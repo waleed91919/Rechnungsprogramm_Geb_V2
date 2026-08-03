@@ -1,0 +1,336 @@
+const electron = require('electron');
+const { app, BrowserWindow, Menu, ipcMain } = electron;
+const path = require('path');
+function createWindow() {
+    const mainWindow = new BrowserWindow({
+        width: 1400,
+        height: 900,
+        minWidth: 1024,
+        minHeight: 700,
+        title: 'W-Link ERP',
+        icon: path.join(__dirname, 'W-Link_ERP_software_202604132222.png'),
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js')
+        },
+        show: false
+    });
+
+    // Deutsche Menüleiste
+    const menuTemplate = [
+        {
+            label: 'Datei',
+            submenu: [
+                { label: 'Neue Rechnung', accelerator: 'CmdOrCtrl+N', click: () => { } },
+                { type: 'separator' },
+                { label: 'Drucken', accelerator: 'CmdOrCtrl+P', click: () => mainWindow.webContents.print() },
+                { type: 'separator' },
+                { label: 'Beenden', accelerator: 'CmdOrCtrl+Q', role: 'quit' }
+            ]
+        },
+        {
+            label: 'Bearbeiten',
+            submenu: [
+                { label: 'Rückgängig', accelerator: 'CmdOrCtrl+Z', role: 'undo' },
+                { label: 'Wiederholen', accelerator: 'CmdOrCtrl+Y', role: 'redo' },
+                { type: 'separator' },
+                { label: 'Ausschneiden', accelerator: 'CmdOrCtrl+X', role: 'cut' },
+                { label: 'Kopieren', accelerator: 'CmdOrCtrl+C', role: 'copy' },
+                { label: 'Einfügen', accelerator: 'CmdOrCtrl+V', role: 'paste' },
+                { label: 'Alles auswählen', accelerator: 'CmdOrCtrl+A', role: 'selectAll' }
+            ]
+        },
+        {
+            label: 'Ansicht',
+            submenu: [
+                { label: 'Vergrößern', accelerator: 'CmdOrCtrl+Plus', role: 'zoomIn' },
+                { label: 'Verkleinern', accelerator: 'CmdOrCtrl+-', role: 'zoomOut' },
+                { label: 'Originalgröße', accelerator: 'CmdOrCtrl+0', role: 'resetZoom' },
+                { type: 'separator' },
+                { label: 'Vollbild', accelerator: 'F11', role: 'togglefullscreen' },
+                { type: 'separator' },
+                { label: 'Entwicklertools', accelerator: 'F12', role: 'toggleDevTools' }
+            ]
+        },
+        {
+            label: 'Hilfe',
+            submenu: [
+                {
+                    label: 'Über W-Link ERP', click: () => {
+                        const { dialog } = require('electron');
+                        dialog.showMessageBox(mainWindow, {
+                            type: 'info',
+                            title: 'Über W-Link ERP',
+                            message: 'W-Link ERP v1.0.5',
+                            detail: 'Professionelle ERP Rechnungsverwaltung\n© 2026 W-Link. Alle Rechte vorbehalten.'
+                        });
+                    }
+                }
+            ]
+        }
+    ];
+
+    const menu = Menu.buildFromTemplate(menuTemplate);
+    Menu.setApplicationMenu(menu);
+
+    mainWindow.loadFile('code.html');
+
+    mainWindow.once('ready-to-show', () => {
+        if (process.platform === 'win32') {
+            mainWindow.setAlwaysOnTop(true);
+            mainWindow.show();
+            mainWindow.focus();
+            mainWindow.setAlwaysOnTop(false);
+        } else {
+            mainWindow.show();
+            mainWindow.focus();
+        }
+    });
+}
+
+// Set up IPC Handlers
+function setupIpc() {
+    const { dbAPI } = require('./db');
+
+    // Generic error wrapper for IPC handlers
+    const wrapHandler = (fn) => async (event, ...args) => {
+        try {
+            return await fn(event, ...args);
+        } catch (error) {
+            console.error('IPC Handler Error:', error);
+            throw error; // Electron will pass this error to the renderer
+        }
+    };
+
+    ipcMain.handle('db:getFullState', wrapHandler(async () => await dbAPI.getFullState()));
+
+    // Artikel
+    ipcMain.handle('db:saveArtikel', wrapHandler(async (e, artikel) => {
+        if (!artikel || typeof artikel !== 'object' || !artikel.name) {
+            throw new Error('Ungültige Artikel-Daten');
+        }
+        return await dbAPI.saveArtikel(artikel);
+    }));
+
+    ipcMain.handle('db:deleteArtikel', wrapHandler(async (e, id) => {
+        if (typeof id !== 'number') throw new Error('Ungültige Artikel-ID');
+        return await dbAPI.deleteArtikel(id);
+    }));
+
+    // Kunden
+    ipcMain.handle('db:saveKunde', wrapHandler(async (e, kunde) => {
+        if (!kunde || typeof kunde !== 'object' || !kunde.name) {
+            throw new Error('Ungültige Kunden-Daten');
+        }
+        return await dbAPI.saveKunde(kunde);
+    }));
+
+    ipcMain.handle('db:deleteKunde', wrapHandler(async (e, id) => {
+        if (typeof id !== 'number') throw new Error('Ungültige Kunden-ID');
+        return await dbAPI.deleteKunde(id);
+    }));
+
+    ipcMain.handle('db:bulkSaveKunden', wrapHandler(async (e, kunden) => {
+        if (!kunden || !Array.isArray(kunden)) {
+            throw new Error('Ungültige Kunden-Daten für Bulk-Update');
+        }
+        return await dbAPI.bulkSaveKunden(kunden);
+    }));
+
+    // Dokumente
+    ipcMain.handle('db:saveDocument', wrapHandler(async (e, doc) => {
+        if (!doc || typeof doc !== 'object' || !doc.nr) {
+            throw new Error('Ungültige Dokumenten-Daten');
+        }
+        return await dbAPI.saveDocument(doc);
+    }));
+
+
+    ipcMain.handle('db:bulkSaveDocuments', wrapHandler(async (e, docs) => {
+        if (!docs || !Array.isArray(docs)) {
+            throw new Error('Ungültige Dokumenten-Daten für Bulk-Update');
+        }
+        return await dbAPI.bulkSaveDocuments(docs);
+    }));
+
+    ipcMain.handle('db:deleteDocument', wrapHandler(async (e, id) => {
+        if (typeof id !== 'number') throw new Error('Ungültige Dokumenten-ID');
+        return await dbAPI.deleteDocument(id);
+    }));
+
+    // Projekte
+    ipcMain.handle('db:saveProjekt', wrapHandler(async (e, projekt) => {
+        if (!projekt || typeof projekt !== 'object' || !projekt.name) {
+            throw new Error('Ungültige Projekt-Daten');
+        }
+        return await dbAPI.saveProjekt(projekt);
+    }));
+
+    // Einstellungen
+    ipcMain.handle('db:saveEinstellung', wrapHandler(async (e, key, val) => {
+        if (!key) throw new Error('Ungültiger Einstellungs-Key');
+        return await dbAPI.saveEinstellung(key, val);
+    }));
+
+    // Helper for robust focus restoration
+    const focusWin = (win) => {
+        if (!win || win.isDestroyed()) return;
+        
+        // sequence to "kick" the OS-level focus back to the window
+        if (process.platform === 'win32') {
+            // Bring app to front at OS level
+            app.focus({ steal: true });
+            
+            win.setAlwaysOnTop(true, 'screen-saver');
+            win.setEnabled(true);
+            win.show();
+            win.focus();
+            
+            // WebContents focus is often the key for input fields
+            win.webContents.focus();
+
+            // Give the OS time to process the focus change before removing AlwaysOnTop
+            setTimeout(() => {
+                if (!win.isDestroyed()) {
+                    win.setAlwaysOnTop(false);
+                    win.webContents.focus();
+                }
+            }, 150);
+        } else {
+            win.focus();
+            win.webContents.focus();
+        }
+    };
+
+    // Backup
+    ipcMain.handle('db:backup', wrapHandler(async (event) => {
+        const { dialog } = require('electron');
+        const win = BrowserWindow.fromWebContents(event.sender);
+        const defaultPath = path.join(app.getPath('documents'), `backup_${new Date().toISOString().split('T')[0]}.sqlite`);
+
+        const { filePath } = await dialog.showSaveDialog(win, {
+            title: 'Datenbank-Backup speichern',
+            defaultPath: defaultPath,
+            filters: [{ name: 'SQLite Datenbank', extensions: ['sqlite'] }]
+        });
+
+        if (filePath) {
+            await dbAPI.backup(filePath);
+            focusWin(win);
+            return { success: true, path: filePath };
+        }
+        focusWin(win);
+        return { success: false, cancelled: true };
+    }));
+
+    // Restore
+    ipcMain.handle('db:restore', wrapHandler(async (event) => {
+        const { dialog } = require('electron');
+        const win = BrowserWindow.fromWebContents(event.sender);
+
+        const { filePaths } = await dialog.showOpenDialog(win, {
+            title: 'Backup-Datei zum Wiederherstellen auswählen',
+            properties: ['openFile'],
+            filters: [{ name: 'SQLite Datenbank', extensions: ['sqlite'] }]
+        });
+
+        if (filePaths && filePaths.length > 0) {
+            await dbAPI.restore(filePaths[0]);
+            focusWin(win);
+            return { success: true };
+        }
+        focusWin(win);
+        return { success: false, cancelled: true };
+    }));
+
+    // QR Code Generation
+    ipcMain.handle('qr:generate', wrapHandler(async (event, text) => {
+        if (!text) return null;
+        const QRCode = require('qrcode');
+        return await QRCode.toDataURL(text, {
+            errorCorrectionLevel: 'M',
+            margin: 1,
+            width: 150
+        });
+    }));
+
+    // Focus Window (fixes Windows input focus bug after modal transitions)
+    ipcMain.handle('app:focusWindow', wrapHandler(async (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        focusWin(win);
+    }));
+
+    ipcMain.handle('dialog:confirm', wrapHandler(async (event, options) => {
+        const { dialog } = require('electron');
+        const win = BrowserWindow.fromWebContents(event.sender);
+        const result = await dialog.showMessageBox(win, {
+            type: 'question',
+            buttons: ['Abbrechen', 'Bestätigen'],
+            defaultId: 1,
+            cancelId: 0,
+            title: options.title || 'Bestätigung',
+            message: options.message,
+            detail: options.detail || ''
+        });
+        focusWin(win);
+        return result.response === 1;
+    }));
+
+    ipcMain.handle('dialog:alert', wrapHandler(async (event, options) => {
+        const { dialog } = require('electron');
+        const win = BrowserWindow.fromWebContents(event.sender);
+        await dialog.showMessageBox(win, {
+            type: 'info',
+            buttons: ['OK'],
+            title: options.title || 'Information',
+            message: options.message,
+            detail: options.detail || ''
+        });
+        focusWin(win);
+    }));
+
+    // PDF Generierung
+    const fs = require('fs');
+    ipcMain.handle('save:pdf', wrapHandler(async (event) => {
+        const { dialog } = require('electron');
+        const win = BrowserWindow.fromWebContents(event.sender);
+        const defaultPath = path.join(app.getPath('documents'), 'Dokument.pdf');
+
+        const { filePath } = await dialog.showSaveDialog(win, {
+            title: 'Als PDF speichern',
+            defaultPath: defaultPath,
+            filters: [{ name: 'PDF Dateien', extensions: ['pdf'] }]
+        });
+
+        if (filePath) {
+            const pdfData = await event.sender.printToPDF({
+                printBackground: true,
+                pageSize: 'A4',
+                margins: { marginType: 'custom', top: 0, bottom: 0, left: 0, right: 0 }
+            });
+            fs.writeFileSync(filePath, pdfData);
+            focusWin(win);
+            return { success: true, path: filePath };
+        }
+        focusWin(win);
+        return { success: false, cancelled: true };
+    }));
+}
+
+app.whenReady().then(() => {
+    setupIpc();
+    createWindow();
+
+    app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) {
+            createWindow();
+        }
+    });
+});
+
+app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+        app.quit();
+    }
+});

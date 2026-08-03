@@ -1,0 +1,2463 @@
+<!DOCTYPE html>
+
+<html lang="de">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>ERP Rechnungsprogramm</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#1366ec",
+                        "primary-content": "#ffffff",
+                        "primary-dark": "#0e4cb0",
+                        "background-light": "#f3f4f6",
+                        "background-dark": "#101722",
+                        "sidebar-bg": "#0f172a",
+                        "sidebar-hover": "#1e293b",
+                        "border-color": "#d1d5db",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "sm": "0.125rem",
+                        "md": "0.375rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        /* PDF Print Fix */
+        @media print {
+            @page {
+                size: A4;
+                margin: 0mm;
+            }
+        }
+
+        /* Custom scrollbar for a more native feel */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+        /* Dense table styles */
+        .dense-table th,
+        .dense-table td {
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+        }
+    </style>
+</head>
+
+<body class="bg-background-light font-display text-slate-900 antialiased overflow-hidden h-screen flex">
+    <!-- Left Sidebar -->
+    <aside
+        class="w-64 bg-sidebar-bg flex flex-col h-full shrink-0 border-r border-slate-700 shadow-xl z-20 transition-all duration-300">
+        <!-- Brand -->
+        <div class="h-20 flex items-center px-6 bg-sidebar-bg border-b border-slate-700/50">
+            <div class="flex items-center gap-3">
+                <div class="relative">
+                    <div class="absolute -inset-1 bg-primary/20 blur-sm rounded-full"></div>
+                    <img src="W-Link_ERP_software_202604132222.png" alt="Icon" class="h-10 w-auto object-contain relative z-10">
+                </div>
+                <img src="W-Link_ERP_software_202604132223.png" alt="W-LINK" class="h-6 w-auto object-contain brightness-0 invert opacity-90">
+            </div>
+        </div>
+        <!-- Navigation -->
+        <nav class="flex-1 overflow-y-auto py-4 flex flex-col gap-1 px-2">
+            <a id="nav-dashboard" onclick="switchView('dashboard')"
+                class="flex items-center gap-3 px-3 py-2 rounded-md bg-primary text-white shadow-sm ring-1 ring-white/10 cursor-pointer">
+                <span class="material-symbols-outlined text-[20px]">dashboard</span>
+                <span class="text-sm font-medium">Dashboard</span>
+            </a>
+            <div class="pt-4 pb-1 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Module</div>
+            <a id="nav-rechnungen" onclick="switchView('rechnungen')"
+                class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer">
+                <span
+                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">receipt_long</span>
+                <span class="text-sm font-medium">Rechnungen</span>
+            </a>
+            <a id="nav-artikel" onclick="switchView('artikel')"
+                class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer">
+                <span
+                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">inventory_2</span>
+                <span class="text-sm font-medium">Artikel</span>
+            </a>
+            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
+                id="nav-angebote" onclick="switchView('angebote')">
+                <span
+                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">request_quote</span>
+                <span class="text-sm font-medium">Angebote</span>
+            </a>
+            <a id="nav-kunden" onclick="switchView('kunden')"
+                class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer">
+                <span class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">group</span>
+                <span class="text-sm font-medium">Kunden</span>
+            </a>
+            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
+                id="nav-projekte" onclick="switchView('projekte')">
+                <span
+                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">folder_special</span>
+                <span class="text-sm font-medium">Projekte</span>
+            </a>
+            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
+                id="nav-berichte" onclick="switchView('berichte')">
+                <span
+                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">analytics</span>
+                <span class="text-sm font-medium">Berichte</span>
+            </a>
+            <div class="pt-4 pb-1 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">System</div>
+            <a id="nav-einstellungen" onclick="switchView('einstellungen')"
+                class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer">
+                <span
+                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">settings</span>
+                <span class="text-sm font-medium">Einstellungen</span>
+            </a>
+        </nav>
+    </aside>
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-full min-w-0 bg-white print:hidden">
+        <!-- Top Toolbar -->
+        <header
+            class="h-14 bg-white border-b border-border-color flex items-center justify-between px-6 shrink-0 shadow-sm z-[40]">
+            <div class="flex items-center gap-4">
+                <h2 id="header-title" class="text-lg font-semibold text-slate-800">Dashboard-Übersicht</h2>
+                <div class="h-4 w-px bg-slate-300"></div>
+                <div class="flex items-center text-sm text-slate-500">
+                    <span>Startseite</span>
+                    <span class="material-symbols-outlined text-sm mx-1">chevron_right</span>
+                    <span id="header-subtitle" class="text-primary font-medium">Rechnungen</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="relative">
+                    <span
+                        class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                    <input id="global-search" oninput="handleGlobalSearch(this.value)"
+                        class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-64 placeholder:text-slate-400"
+                        placeholder="Rechnung, Kunde suchen..." type="text" />
+                </div>
+                <div class="relative">
+                    <button id="btn-notifications" onclick="toggleNotifications()" class="p-2 text-slate-600 hover:bg-slate-100 rounded-md relative">
+                        <span class="material-symbols-outlined text-[20px]">notifications</span>
+                        <span id="notif-dot" class="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white hidden"></span>
+                    </button>
+                    <!-- Notification Dropdown -->
+                    <div id="notification-dropdown" class="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 z-[100] hidden overflow-hidden">
+                        <div class="px-4 py-3 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                            <h3 class="text-sm font-bold text-slate-800">Benachrichtigungen</h3>
+                            <span id="notif-count-badge" class="bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">0</span>
+                        </div>
+                        <div id="notif-list" class="max-h-96 overflow-y-auto">
+                            <div class="p-8 text-center text-slate-400">
+                                <span class="material-symbols-outlined text-4xl mb-2 opacity-20">notifications_off</span>
+                                <p class="text-xs">Keine neuen Benachrichtigungen</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <button onclick="openHelpModal()" class="p-2 text-slate-600 hover:bg-slate-100 rounded-md">
+                    <span class="material-symbols-outlined text-[20px]">help</span>
+                </button>
+            </div>        </header>
+        <!-- Main Scrollable Area -->
+        <div id="view-dashboard" class="flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+                <!-- KPI Cards Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- KPI 1 -->
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Umsatz
+                                    (Bezahlt)</p>
+                                <h3 id="kpi-umsatz" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                        </div>
+                        <!-- Background Pattern -->
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">payments</span>
+                        </div>
+                    </div>
+                    <!-- KPI 2 -->
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ausstehende
+                                    Zahlungen</p>
+                                <h3 id="kpi-ausstehend" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                            <div id="kpi-ausstehend-count"
+                                class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1 border border-slate-200">
+                                0 Rg.
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">pending_actions</span>
+                        </div>
+                    </div>
+                    <!-- KPI 3 -->
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-red-200 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Überfällige
+                                    Rechnungen</p>
+                                <h3 id="kpi-uberfallig" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                            <div id="kpi-uberfallig-count"
+                                class="bg-red-50 text-red-700 px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1 border border-red-100">
+                                <span class="material-symbols-outlined text-[14px]">warning</span>
+                                0 Rg.
+                            </div>
+                        </div>
+                        <div id="kpi-uberfallig-warning" class="mt-auto z-10 hidden">
+                            <p class="text-xs text-red-600 font-medium whitespace-nowrap overflow-hidden text-ellipsis">
+                                Sofortige Aufmerksamkeit erforderlich</p>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-red-50 transform rotate-12 group-hover:text-red-50 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">error_outline</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Quick Actions & Recent Activity -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Quick Actions -->
+                    <div class="bg-white rounded-md border border-slate-200 shadow-sm p-5 flex flex-col gap-4">
+                        <h3 class="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary text-[20px]">bolt</span>
+                            Schnellaktionen
+                        </h3>
+                        <div class="flex flex-col gap-3">
+                            <button onclick="openRechnungModal()"
+                                class="flex items-center gap-3 p-3 rounded border border-slate-200 hover:border-primary hover:bg-slate-50 transition-colors text-left group">
+                                <span
+                                    class="material-symbols-outlined p-2 rounded bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-colors">receipt_long</span>
+                                <div>
+                                    <p class="font-medium text-slate-800 text-sm">Neue Rechnung</p>
+                                    <p class="text-xs text-slate-500">Rechnung erstellen & senden</p>
+                                </div>
+                            </button>
+                            <button onclick="switchView('kunden'); setTimeout(openKundeModal, 100)"
+                                class="flex items-center gap-3 p-3 rounded border border-slate-200 hover:border-primary hover:bg-slate-50 transition-colors text-left group">
+                                <span
+                                    class="material-symbols-outlined p-2 rounded bg-slate-100 text-slate-600 group-hover:bg-primary group-hover:text-white transition-colors">person_add</span>
+                                <div>
+                                    <p class="font-medium text-slate-800 text-sm">Neuer Kunde</p>
+                                    <p class="text-xs text-slate-500">Kontakt im Adressbuch anlegen</p>
+                                </div>
+                            </button>
+                            <button onclick="switchView('artikel'); setTimeout(openArtikelModal, 100)"
+                                class="flex items-center gap-3 p-3 rounded border border-slate-200 hover:border-primary hover:bg-slate-50 transition-colors text-left group">
+                                <span
+                                    class="material-symbols-outlined p-2 rounded bg-slate-100 text-slate-600 group-hover:bg-primary group-hover:text-white transition-colors">inventory_2</span>
+                                <div>
+                                    <p class="font-medium text-slate-800 text-sm">Neuer Artikel</p>
+                                    <p class="text-xs text-slate-500">Produkt zum Katalog hinzufügen</p>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Recent Invoices -->
+                    <div
+                        class="lg:col-span-2 bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                        <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50/50">
+                            <h3 class="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                                <span class="material-symbols-outlined text-slate-500 text-[20px]">history</span>
+                                Letzte Rechnungen
+                            </h3>
+                            <button onclick="switchView('rechnungen')"
+                                class="text-primary hover:text-primary-dark text-xs font-medium flex items-center">
+                                Alle anzeigen <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm dense-table">
+                                <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
+                                    <tr>
+                                        <th class="px-4 py-2 font-medium">Rechnungs-Nr.</th>
+                                        <th class="px-4 py-2 font-medium">Kunde</th>
+                                        <th class="px-4 py-2 font-medium text-right">Betrag</th>
+                                        <th class="px-4 py-2 font-medium text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dashboard-recent-table-body"
+                                    class="divide-y divide-slate-100 text-slate-700">
+                                    <!-- JS populated -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Invoices View -->
+        <div id="view-rechnungen" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6 h-full">
+                <!-- Functional Area -->
+                <div class="flex flex-col gap-3 h-full">
+                    <!-- Action Bar -->
+                    <div
+                        class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                        <div class="flex items-center gap-2">
+                            <div class="flex items-center bg-slate-100 rounded p-1 border border-slate-200"
+                                id="filter-buttons">
+                                <button onclick="filterRechnungen('Alle')"
+                                    class="filter-btn px-3 py-1 text-xs font-semibold bg-white rounded shadow-sm text-slate-800"
+                                    data-filter="Alle">Alle</button>
+                                <button onclick="filterRechnungen('Bezahlt')"
+                                    class="filter-btn px-3 py-1 text-xs font-medium text-slate-600 hover:text-slate-900"
+                                    data-filter="Bezahlt">Bezahlt</button>
+                                <button onclick="filterRechnungen('Ausstehend')"
+                                    class="filter-btn px-3 py-1 text-xs font-medium text-slate-600 hover:text-slate-900"
+                                    data-filter="Ausstehend">Ausstehend</button>
+                                <button onclick="filterRechnungen('Überfällig')"
+                                    class="filter-btn px-3 py-1 text-xs font-medium text-slate-600 hover:text-slate-900"
+                                    data-filter="Überfällig">Überfällig</button>
+                            </div>
+                            <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                            <button onclick="exportDATEV()"
+                                class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-50">
+                                <span class="material-symbols-outlined text-[16px]">file_upload</span>
+                                DATEV Export
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="openRechnungModal()"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">add</span>
+                                Neue Rechnung
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Bulk Action Bar -->
+                    <div id="bulk-action-bar"
+                        class="hidden items-center justify-between bg-blue-50/80 border border-blue-200 rounded-md p-3 shadow-sm transition-all duration-300">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-blue-500 text-[20px]">check_box</span>
+                            <span class="text-sm font-medium text-blue-900"><span id="bulk-selected-count">0</span>
+                                Rechnungen ausgewählt</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button id="bulk-btn-paid" onclick="bulkAction('paid')"
+                                class="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors">
+                                <span class="material-symbols-outlined text-[16px]">task_alt</span>
+                                Als Bezahlt markieren
+                            </button>
+                            <button id="bulk-btn-dunning" onclick="bulkAction('dunning')"
+                                class="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors">
+                                <span class="material-symbols-outlined text-[16px]">gavel</span>
+                                Mahnungen Senden
+                            </button>
+                            <button id="bulk-btn-pdf" onclick="bulkAction('pdf')"
+                                class="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-100 hover:bg-white border border-blue-200 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors shadow-sm">
+                                <span class="material-symbols-outlined text-[16px]">picture_as_pdf</span>
+                                PDFs Exportieren
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Data Grid Container -->
+                    <div
+                        class="border border-slate-300 rounded-md bg-white shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm dense-table">
+                                <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
+                                    <tr>
+                                        <th class="px-4 font-semibold w-10">
+                                            <input id="selectAll"
+                                                class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4"
+                                                type="checkbox" onchange="toggleAllSelections(this)" />
+                                        </th>
+                                        <th class="px-4 font-semibold">Rechnungs-Nr.</th>
+                                        <th class="px-4 font-semibold">Datum</th>
+                                        <th class="px-4 font-semibold">Kundenname</th>
+                                        <th class="px-4 font-semibold text-right">Betrag</th>
+                                        <th class="px-4 font-semibold text-right">Restbetrag</th>
+                                        <th class="px-4 font-semibold text-center">Status</th>
+                                        <th class="px-4 font-semibold text-right w-24">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rechnungen-table-body"
+                                    class="divide-y divide-slate-200 text-slate-700 bg-white">
+                                    <!-- JS populated -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <!-- Footer Pagination -->
+                        <div
+                            class="bg-slate-50 p-3 border-t border-slate-300 flex items-center justify-between text-xs text-slate-500 mt-auto">
+                            <div id="rechnung-pagination-info">Zeige 0 von 0 Rechnungen</div>
+                            <div class="flex gap-1" id="rechnung-pagination-controls">
+                                <!-- JS populated -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Artikel View -->
+        <div id="view-artikel" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+
+                <!-- KPI Cards Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gesamtsortiment
+                                </p>
+                                <h3 id="kpi-total-items" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">inventory</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Lagerwert (EK)
+                                </p>
+                                <h3 id="kpi-total-value" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">account_balance_wallet</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Geringer
+                                    Bestand</p>
+                                <h3 id="kpi-low-stock" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">warning</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Functional Area -->
+                <div class="flex flex-col gap-3 h-full">
+                    <div
+                        class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                        <div class="flex items-center gap-2">
+                            <div class="relative">
+                                <span
+                                    class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                                <input id="search-artikel"
+                                    class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-64 placeholder:text-slate-400"
+                                    placeholder="Artikel suchen..." type="text">
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <!-- Hidden File Input for CSV Upload -->
+                            <input type="file" id="csv-artikel-upload" accept=".csv" class="hidden"
+                                onchange="importArtikelCsv(event)">
+
+                            <button onclick="exportArtikelCsv()"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">upload</span>
+                                CSV Export
+                            </button>
+                            <button onclick="document.getElementById('csv-artikel-upload').click()"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">download</span>
+                                CSV Import
+                            </button>
+                            <button onclick="openArtikelModal()"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">add</span>
+                                Neuer Artikel
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Data Grid -->
+                    <div
+                        class="border border-slate-300 rounded-md bg-white shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm dense-table">
+                                <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
+                                    <tr>
+                                        <th class="px-4 font-semibold w-12 text-center">Bild</th>
+                                        <th class="px-4 font-semibold w-16 whitespace-nowrap">ID</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Artikelname</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Katalog</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap text-right">Bestand</th>
+                                        <th class="px-4 font-semibold text-right whitespace-nowrap">VK-Preis</th>
+                                        <th class="px-4 font-semibold text-right w-24 whitespace-nowrap">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="artikel-table-body"
+                                    class="divide-y divide-slate-200 text-slate-700 bg-white">
+                                    <!-- JS populated -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal Overlay -->
+        <div id="artikel-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+            <div
+                class="bg-white rounded-lg shadow-xl w-full max-w-md border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 id="modal-title" class="text-lg font-semibold text-slate-800">Neuer Artikel</h3>
+                    <button onclick="closeArtikelModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto">
+                    <form id="artikel-form" class="flex flex-col gap-4">
+                        <div class="flex items-stretch gap-4 mb-2">
+                            <!-- Image Preview Area -->
+                            <div class="shrink-0 w-32 flex flex-col gap-2">
+                                <div id="artikel-bilder-container" class="grid grid-cols-2 gap-2 empty:hidden">
+                                    <!-- Dynamic thumbnails will be injected here -->
+                                </div>
+                                <div id="artikel-bilder-upload-btn"
+                                    class="w-full h-full min-h-[96px] bg-slate-100 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-slate-200 transition-colors"
+                                    onclick="document.getElementById('artikel-bild').click()">
+                                    <span
+                                        class="material-symbols-outlined text-2xl text-slate-400">add_photo_alternate</span>
+                                    <span class="text-[10px] font-semibold text-slate-500 mt-1">Bilder (Max 4)</span>
+                                </div>
+                                <input type="file" id="artikel-bild" accept="image/*" multiple class="hidden"
+                                    onchange="handleArtikelBildUpload(event)">
+                            </div>
+
+                            <!-- Primary Info -->
+                            <div class="flex-1 space-y-4">
+                                <input type="hidden" id="artikel-id">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Artikelname</label>
+                                    <input type="text" id="artikel-name" required
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Artikelnummer/Barcode
+                                        (EAN) <span class="text-slate-400 font-normal">(Optional)</span></label>
+                                    <input type="text" id="artikel-ean"
+                                        placeholder="z.B. 4001234567890 (Klick hier für Scanner)"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Artikelkatalog /
+                                        Kategorie <span class="text-slate-400 font-normal">(Optional)</span></label>
+                                    <input type="text" id="artikel-katalog" placeholder="z.B. IT Zubehör"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Detaillierte Beschreibung
+                                (Beschreibung)</label>
+                            <textarea id="artikel-beschreibung" rows="3"
+                                placeholder="Detaillierte Artikelinformationen, Varianten (Farbe, Größe, etc.)..."
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-y"></textarea>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Lieferant</label>
+                                <input type="text" id="artikel-lieferant" placeholder="z.B. Großhandel GmbH"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Aktueller Bestand</label>
+                                <input type="number" id="artikel-bestand" min="0" value="0"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4 border-t border-slate-100 pt-4 mt-2">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">EK-Preis (€)</label>
+                                <input type="number" step="0.01" id="artikel-ek" required
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">VK-Preis (€)</label>
+                                <input type="number" step="0.01" id="artikel-vk" required
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">MwSt</label>
+                                <select id="artikel-mwst"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                    <option value="19">19%</option>
+                                    <option value="7">7%</option>
+                                    <option value="0">0%</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4 pt-2">
+                            <div class="flex items-center pt-6">
+                                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="checkbox" id="artikel-ist-bauleistung" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                    <span>Bauleistung (13b UStG)</span>
+                                </label>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Kostenart</label>
+                                <select id="artikel-kostenart" class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                    <option value="MATERIAL">Material</option>
+                                    <option value="LOHN">Lohnleistung</option>
+                                    <option value="MASCHINE">Maschine/Gerät</option>
+                                    <option value="FAHRT">Fahrtkosten</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Lohnanteil (%)</label>
+                                <input type="number" step="1" min="0" max="100" value="0" id="artikel-lohnanteil" class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm" placeholder="0">
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="closeArtikelModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                    <button onclick="saveArtikel()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark shadow-sm">Speichern</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kunden View -->
+        <div id="view-kunden" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+
+                <!-- KPI Cards Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gesamtkunden
+                                </p>
+                                <h3 id="kpi-total-kunden" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">group</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Neu in diesem
+                                    Monat</p>
+                                <h3 id="kpi-neue-kunden" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">person_add</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Functional Area -->
+                <div class="flex flex-col gap-3 h-full">
+                    <div
+                        class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                        <div class="flex items-center gap-2">
+                            <div class="relative">
+                                <span
+                                    class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                                <input id="search-kunden"
+                                    class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-64 placeholder:text-slate-400"
+                                    placeholder="Kunde suchen..." type="text">
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <!-- Hidden File Input for CSV Upload -->
+                            <input type="file" id="csv-kunden-upload" accept=".csv" class="hidden"
+                                onchange="importKundenCsv(event)">
+
+                            <button onclick="exportKundenCsv()"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">upload</span>
+                                CSV Export
+                            </button>
+                            <button onclick="document.getElementById('csv-kunden-upload').click()"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">download</span>
+                                CSV Import
+                            </button>
+                            <button onclick="openKundeModal()"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">add</span>
+                                Neuer Kunde
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Data Grid -->
+                    <div
+                        class="border border-slate-300 rounded-md bg-white shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm dense-table">
+                                <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
+                                    <tr>
+                                        <th class="px-4 font-semibold w-16 whitespace-nowrap">ID</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Firmen-/Name</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Adresse</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">PLZ</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Telefonnummer</th>
+                                        <th class="px-4 font-semibold text-right w-24 whitespace-nowrap">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="kunden-table-body" class="divide-y divide-slate-200 text-slate-700 bg-white">
+                                    <!-- JS populated -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Angebote View -->
+        <div id="view-angebote" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+                <!-- KPI Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 h-32 relative overflow-hidden group">
+                        <div class="flex justify-between items-start z-10 relative">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Offene Angebote
+                                </p>
+                                <h3 id="kpi-angebote-offen" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">history_edu</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Action Bar -->
+                <div
+                    class="flex items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                    <h3 class="font-semibold text-slate-700 pl-2">Angebote verwalten</h3>
+                    <button onclick="openAngebotModal()"
+                        class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow shadow-primary/30 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">add</span>
+                        Neues Angebot
+                    </button>
+                </div>
+                <!-- Table -->
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
+                            <tr>
+                                <th class="px-4 py-3 font-semibold w-32">Angebots-Nr.</th>
+                                <th class="px-4 py-3 font-semibold">Datum</th>
+                                <th class="px-4 py-3 font-semibold">Kunde</th>
+                                <th class="px-4 py-3 font-semibold text-right">Betrag</th>
+                                <th class="px-4 py-3 font-semibold text-center w-32">Status</th>
+                                <th class="px-4 py-3 font-semibold text-right w-24">Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="angebote-table-body" class="divide-y divide-slate-100 text-slate-700">
+                            <!-- JS populated -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- BERICHTE VIEW -->
+        <div id="view-berichte" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6 animate-fade-in fade-in">
+                <!-- Header & Filters -->
+                <div
+                    class="flex flex-col md:flex-row md:justify-between md:items-end gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative">
+                    <div class="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-indigo-50/50 to-transparent">
+                    </div>
+                    <div class="z-10 relative">
+                        <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight">Erweiterte Berichte</h1>
+                        <p class="text-slate-500 mt-2 font-medium">Ihre Geschäftszahlen auf einen Blick</p>
+                    </div>
+
+                    <div class="z-10 relative flex flex-col items-end gap-2">
+                        <div class="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
+                            <button onclick="openSteuerberichtModal()"
+                                class="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap shadow-sm active:translate-y-px">
+                                <span class="material-symbols-outlined text-[20px]">description</span>
+                                Steuerbericht für StB
+                            </button>
+                            <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                            <div class="relative inline-block text-left">
+                                <button type="button" onclick="toggleReportFilterDropdown()"
+                                    class="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 rounded-lg transition-all cursor-pointer outline-none group">
+                                    <span class="material-symbols-outlined text-slate-400 text-[20px] group-hover:text-primary transition-colors">calendar_month</span>
+                                    <span id="report-time-filter-label">Gesamter Zeitraum</span>
+                                    <span class="material-symbols-outlined text-slate-400 text-[18px] transition-transform duration-200" id="report-filter-arrow">expand_more</span>
+                                </button>
+                                
+                                <div id="report-filter-dropdown" 
+                                    class="hidden absolute right-0 mt-3 w-56 origin-top-right bg-white border border-slate-200 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] z-[110] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div class="py-1">
+                                        <button onclick="selectReportFilter('this_month', 'Dieser Monat')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">Dieser Monat</button>
+                                        <button onclick="selectReportFilter('last_month', 'Letzter Monat')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">Letzter Monat</button>
+                                        <button onclick="selectReportFilter('this_quarter', 'Dieses Quartal')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">Dieses Quartal</button>
+                                        <button onclick="selectReportFilter('this_year', 'Dieses Jahr')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">Dieses Jahr</button>
+                                        <button onclick="selectReportFilter('last_year', 'Letztes Jahr')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">Letztes Jahr</button>
+                                        <button onclick="selectReportFilter('all_time', 'Gesamter Zeitraum')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors font-semibold bg-blue-50/30">Gesamter Zeitraum</button>
+                                        <button onclick="selectReportFilter('custom', 'Benutzerdefiniert')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors border-t border-slate-100">Benutzerdefiniert</button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Hidden select to keep compatibility with existing JS -->
+                                <select id="report-time-filter" class="hidden" onchange="handleReportTimeFilterChange()">
+                                    <option value="this_month">Dieser Monat</option>
+                                    <option value="last_month">Letzter Monat</option>
+                                    <option value="this_quarter">Dieses Quartal</option>
+                                    <option value="this_year">Dieses Jahr</option>
+                                    <option value="last_year">Letztes Jahr</option>
+                                    <option value="all_time" selected>Gesamter Zeitraum</option>
+                                    <option value="custom">Benutzerdefiniert</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="report-custom-dates"
+                            class="hidden flex items-center gap-2 mt-2 bg-slate-50 border border-slate-200 p-2 rounded-lg shadow-inner">
+                            <input type="date" id="report-date-from" onchange="renderBerichte()"
+                                class="text-xs text-slate-700 bg-white border border-slate-300 rounded px-2 py-1 outline-none focus:border-primary">
+                            <span class="text-slate-400 text-xs">-</span>
+                            <input type="date" id="report-date-to" onchange="renderBerichte()"
+                                class="text-xs text-slate-700 bg-white border border-slate-300 rounded px-2 py-1 outline-none focus:border-primary">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPI Widgets Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Net Profit Margin -->
+                    <div
+                        class="bg-white rounded-xl border-2 border-emerald-500/20 p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">
+                                    Nettogewinnmarge</p>
+                                <h3 id="report-margin" class="text-3xl font-bold text-emerald-600">0,0%</h3>
+                            </div>
+                            <div class="p-3 bg-emerald-100/50 text-emerald-600 rounded-lg">
+                                <span class="material-symbols-outlined font-bold">savings</span>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-4 font-medium flex gap-2">
+                            <span>Summe Gewinn:</span><span id="report-total-profit"
+                                class="font-bold text-slate-600">0,00 €</span>
+                        </p>
+                        <div class="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-teal-400 group-hover:h-2 transition-all">
+                        </div>
+                    </div>
+
+                    <!-- Gross Revenue -->
+                    <div
+                        class="bg-white rounded-xl border-2 border-blue-500/20 p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">Umsatz (Brutto)
+                                </p>
+                                <h3 id="report-revenue" class="text-3xl font-bold text-blue-600">0,00 €</h3>
+                            </div>
+                            <div class="p-3 bg-blue-100/50 text-primary rounded-lg">
+                                <span class="material-symbols-outlined font-bold">account_balance_wallet</span>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-4 font-medium flex gap-2">
+                            <span>Nur bezahlte Rechnungen</span>
+                        </p>
+                        <div class="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-indigo-400 group-hover:h-2 transition-all">
+                        </div>
+                    </div>
+
+                    <!-- Umsatzsteuer Aktueller Monat -->
+                    <div
+                        class="bg-white rounded-xl border-2 border-primary/20 p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">
+                                    Vorauss. USt.-Zahllast
+                                </p>
+                                <div class="flex items-center gap-2">
+                                    <h3 id="report-monthly-tax" class="text-3xl font-bold text-primary">0,00 €</h3>
+                                </div>
+                            </div>
+                            <div class="p-3 bg-indigo-100/50 text-indigo-600 rounded-lg">
+                                <span class="material-symbols-outlined font-bold">receipt_long</span>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-4 font-medium flex flex-col gap-1">
+                            <span id="report-current-month-label">für diesen Monat</span>
+                            <span class="text-slate-400">aus bezahlten Rechnungen</span>
+                        </p>
+                        <div
+                            class="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-indigo-400 group-hover:h-2 transition-all">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trend Chart Section -->
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-indigo-500">monitoring</span>
+                            Umsatztrend (letzte 6 Monate)
+                        </h2>
+                        <span
+                            class="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded uppercase tracking-wider">Nettoumsatz</span>
+                    </div>
+
+                    <div class="relative h-48 w-full flex items-end justify-between gap-4 px-2 pb-6 mt-4 border-b border-slate-200"
+                        id="report-trend-chart">
+                        <!-- Bars dynamically populated by JS -->
+                        <div class="w-full text-center text-slate-400 py-10">Lade Trenddaten...</div>
+                    </div>
+                </div>
+
+                <!-- Bottom Row: Top Products & Top Customers -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-12">
+
+                    <!-- Top Products Table -->
+                    <div
+                        class="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden max-h-[400px]">
+                        <div
+                            class="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center sticky top-0">
+                            <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-amber-500">star</span>
+                                Bestseller Produkte
+                            </h2>
+                        </div>
+                        <div class="overflow-y-auto flex-1 p-0">
+                            <table class="w-full text-left">
+                                <thead class="sticky top-0 bg-white/95 backdrop-blur z-10">
+                                    <tr
+                                        class="text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                                        <th class="px-5 py-3 font-semibold w-12 text-center">#</th>
+                                        <th class="px-5 py-3 font-semibold">Artikel</th>
+                                        <th class="px-5 py-3 font-semibold text-center">Verkauft</th>
+                                        <th class="px-5 py-3 font-semibold text-right">Umsatz (Netto)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="report-topsellers-body" class="text-sm divide-y divide-slate-50">
+                                    <!-- Populated by JS -->
+                                    <tr>
+                                        <td colspan="4" class="text-center py-8 text-slate-400">Daten werden geladen...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Top Customers Table & Actions -->
+                    <div class="flex flex-col gap-6">
+                        <!-- Table -->
+                        <div
+                            class="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden flex-1 max-h-[300px]">
+                            <div
+                                class="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center sticky top-0">
+                                <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-emerald-500">emoji_events</span>
+                                    Top-Kunden
+                                </h2>
+                            </div>
+                            <div class="overflow-y-auto flex-1 p-0">
+                                <table class="w-full text-left">
+                                    <thead class="sticky top-0 bg-white/95 backdrop-blur d-10">
+                                        <tr
+                                            class="text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                                            <th class="px-5 py-3 font-semibold w-12 text-center">#</th>
+                                            <th class="px-5 py-3 font-semibold">Kunde</th>
+                                            <th class="px-5 py-3 font-semibold text-center">Rechnungen</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Umsatz (Netto)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="report-topcustomers-body" class="text-sm divide-y divide-slate-50">
+                                        <!-- Populated by JS -->
+                                        <tr>
+                                            <td colspan="4" class="text-center py-8 text-slate-400">Daten werden
+                                                geladen...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        </div>
+                        </div>
+                        </div>
+        </div>
+
+        <!-- Projekte View -->
+        <div id="view-projekte" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+                <!-- Action Bar -->
+                <div
+                    class="flex items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                    <h3 class="font-semibold text-slate-700 pl-2">Projektübersicht & Rentabilität</h3>
+                    <button onclick="openProjektModal()"
+                        class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow shadow-primary/30 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">add</span>
+                        Neues Projekt
+                    </button>
+                </div>
+
+                <!-- Projects Grid -->
+                <!-- Replace with list or card layout dependent on rentabilität -->
+                <div id="projekte-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    <!-- JS populated -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Projekt Details View -->
+        <div id="view-projekt-details" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1200px] mx-auto flex flex-col gap-6">
+
+                <!-- Action Bar & Header -->
+                <div
+                    class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+                    <div
+                        class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full -z-0">
+                    </div>
+                    <div class="relative z-10 flex items-start gap-4">
+                        <button onclick="closeProjektDetails()"
+                            class="mt-1 p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors tooltip"
+                            title="Zurück zur Übersicht">
+                            <span class="material-symbols-outlined">arrow_back</span>
+                        </button>
+                        <div>
+                            <div class="flex items-center gap-3 mb-1">
+                                <h2 id="pd-name" class="text-2xl font-bold text-slate-800 tracking-tight">Projektname
+                                </h2>
+                                <span id="pd-status"
+                                    class="inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-slate-100 text-slate-800 border border-slate-200">Status</span>
+                            </div>
+                            <p id="pd-kunde" class="text-sm text-slate-500 font-medium flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">domain</span> Kunde GmbH
+                            </p>
+                        </div>
+                    </div>
+                    <div class="relative z-10 flex gap-2">
+                        <button id="pd-edit-btn" onclick=""
+                            class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-slate-200">
+                            <span class="material-symbols-outlined text-[18px]">edit</span>
+                            Projekt bearbeiten
+                        </button>
+                    </div>
+                </div>
+
+                <!-- KPIs and Budget Progress -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                    <!-- KPI Cards -->
+                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
+                        <h3
+                            class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-5 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[16px]">account_balance_wallet</span>
+                            Finanz-Übersicht
+                        </h3>
+                        <div class="flex justify-between items-end">
+                            <div>
+                                <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+                                    Abrechenbarer Umsatz</p>
+                                <p id="pd-umsatz" class="text-3xl font-bold text-slate-800 tracking-tight">€ 0,00</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Budget
+                                    (Kostenlimit)</p>
+                                <p id="pd-budget" class="text-xl font-bold text-slate-500 tracking-tight">€ 0,00</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
+                        <div class="flex justify-between items-end mb-3">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Fortschritt ggü.
+                                Budget</span>
+                            <span id="pd-progress-text" class="text-xl font-bold text-slate-700">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-100 rounded-full h-4 mb-4">
+                            <div id="pd-progress-bar"
+                                class="bg-primary h-4 rounded-full transition-all duration-700 ease-out"
+                                style="width: 0%"></div>
+                        </div>
+                        <div class="flex justify-between items-center text-xs text-slate-500 font-medium">
+                            <span class="flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full bg-primary block"></span>
+                                Verbraucht: <span id="pd-verbraucht" class="text-slate-700">€ 0,00</span>
+                            </span>
+                            <span class="flex items-center gap-1.5">
+                                <span class="w-2.5 h-2.5 rounded-full bg-slate-300 block"></span>
+                                Rest: <span id="pd-rest" class="text-slate-700">€ 0,00</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notizen Section -->
+                <div id="pd-notizen-container" class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hidden">
+                    <h3 class="font-semibold text-slate-700 mb-3 flex items-center gap-2 text-sm">
+                        <span class="material-symbols-outlined text-[18px] text-slate-400">description</span>
+                        Projektbeschreibung & Notizen
+                    </h3>
+                    <div id="pd-notizen"
+                        class="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100 italic">
+                    </div>
+                </div>
+
+                <!-- Linked Documents -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Rechnungen -->
+                    <div
+                        class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col max-h-[500px]">
+                        <div
+                            class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center sticky top-0">
+                            <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px] text-primary">receipt_long</span>
+                                Verknüpfte Rechnungen
+                            </h3>
+                            <button type="button" onclick="createRechnungForProjekt()"
+                                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary bg-primary/10 rounded-md hover:bg-primary/20 transition-colors">
+                                <span class="material-symbols-outlined text-[16px]">add</span>
+                                Neue Rechnung
+                            </button>
+                        </div>
+                        <div class="p-0 overflow-auto flex-1">
+                            <table class="w-full text-left whitespace-nowrap">
+                                <thead class="sticky top-0 bg-white/95 backdrop-blur z-10">
+                                    <tr
+                                        class="text-slate-400 text-[10px] uppercase tracking-wider border-b border-slate-200">
+                                        <th class="px-4 py-3 font-semibold">Nummer</th>
+                                        <th class="px-4 py-3 font-semibold">Datum</th>
+                                        <th class="px-4 py-3 font-semibold">Status</th>
+                                        <th class="px-4 py-3 font-semibold text-right">Summe</th>
+                                        <th class="px-4 py-3 w-10"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pd-rechnungen-body" class="divide-y divide-slate-100 text-sm">
+                                </tbody>
+                            </table>
+                            <div id="pd-rechnungen-empty"
+                                class="hidden p-10 text-center text-slate-400 text-sm flex flex-col justify-center items-center gap-2 h-full">
+                                <span class="material-symbols-outlined text-4xl text-slate-200">receipt_long</span>
+                                Keine Rechnungen zugeordnet.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Angebote -->
+                    <div
+                        class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col max-h-[500px]">
+                        <div
+                            class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center sticky top-0">
+                            <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px] text-amber-500">request_quote</span>
+                                Verknüpfte Angebote
+                            </h3>
+                            <button type="button" onclick="createAngebotForProjekt()"
+                                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-600 bg-amber-500/10 rounded-md hover:bg-amber-500/20 transition-colors">
+                                <span class="material-symbols-outlined text-[16px]">add</span>
+                                Neues Angebot
+                            </button>
+                        </div>
+                        <div class="p-0 overflow-auto flex-1">
+                            <table class="w-full text-left whitespace-nowrap">
+                                <thead class="sticky top-0 bg-white/95 backdrop-blur z-10">
+                                    <tr
+                                        class="text-slate-400 text-[10px] uppercase tracking-wider border-b border-slate-200">
+                                        <th class="px-4 py-3 font-semibold">Nummer</th>
+                                        <th class="px-4 py-3 font-semibold text-center">Datum</th>
+                                        <th class="px-4 py-3 font-semibold">Status</th>
+                                        <th class="px-4 py-3 font-semibold text-right">Summe</th>
+                                        <th class="px-4 py-3 w-10"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pd-angebote-body" class="divide-y divide-slate-100 text-sm">
+                                </tbody>
+                            </table>
+                            <div id="pd-angebote-empty"
+                                class="hidden p-10 text-center text-slate-400 text-sm flex flex-col justify-center items-center gap-2 h-full">
+                                <span class="material-symbols-outlined text-4xl text-slate-200">request_quote</span>
+                                Keine Angebote zugeordnet.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- System Einstellungen View -->
+        <div id="view-einstellungen" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden">
+            <div class="max-w-4xl mx-auto flex flex-col gap-6">
+                <!-- Header -->
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800">Unternehmenseinstellungen</h2>
+                    <p class="text-sm text-slate-500 mt-1">Konfigurieren Sie Ihre Firmendaten für die
+                        Rechnungsausgabe.
+                    </p>
+                </div>
+
+                <!-- Form Section -->
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 bg-slate-50/50">
+                        <h3 class="text-base font-semibold text-slate-800 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[20px] text-primary">storefront</span>
+                            Firmendaten
+                        </h3>
+                    </div>
+                    <div class="p-6 space-y-6">
+                        <!-- Logo Upload -->
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Firmenlogo (für
+                                Rechnungen)</label>
+                            <div class="flex items-center gap-6">
+                                <div id="logo-preview-container"
+                                    class="w-32 h-32 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center bg-slate-50 overflow-hidden relative group">
+                                    <span
+                                        class="material-symbols-outlined text-4xl text-slate-300 group-hover:text-slate-400 transition-colors">image</span>
+                                    <img id="logo-preview-image"
+                                        class="absolute inset-0 w-full h-full object-contain hidden bg-white">
+                                </div>
+                                <div class="flex flex-col gap-2">
+                                    <input type="file" id="logo-upload" accept="image/png, image/jpeg, image/jpg"
+                                        class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary/5 file:text-primary hover:file:bg-primary/10 cursor-pointer transition-colors"
+                                        onchange="handleLogoUpload(event)">
+                                    <p class="text-xs text-slate-500 leading-snug">Max. 2MB. Erlaubte Formate: PNG,
+                                        JPG.<br>Dies wird auf der A4-Rechnung oben links platziert.</p>
+                                    <button type="button" onclick="removeLogo()"
+                                        class="text-sm text-red-500 hover:text-red-700 font-medium self-start mt-1 hidden focus:outline-none"
+                                        id="btn-remove-logo">Logo entfernen</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Firm/Address -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="col-span-1 md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Unternehmensname</label>
+                                <input type="text" id="setting-firma"
+                                    class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all"
+                                    placeholder="Musterfirma GmbH">
+                            </div>
+                            <div class="col-span-1 md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Adresse</label>
+                                <textarea id="setting-adresse" rows="3"
+                                    class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all resize-y"
+                                    placeholder="Musterstraße 1&#10;12345 Musterstadt"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bank Details -->
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 bg-slate-50/50">
+                        <h3 class="text-base font-semibold text-slate-800 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[20px] text-primary">account_balance</span>
+                            Bankverbindung & Steuernummer
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 flex-wrap">
+                            <div class="col-span-1 min-w-0">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Bankname</label>
+                                <input type="text" id="setting-bank"
+                                    class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all truncate"
+                                    placeholder="Musterbank eG">
+                            </div>
+                            <div class="col-span-1 min-w-0">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Steuernummer /
+                                    USt-IdNr.</label>
+                                <input type="text" id="setting-steuer"
+                                    class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all uppercase truncate"
+                                    placeholder="DE123456789">
+                            </div>
+                            <div class="col-span-1 md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">IBAN</label>
+                                <input type="text" id="setting-iban"
+                                    class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm font-mono text-slate-600 transition-all uppercase tracking-wider"
+                                    placeholder="DEXX XXXX XXXX XXXX XXXX XX">
+                            </div>
+                            <div class="col-span-1 min-w-0">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">BIC</label>
+                                <input type="text" id="setting-bic"
+                                    class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm font-mono text-slate-600 transition-all uppercase tracking-wider"
+                                    placeholder="XXXXXXXXXXX">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment Conditions -->
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 bg-slate-50/50">
+                        <h3 class="text-base font-semibold text-slate-800 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[20px] text-primary">payments</span>
+                            Zahlungskonditionen & Mahnwesen
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <!-- Standard Zahlungsziel -->
+                            <div class="col-span-1 md:col-span-3 pb-4 border-b border-slate-100">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Standard-Zahlungsziel (Tage)</label>
+                                <div class="relative w-full md:w-64">
+                                    <input type="number" id="setting-zahlungsziel" min="0"
+                                        class="w-full pl-4 pr-12 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all"
+                                        placeholder="14">
+                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                        <span class="text-slate-400 text-sm">Tage</span>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-1.5">Standardfrist für neue Rechnungen.</p>
+                            </div>
+
+                            <!-- Mahnstufe 1 -->
+                            <div class="col-span-1">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">1. Mahnung (Erinnerung)</label>
+                                <div class="relative">
+                                    <input type="number" id="setting-mahngebuehr-1" step="0.01" min="0"
+                                        class="w-full pl-4 pr-10 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all"
+                                        placeholder="0.00">
+                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                        <span class="text-slate-400 text-sm">€</span>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-1.5">Meist kostenlos oder geringe Gebühr.</p>
+                            </div>
+
+                            <!-- Mahnstufe 2 -->
+                            <div class="col-span-1">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">2. Mahnung</label>
+                                <div class="relative">
+                                    <input type="number" id="setting-mahngebuehr-2" step="0.01" min="0"
+                                        class="w-full pl-4 pr-10 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all"
+                                        placeholder="5.00">
+                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                        <span class="text-slate-400 text-sm">€</span>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-1.5">Erhöhte Gebühr für Verzug.</p>
+                            </div>
+
+                            <!-- Mahnstufe 3 -->
+                            <div class="col-span-1">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">3. Mahnung (Letzte)</label>
+                                <div class="relative">
+                                    <input type="number" id="setting-mahngebuehr-3" step="0.01" min="0"
+                                        class="w-full pl-4 pr-10 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all"
+                                        placeholder="10.00">
+                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                        <span class="text-slate-400 text-sm">€</span>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-1.5">Maximale Mahngebühr.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Allgemeine Einstellungen Section -->
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 bg-slate-50/50">
+                        <h3 class="text-base font-semibold text-slate-800 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[20px] text-primary">toggle_on</span>
+                            Erweiterte Optionen
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-slate-800">Manuelle Rechnungs- und Angebotsnummern</p>
+                                <p class="text-xs text-slate-500 mt-1">Erlaubt das manuelle Bearbeiten der automatisch generierten Nummern im Editor.</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="setting-manuelle-nummern" class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                            </label>
+                        </div>
+                        
+                        <div class="h-px bg-slate-200 my-4"></div>
+
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-slate-800">Standard-Eingabemodus (Preise)</p>
+                                <p class="text-xs text-slate-500 mt-1">Wählen Sie, ob Preise standardmäßig als Netto (zzgl. MwSt.) oder Brutto (inkl. MwSt.) eingegeben werden.</p>
+                            </div>
+                            <div class="w-48">
+                                <select id="setting-eingabemodus" class="w-full pl-3 pr-8 py-2 bg-white border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all cursor-pointer">
+                                    <option value="netto">Netto (B2B / Firmen)</option>
+                                    <option value="brutto">Brutto (B2C / Privat)</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="h-px bg-slate-200 my-4"></div>
+
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-slate-800">Rechnungsvorlage (Design)</p>
+                                <p class="text-xs text-slate-500 mt-1">Wählen Sie das Design für Ihre PDF-Rechnungen und Angebote.</p>
+                            </div>
+                            <div class="w-48">
+                                <select id="setting-rechnungsvorlage" class="w-full pl-3 pr-8 py-2 bg-white border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all cursor-pointer">
+                                    <option value="klassisch">Klassisch (Standard)</option>
+                                    <option value="modern">Modern (Elegant)</option>
+                                    <option value="minimalistisch">Minimalistisch</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Datensicherung / Backup Section -->
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 bg-amber-50/50">
+                        <h3 class="text-base font-semibold text-amber-800 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[20px] text-amber-600">backup</span>
+                            Datensicherung (Backup)
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                            <div class="flex-1">
+                                <p class="text-sm font-medium text-slate-800 mb-1">Sichern Sie Ihre Daten regelmäßig</p>
+                                <p class="text-xs text-slate-500 leading-relaxed">
+                                    Erstellen Sie eine Kopie Ihrer gesamten Datenbank (Rechnungen, Kunden, Artikel). 
+                                    Speichern Sie dieses Backup an einem sicheren Ort wie einem USB-Stick oder in Ihrem Cloud-Speicher (Dropbox, OneDrive etc.), 
+                                    um Datenverlust bei Hardware-Defekten vorzubeugen.
+                                </p>
+                            </div>
+                            <div class="flex flex-col items-center gap-2 w-full md:w-auto">
+                                <button type="button" onclick="createDatabaseBackup()"
+                                    class="w-full px-6 py-3 bg-amber-600 text-white font-semibold rounded-lg hover:bg-amber-700 shadow-lg shadow-amber-600/20 transition-all flex items-center justify-center gap-2 whitespace-nowrap">
+                                    <span class="material-symbols-outlined text-[20px]">cloud_upload</span>
+                                    Backup erstellen
+                                </button>
+                                <button type="button" onclick="openRestoreModal()"
+                                    class="text-slate-400 hover:text-slate-600 text-xs font-medium transition-colors py-1 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[14px]">history</span>
+                                    Backup wiederherstellen
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Save Action -->
+                <div class="flex justify-end gap-3 mt-4 mb-12">
+                    <button type="button" onclick="loadEinstellungenToForm()"
+                        class="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-colors focus:ring-2 focus:ring-slate-200">Zurücksetzen</button>
+                    <button type="button" onclick="saveEinstellungen()"
+                        class="px-6 py-2.5 text-sm font-semibold text-white bg-primary rounded-lg hover:bg-primary-dark shadow-md transition-colors flex items-center gap-2 focus:ring-2 focus:ring-primary/50">
+                        <span class="material-symbols-outlined text-[18px]">save</span>
+                        Einstellungen Speichern
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kunde Modal Overlay -->
+        <div id="kunde-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+            <div
+                class="bg-white rounded-lg shadow-xl w-full max-w-md border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 id="kunde-modal-title" class="text-lg font-semibold text-slate-800">Neuer Kunde</h3>
+                    <button onclick="closeKundeModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto">
+                    <form id="kunde-form" class="flex flex-col gap-4">
+                        <input type="hidden" id="kunde-id">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Kundennummer</label>
+                            <input type="text" id="kunde-kundennummer" required readonly
+                                class="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-md text-sm text-slate-600 font-mono"
+                                placeholder="Wird automatisch generiert...">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Firmen-/Name</label>
+                            <input type="text" id="kunde-name" required
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Adresse</label>
+                            <input type="text" id="kunde-adresse" required
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">PLZ</label>
+                                <input type="text" id="kunde-plz" required
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Ort</label>
+                                <input type="text" id="kunde-ort" required
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Telefonnummer</label>
+                                <input type="text" id="kunde-telefon"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">E-Mail-Adresse</label>
+                                <input type="email" id="kunde-email"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">USt-IdNr. <span
+                                    class="text-slate-400 font-normal">(Optional)</span></label>
+                            <input type="text" id="kunde-ustid"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm "
+                                placeholder="z.B. DE123456789">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4 mt-2">
+                            <div>
+                                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="checkbox" id="kunde-ist-bauleistender-13b" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                    <span>Bauleistender (§13b UStG)</span>
+                                </label>
+                                <label class="block text-sm font-medium text-slate-700 mt-2 mb-1">Gültig bis</label>
+                                <input type="date" id="kunde-ust-1-tg-gueltig-bis"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="checkbox" id="kunde-hat-freistellungsbescheinigung" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                    <span>Freistellungsbescheinigung</span>
+                                </label>
+                                <label class="block text-sm font-medium text-slate-700 mt-2 mb-1">Gültig bis</label>
+                                <input type="date" id="kunde-freistellung-gueltig-bis"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+
+                        <div class="pt-2">
+                            <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                <input type="checkbox" id="kunde-ist-umsatzsteuerfreie-vermietung" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                <span>Steuerfreie Vermietung (Ohne MwSt.)</span>
+                            </label>
+                        </div>
+
+                        <!-- Quick Paste Section -->
+                        <div class="mt-2 pt-4 border-t border-slate-100">
+                            <button type="button" onclick="toggleQuickPaste()"
+                                class="flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary-dark transition-colors">
+                                <span class="material-symbols-outlined text-[16px]">content_paste</span>
+                                Text einfügen (Schnell-Ausfüllen)
+                            </button>
+                            <div id="quick-paste-container" class="hidden mt-2">
+                                <textarea id="kunde-quick-paste" rows="4"
+                                    class="w-full px-2 py-1.5 border border-slate-200 rounded text-xs font-mono bg-slate-50 focus:bg-white focus:ring-1 focus:ring-primary outline-none resize-none"
+                                    placeholder="Name&#10;Strasse&#10;PLZ Ort&#10;Telefon&#10;Email&#10;USt-IdNr"
+                                    oninput="processQuickPaste(this.value)"></textarea>
+                                <p class="text-xs text-slate-500 mt-1 font-medium">Einfach Textblock hier einfügen (Strg + V), die Felder
+                                    füllen sich automatisch.</p>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="closeKundeModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                    <button onclick="saveKunde()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark shadow-sm">Speichern</button>
+                </div>
+            </div>
+        </div>
+
+
+
+        <!-- Rechnung Erstellen Modal -->
+        <div id="rechnung-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden overflow-y-auto">
+            <div class="min-h-screen px-4 text-center flex items-center justify-center">
+                <div
+                    class="inline-block w-full max-w-5xl my-8 text-left align-middle transition-all transform bg-white rounded-xl shadow-2xl border border-slate-200">
+
+                    <!-- Modal Header -->
+                    <div
+                        class="flex justify-between items-center px-8 py-5 border-b border-slate-200 bg-slate-50/80 rounded-t-xl sticky top-0 z-10">
+                        <div>
+                            <h3 id="rechnung-modal-title" class="text-2xl font-bold text-slate-800 tracking-tight">
+                                Neue
+                                Rechnung erstellen</h3>
+                            <p class="text-sm text-slate-500 mt-1">Geben Sie die Basisdaten und Positionen ein.</p>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span id="rechnung-modal-status"
+                                class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">Entwurf</span>
+                            <button onclick="closeRechnungModal()"
+                                class="text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 p-2 rounded-full transition-colors">
+                                <span class="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="p-8">
+                        <form id="rechnung-form" class="space-y-8">
+                            <input type="hidden" id="rechnung-id">
+
+                            <!-- Header Data Grid -->
+                            <div
+                                class="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
+                                <div class="space-y-5">
+                                    <h4
+                                        class="text-sm font-semibold text-slate-800 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                        <span class="material-symbols-outlined text-[18px] text-primary">person</span>
+                                        Kundendaten
+                                    </h4>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Kunde
+                                            auswählen
+                                            <span class="text-red-500">*</span></label>
+                                        <select id="rechnung-kunde" required onchange="handleKundeSelect(event)"
+                                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                            <option value="">Bitte wählen...</option>
+                                            <!-- JS populated -->
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Projekt
+                                            zuordnen
+                                            (Optional)</label>
+                                        <select id="rechnung-projekt"
+                                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                            <option value="">Kein Projekt</option>
+                                            <!-- JS populated -->
+                                        </select>
+                                    </div>
+                                    <div
+                                        class="bg-slate-50 rounded-lg p-4 border border-slate-200 min-h-[100px] flex items-center justify-center relative overflow-hidden group">
+                                        <!-- Animated background pattern -->
+                                        <div
+                                            class="absolute inset-0 opacity-[0.03] bg-[radial-gradient(#000_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none">
+                                        </div>
+
+                                        <div id="rechnung-kunde-details"
+                                            class="w-full text-sm text-slate-600 leading-relaxed font-mono relative z-10">
+                                            <p class="text-slate-400 italic text-center text-sm">Kein Kunde
+                                                ausgewählt
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="space-y-5">
+                                    <h4
+                                        class="text-sm font-semibold text-slate-800 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                        <span class="material-symbols-outlined text-[18px] text-primary">event</span>
+                                        <span id="rechnungsdetails-title">Rechnungsdetails</span>
+                                    </h4>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label id="rechnung-nr-label"
+                                                class="block text-sm font-medium text-slate-700 mb-1.5">Rechnungsnummer</label>
+                                            <input type="text" id="rechnung-nr" readonly
+                                                class="w-full px-4 py-2.5 bg-slate-100 border border-slate-300 rounded-lg text-sm text-slate-500 font-mono focus:outline-none cursor-not-allowed">
+                                        </div>
+                                        <div>
+                                            <label id="rechnung-datum-label"
+                                                class="block text-sm font-medium text-slate-700 mb-1.5">Rechnungsdatum</label>
+                                            <input type="date" id="rechnung-datum" required
+                                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center justify-between mb-1.5">
+                                            <label class="block text-sm font-medium text-slate-700">Fällig am /
+                                                Lieferdatum</label>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <input type="date" id="rechnung-faellig" required
+                                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+
+                                            <!-- Delivery Calculator -->
+                                            <div class="flex items-center gap-1 bg-slate-100 border border-slate-300 rounded-lg px-2 shadow-inner"
+                                                title="Wochenenden & Feiertage ausschließen">
+                                                <input type="number" id="rechnung-werktage" placeholder="Werktage"
+                                                    min="1"
+                                                    class="w-20 bg-transparent border-none text-sm focus:ring-0 p-1 text-center font-medium text-slate-700">
+                                                <button type="button" onclick="calculateDeliveryDate()"
+                                                    class="text-primary hover:text-primary-dark p-1 rounded transition-colors flex items-center justify-center bg-white border border-slate-200 shadow-sm">
+                                                    <span class="material-symbols-outlined text-[18px]">calculate</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <p class="text-[10px] text-slate-400 mt-1 italic text-right">
+                                            Feiertagsberechnung
+                                            (ohne Sa/So).</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Eingabemodus (Preise)</label>
+                                        <div class="flex gap-2 p-1 bg-slate-100 rounded-lg border border-slate-200">
+                                            <button type="button" id="btn-mode-netto" onclick="setEingabeModus('netto')"
+                                                class="flex-1 py-1.5 text-xs font-bold rounded-md transition-all shadow-sm bg-primary text-white">Netto (B2B)</button>
+                                            <button type="button" id="btn-mode-brutto" onclick="setEingabeModus('brutto')"
+                                                class="flex-1 py-1.5 text-xs font-bold rounded-md transition-all text-slate-600 hover:text-slate-800">Brutto (B2C)</button>
+                                            <input type="hidden" id="rechnung-eingabemodus" value="netto">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label id="rechnungsstatus-label"
+                                            class="block text-sm font-medium text-slate-700 mb-1.5">Rechnungsstatus</label>
+                                        <select id="rechnung-status" required
+                                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                            <option value="Ausstehend" selected>Ausstehend</option>
+                                            <option value="Bezahlt">Bezahlt</option>
+                                            <option value="Überfällig">Überfällig</option>
+                                            <option value="Entwurf">Entwurf</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Erweiterte Angaben -->
+                            <div class="bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
+                                <h4 class="text-sm font-semibold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">settings_applications</span>
+                                    Erweiterte Angaben (VOB/GoBD)
+                                </h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div class="space-y-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Rechnungsart</label>
+                                            <select id="rechnung-art"
+                                                class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                                <option value="REGULAER" selected>Reguläre Rechnung</option>
+                                                <option value="TEILRECHNUNG">Teilrechnung</option>
+                                                <option value="ABSCHLAG_KUMULIERT">Abschlagsrechnung (kumuliert)</option>
+                                                <option value="SCHLUSSRECHNUNG">Schlussrechnung</option>
+                                            </select>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Leistungszeitraum Von</label>
+                                                <input type="date" id="rechnung-leistungszeitraum-von"
+                                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Leistungszeitraum Bis</label>
+                                                <input type="date" id="rechnung-leistungszeitraum-bis"
+                                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Baustellen-Adresse</label>
+                                            <input type="text" id="rechnung-baustellen-adresse" placeholder="Straße, PLZ Ort..."
+                                                class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                        </div>
+                                    </div>
+                                    <div class="space-y-4">
+                                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer pt-2">
+                                            <input type="checkbox" id="rechnung-vob-vereinbart" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                            <span>VOB/B vereinbart</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer pt-2">
+                                            <input type="checkbox" id="rechnung-ist-privatkunde" onchange="handleRechtlicheCheckboxes()" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                            <span>Privatkunde (Hinweispflicht nach §14 Abs. 4 Nr. 9 UStG)</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer pt-2">
+                                            <input type="checkbox" id="rechnung-unterliegt-bauabzugsteuer" onchange="handleRechtlicheCheckboxes()" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                            <span>Unterliegt der Bauabzugsteuer (§48 EStG)</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer pt-2">
+                                            <input type="checkbox" id="rechnung-13b-ustg" onchange="handleRechtlicheCheckboxes()" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                            <span>§ 13b UStG (Reverse Charge)</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Bisherige Abschlagsrechnungen (Kumulation) -->
+                            <div id="rechnung-kumulation-section" class="bg-indigo-50/50 border border-indigo-100 rounded-lg p-6 shadow-sm hidden mb-6">
+                                <h4 class="text-sm font-semibold text-indigo-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-[18px] text-indigo-600">account_tree</span>
+                                    Bisherige Abschlagsrechnungen abziehen (Kumulativ)
+                                </h4>
+                                <div class="space-y-4">
+                                    <div class="flex gap-4">
+                                        <select id="rechnung-verrechnung-select" class="flex-1 px-4 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 text-sm transition-all">
+                                            <option value="">Vorherige Rechnung wählen...</option>
+                                            <!-- Populated dynamically -->
+                                        </select>
+                                        <button type="button" onclick="addVerrechnung()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm">
+                                            Hinzufügen
+                                        </button>
+                                    </div>
+                                    <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                                        <table class="w-full text-sm text-left">
+                                            <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
+                                                <tr>
+                                                    <th class="px-4 py-2 font-medium">Rechnung Nr.</th>
+                                                    <th class="px-4 py-2 font-medium">Datum</th>
+                                                    <th class="px-4 py-2 font-medium text-right">Abzugsbetrag (Netto)</th>
+                                                    <th class="px-4 py-2 w-16"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="rechnung-verrechnungen-list" class="divide-y divide-slate-100">
+                                                <!-- Dynamic rows -->
+                                            </tbody>
+                                        </table>
+                                        <div id="verrechnungen-empty-state" class="py-4 text-center text-slate-400 text-sm italic">
+                                            Keine bisherigen Abschlagsrechnungen ausgewählt.
+                                        </div>
+                                    </div>
+                                    <div class="flex justify-end pt-2">
+                                        <div class="text-sm font-semibold text-indigo-900 bg-indigo-100/50 px-4 py-2 rounded-lg border border-indigo-100 flex items-center gap-2">
+                                            <span>Summe Abzüge (Netto):</span>
+                                            <span id="verrechnungen-summe-netto" class="font-mono text-indigo-700 text-lg">€0,00</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Vortext</label>
+                                <textarea id="rechnung-vortext" rows="2"
+                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all"></textarea>
+                            </div>
+
+                            <!-- Line Items -->
+                            <div
+                                class="bg-white border text-left border-slate-200 rounded-lg shadow-sm overflow-hidden">
+                                <div
+                                    class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                                    <h4
+                                        class="text-sm font-semibold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                                        <span class="material-symbols-outlined text-[18px] text-primary">list_alt</span>
+                                        Positionen
+                                    </h4>
+                                    <button type="button" onclick="addRechnungPosition()"
+                                        class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary bg-primary/10 rounded-md hover:bg-primary/20 transition-colors">
+                                        <span class="material-symbols-outlined text-[16px]">add</span>
+                                        Zeile hinzufügen
+                                    </button>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm">
+                                        <thead class="bg-slate-50 border-b border-slate-200">
+                                            <tr>
+                                                <th class="px-6 py-3 font-semibold text-slate-600 w-12 text-center">
+                                                    #
+                                                </th>
+                                                <th class="px-6 py-3 font-semibold text-slate-600">
+                                                    Artikelbeschreibung
+                                                </th>
+                                                <th class="px-6 py-3 font-semibold text-slate-600 w-32 text-right">
+                                                    Menge
+                                                </th>
+                                                <th id="header-einzelpreis" class="px-6 py-3 font-semibold text-slate-600 w-40 text-right">
+                                                    Einzelpreis (€)</th>
+                                                <th class="px-3 py-3 font-semibold text-slate-600 w-24 text-right">
+                                                    MwSt
+                                                </th>
+                                                <th class="px-3 py-3 font-semibold text-slate-600 w-28 text-right">
+                                                    Rabatt
+                                                </th>
+                                                <th id="header-gesamtpreis" class="px-6 py-3 font-semibold text-slate-600 w-40 text-right">
+                                                    Gesamt (€)</th>
+                                                <th class="px-6 py-3 font-semibold text-slate-600 w-16 text-center">
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="rechnung-positionen" class="divide-y divide-slate-100">
+                                            <!-- JS populated rows -->
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- No Items Empty State -->
+                                <div id="rechnung-empty-state" class="hidden py-8 text-center bg-slate-50">
+                                    <span class="material-symbols-outlined text-4xl text-slate-300 mb-2">inbox</span>
+                                    <p class="text-sm text-slate-500">Keine Positionen hinzugefügt.</p>
+                                    <button type="button" onclick="addRechnungPosition()"
+                                        class="mt-3 text-sm font-medium text-primary hover:text-primary-dark">Position
+                                        hinzufügen</button>
+                                </div>
+                            </div>
+
+                            <!-- Totals Box and Advanced Financials -->
+                            <div class="flex justify-between items-start gap-8">
+
+                                <!-- Modifiers -->
+                                <div class="w-full max-w-sm space-y-4">
+                                    <div class="bg-slate-50 border border-slate-200 p-4 rounded-lg shadow-sm">
+                                        <label
+                                            class="block text-sm font-semibold text-slate-800 mb-2">Gesamtrabatt</label>
+                                        <div class="flex items-center gap-3">
+                                            <input type="number" id="rechnung-global-rabatt" min="0" step="1"
+                                                placeholder="0" oninput="calculateRechnungTotals()"
+                                                class="w-24 px-3 py-1.5 border border-slate-300 rounded text-sm text-right focus:ring-1 focus:ring-primary focus:border-primary">
+                                            
+                                            <div class="flex p-1 bg-slate-100 rounded-lg border border-slate-200 w-fit">
+                                                <button type="button" id="btn-rabatt-pct" onclick="setRabattType('%')" 
+                                                    class="px-3 py-1 text-xs font-bold rounded-md transition-all shadow-sm bg-primary text-white">%</button>
+                                                <button type="button" id="btn-rabatt-eur" onclick="setRabattType('€')" 
+                                                    class="px-3 py-1 text-xs font-bold rounded-md transition-all text-slate-600 hover:text-slate-800">€</button>
+                                                <input type="hidden" id="rechnung-global-rabatt-type" value="%">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="bg-slate-50 border border-slate-200 p-4 rounded-lg shadow-sm">
+                                        <label class="block text-sm font-semibold text-slate-800 mb-2">Bereits
+                                            gezahlt /
+                                            Anzahlung</label>
+                                        <div class="relative">
+                                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                <span class="text-slate-400 font-medium text-sm">€</span>
+                                            </div>
+                                            <input type="number" id="rechnung-anzahlung" min="0" step="0.01"
+                                                placeholder="0.00" oninput="calculateRechnungTotals()"
+                                                class="w-full pl-8 pr-4 py-1.5 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-primary focus:border-primary">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Totals -->
+                                <div
+                                    class="w-full max-w-sm bg-white rounded-xl border border-slate-200 p-6 shadow-sm shadow-slate-200/50">
+                                    <div class="space-y-3 text-sm">
+
+                                        <div class="flex justify-between items-center text-slate-500">
+                                            <span>Zwischensumme Positionen</span>
+                                            <span id="rechnung-zwischensumme"
+                                                class="font-mono text-slate-700">€0,00</span>
+                                        </div>
+                                        <div class="flex justify-between items-center text-emerald-600">
+                                            <span>Abzug Rabatt</span>
+                                            <span id="rechnung-rabatt-wert" class="font-mono">-€0,00</span>
+                                        </div>
+
+                                        <div
+                                            class="border-t border-slate-100 pt-3 flex justify-between items-center text-slate-600 font-medium">
+                                            <span>Nettobetrag (Leistungsstand)</span>
+                                            <span id="rechnung-netto" class="font-mono">€0,00</span>
+                                        </div>
+
+                                        <div id="rechnung-verrechnungen-row" class="hidden flex justify-between items-center text-indigo-600 pt-1 pb-1">
+                                            <span>Abzug bisherige Anforderungen (Netto)</span>
+                                            <span id="rechnung-verrechnungen-wert" class="font-mono">-</span>
+                                        </div>
+
+                                        <div id="rechnung-steuern-container" class="space-y-1 py-2 text-slate-500">
+                                            <!-- JS populated tax breakdown -->
+                                        </div>
+
+                                        <div
+                                            class="flex justify-between items-center text-lg font-bold text-slate-900 pt-3 border-t border-slate-200">
+                                            <span>Bruttobetrag</span>
+                                            <span id="rechnung-brutto" class="font-mono">€0,00</span>
+                                        </div>
+
+                                        <div class="flex justify-between items-center text-slate-500 pt-2 pb-1">
+                                            <span>Abzug Anzahlung</span>
+                                            <span id="rechnung-anzahlung-wert" class="font-mono text-slate-700">-</span>
+                                        </div>
+
+                                        <div id="rechnung-sicherheitseinbehalt-row" class="hidden flex justify-between items-center text-amber-600 pt-1 pb-1">
+                                            <span id="rechnung-sicherheitseinbehalt-label">Sicherheitseinbehalt</span>
+                                            <span id="rechnung-sicherheitseinbehalt-wert" class="font-mono">-</span>
+                                        </div>
+
+                                        <div
+                                            class="flex justify-between items-center text-xl font-bold text-primary pt-3 border-t-2 border-primary/20">
+                                            <span>Zahlbetrag</span>
+                                            <span id="rechnung-zahlbetrag" class="font-mono text-primary">€0,00</span>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Fusstext</label>
+                                <textarea id="rechnung-fusstext" rows="2"
+                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all"></textarea>
+                            </div>
+
+                            <datalist id="artikel-datalist"></datalist>
+                        </form>
+                    </div>
+
+                    <!-- Modal Actions -->
+                    <div
+                        class="px-8 py-5 border-t border-slate-200 bg-slate-50/80 rounded-b-xl flex justify-end items-center sticky bottom-0 z-10 backdrop-blur-sm">
+                        <div class="flex gap-3">
+                            <button onclick="closeRechnungModal()" type="button"
+                                class="px-5 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-all focus:ring-2 focus:ring-slate-200">Abbrechen</button>
+                            <button onclick="saveRechnung()" type="button" id="rechnung-modal-submit"
+                                class="px-6 py-2.5 text-sm font-semibold text-white bg-primary rounded-lg hover:bg-primary-dark shadow-md hover:shadow-lg transition-all active:scale-[0.98] focus:ring-2 focus:ring-primary/50 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px]">save</span>
+                                <span id="rechnung-modal-submit-text">Rechnung Speichern</span>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+        </div>
+
+        <!-- Projekt Erstellen Modal -->
+        <div id="projekt-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden overflow-y-auto">
+            <div class="min-h-screen px-4 text-center flex items-center justify-center">
+                <div
+                    class="inline-block w-full max-w-2xl my-8 text-left align-middle transition-all transform bg-white rounded-xl shadow-2xl border border-slate-200">
+                    <div
+                        class="flex justify-between items-center px-8 py-5 border-b border-slate-200 bg-slate-50/80 rounded-t-xl sticky top-0 z-10">
+                        <div>
+                            <h3 id="projekt-modal-title" class="text-2xl font-bold text-slate-800 tracking-tight">Neues
+                                Projekt</h3>
+                            <p class="text-sm text-slate-500 mt-1">Erfassen Sie Grunddaten und Budget für das Projekt.
+                            </p>
+                        </div>
+                        <button onclick="closeProjektModal()"
+                            class="text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 p-2 rounded-full transition-colors">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+                    <div class="p-8">
+                        <form id="projekt-form" class="space-y-6">
+                            <input type="hidden" id="projekt-id">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Projektname <span
+                                        class="text-red-500">*</span></label>
+                                <input type="text" id="projekt-name" required
+                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all"
+                                    placeholder="z.B. Website Relaunch 2024">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Kunde <span
+                                        class="text-red-500">*</span></label>
+                                <select id="projekt-kunde" required
+                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                    <option value="">Bitte wählen...</option>
+                                    <!-- JS populated -->
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Startdatum</label>
+                                    <input type="date" id="projekt-start"
+                                        class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Geplantes
+                                        Ende</label>
+                                    <input type="date" id="projekt-ende"
+                                        class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Budget (Kostenlimit)
+                                        €</label>
+                                    <input type="number" id="projekt-budget" step="100" min="0" placeholder="0.00"
+                                        class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Projektstatus</label>
+                                    <select id="projekt-status" required
+                                        class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                        <option value="Geplant" selected>Geplant</option>
+                                        <option value="In Bearbeitung">In Bearbeitung</option>
+                                        <option value="Abgeschlossen">Abgeschlossen</option>
+                                        <option value="Abgebrochen">Abgebrochen</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Sicherheitseinbehalt (%)</label>
+                                <input type="number" id="projekt-sicherheitseinbehalt" step="0.1" min="0" max="100" placeholder="0.0"
+                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Beschreibung oder Notizen
+                                    <span class="text-slate-400 font-normal">(Optional)</span></label>
+                                <textarea id="projekt-notizen" rows="3"
+                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all"
+                                    placeholder="Vertragsdetails, Anmerkungen oder Notizen..."></textarea>
+                            </div>
+                        </form>
+                    </div>
+                    <div
+                        class="px-8 py-5 border-t border-slate-200 bg-slate-50/80 rounded-b-xl flex justify-end gap-3 sticky bottom-0 z-10">
+                        <button onclick="closeProjektModal()" type="button"
+                            class="px-5 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-all focus:ring-2 focus:ring-slate-200">Abbrechen</button>
+                        <button onclick="saveProjekt()" type="button"
+                            class="px-6 py-2 text-sm font-semibold text-white bg-primary rounded-lg hover:bg-primary-dark shadow-md hover:shadow-lg transition-all focus:ring-2 focus:ring-primary/50 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[18px]">save</span> Speichern
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- PDF Preview Modal -->
+    <div id="pdf-preview-modal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] hidden flex-col">
+        <div class="h-16 bg-slate-800 text-white flex items-center justify-between px-6 shadow-md shrink-0">
+            <h3 id="pdf-preview-title" class="text-lg font-semibold tracking-tight">PDF Vorschau</h3>
+            <div class="flex items-center gap-4">
+                <button onclick="executePrint('print')"
+                    class="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm shadow-lg shadow-slate-900/30">
+                    <span class="material-symbols-outlined text-[18px]">print</span>
+                    Drucken
+                </button>
+                <button onclick="executePrint('save')"
+                    class="flex items-center gap-2 bg-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm shadow-lg shadow-primary/30">
+                    <span class="material-symbols-outlined text-[18px]">save</span>
+                    Als PDF Speichern
+                </button>
+                <button onclick="closePdfPreview()"
+                    class="text-slate-400 hover:text-white p-2 rounded-full transition-colors bg-slate-700 hover:bg-slate-600">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-auto p-8 flex justify-center bg-slate-100">
+            <!-- This container holds the exact print layout logic so user can verify -->
+            <div id="pdf-preview-container" class="bg-white shadow-2xl relative"
+                style="width: 210mm; min-height: 297mm;">
+                <!-- Content injected here by JS instead of the hidden template -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Print Template for actual printing -->
+    <div id="print-template"
+        class="hidden print:block print:w-full print:bg-white text-black text-sm absolute inset-0 z-[9999] bg-white">
+        <!-- JS copies preview content here when executePrint() is called -->
+    </div>
+
+    <!-- Steuerbericht Modal -->
+    <div id="steuerbericht-modal"
+        class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[150] hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md border border-slate-200 overflow-hidden">
+            <div class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">assessment</span>
+                    Steuerbericht Export
+                </h3>
+                <button onclick="closeSteuerberichtModal()" class="text-slate-400 hover:text-slate-600">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-slate-600 mb-6 leading-relaxed">
+                    Wählen Sie das gewünschte Exportformat für den Zeitraum <span id="steuerbericht-period-label" class="font-bold text-slate-800">...</span>.
+                </p>
+                <div class="grid grid-cols-1 gap-4">
+                    <button onclick="exportSteuerberichtPDF()"
+                        class="flex items-center gap-4 p-4 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-all group text-left">
+                        <div class="p-3 bg-red-100 text-red-600 rounded-lg group-hover:bg-red-600 group-hover:text-white transition-colors">
+                            <span class="material-symbols-outlined">picture_as_pdf</span>
+                        </div>
+                        <div>
+                            <p class="font-bold text-slate-800">PDF</p>
+                            <p class="text-xs text-slate-500">Zum Drucken und Archivieren (Offizieller Bericht)</p>
+                        </div>
+                    </button>
+                    <button onclick="printTaxReport(true);"
+                        class="flex items-center gap-4 p-4 rounded-xl border border-slate-200 hover:border-slate-500 hover:bg-slate-50 transition-all group text-left">
+                        <div class="p-3 bg-slate-100 text-slate-600 rounded-lg group-hover:bg-slate-600 group-hover:text-white transition-colors">
+                            <span class="material-symbols-outlined">print</span>
+                        </div>
+                        <div>
+                            <p class="font-bold text-slate-800">Einfacher Ausdruck</p>
+                            <p class="text-xs text-slate-500">Kompakte Liste ohne Grafiken</p>
+                        </div>
+                    </button>
+                    <button onclick="exportSteuerberichtCSV()"
+                        class="flex items-center gap-4 p-4 rounded-xl border border-slate-200 hover:border-emerald-500 hover:bg-emerald-50 transition-all group text-left">
+                        <div class="p-3 bg-emerald-100 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                            <span class="material-symbols-outlined">table_chart</span>
+                        </div>
+                        <div>
+                            <p class="font-bold text-slate-800">CSV exportieren</p>
+                            <p class="text-xs text-slate-500">Für DATEV / Excel (Semikolon-getrennt, Deutsch)</p>
+                        </div>
+                    </button>
+                </div>
+            </div>
+            <div class="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+                <button onclick="closeSteuerberichtModal()"
+                    class="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-800 transition-colors">
+                    Abbrechen
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Restore Backup Confirmation Modal -->
+    <div id="restore-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 overflow-hidden transform transition-all">
+            <div class="p-8 text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <span class="material-symbols-outlined text-red-600 text-4xl">warning</span>
+                </div>
+                <h3 class="text-xl font-bold text-slate-900 mb-2">Achtung!</h3>
+                <p class="text-slate-600 mb-6 leading-relaxed text-sm">
+                    Das Wiederherstellen eines Backups überschreibt alle aktuellen Daten unwiderruflich. <br>
+                    <strong>Alle aktuellen Daten werden gelöscht!</strong>
+                </p>
+                
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-6 text-left">
+                    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Zur Bestätigung 'BESTÄTIGEN' eingeben:</p>
+                    <input type="text" id="restore-confirm-input" 
+                        class="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-center font-bold tracking-widest outline-none transition-all"
+                        placeholder="BESTÄTIGEN" autocomplete="off">
+                </div>
+
+                <div class="flex gap-3">
+                    <button onclick="closeRestoreModal()" 
+                        class="flex-1 px-4 py-3 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-all">
+                        Abbrechen
+                    </button>
+                    <button id="restore-confirm-btn" onclick="handleRestoreBackup()" disabled
+                        class="flex-1 px-4 py-3 text-sm font-semibold text-white bg-red-600 rounded-xl hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-red-600/20 transition-all flex items-center justify-center gap-2">
+                        <span class="material-symbols-outlined text-[18px]">restore</span>
+                        Wiederherstellen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Extend Deadline Modal -->
+    <div id="extend-deadline-modal"
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">calendar_month</span>
+                    Zahlungsziel verlängern
+                </h3>
+                <button onclick="closeExtendModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="p-6">
+                <input type="hidden" id="extend-rechnung-id">
+                <label class="block text-sm font-medium text-slate-700 mb-2">Neues Fälligkeitsdatum</label>
+                <input type="date" id="extend-date-input" 
+                    class="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-4 focus:ring-primary/10 focus:border-primary text-sm shadow-sm transition-all">
+                <p class="text-xs text-slate-500 mt-3 leading-relaxed">
+                    Der Status wird automatisch auf "Ausstehend" gesetzt, wenn das Datum in der Zukunft liegt.
+                </p>
+            </div>
+            <div class="p-6 bg-slate-50 flex justify-end gap-3">
+                <button onclick="closeExtendModal()" 
+                    class="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors">
+                    Abbrechen
+                </button>
+                <button onclick="confirmExtendDeadline()" 
+                    class="px-6 py-2 bg-primary hover:bg-primary-dark text-white text-sm font-bold rounded-xl shadow-md shadow-primary/20 transition-all">
+                    Datum speichern
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mahnung Modal -->
+    <div id="mahnung-modal"
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-amber-500">gavel</span>
+                    Mahnstufe auswählen
+                </h3>
+                <button onclick="closeMahnungModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="p-6">
+                <input type="hidden" id="mahnung-rechnung-id">
+                <label class="block text-sm font-medium text-slate-700 mb-2">Bitte wählen Sie die gewünschte Mahnstufe:</label>
+                <select id="mahnung-level-select"
+                    class="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-4 focus:ring-primary/10 focus:border-primary text-sm shadow-sm transition-all">
+                    <option value="1">1. Zahlungserinnerung</option>
+                    <option value="2">2. Mahnung</option>
+                    <option value="3">3. & Letzte Mahnung (Inkasso)</option>
+                </select>
+            </div>
+            <div class="p-6 bg-slate-50 flex justify-end gap-3">
+                <button onclick="closeMahnungModal()" 
+                    class="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors">
+                    Abbrechen
+                </button>
+                <button onclick="confirmMahnungLevel()" 
+                    class="px-6 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-xl shadow-md shadow-amber-500/20 transition-all">
+                    Mahnung erstellen
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help Modal Overlay -->
+    <div id="help-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200">
+            <div class="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">help</span>
+                    Hilfe & Systeminformationen
+                </h3>
+                <button onclick="closeHelpModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- System Info -->
+                <div class="space-y-2">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest text-[10px]">Programm-Info</h4>
+                    <div class="bg-slate-50 p-4 rounded-lg border border-slate-100 space-y-1">
+                        <p class="text-sm font-bold text-slate-800">W-LINK ERP</p>
+                        <p class="text-xs text-slate-500">Version 1.0.5</p>
+                        <p class="text-xs text-slate-600 mt-2">Entwickelt von: <span class="font-semibold text-primary">Waleed Hussein</span></p>
+                        <p class="text-xs text-slate-600">Support: <a href="mailto:4kwaleed@gmail.com" class="text-primary hover:underline">4kwaleed@gmail.com</a></p>
+                    </div>
+                </div>
+                <!-- Shortcuts -->
+                <div class="space-y-2">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest text-[10px]">Tastenkombinationen</h4>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="flex items-center justify-between p-2.5 bg-slate-50 rounded border border-slate-100">
+                            <span class="text-xs text-slate-600">Neue Rechnung</span>
+                            <kbd class="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-[10px] font-bold shadow-sm">STRG + N</kbd>
+                        </div>
+                        <div class="flex items-center justify-between p-2.5 bg-slate-50 rounded border border-slate-100">
+                            <span class="text-xs text-slate-600">Drucken</span>
+                            <kbd class="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-[10px] font-bold shadow-sm">STRG + P</kbd>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+                <button onclick="closeHelpModal()" class="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-colors">Schließen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Confirmation Modal -->
+    <div id="custom-confirm-modal" 
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[300] hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in duration-200 border border-slate-200">
+            <div class="p-8 text-center">
+                <div class="w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto mb-6">
+                    <span class="material-symbols-outlined text-4xl">help_outline</span>
+                </div>
+                <h3 id="custom-confirm-title" class="text-xl font-bold text-slate-900 mb-2">Bestätigung</h3>
+                <p id="custom-confirm-message" class="text-slate-600 leading-relaxed text-sm mb-8">
+                    Möchten Sie diesen Vorgang wirklich fortsetzen?
+                </p>
+                <div class="flex gap-3">
+                    <button id="custom-confirm-cancel" 
+                        class="flex-1 px-4 py-3 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-all">
+                        Abbrechen
+                    </button>
+                    <button id="custom-confirm-ok" 
+                        class="flex-1 px-4 py-3 text-sm font-semibold text-white bg-primary rounded-xl hover:bg-primary-dark shadow-lg shadow-primary/20 transition-all">
+                        Bestätigen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modules -->
+    <script src="js/state.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/navigation.js"></script>
+    <script src="js/kunden.js"></script>
+    <script src="js/artikel.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/projekte.js"></script>
+    <script src="js/editor.js"></script>
+    <script src="js/einstellungen.js"></script>
+    <script src="js/berichte.js"></script>
+    <script src="js/datev.js"></script>
+    <script src="js/notifications.js"></script>
+    <script src="js/init.js"></script>
+</body>
+
+</html>

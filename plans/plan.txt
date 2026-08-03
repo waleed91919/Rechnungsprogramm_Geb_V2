@@ -1,0 +1,111 @@
+### 1. Strukturierte Textflexibilität (Vor- und Fußtexte)
+
+Handwerker benötigen zwingend dynamische Texte für Baustellenadressen, Lieferzeiträume und individuelle rechtliche Hinweise.
+
+* **Datenbank-Erweiterung (Tabelle `rechnungen`):**
+* `vortext` (TEXT): Freitextfeld für die Einleitung (z. B. "Sehr geehrte Damen und Herren...").
+* `fusstext` (TEXT): Freitextfeld für den Abschluss (z. B. "Zahlbar innerhalb von 14 Tagen...").
+* `leistungszeitraum_von` (DATE): Der Zeitpunkt der Leistung muss nach § 14 UStG exakt bestimmbar sein.
+
+
+* `leistungszeitraum_bis` (DATE): Für Leistungen, die sich über mehrere Wochen erstrecken.
+
+
+* `baustellen_adresse` (VARCHAR): Zwingend erforderlich, wenn die Rechnungsadresse von der tatsächlichen Baustelle abweicht.
+
+
+
+
+* **Logik & Layout:** Diese Felder müssen optional sein. Wenn sie befüllt sind, platziert die PDF-Engine den Vortext direkt unter den Betreff und den Fußtext direkt über den Summenblock.
+
+---
+
+### 2. Reverse-Charge-Verfahren (§ 13b UStG)
+
+Die Umkehr der Steuerschuldnerschaft ist im B2B-Baubereich essenziell, um Umsatzsteuerbetrug zu verhindern.
+
+* **Datenbank-Erweiterung:**
+* `ist_bauleistender_13b` (BOOLEAN) in der Kundentabelle: Aktiviert die Vorbelegung der 13b-Logik.
+
+
+* `ist_bauleistung` (BOOLEAN) in der Artikeltabelle: Unterscheidet zwischen reinen Materiallieferungen (FALSE) und Montage/Bauleistungen (TRUE).
+
+
+* `steuer_schluessel` (INT) in den Rechnungspositionen: Erlaubt die Mischung aus 19% USt und § 13b USt auf demselben Beleg.
+
+
+
+
+* **Berechnungslogik:** Wenn § 13b greift, wird der Steuersatz für diese Positionen systemseitig auf 0% gesetzt. Der Gesamt-Nettobetrag entspricht dann exakt dem Gesamt-Bruttobetrag.
+
+
+* **Logik & Layout:** Die Steuer darf betragsmäßig nicht ausgewiesen werden. Das System muss am Ende der Rechnung dynamisch folgenden Text einfügen: "Leistungen unterliegen gemäß § 13b UStG dem Reverse-Charge-Verfahren. Die Steuerschuldnerschaft geht auf den Leistungsempfänger über.".
+
+
+
+---
+
+### 3. Ausweis von Lohnkosten für Privatkunden (§ 35a EStG)
+
+Privatkunden können 20% der Handwerkerarbeitskosten von der Steuer absetzen. Ein fehlender Ausweis führt oft zu stornierten Rechnungen.
+
+* **Datenbank-Erweiterung (Tabelle `artikel_stammdaten`):**
+* `kostenart` (ENUM): Kategorisierung in MATERIAL, LOHN, MASCHINE, FAHRT.
+
+
+* `lohnanteil_prozent` (DECIMAL): Erlaubt die Zuweisung eines relativen Lohnanteils bei Mischkalkulationen (z. B. 60% Lohn, 40% Material).
+
+
+
+
+* **Berechnungslogik:** Der Algorithmus iteriert über alle Positionen, isoliert die Netto-Beträge für Lohn, Maschinen und Fahrten und schlägt darauf die Umsatzsteuer auf, um die Brutto-Arbeitskosten zu ermitteln. Materialkosten sind strikt von der Förderung ausgeschlossen.
+
+
+* **Logik & Layout:** Wenn der Kunde eine Privatperson ist, wird am Ende der Rechnung (unterhalb des Rechnungsbetrages) ein Satz generiert. Beispiel: "Hinweis zur Steuerermäßigung nach § 35a EStG: In dem oben ausgewiesenen Rechnungsbetrag sind steuerbegünstigte Arbeits-, Fahrt- und Maschinenkosten in Höhe von X € (netto) zzgl. Y € Umsatzsteuer, somit insgesamt Z € (brutto) enthalten."
+
+
+
+---
+
+### 4. Bauabzugsteuer (15%)
+
+Für B2B-Bauleistungen müssen oft 15% der Summe als Sicherheit für das Finanzamt einbehalten werden.
+
+* **Datenbank-Erweiterung:**
+* `hat_freistellungsbescheinigung` (BOOLEAN) in den Kreditorenstammdaten: Globaler Indikator für systemische Schnellabfragen.
+
+
+* `freistellung_gueltig_bis` (DATE) in den Kreditorenstammdaten: Überwacht die zeitliche Gültigkeit.
+
+
+* `bauabzugsteuer_betrag` (DECIMAL) in der Rechnungstabelle: Der berechnete Einbehalt.
+
+
+
+
+* **Berechnungslogik:** Die Bemessungsgrundlage ist primär der Bruttobetrag (Entgelt zuzüglich Umsatzsteuer). Nur wenn § 13b UStG angewendet wird, entspricht das Entgelt der Gegenleistung, wodurch die 15% vom Nettobetrag berechnet werden.
+
+
+* **Logik & Layout:** Auf dem Rechnungs-PDF darf die Bauabzugsteuer den Gesamt-Rechnungsbetrag buchhalterisch nicht verändern. Sie wird als "Einbehalt" vom finalen "Zahlbetrag" abgezogen.
+
+
+
+---
+
+### 5. Abschlags- und Schlussrechnungen (Kumulierte Methodik)
+
+Der absolute Branchenstandard bei Bauprojekten, um Liquidität während der Bauphase zu sichern.
+
+* **Datenbank-Erweiterung:**
+* `rechnungsart` (ENUM) in der Rechnungstabelle: Unterscheidung zwischen TEILRECHNUNG, ABSCHLAG_KUMULIERT, SCHLUSSRECHNUNG.
+
+
+* Neue Relationstabelle `rechnung_verrechnungen`: Benötigt Felder wie `aktuelle_rechnung_id`, `vorherige_rechnung_id` und `abzugsbetrag_netto`. Dies ist essenziell, um die Historie GoBD-konform aufzubauen.
+
+
+
+
+* **Berechnungslogik:** Die Abzüge der bisherigen Abschlagsrechnungen müssen zwingend auf der Netto-Ebene stattfinden, um Rundungsdifferenzen und einen doppelten Umsatzsteuerausweis zu verhindern. Erst auf die Netto-Restforderung wird die aktuelle Umsatzsteuer aufgeschlagen. Vertraglich vereinbarte Sicherheitseinbehalte (z. B. 5%) werden auf Basis der aktuellen kumulierten Gesamtleistung abgezogen.
+
+
+* **Logik & Layout:** Der Summenblock am Ende erfordert eine detaillierte Zahlungsaufstellung, in der jede Vorrechnung mit Datum und Rechnungsnummer zitiert wird.

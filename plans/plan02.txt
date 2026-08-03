@@ -1,0 +1,8 @@
+"Gute Arbeit mit den Texten und dem UI! Aber ACHTUNG: Du hast einen kritischen buchhalterischen Fehler in der Logik für den Sicherheitseinbehalt gemacht. Du hast geschrieben, dass dieser vom Bruttobetrag abgezogen wird. Das ist falsch und führt zu fehlerhafter Umsatzsteuer!
+
+Korrektur:
+Der vertragliche Sicherheitseinbehalt (z.B. 5%) MUSS zwingend vom Netto-Betrag (dem kumulierten Leistungsstand netto) abgezogen werden, BEVOR die 19% Umsatzsteuer auf die verbleibende Netto-Forderung aufgeschlagen wird. Bitte korrigiere diese Logik in der editor.js sofort.
+
+Nächster Schritt:
+Wenn du das korrigiert hast, ja, bitte starte mit dem Modul 'Kumulierte Abschlagsrechnungen'.
+Fokussiere dich dabei auf die in der Dokumentation beschriebene Parent-Child-Architektur in der Datenbank (Verknüpfung von aktueller Rechnung mit Vorrechnungen) und stelle sicher, dass auch hier alle Abzüge der Vorrechnungen strikt auf der Netto-Ebene passieren. Zeige mir, wie du die Datenbank-Tabellen und die Berechnungslogik dafür anpasst."
