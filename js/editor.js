@@ -382,6 +382,7 @@ function openRechnungModal() {
     }
     
     applyManuelleNummernSetting(existing);
+    applyUnternehmensartVisibility();
 }
 
 function setupAngebotModalUI() {
@@ -499,6 +500,7 @@ function openAngebotModal() {
     }
     
     applyManuelleNummernSetting(existing);
+    applyUnternehmensartVisibility();
 }
 
 function closeRechnungModal() {
@@ -685,6 +687,19 @@ function handlePositionChange(id, field, value) {
         pos.preis = parseFloat(value) || 0;
     } else if (field === 'mwst') {
         pos.mwst = parseInt(value) || 0;
+        if (!pos.is13b) {
+            pos.previousMwst = pos.mwst;
+        }
+    } else if (field === 'is13b') {
+        pos.is13b = !!value;
+        if (pos.is13b) {
+            if (pos.mwst !== 0) {
+                pos.previousMwst = pos.mwst;
+            }
+            pos.mwst = 0;
+        } else {
+            pos.mwst = pos.previousMwst !== undefined ? pos.previousMwst : 19;
+        }
     } else if (field === 'rabatt') {
         pos.rabatt = Math.max(0, Math.min(100, parseFloat(value) || 0)); // Cap 0-100%
     }
@@ -748,6 +763,7 @@ function createRechnungPositionRow(pos, index) {
 
     
     const isGlobal13b = document.getElementById('rechnung-13b-ustg') && document.getElementById('rechnung-13b-ustg').checked;
+    const isPos13b = isGlobal13b && pos.is13b;
     
     // MwSt cell
     const tdMwst = document.createElement('td');
@@ -758,13 +774,22 @@ function createRechnungPositionRow(pos, index) {
     selectMwst.style.backgroundImage = "url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%2394a3b8%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E')";
     selectMwst.style.backgroundPosition = 'right 0.5rem top 50%';
     selectMwst.style.backgroundSize = '0.65rem auto';
+    
+    const currentMwstShow = isPos13b ? 0 : pos.mwst;
+
     [19, 7, 0].forEach(rate => {
         const opt = document.createElement('option');
         opt.value = rate;
         opt.textContent = `${rate}%`;
-        if (pos.mwst == rate) opt.selected = true;
+        if (currentMwstShow == rate) opt.selected = true;
         selectMwst.appendChild(opt);
     });
+
+    if (isPos13b) {
+        selectMwst.disabled = true;
+        selectMwst.classList.add('opacity-50', 'bg-slate-100', 'cursor-not-allowed');
+    }
+
     tdMwst.appendChild(selectMwst);
     
     if (isGlobal13b) {
@@ -782,11 +807,6 @@ function createRechnungPositionRow(pos, index) {
         div13b.appendChild(cb13b);
         div13b.appendChild(lbl13b);
         tdMwst.appendChild(div13b);
-        
-        if (pos.is13b) {
-            selectMwst.disabled = true;
-            selectMwst.classList.add('opacity-50', 'bg-slate-100');
-        }
     }
     
     tr.appendChild(tdMwst);
@@ -1411,7 +1431,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const projektSelect = document.getElementById('rechnung-projekt');
     if (artSelect) artSelect.addEventListener('change', toggleAbschlagsKumulationUI);
     if (projektSelect) projektSelect.addEventListener('change', populateVerrechnungSelect);
+    applyUnternehmensartVisibility();
 });
+
+function applyUnternehmensartVisibility() {
+    const isHandwerk = (state.einstellungen.unternehmensart || 'handwerk') === 'handwerk';
+    const handwerkSection = document.getElementById('rechnung-handwerk-section');
+    if (handwerkSection) {
+        if (isHandwerk) {
+            handwerkSection.classList.remove('hidden');
+            if (typeof toggleAbschlagsKumulationUI === 'function') {
+                toggleAbschlagsKumulationUI();
+            }
+        } else {
+            handwerkSection.classList.add('hidden');
+            const kumulationSection = document.getElementById('rechnung-kumulation-section');
+            if (kumulationSection) {
+                kumulationSection.classList.add('hidden');
+            }
+        }
+    }
+}
 
 function handleRechtlicheCheckboxes(triggeredById) {
     const pKunde = document.getElementById('rechnung-ist-privatkunde');
@@ -1436,7 +1476,9 @@ function handleRechtlicheCheckboxes(triggeredById) {
             pKunde.disabled = false;
         }
     }
-    if (typeof calculateRechnungTotals === 'function') {
+    if (typeof renderRechnungPositionen === 'function') {
+        renderRechnungPositionen();
+    } else if (typeof calculateRechnungTotals === 'function') {
         calculateRechnungTotals();
     }
 }

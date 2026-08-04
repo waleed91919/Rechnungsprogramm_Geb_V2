@@ -18,7 +18,8 @@ const state = {
         mahngebuehr1: '0.00',
         mahngebuehr2: '5.00',
         mahngebuehr3: '10.00',
-        eingabemodus: 'netto'
+        eingabemodus: 'netto',
+        unternehmensart: 'handwerk'
     },
     // The nextId values will now be handled by DB AutoIncrement mostly, 
     // but we can preserve the placeholders if UI needs them directly based on local state lengths.

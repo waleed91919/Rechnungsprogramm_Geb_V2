@@ -1,0 +1,6 @@
+"Das PDF sieht im Summenblock und bei den Rechtstexten perfekt aus! Die Aufschlüsselung der Nettobeträge (regulär vs. 13b) im Summenblock ist rechtlich genau richtig.
+
+Es gibt aber noch einen kritischen Darstellungsfehler in der Artikeltabelle (Positionen) auf dem PDF: Obwohl Zeile 1 in der UI als '13B' markiert wurde, wird im generierten PDF in der Spalte 'MWST' bei BEIDEN Positionen fälschlicherweise '19%' abgedruckt.
+
+Bitte passe die generatePdf-Funktion (oder deine PDF-Template-Schleife) an:
+Wenn bei einer Position das Flag für § 13b gesetzt ist (z.B. is13b == true), dann MUSS in der Spalte 'MWST' auf dem PDF zwingend '0%' oder '13b' abgedruckt werden. Der Wert '19%' darf dort nur stehen, wenn es sich um eine reguläre Position handelt. Bitte korrigiere diesen Render-Fehler, damit die Tabelle nicht im Widerspruch zum korrekten Summenblock steht."

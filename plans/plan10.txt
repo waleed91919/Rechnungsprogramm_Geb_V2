@@ -1,0 +1,9 @@
+"Das Rendering ist leider immer noch fehlerhaft. Auf den neuen Screenshots sehe ich zwei kritische Probleme, die wir jetzt Schritt für Schritt beheben müssen:
+
+1. Das falsche DOM-Element wird exportiert: Die dunkle Seitenleiste ('PDF Vorschau') wird in das PDF gedruckt! Du übergibst an das PDF-Skript (z.B. html2pdf) den falschen Container.
+Fix: Bitte wähle AUSSCHLIESSLICH die ID oder Klasse des reinen weißen A4-Rechnungsblatts aus (z.B. document.getElementById('invoice-paper')). Stelle sicher, dass UI-Elemente wie Sidebars oder Buttons komplett außerhalb dieses Containers liegen.
+
+2. Zerstörter Footer durch falsches CSS (Positioning): Auf Seite 2 schwebt der Footer (Unternehmen, Bankverbindung) plötzlich ganz oben und überlappt das Wort 'RECHNUNG'. Das ist ein typischer Fehler, wenn position: absolute; oder position: fixed; verwendet wird.
+Fix: Entferne für die PDF-Generierung alle absoluten oder fixierten Positionierungen vom Footer. Der Footer muss sich im normalen Dokumentenfluss (Normal Document Flow) befinden (z.B. mit margin-top: auto in einem Flex-Container oder einfach als letztes Block-Element im HTML).
+
+Bitte isoliere den Rechnungs-Container korrekt und entferne fehlerhafte absolute Positionierungen, damit die Seitenumbrüche natürlich und sauber funktionieren."

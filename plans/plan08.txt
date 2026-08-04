@@ -1,0 +1,11 @@
+"Die Logik für die 0% und 19% in der Artikeltabelle auf dem PDF funktioniert jetzt perfekt, großartige Arbeit!
+
+Wir haben nun aber ein Rendering-Problem mit der PDF-Generierung (Paginierung / Seitenumbruch). Die Rechnung bricht falsch auf eine zweite Seite um. Der Footer (Bankverbindung etc.) erscheint plötzlich ganz oben auf Seite 2, und danach dupliziert/überschneidet sich der gesamte Rechnungsinhalt (Tabelle, Texte) noch einmal fehlerhaft.
+
+Bitte behebe diesen PDF-Seitenumbruch-Fehler in der js/einstellungen.js (oder wo der PDF-Export konfiguriert ist) und den dazugehörigen CSS-Klassen:
+
+1. CSS Page-Breaks: Füge den wichtigen Containern (wie dem Summenblock, den Rechtstexten und den Tabellenzeilen) die CSS-Eigenschaft page-break-inside: avoid; (oder break-inside: avoid;) hinzu, damit diese Blöcke nicht unsauber in der Mitte durchgeschnitten werden.
+2. Footer-Positionierung: Stelle sicher, dass der Footer absolut am Ende der Seite fixiert ist, ohne das Rendering-Skript (z.B. html2pdf/html2canvas) zu verwirren.
+3. PDF-Bibliothek Konfiguration: Falls du html2pdf.js nutzt, aktiviere die korrekten Pagebreak-Optionen (z.B. pagebreak: { mode: ['css', 'legacy'] }), um das Duplizieren von DOM-Elementen auf der zweiten Seite zu verhindern.
+
+Bitte überarbeite die PDF-Generierungslogik so, dass lange Rechnungen sauber auf eine zweite Seite fließen, ohne Elemente zu duplizieren."

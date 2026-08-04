@@ -292,10 +292,18 @@ function setupIpc() {
 
     // PDF Generierung
     const fs = require('fs');
-    ipcMain.handle('save:pdf', wrapHandler(async (event) => {
+    ipcMain.handle('save:pdf', wrapHandler(async (event, bufferData, defaultName = 'Dokument.pdf') => {
         const { dialog } = require('electron');
         const win = BrowserWindow.fromWebContents(event.sender);
-        const defaultPath = path.join(app.getPath('documents'), 'Dokument.pdf');
+        
+        let pdfBuffer = bufferData;
+        let fileName = defaultName;
+        if (typeof bufferData === 'string') {
+            fileName = bufferData;
+            pdfBuffer = null;
+        }
+
+        const defaultPath = path.join(app.getPath('documents'), fileName || 'Dokument.pdf');
 
         const { filePath } = await dialog.showSaveDialog(win, {
             title: 'Als PDF speichern',
@@ -304,12 +312,17 @@ function setupIpc() {
         });
 
         if (filePath) {
-            const pdfData = await event.sender.printToPDF({
-                printBackground: true,
-                pageSize: 'A4',
-                margins: { marginType: 'custom', top: 0, bottom: 0, left: 0, right: 0 }
-            });
-            fs.writeFileSync(filePath, pdfData);
+            let dataToWrite;
+            if (pdfBuffer && (pdfBuffer instanceof ArrayBuffer || ArrayBuffer.isView(pdfBuffer) || Buffer.isBuffer(pdfBuffer))) {
+                dataToWrite = Buffer.from(pdfBuffer);
+            } else {
+                dataToWrite = await event.sender.printToPDF({
+                    printBackground: true,
+                    pageSize: 'A4',
+                    margins: { marginType: 'custom', top: 0, bottom: 0, left: 0, right: 0 }
+                });
+            }
+            fs.writeFileSync(filePath, dataToWrite);
             focusWin(win);
             return { success: true, path: filePath };
         }

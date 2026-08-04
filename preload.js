@@ -21,7 +21,7 @@ contextBridge.exposeInMainWorld('api', {
     backupDatabase: () => ipcRenderer.invoke('db:backup'),
     restoreDatabase: () => ipcRenderer.invoke('db:restore'),
 
-    savePdf: () => ipcRenderer.invoke('save:pdf'),
+    savePdf: (buffer, defaultName) => ipcRenderer.invoke('save:pdf', buffer, defaultName),
 
     generateQrCode: (text) => ipcRenderer.invoke('qr:generate', text),
 

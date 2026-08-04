@@ -21,6 +21,9 @@ function loadEinstellungenToForm() {
     if (document.getElementById('setting-eingabemodus')) {
         document.getElementById('setting-eingabemodus').value = state.einstellungen.eingabemodus || 'netto';
     }
+    if (document.getElementById('setting-unternehmensart')) {
+        document.getElementById('setting-unternehmensart').value = state.einstellungen.unternehmensart || 'handwerk';
+    }
 
     const previewImg = document.getElementById('logo-preview-image');
     const btnRemove = document.getElementById('btn-remove-logo');
@@ -57,6 +60,9 @@ async function saveEinstellungen() {
     if (document.getElementById('setting-eingabemodus')) {
         state.einstellungen.eingabemodus = document.getElementById('setting-eingabemodus').value;
     }
+    if (document.getElementById('setting-unternehmensart')) {
+        state.einstellungen.unternehmensart = document.getElementById('setting-unternehmensart').value;
+    }
 
     try {
         await window.api.saveEinstellung('firmenname', state.einstellungen.firmenname);
@@ -80,11 +86,19 @@ async function saveEinstellungen() {
         if (state.einstellungen.eingabemodus) {
             await window.api.saveEinstellung('eingabemodus', state.einstellungen.eingabemodus);
         }
+        if (state.einstellungen.unternehmensart) {
+            await window.api.saveEinstellung('unternehmensart', state.einstellungen.unternehmensart);
+        }
         if (state.einstellungen.logo) {
             await window.api.saveEinstellung('logo', state.einstellungen.logo);
         } else {
             await window.api.saveEinstellung('logo', '');
         }
+
+        if (typeof applyUnternehmensartVisibility === 'function') {
+            applyUnternehmensartVisibility();
+        }
+
         showToast('Einstellungen erfolgreich gespeichert!', 'success');
     } catch (e) {
         console.error('Error saving settings:', e);
@@ -222,7 +236,9 @@ window.generatePdf = async function(id, isAngebot = false) {
         const gesamt = (pos.menge * pos.preis) * (1 - rabatt / 100);
 
         const tr = document.createElement('tr');
-        tr.className = 'border-b border-slate-200 text-sm';
+        tr.className = 'border-b border-slate-200 text-sm avoid-break pdf-no-break';
+        tr.style.pageBreakInside = 'avoid';
+        tr.style.breakInside = 'avoid';
 
         const tdIdx = document.createElement('td');
         tdIdx.className = 'py-3 pl-4 text-slate-500';
@@ -244,9 +260,11 @@ window.generatePdf = async function(id, isAngebot = false) {
         tdPreis.textContent = formatCurrency(pos.preis);
         tr.appendChild(tdPreis);
 
+        const isPos13b = (rech.unterliegt_13b && pos.is13b) || pos.is13b;
+
         const tdMwst = document.createElement('td');
         tdMwst.className = 'py-3 text-right text-slate-500';
-        tdMwst.textContent = `${pos.mwst}%`;
+        tdMwst.textContent = isPos13b ? '0%' : `${pos.mwst}%`;
         tr.appendChild(tdMwst);
 
         const tdRabatt = document.createElement('td');
@@ -503,7 +521,7 @@ window.generatePdf = async function(id, isAngebot = false) {
 
     if (vorlage === 'modern') {
         templateHtml = `
-                        <div class="max-w-4xl mx-auto bg-white min-h-[297mm] font-sans">
+                        <div id="invoice-paper" class="invoice-paper max-w-4xl mx-auto bg-white min-h-[297mm] font-sans flex flex-col justify-between relative">
                             <!-- Header Block -->
                             <div class="bg-slate-900 text-white px-12 py-12 flex justify-between items-center rounded-b-xl shadow-lg mb-8 mx-4">
                                 <div class="flex items-center gap-6">
@@ -563,7 +581,7 @@ window.generatePdf = async function(id, isAngebot = false) {
                                 </div>
                                 
                                 <!-- Totals & QR -->
-                                <div class="flex justify-between items-start mb-16 gap-12">
+                                <div class="flex justify-between items-start mb-16 gap-12 summenblock avoid-break pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">
                                     <div class="flex-1">
                                         ${legalTextsHtml}
                                         ${qrHtml}
@@ -612,10 +630,10 @@ window.generatePdf = async function(id, isAngebot = false) {
                                     </div>
                                 </div>
 
-                                ${fusstextHtml}
+                                ${fusstextHtml ? `<div class="mb-8 pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">${fusstextHtml}</div>` : ''}
 
                                 <!-- Footer -->
-                                <div class="mt-24 pt-8 border-t border-slate-200 text-xs text-slate-500 grid grid-cols-3 gap-8 text-left pb-12">
+                                <div class="mt-24 pt-8 border-t border-slate-200 text-xs text-slate-500 grid grid-cols-3 gap-8 text-left pb-12 pdf-footer avoid-break" style="break-inside: avoid; page-break-inside: avoid; position: static !important;">
                                     <div>
                                         <p class="font-bold text-slate-800 mb-2 uppercase tracking-wider text-[10px]">Unternehmen</p>
                                         <p>${sanitize(state.einstellungen.firmenname)}</p>
@@ -638,7 +656,7 @@ window.generatePdf = async function(id, isAngebot = false) {
         `;
     } else if (vorlage === 'minimalistisch') {
         templateHtml = `
-                        <div class="max-w-4xl mx-auto bg-white min-h-[297mm] font-serif">
+                        <div id="invoice-paper" class="invoice-paper max-w-4xl mx-auto bg-white min-h-[297mm] font-serif flex flex-col justify-between relative">
                             <div class="px-16 py-16">
                                 <!-- Header -->
                                 <div class="flex justify-between items-end mb-16 border-b-2 border-black pb-8">
@@ -690,7 +708,7 @@ window.generatePdf = async function(id, isAngebot = false) {
                                 </table>
 
                                 <!-- Totals & QR -->
-                                <div class="flex justify-between items-start mb-16 gap-12">
+                                <div class="flex justify-between items-start mb-16 gap-12 summenblock avoid-break pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">
                                     <div class="flex-1">
                                         ${legalTextsHtml}
                                         ${qrHtml ? `<div class="grayscale opacity-90">${qrHtml}</div>` : ''}
@@ -736,10 +754,10 @@ window.generatePdf = async function(id, isAngebot = false) {
                                     </div>
                                 </div>
 
-                                ${fusstextHtml}
+                                ${fusstextHtml ? `<div class="mb-8 pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">${fusstextHtml}</div>` : ''}
 
                                 <!-- Footer -->
-                                <div class="mt-32 pt-8 border-t border-gray-200 text-[10px] text-gray-500 grid grid-cols-3 gap-8 uppercase tracking-wider leading-relaxed">
+                                <div class="mt-32 pt-8 border-t border-gray-200 text-[10px] text-gray-500 grid grid-cols-3 gap-8 uppercase tracking-wider leading-relaxed pdf-footer avoid-break" style="break-inside: avoid; page-break-inside: avoid; position: static !important;">
                                     <div>
                                         <p class="text-black font-bold mb-2">Unternehmen</p>
                                         <p>${sanitize(state.einstellungen.firmenname)}</p>
@@ -762,7 +780,7 @@ window.generatePdf = async function(id, isAngebot = false) {
         `;
     } else {
         templateHtml = `
-                        <div class="max-w-4xl mx-auto bg-white min-h-[297mm]">
+                        <div id="invoice-paper" class="invoice-paper max-w-4xl mx-auto bg-white min-h-[297mm] flex flex-col justify-between relative">
                             <!-- Header Block -->
                             <div class="bg-slate-50 px-12 py-10 flex justify-between items-start border-b border-slate-200">
                                 <div>
@@ -815,7 +833,7 @@ window.generatePdf = async function(id, isAngebot = false) {
                                 ${legalTextsHtml}
 
                                 <!-- Totals & QR -->
-                                <div class="flex justify-between items-end mb-16 gap-8">
+                                <div class="flex justify-between items-end mb-16 gap-8 summenblock avoid-break pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">
                                     <div class="flex-1 max-w-sm">
                                         ${qrHtml}
                                     </div>
@@ -864,10 +882,10 @@ window.generatePdf = async function(id, isAngebot = false) {
                                     </div>
                                 </div>
 
-                                ${fusstextHtml}
+                                ${fusstextHtml ? `<div class="mb-8 pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">${fusstextHtml}</div>` : ''}
 
                                 <!-- Footer -->
-                                <div class="mt-24 pt-8 border-t border-slate-200 text-xs text-slate-500 grid grid-cols-3 gap-8 text-left">
+                                <div class="mt-24 pt-8 border-t border-slate-200 text-xs text-slate-500 grid grid-cols-3 gap-8 text-left pdf-footer avoid-break" style="break-inside: avoid; page-break-inside: avoid; position: static !important;">
                                     <div>
                                         <p class="font-semibold text-slate-700 mb-1">Unternehmen</p>
                                         <p>${sanitize(state.einstellungen.firmenname)}</p>
@@ -892,8 +910,9 @@ window.generatePdf = async function(id, isAngebot = false) {
 
     template.innerHTML = templateHtml;
 
+    const pdfFilename = `${isAngebot ? 'Angebot' : 'Rechnung'}_${rech.nr || 'Dokument'}.pdf`;
     setTimeout(() => {
-        openPdfPreview(template.innerHTML);
+        openPdfPreview(template.innerHTML, pdfFilename);
     }, 50);
 }
 
@@ -1111,9 +1130,11 @@ function generateMahnungItemsHtml(rech, MAHNGEBUHR) {
         tdPreis.textContent = formatCurrency(pos.preis);
         tr.appendChild(tdPreis);
 
+        const isPos13b = (rech.unterliegt_13b && pos.is13b) || pos.is13b;
+
         const tdMwst = document.createElement('td');
         tdMwst.className = 'py-3 text-right text-slate-500';
-        tdMwst.textContent = `${pos.mwst}%`;
+        tdMwst.textContent = isPos13b ? '0%' : `${pos.mwst}%`;
         tr.appendChild(tdMwst);
 
         const tdRabatt = document.createElement('td');
@@ -1197,7 +1218,7 @@ function buildMahnungHtmlTemplate(data) {
     const mahnungsNr = `${rech.nr}-M${level}`;
 
     return `
-                        <div class="max-w-4xl mx-auto bg-white min-h-[297mm] flex flex-col">
+                        <div id="invoice-paper" class="invoice-paper max-w-4xl mx-auto bg-white min-h-[297mm] flex flex-col justify-between relative">
                             <!-- Header Block -->
                             <div class="bg-slate-50 px-12 py-8 flex justify-between items-start border-b border-slate-200">
                                 <div>
@@ -1282,7 +1303,7 @@ function buildMahnungHtmlTemplate(data) {
                                 </div>
 
                                 <!-- Footer -->
-                                <div class="mt-auto pt-6 border-t border-slate-200 text-xs text-slate-500 grid grid-cols-3 gap-8 text-left">
+                                <div class="mt-auto pt-6 border-t border-slate-200 text-xs text-slate-500 grid grid-cols-3 gap-8 text-left pdf-footer avoid-break" style="break-inside: avoid; page-break-inside: avoid; position: static !important;">
                                     <div>
                                         <p class="font-semibold text-slate-700 mb-1">Unternehmen</p>
                                         <p>${sanitize(state.einstellungen.firmenname)}</p>
@@ -1306,12 +1327,14 @@ function buildMahnungHtmlTemplate(data) {
 }
 
 // --- PDF Preview Logic ---
-function openPdfPreview(htmlContent) {
+// --- PDF Preview & Export Logic ---
+function openPdfPreview(htmlContent, filename = 'Rechnung.pdf') {
     const previewContainer = document.getElementById('pdf-preview-container');
     const modal = document.getElementById('pdf-preview-modal');
 
     // Inject content into preview
     previewContainer.innerHTML = htmlContent;
+    previewContainer.dataset.filename = filename;
 
     // Show Modal
     modal.classList.remove('hidden');
@@ -1328,28 +1351,79 @@ async function executePrint(mode = 'print') {
     const printTemplate = document.getElementById('print-template');
     const previewContainer = document.getElementById('pdf-preview-container');
 
-    // Copy the exact previewed content to the hidden print template
-    printTemplate.innerHTML = previewContainer.innerHTML;
+    // Target ONLY the inner invoice document element (#invoice-paper or firstElementChild)
+    const invoiceElement = document.getElementById('invoice-paper') || previewContainer.querySelector('#invoice-paper') || previewContainer.firstElementChild || previewContainer;
 
-    // Give the DOM a tiny moment to render the template
-    setTimeout(async () => {
-        if (mode === 'save') {
+    if (mode === 'save') {
+        const filename = previewContainer.dataset.filename || 'Rechnung.pdf';
+        const opt = {
+            margin: [10, 10, 10, 10],
+            filename: filename,
+            image: { type: 'jpeg', quality: 0.98 },
+            html2canvas: {
+                scale: 2,
+                useCORS: location.protocol !== 'file:',
+                allowTaint: true,
+                windowWidth: 1024,
+                logging: false
+            },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['css', 'legacy'], avoid: ['.avoid-break', '.pdf-no-break', '.pdf-footer'] }
+        };
+
+        if (typeof html2pdf !== 'undefined') {
             try {
-                const result = await window.api.savePdf();
-                if (result.success) {
+                showToast('PDF-Export wird vorbereitet...', 'info');
+                const pdfArrayBuffer = await html2pdf().set(opt).from(invoiceElement).output('arraybuffer');
+                
+                if (window.api && window.api.savePdf) {
+                    const result = await window.api.savePdf(pdfArrayBuffer, filename);
+                    if (result && result.success) {
+                        showToast('PDF erfolgreich gespeichert', 'success');
+                    } else if (result && !result.cancelled) {
+                        showToast('Fehler beim Speichern der PDF', 'error');
+                    }
+                } else {
+                    // Browser environment direct download
+                    await html2pdf().set(opt).from(invoiceElement).save();
                     showToast('PDF erfolgreich gespeichert', 'success');
-                } else if (!result.cancelled) {
+                }
+            } catch (error) {
+                console.error('html2pdf error:', error);
+                // Fallback to native printToPDF via Electron
+                try {
+                    printTemplate.innerHTML = invoiceElement.outerHTML || previewContainer.innerHTML;
+                    const result = await window.api.savePdf(null, filename);
+                    if (result && result.success) {
+                        showToast('PDF erfolgreich gespeichert', 'success');
+                    } else if (result && !result.cancelled) {
+                        showToast('Fehler beim Speichern der PDF', 'error');
+                    }
+                } catch (fallbackErr) {
+                    console.error('Save PDF fallback error:', fallbackErr);
+                    showToast('Fehler beim Speichern der PDF: ' + (error.message || error), 'error');
+                }
+            }
+        } else {
+            // Fallback to electron savePdf when html2pdf is not loaded
+            try {
+                printTemplate.innerHTML = invoiceElement.outerHTML || previewContainer.innerHTML;
+                const result = await window.api.savePdf(null, filename);
+                if (result && result.success) {
+                    showToast('PDF erfolgreich gespeichert', 'success');
+                } else if (result && !result.cancelled) {
                     showToast('Fehler beim Speichern der PDF', 'error');
                 }
             } catch (error) {
                 console.error('Save PDF error:', error);
                 showToast('Fehler beim Speichern der PDF', 'error');
             }
-        } else {
-            // Trigger native print (Electron handles this internally)
-            window.print();
         }
-
-        // Preview stays open so user can decide when to leave or do multiple actions
-    }, 100);
+    } else {
+        // Copy preview content to hidden print template for native browser print
+        printTemplate.innerHTML = invoiceElement.outerHTML || previewContainer.innerHTML;
+        setTimeout(() => {
+            window.print();
+        }, 100);
+    }
 }

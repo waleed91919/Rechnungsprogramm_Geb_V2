@@ -1,0 +1,6 @@
+"Das UI für die Positionsebene sieht gut aus, aber wir brauchen noch eine kleine UX-Verbesserung, um die Nutzer nicht zu verwirren.
+
+Bitte passe die editor.js an:
+Wenn die Checkbox '13B (0%)' in einer Zeile aktiviert wird, muss das darüberliegende MwSt-Dropdown (Select-Feld) für diese Zeile zwingend deaktiviert (disabled) werden, und der angezeigte Wert sollte visuell auf '0%' oder leer springen. Wenn die Checkbox wieder deaktiviert wird, soll das Dropdown wieder freigegeben werden (enabled) und auf den Standardwert (z.B. 19%) zurückspringen.
+
+Setze das bitte um, damit der Nutzer nicht gleichzeitig 19% im Dropdown sieht und 13B angehakt hat."

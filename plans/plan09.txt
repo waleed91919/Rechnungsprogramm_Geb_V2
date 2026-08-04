@@ -1,0 +1,19 @@
+"Das war leider ein Rückschritt. Das PDF-Layout ist jetzt komplett zerschossen. Es sieht so aus, als ob das Styling (Breite) kaputt ist und die PDF-Engine versucht, die gesamte UI (inklusive Sidebar) anstatt nur das Rechnungsdokument zu rendern. Die Inhalte überschneiden sich und sind extrem gequetscht.
+
+Bitte mache die fehlerhaften Layout-Änderungen rückgängig und setze diese robuste Lösung für den PDF-Export um:
+
+1. Nur das Rechnungs-Element rendern: Stelle sicher, dass du html2pdf() NUR auf den Container anwendest, der die eigentliche Rechnung enthält (z.B. #invoice-document oder .a4-page), NICHT auf den äußeren Wrapper, der die UI-Elemente wie 'PDF Vorschau' enthält.
+
+2. Fixe Breite für html2canvas (Gegen das Quetschen): Das PDF-Skript denkt aktuell, es sei auf einem kleinen Bildschirm. Füge in den html2pdf Optionen zwingend windowWidth im html2canvas Objekt hinzu:
+var opt = {
+  margin: [10, 10, 10, 10],
+  filename: 'Rechnung.pdf',
+  image: { type: 'jpeg', quality: 0.98 },
+  html2canvas: { scale: 2, useCORS: true, windowWidth: 1024 }, // Wichtig: Zwingt zu Desktop-Breite
+  jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+  pagebreak: { mode: 'css', avoid: '.avoid-break' }
+};
+
+3. Gezielter Page-Break: Entferne alle pauschalen page-break CSS-Regeln, die du vorher wild verteilt hast. Gib stattdessen NUR den Elementen, die nicht getrennt werden dürfen (wie dem Summenblock .summenblock und den einzelnen Tabellenzeilen tr), die Klasse avoid-break. Im CSS definierst du dann: .avoid-break { page-break-inside: avoid; break-inside: avoid; }.
+
+Bitte repariere die PDF-Generierung nach diesen Vorgaben, damit die Rechnung wieder das korrekte A4-Format hat und nicht gequetscht wird."

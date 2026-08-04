@@ -482,7 +482,7 @@ function generateSteuerberichtHtml(data, periodText) {
     const { totalNetto, tax19, tax7, totalBrutto, tableRows } = data;
 
     return `
-        <div class="p-10 max-w-5xl mx-auto bg-white text-slate-800" style="font-family: 'Inter', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
+        <div id="invoice-paper" class="invoice-paper p-10 max-w-5xl mx-auto bg-white text-slate-800 flex flex-col justify-between relative" style="font-family: 'Inter', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact;">
             <div class="flex justify-between items-end border-b-4 border-primary pb-8 mb-8">
                 <div>
                     <h1 class="text-3xl font-black uppercase tracking-tighter text-primary">Umsatzsteuerbericht</h1>

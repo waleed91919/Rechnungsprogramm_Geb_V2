@@ -15,6 +15,7 @@
         href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
         rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script>
         tailwind.config = {
             darkMode: "class",
@@ -46,11 +47,37 @@
         }
     </script>
     <style>
-        /* PDF Print Fix */
+        /* PDF Print & Page Break Styles */
+        .avoid-break,
+        .pdf-no-break,
+        .pdf-footer {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            position: static !important;
+        }
+
         @media print {
             @page {
                 size: A4;
                 margin: 0mm;
+            }
+            html, body {
+                background-color: #ffffff !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                height: auto !important;
+                overflow: visible !important;
+            }
+            body > *:not(#print-template) {
+                display: none !important;
+            }
+            #print-template {
+                display: block !important;
+                position: relative !important;
+                width: 100% !important;
+                height: auto !important;
+                overflow: visible !important;
+                background: white !important;
             }
         }
 
@@ -1465,6 +1492,21 @@
 
                         <div class="flex items-center justify-between">
                             <div>
+                                <p class="text-sm font-medium text-slate-800">Unternehmensart / Handwerks-Modul</p>
+                                <p class="text-xs text-slate-500 mt-1">Wählen Sie, ob es sich um ein Handwerksunternehmen (mit Handwerks-Modul: VOB, Bauabzugsteuer §48, §13b, Abschlagsrechnungen) oder ein normales Unternehmen (Handel / Dienstleistung) handelt.</p>
+                            </div>
+                            <div class="w-64">
+                                <select id="setting-unternehmensart" class="w-full pl-3 pr-8 py-2 bg-white border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all cursor-pointer">
+                                    <option value="handwerk">Handwerksunternehmen (Handwerksmodul aktiv)</option>
+                                    <option value="normal">Normales Unternehmen (Handel / Dienstleistung)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="h-px bg-slate-200 my-4"></div>
+
+                        <div class="flex items-center justify-between">
+                            <div>
                                 <p class="text-sm font-medium text-slate-800">Rechnungsvorlage (Design)</p>
                                 <p class="text-xs text-slate-500 mt-1">Wählen Sie das Design für Ihre PDF-Rechnungen und Angebote.</p>
                             </div>
@@ -1787,11 +1829,11 @@
                                 </div>
                             </div>
 
-                            <!-- Erweiterte Angaben -->
-                            <div class="bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
+                            <!-- Erweiterte Angaben (Handwerksmodul) -->
+                            <div id="rechnung-handwerk-section" class="bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
                                 <h4 class="text-sm font-semibold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <span class="material-symbols-outlined text-[18px] text-primary">settings_applications</span>
-                                    Erweiterte Angaben (VOB/GoBD)
+                                    <span class="material-symbols-outlined text-[18px] text-primary">engineering</span>
+                                    Handwerk & Erweiterte Angaben (VOB/GoBD)
                                 </h4>
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                                     <div class="space-y-4">
@@ -2073,7 +2115,6 @@
                 </div>
             </div>
         </div>
-        </div>
 
         <!-- Projekt Erstellen Modal -->
         <div id="projekt-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden overflow-y-auto">
@@ -2205,7 +2246,7 @@
 
     <!-- Hidden Print Template for actual printing -->
     <div id="print-template"
-        class="hidden print:block print:w-full print:bg-white text-black text-sm absolute inset-0 z-[9999] bg-white">
+        class="hidden print:block print:w-full print:bg-white text-black text-sm relative z-[9999] bg-white">
         <!-- JS copies preview content here when executePrint() is called -->
     </div>
 
