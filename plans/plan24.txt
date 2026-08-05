@@ -1,0 +1,14 @@
+"Wir machen jetzt weiter mit dem Hinzufügen der 'Einheit' (z.B. Stk., m², Std., pauschal) für die Rechnungspositionen, genau wie es in klassischen ERP-Systemen Standard ist.
+
+Bitte implementiere die 'Einheit' vollständig in das System:
+
+1. UI-Update (editor.js / Rechnungserstellung):
+Füge direkt neben dem Eingabefeld für die 'Menge' (und dem Aufmaß-Button) ein kleines Dropdown-Menü (<select>) für die 'Einheit' hinzu. Standard-Optionen sollten sein: Stk., m², m³, lfm, Std., Pauschal.
+
+2. Datenbank & Speichern:
+Stelle sicher, dass der Wert einheit im Model und beim Speichern der Rechnungspositionen in der SQLite-Datenbank (in der entsprechenden Tabelle für Positionen) mitgespeichert und beim Laden der Rechnung wieder korrekt ins UI geladen wird.
+
+3. PDF & Vorschau Update (code.html / einstellungen.js):
+Passe das Template für die finale Rechnung/PDF an. In der Spalte 'Menge' soll nun die Zahl zusammen mit der Einheit angezeigt werden (z.B. 23.2 m² oder 1 Pauschal), anstatt nur der nackten Zahl.
+
+Bitte zeige mir die genauen Code-Änderungen für das HTML (Select-Feld), die JS-Logik zum Speichern/Laden und das PDF-Template."

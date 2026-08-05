@@ -1,0 +1,11 @@
+"Die Buttons sind jetzt initial klickbar und das Scrollen funktioniert, danke! ABER es gibt einen neuen Freeze: Sobald ich auf 'Als PDF Speichern' oder 'Drucken' klicke, wird die Aktion zwar ausgeführt, aber DANACH friert das UI ein. Ich kann nicht mehr auf das 'X' klicken oder nochmal drucken.
+
+Das ist ein klassisches State-Reset-Problem. Die Funktion executePrint() (vermutlich in einstellungen.js oder editor.js) blockiert den Main-Thread oder vergisst, das UI nach dem asynchronen Vorgang (z.B. html2pdf Promise) wieder freizugeben.
+
+Bitte korrigiere die executePrint() Funktion (und verwandte Logik) wie folgt:
+
+1. Async/Await & Finally Block: Stelle sicher, dass die PDF-Generierung (html2pdf) sauber mit Promises (oder async/await) verarbeitet wird. Nutze einen .finally() Block (oder finally im try/catch), um das UI IMMER wieder zu entsperren (Buttons wieder enablen, Lade-Overlays entfernen), egal ob der Export erfolgreich war oder fehlgeschlagen ist.
+2. Fokus/Event-Verlust: Wenn window.print() in Electron/Browsern aufgerufen wird, verliert das Modal oft den Fokus. Stelle sicher, dass nach dem Schließen des System-Druckdialogs die Events des Modals weiterhin feuern.
+3. Keine Endlosschleifen: Prüfe, ob beim Re-Rendern nach dem Drucken Fehler geworfen werden, die das Skript abbrechen lassen.
+
+Bitte zeige mir die überarbeitete executePrint() Funktion mit sauberem Error-Handling und UI-Reset."

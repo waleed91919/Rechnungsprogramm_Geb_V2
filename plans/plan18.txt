@@ -1,0 +1,23 @@
+"Der Nutzer hat uns gerade den entscheidenden Hinweis gegeben, der dieses Problem schon einmal gelöst hat: Ein automatischer 'Auto-Close' direkt nach dem nativen Speichern/Drucken verursacht einen Thread-Lock (Fokus-Verlust zwischen OS und Electron/Browser). Die Lösung, die das UI-Freeze in der Vergangenheit behoben hat, ist ein expliziter BESTÄTIGUNGS-BUTTON (Confirmation Button)!
+
+Wir müssen das automatische Schließen abbrechen und den Nutzer zwingen, nach dem Speichern aktiv auf 'OK' zu klicken, um den JavaScript Event-Loop wieder aufzuwecken.
+
+Bitte setze das sofort in der executePrint() Funktion (und ggf. in der InvoiceView.js) um:
+
+1. Auto-Close entfernen: Entferne den Code, der das Modal (closePdfPreview()) automatisch schließt, nachdem html2pdf oder window.print() fertig ist.
+
+2. Bestätigungs-Button implementieren (Der Lebensretter):
+Sobald der Vorgang erfolgreich war, darfst du das Modal nicht schließen. Ändere stattdessen das UI im Modal: Verstecke den PDF-Container und die alten Buttons, und zeige stattdessen eine klare Erfolgsmeldung mit einem großen 'OK / Schließen' Bestätigungs-Button an.
+
+Alternativ (als schnellster und härtester Fix): Verwende einen nativen Browser-Alert mit einem Timeout, um den Thread zu zwingen, den Fokus zurückzuholen, BEVOR das Modal geschlossen wird:
+JavaScript
+
+setTimeout(() => {
+    alert("Vorgang erfolgreich! Klicken Sie auf OK, um fortzufahren.");
+    // ERST HIER, NACHDEM DER NUTZER GEKLICKT HAT, DAS MODAL SCHLIESSEN:
+    if (window.invoiceView) window.invoiceView.closePdfPreview();
+}, 500);
+
+3. UI Sauberkeit: Wenn du den Alert nutzt, stelle sicher, dass die finally-Block-Reste (wie pointerEvents = 'auto') trotzdem ausgeführt werden. Wenn du einen eigenen HTML-Button ins Modal baust, binde closePdfPreview() strikt an diesen neuen 'OK'-Button.
+
+Bitte implementiere diese 'Bestätigungs-Button'-Lösung. Der manuelle Klick des Nutzers wird den Freeze-Bug endgültig eliminieren!"

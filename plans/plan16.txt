@@ -1,0 +1,30 @@
+"Das UI friert NACH dem Speichern/Drucken immer noch ein! Das bedeutet, dass der finally-Block entweder gar nicht erreicht wird (weil ein Promise z.B. bei der Electron IPC-Bridge unendlich hängt) ODER dass html2pdf das Live-DOM beim Rendern dauerhaft blockiert (z.B. durch unsichtbare Canvas-Overlays).
+
+Wir machen jetzt Schluss mit diesem Fehler. Implementiere diesen radikalen und narrensicheren Fix in der executePrint Funktion in einstellungen.js:
+
+1. DOM-Klon verwenden (Zerstörung des Live-DOMs verhindern):
+Übergib an html2pdf().from(...) NICHT das Live-Element, sondern einen sauberen Klon!
+JavaScript
+
+const elementToPrint = invoiceElement.cloneNode(true);
+// Dann: html2pdf().set(opt).from(elementToPrint)...
+
+Dadurch kann die PDF-Engine das sichtbare UI unmöglich einfrieren oder verändern.
+
+2. Auto-Close bei Erfolg (Beste UX):
+Wenn das Speichern oder Drucken ERFOLGREICH war, schließe das Modal einfach automatisch! Rufe bei Erfolg sofort auf:
+JavaScript
+
+if (window.invoiceView && typeof window.invoiceView.closePdfPreview === 'function') {
+    window.invoiceView.closePdfPreview();
+}
+
+3. Harter Notfall-Reset im finally-Block:
+Füge im finally-Block zusätzlich diese Zeilen hinzu, um eventuell hängengebliebene unsichtbare Overlays mit Gewalt zu entfernen und das Event-System zu zwingen:
+JavaScript
+
+document.body.style.pointerEvents = 'auto';
+const modal = document.getElementById('pdf-preview-modal');
+if (modal) modal.style.pointerEvents = 'auto';
+
+Bitte setze den Klon (cloneNode), das Auto-Close bei Erfolg und den harten CSS-Reset im finally-Block sofort um. Das wird den Freeze endgültig beenden!"

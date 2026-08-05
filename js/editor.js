@@ -31,57 +31,25 @@ async function storniereRechnung(id) {
     if (!original) return;
 
     if (await safeConfirm(`Möchten Sie für die Rechnung ${original.nr} wirklich eine Stornorechnung (Gutschrift) erstellen? Dies kann nicht rückgängig gemacht werden.`)) {
-
-        // Mark original as Storniert and lock it
-        original.status = 'Storniert';
-        original.isLocked = true;
-
-        // Deep copy positions and negative them
-        const stornoPositionen = JSON.parse(JSON.stringify(original.positionen)).map(p => {
-            p.menge = p.menge * -1; // Negative quantity makes everything negative
-            return p;
-        });
-
-        const stornoNr = "STORNO - " + original.nr;
-        const today = new Date().toISOString().split('T')[0];
-
-        const stornoDoc = {
-            id: null,
-            type: 'rechnung',
-            nr: stornoNr,
-            datum: today,
-            faellig: today, // Storno is immediate
-            kundeId: original.kundeId,
-            projektId: original.projektId,
-            positionen: stornoPositionen,
-            netto: original.netto * -1,
-            steuer: original.steuer * -1,
-            brutto: original.brutto * -1,
-            globalRabattAbzug: (original.globalRabattAbzug || 0) * -1,
-            anzahlung: 0, // Doesn't apply to Storno usually
-            zahlbetrag: (original.zahlbetrag || original.brutto) * -1,
-            status: 'Bezahlt', // Storno is effectively settled
-            isLocked: true // Storno inherently locked
-        };
+        const stornoData = window.InvoiceController.createStornoData(original);
+        if (!stornoData) return;
 
         try {
-            // Save updated original invoice
-            await window.api.saveDocument(original);
-            // Save new storno doc
-            await window.api.saveDocument(stornoDoc);
+            const model = new window.InvoiceModel(window.api);
+            const newState = await model.storniereRechnung(stornoData.updatedOriginal, stornoData.stornoDoc);
 
-            // Resync all frontend state from DB to get updated stock and IDs
-            const newState = await window.api.getFullState();
-            state.angebote = newState.angebote;
-            state.rechnungen = newState.rechnungen;
-            state.artikel = newState.artikel;
+            if (newState) {
+                state.angebote = newState.angebote;
+                state.rechnungen = newState.rechnungen;
+                state.artikel = newState.artikel;
+            }
 
             if (document.getElementById('view-dashboard') && !document.getElementById('view-dashboard').classList.contains('hidden')) {
                 renderDashboard();
             } else if (document.getElementById('view-rechnungen') && !document.getElementById('view-rechnungen').classList.contains('hidden')) {
                 renderRechnungen();
             }
-            showToast(`Stornorechnung ${stornoNr} wurde erfolgreich erstellt.`, 'success');
+            showToast(`Stornorechnung ${stornoData.stornoNr} wurde erfolgreich erstellt.`, 'success');
         } catch (e) {
             console.error('Fehler beim Stornieren:', e);
             showToast('Fehler beim Stornieren der Rechnung', 'error');
@@ -94,12 +62,11 @@ async function markAsPaid(id) {
     if (!rech) return;
 
     if (await safeConfirm(`Möchten Sie die Rechnung ${rech.nr} als bezahlt markieren?`)) {
-        rech.status = 'Bezahlt';
         try {
-            await window.api.saveDocument(rech);
+            const model = new window.InvoiceModel(window.api);
+            await model.markAsPaid(rech);
             showToast(`Rechnung ${rech.nr} als bezahlt markiert.`, 'success');
             
-            // Refresh UI
             if (document.getElementById('view-dashboard') && !document.getElementById('view-dashboard').classList.contains('hidden')) {
                 renderDashboard();
             } else if (document.getElementById('view-rechnungen') && !document.getElementById('view-rechnungen').classList.contains('hidden')) {
@@ -610,6 +577,7 @@ function addRechnungPosition() {
         artikelId: '',
         name: '', // Allow custom Name
         menge: 1,
+        einheit: 'Stk.',
         preis: 0,
         mwst: 19,
         rabatt: 0 // New field
@@ -683,6 +651,8 @@ function handlePositionChange(id, field, value) {
         }
     } else if (field === 'menge') {
         pos.menge = parseFloat(value) || 0;
+    } else if (field === 'einheit') {
+        pos.einheit = value || 'Stk.';
     } else if (field === 'preis') {
         pos.preis = parseFloat(value) || 0;
     } else if (field === 'mwst') {
@@ -736,17 +706,49 @@ function createRechnungPositionRow(pos, index) {
     tdArt.appendChild(divRel);
     tr.appendChild(tdArt);
 
-    // Menge cell
+    // Menge cell mit Einheit & Aufmaß-Button
     const tdMenge = document.createElement('td');
     tdMenge.className = 'px-6 py-3';
+    const divMengeWrapper = document.createElement('div');
+    divMengeWrapper.className = 'flex items-center gap-1';
+
     const inputMenge = document.createElement('input');
     inputMenge.type = 'number';
     inputMenge.min = '0';
     inputMenge.step = 'any';
     inputMenge.value = pos.menge;
     inputMenge.onblur = (e) => handlePositionChange(pos.id, 'menge', e.target.value);
-    inputMenge.className = 'w-full px-3 py-1.5 border border-slate-300 rounded text-sm text-right focus:ring-1 focus:ring-primary focus:border-primary';
-    tdMenge.appendChild(inputMenge);
+    inputMenge.className = 'w-full px-2 py-1.5 border border-slate-300 rounded text-sm text-right focus:ring-1 focus:ring-primary focus:border-primary';
+
+    const selectEinheit = document.createElement('select');
+    selectEinheit.className = 'px-2 py-1.5 border border-slate-300 rounded text-xs bg-slate-50 focus:ring-1 focus:ring-primary focus:border-primary shrink-0';
+    selectEinheit.onchange = (e) => handlePositionChange(pos.id, 'einheit', e.target.value);
+
+    const einheitenOptions = ['Stk.', 'm²', 'm³', 'lfm', 'Std.', 'Pauschal'];
+    const currentEinheit = pos.einheit || 'Stk.';
+    if (!einheitenOptions.includes(currentEinheit)) {
+        einheitenOptions.push(currentEinheit);
+    }
+
+    einheitenOptions.forEach(optVal => {
+        const opt = document.createElement('option');
+        opt.value = optVal;
+        opt.textContent = optVal;
+        if (optVal === currentEinheit) opt.selected = true;
+        selectEinheit.appendChild(opt);
+    });
+
+    const btnAufmass = document.createElement('button');
+    btnAufmass.type = 'button';
+    btnAufmass.title = 'Aufmaß / Mengenberechnung öffnen';
+    btnAufmass.className = 'p-1.5 bg-slate-100 hover:bg-primary hover:text-white border border-slate-300 rounded text-slate-600 transition-colors flex items-center justify-center shrink-0';
+    btnAufmass.innerHTML = '<span class="material-symbols-outlined text-[16px]">straighten</span>';
+    btnAufmass.onclick = () => openAufmassModalForPosition(pos.id);
+
+    divMengeWrapper.appendChild(inputMenge);
+    divMengeWrapper.appendChild(selectEinheit);
+    divMengeWrapper.appendChild(btnAufmass);
+    tdMenge.appendChild(divMengeWrapper);
     tr.appendChild(tdMenge);
 
     // Preis cell
@@ -898,264 +900,49 @@ function setRabattType(type) {
 
 
 function calculateRechnungTotals() {
-    let positionenNetto = 0;
-    let positionenBrutto = 0;
-    let taxes = { 19: 0, 7: 0 };
-    const mode = document.getElementById('rechnung-eingabemodus') ? document.getElementById('rechnung-eingabemodus').value : 'netto';
+    if (!window.invoiceView && window.InvoiceView) {
+        window.invoiceView = new window.InvoiceView(window.formatCurrency);
+    }
+    if (!window.invoiceModel && window.InvoiceModel) {
+        window.invoiceModel = new window.InvoiceModel(window.api);
+    }
+
+    if (!window.invoiceView || !window.InvoiceController) {
+        console.warn("MVC Invoice components not yet initialized.");
+        return;
+    }
+
+    let currentProjekt = null;
+    const projektSelect = document.getElementById('rechnung-projekt');
+    if (projektSelect && projektSelect.value) {
+        const projektId = parseInt(projektSelect.value);
+        currentProjekt = state.projekte ? state.projekte.find(p => parseInt(p.id) === projektId) : null;
+    }
 
     state.currentRechnungTotals13bNetto = 0;
     state.currentRechnungTotalsNormalNetto = 0;
 
-    state.currentRechnungPositionen.forEach(pos => {
-        const rabatt = parseFloat(pos.rabatt) || 0;
-        let rowNetto = 0;
-        let rowBrutto = 0;
-        let tax = 0;
-
-        const isGlobal13b = document.getElementById('rechnung-13b-ustg') && document.getElementById('rechnung-13b-ustg').checked;
-        const pos13b = isGlobal13b && pos.is13b;
-
-        if (mode === 'netto') {
-            rowNetto = (pos.menge * pos.preis) * (1 - rabatt / 100);
-            tax = pos13b ? 0 : (rowNetto * (pos.mwst / 100));
-            rowBrutto = rowNetto + tax;
-        } else {
-            rowBrutto = (pos.menge * pos.preis) * (1 - rabatt / 100);
-            if (pos13b) {
-                rowNetto = rowBrutto;
-                tax = 0;
-            } else {
-                rowNetto = rowBrutto / (1 + pos.mwst / 100);
-                tax = rowBrutto - rowNetto;
-            }
+    const calculated = window.invoiceView.handleInputEvent(
+        state.currentRechnungPositionen || [],
+        state.currentRechnungVerrechnungen || [],
+        currentProjekt,
+        (res) => {
+            state.currentRechnungTotals13bNetto = res.totals13bNetto;
+            state.currentRechnungTotalsNormalNetto = res.totalsNormalNetto;
         }
+    );
 
-        positionenNetto += rowNetto;
-        positionenBrutto += rowBrutto;
-        
-        if (pos13b) {
-            state.currentRechnungTotals13bNetto += rowNetto;
-        } else {
-            state.currentRechnungTotalsNormalNetto += rowNetto;
-            if (pos.mwst > 0) {
-                if (!taxes[pos.mwst]) taxes[pos.mwst] = 0;
-                taxes[pos.mwst] += tax;
-            }
-        }
-    });
-
-    document.getElementById('rechnung-zwischensumme').innerText = formatCurrency(mode === 'netto' ? positionenNetto : positionenBrutto);
-
-    // Global Discount
-    const globalRabattVal = parseFloat(document.getElementById('rechnung-global-rabatt').value) || 0;
-    const globalRabattType = document.getElementById('rechnung-global-rabatt-type').value;
-
-    let abzug = 0;
-    const baseForGlobalRabatt = mode === 'netto' ? positionenNetto : positionenBrutto;
-    
-    if (globalRabattVal > 0) {
-        if (globalRabattType === '%') {
-            abzug = baseForGlobalRabatt * (globalRabattVal / 100);
-        } else {
-            abzug = globalRabattVal;
-        }
-    }
-
-    // Recalculate taxes proportionally if there's a global discount
-    let totalTax = 0;
-    const taxContainer = document.getElementById('rechnung-steuern-container');
-    taxContainer.innerHTML = '';
-
-    let nettoNachRabatt = 0;
-    let bruttoNachRabatt = 0;
-    let sicherheitseinbehaltNetto = 0;
-    let sicherheitseinbehaltProzent = 0;
-    let verrechnungenSummeNetto = 0;
-
-    // Calculate Verrechnungen Sum
-    if (state.currentRechnungVerrechnungen && state.currentRechnungVerrechnungen.length > 0) {
-        verrechnungenSummeNetto = state.currentRechnungVerrechnungen.reduce((sum, v) => sum + v.abzugsbetrag_netto, 0);
-    }
-
-    if (mode === 'netto') {
-        nettoNachRabatt = positionenNetto - abzug;
-        if (nettoNachRabatt < 0) nettoNachRabatt = 0;
-        const rabattFaktor = positionenNetto > 0 ? (nettoNachRabatt / positionenNetto) : 1;
-
-        // Calculate Sicherheitseinbehalt
-        const projektSelect = document.getElementById('rechnung-projekt');
-        if (projektSelect && projektSelect.value) {
-            const projektId = parseInt(projektSelect.value);
-            const projekt = state.projekte.find(p => parseInt(p.id) === projektId);
-            if (projekt && projekt.sicherheitseinbehalt_prozent > 0) {
-                sicherheitseinbehaltProzent = projekt.sicherheitseinbehalt_prozent;
-                sicherheitseinbehaltNetto = nettoNachRabatt * (sicherheitseinbehaltProzent / 100);
-            }
-        }
-
-        let steuerpflichtigesNetto = nettoNachRabatt - sicherheitseinbehaltNetto - verrechnungenSummeNetto;
-        if (steuerpflichtigesNetto < 0) steuerpflichtigesNetto = 0;
-        const taxableRatio = nettoNachRabatt > 0 ? (steuerpflichtigesNetto / nettoNachRabatt) : 0;
-
-        totalTax = 0;
-        taxContainer.innerHTML = '';
-
-        Object.keys(taxes).forEach(rate => {
-            const baseTax = taxes[rate] * rabattFaktor; // Tax after global discount
-            const adjustedTax = baseTax * taxableRatio; // Tax after sicherheitseinbehalt & verrechnungen
-            totalTax += adjustedTax;
-            
-            const div = document.createElement('div');
-            div.className = 'flex justify-between items-center text-slate-500';
-            const spanLabel = document.createElement('span');
-            spanLabel.textContent = `zzgl. ${rate}% MwSt.` + (taxableRatio < 1 ? ` (auf gemindertes Netto)` : '');
-            const spanVal = document.createElement('span');
-            spanVal.className = 'font-mono';
-            spanVal.textContent = formatCurrency(adjustedTax);
-            div.appendChild(spanLabel);
-            div.appendChild(spanVal);
-            taxContainer.appendChild(div);
-        });
-
-        bruttoNachRabatt = steuerpflichtigesNetto + totalTax;
-
-        // UI Updates for deductions
-        const sichRow = document.getElementById('rechnung-sicherheitseinbehalt-row');
-        if (sicherheitseinbehaltNetto > 0) {
-            if (sichRow) sichRow.classList.remove('hidden');
-            document.getElementById('rechnung-sicherheitseinbehalt-label').innerText = `Sicherheitseinbehalt Netto (${sicherheitseinbehaltProzent}%)`;
-            document.getElementById('rechnung-sicherheitseinbehalt-wert').innerText = '-' + formatCurrency(sicherheitseinbehaltNetto);
-        } else if (sichRow) {
-            sichRow.classList.add('hidden');
-        }
-
-        const verrRow = document.getElementById('rechnung-verrechnungen-row');
-        if (verrechnungenSummeNetto > 0) {
-            if (verrRow) verrRow.classList.remove('hidden');
-            const verrWert = document.getElementById('rechnung-verrechnungen-wert');
-            if (verrWert) verrWert.innerText = '-' + formatCurrency(verrechnungenSummeNetto);
-        } else if (verrRow) {
-            verrRow.classList.add('hidden');
-        }
-
-        var sicherheitseinbehalt = sicherheitseinbehaltNetto;
-
-        if (totalTax === 0) {
-            const div = document.createElement('div');
-            div.className = 'text-right text-xs text-slate-400 italic';
-            div.textContent = 'Keine Steuern berechnet';
-            taxContainer.appendChild(div);
-        }
-        
-    } else {
-        // Mode Brutto
-        bruttoNachRabatt = positionenBrutto - abzug;
-        if (bruttoNachRabatt < 0) bruttoNachRabatt = 0;
-        const rabattFaktor = positionenBrutto > 0 ? (bruttoNachRabatt / positionenBrutto) : 1;
-
-        let totalTaxBase = 0;
-        Object.keys(taxes).forEach(rate => {
-            totalTaxBase += (taxes[rate] * rabattFaktor);
-        });
-        nettoNachRabatt = bruttoNachRabatt - totalTaxBase;
-
-        const projektSelect = document.getElementById('rechnung-projekt');
-        if (projektSelect && projektSelect.value) {
-            const projektId = parseInt(projektSelect.value);
-            const projekt = state.projekte.find(p => parseInt(p.id) === projektId);
-            if (projekt && projekt.sicherheitseinbehalt_prozent > 0) {
-                sicherheitseinbehaltProzent = projekt.sicherheitseinbehalt_prozent;
-                sicherheitseinbehaltNetto = nettoNachRabatt * (sicherheitseinbehaltProzent / 100);
-            }
-        }
-
-        let steuerpflichtigesNetto = nettoNachRabatt - sicherheitseinbehaltNetto - verrechnungenSummeNetto;
-        if (steuerpflichtigesNetto < 0) steuerpflichtigesNetto = 0;
-        const taxableRatio = nettoNachRabatt > 0 ? (steuerpflichtigesNetto / nettoNachRabatt) : 0;
-
-        totalTax = 0;
-        taxContainer.innerHTML = '';
-
-        Object.keys(taxes).forEach(rate => {
-            const baseTax = taxes[rate] * rabattFaktor; 
-            const adjustedTax = baseTax * taxableRatio; 
-            totalTax += adjustedTax;
-            
-            const div = document.createElement('div');
-            div.className = 'flex justify-between items-center text-slate-500';
-            const spanLabel = document.createElement('span');
-            spanLabel.textContent = `darin enthaltene ${rate}% MwSt.` + (taxableRatio < 1 ? ` (angepasst)` : '');
-            const spanVal = document.createElement('span');
-            spanVal.className = 'font-mono';
-            spanVal.textContent = formatCurrency(adjustedTax);
-            div.appendChild(spanLabel);
-            div.appendChild(spanVal);
-            taxContainer.appendChild(div);
-        });
-
-        bruttoNachRabatt = steuerpflichtigesNetto + totalTax;
-
-        // UI Updates for deductions
-        const sichRow = document.getElementById('rechnung-sicherheitseinbehalt-row');
-        if (sicherheitseinbehaltNetto > 0) {
-            if (sichRow) sichRow.classList.remove('hidden');
-            document.getElementById('rechnung-sicherheitseinbehalt-label').innerText = `Sicherheitseinbehalt Netto (${sicherheitseinbehaltProzent}%)`;
-            document.getElementById('rechnung-sicherheitseinbehalt-wert').innerText = '-' + formatCurrency(sicherheitseinbehaltNetto);
-        } else if (sichRow) {
-            sichRow.classList.add('hidden');
-        }
-
-        const verrRow = document.getElementById('rechnung-verrechnungen-row');
-        if (verrechnungenSummeNetto > 0) {
-            if (verrRow) verrRow.classList.remove('hidden');
-            const verrWert = document.getElementById('rechnung-verrechnungen-wert');
-            if (verrWert) verrWert.innerText = '-' + formatCurrency(verrechnungenSummeNetto);
-        } else if (verrRow) {
-            verrRow.classList.add('hidden');
-        }
-
-        var sicherheitseinbehalt = sicherheitseinbehaltNetto;
-
-        if (totalTax === 0) {
-            const div = document.createElement('div');
-            div.className = 'text-right text-xs text-slate-400 italic';
-            div.textContent = 'Keine Steuern berechnet';
-            taxContainer.appendChild(div);
-        }
-    }
-
-    // Prepayment / Anzahlung
-    const anzahlung = parseFloat(document.getElementById('rechnung-anzahlung').value) || 0;
-    document.getElementById('rechnung-anzahlung-wert').innerText = anzahlung > 0 ? '-' + formatCurrency(anzahlung) : '-';
-
-    // The bruttoNachRabatt already has the sicherheitseinbehalt and verrechnungen deducted.
-    const zahlbetrag = bruttoNachRabatt - anzahlung;
-
-    document.getElementById('rechnung-rabatt-wert').innerText = '-' + formatCurrency(abzug);
-    document.getElementById('rechnung-netto').innerText = formatCurrency(nettoNachRabatt);
-    document.getElementById('rechnung-brutto').innerText = formatCurrency(bruttoNachRabatt);
-    document.getElementById('rechnung-zahlbetrag').innerText = formatCurrency(Math.max(0, zahlbetrag));
-
-    // Calculate total tax value for saving
-    let savingTotalTax = 0;
-    const taxSpans = taxContainer.querySelectorAll('span.font-mono');
-    taxSpans.forEach(span => {
-        let val = span.textContent.replace('€', '').replace(/\./g, '').replace(',', '.').trim();
-        savingTotalTax += parseFloat(val) || 0;
-    });
-
-    // Store calculated on state for saving
     state.currentRechnungTotals = {
-        netto: nettoNachRabatt,
-        steuer: savingTotalTax,
-        brutto: bruttoNachRabatt,
-        rabattAbzug: abzug,
-        anzahlung,
-        sicherheitseinbehalt,
-        kumulierte_leistung_netto: nettoNachRabatt, // Save the Leistungsstand netto
-        zahlbetrag: Math.max(0, zahlbetrag),
-        netto13b: state.currentRechnungTotals13bNetto,
-        nettoNormal: state.currentRechnungTotalsNormalNetto
+        netto: calculated.nettoNachRabatt,
+        steuer: calculated.totalTax,
+        brutto: calculated.bruttoNachRabatt,
+        rabattAbzug: calculated.abzug,
+        anzahlung: calculated.anzahlung,
+        sicherheitseinbehalt: calculated.sicherheitseinbehaltNetto,
+        kumulierte_leistung_netto: calculated.nettoNachRabatt,
+        zahlbetrag: calculated.zahlbetrag,
+        netto13b: calculated.totals13bNetto,
+        nettoNormal: calculated.totalsNormalNetto
     };
 }
 
@@ -1170,22 +957,6 @@ async function saveRechnung() {
     const existingIdVal = document.getElementById('rechnung-id').value;
     const existingId = existingIdVal ? parseInt(existingIdVal) : null;
 
-    // Validation
-    if (!kundeId) {
-        showToast('Bitte wählen Sie einen Kunden aus.', 'error');
-        return;
-    }
-    if (state.currentRechnungPositionen.length === 0) {
-        showToast('Bitte fügen Sie mindestens eine Position hinzu.', 'error');
-        return;
-    }
-
-    // Check for empty articles or missing descriptions
-    if (state.currentRechnungPositionen.some(p => !p.artikelId && !p.name)) {
-        showToast('Bitte wählen Sie für alle Positionen einen Artikel aus oder geben Sie eine Beschreibung ein.', 'error');
-        return;
-    }
-
     const existing = existingId ? (state.isAngebotMode ? state.angebote.find(a => a.id === existingId) : state.rechnungen.find(r => r.id === existingId)) : null;
 
     const newDoc = {
@@ -1193,66 +964,75 @@ async function saveRechnung() {
         nr,
         datum,
         faellig,
-        kundeId: parseInt(kundeId),
+        kundeId: kundeId ? parseInt(kundeId) : null,
         projektId: projektId ? parseInt(projektId) : null,
-        positionen: [...state.currentRechnungPositionen], // shallow copy fine here
-        netto: state.currentRechnungTotals.netto,
-        steuer: state.currentRechnungTotals.steuer,
-        brutto: state.currentRechnungTotals.brutto,
-        globalRabattAbzug: state.currentRechnungTotals.rabattAbzug,
-        globalRabattType: document.getElementById('rechnung-global-rabatt-type').value,
-        globalRabattValue: parseFloat(document.getElementById('rechnung-global-rabatt').value) || 0,
-        anzahlung: state.currentRechnungTotals.anzahlung,
-        zahlbetrag: state.currentRechnungTotals.zahlbetrag,
+        positionen: [...(state.currentRechnungPositionen || [])],
+        netto: state.currentRechnungTotals ? state.currentRechnungTotals.netto : 0,
+        steuer: state.currentRechnungTotals ? state.currentRechnungTotals.steuer : 0,
+        brutto: state.currentRechnungTotals ? state.currentRechnungTotals.brutto : 0,
+        globalRabattAbzug: state.currentRechnungTotals ? state.currentRechnungTotals.rabattAbzug : 0,
+        globalRabattType: document.getElementById('rechnung-global-rabatt-type') ? document.getElementById('rechnung-global-rabatt-type').value : '%',
+        globalRabattValue: parseFloat(document.getElementById('rechnung-global-rabatt')?.value) || 0,
+        anzahlung: state.currentRechnungTotals ? state.currentRechnungTotals.anzahlung : 0,
+        zahlbetrag: state.currentRechnungTotals ? state.currentRechnungTotals.zahlbetrag : 0,
         status: status,
-        eingabemodus: document.getElementById('rechnung-eingabemodus').value,
-        rechnungsart: document.getElementById('rechnung-art').value,
-        leistungszeitraum_von: document.getElementById('rechnung-leistungszeitraum-von').value,
-        leistungszeitraum_bis: document.getElementById('rechnung-leistungszeitraum-bis').value,
-        baustellen_adresse: document.getElementById('rechnung-baustellen-adresse').value,
-        vob_vereinbart: document.getElementById('rechnung-vob-vereinbart').checked ? 1 : 0,
-        ist_privatkunde: document.getElementById('rechnung-ist-privatkunde').checked ? 1 : 0,
-        unterliegt_bauabzugsteuer: document.getElementById('rechnung-unterliegt-bauabzugsteuer').checked ? 1 : 0,
-        unterliegt_13b: document.getElementById('rechnung-13b-ustg').checked ? 1 : 0,
-        vortext: document.getElementById('rechnung-vortext').value,
-        fusstext: document.getElementById('rechnung-fusstext').value,
-        sicherheitseinbehalt: state.currentRechnungTotals.sicherheitseinbehalt || 0,
-        kumulierte_leistung_netto: state.currentRechnungTotals.kumulierte_leistung_netto || 0,
-        verrechnungen: [...state.currentRechnungVerrechnungen],
+        eingabemodus: document.getElementById('rechnung-eingabemodus') ? document.getElementById('rechnung-eingabemodus').value : 'netto',
+        rechnungsart: document.getElementById('rechnung-art') ? document.getElementById('rechnung-art').value : 'Standard',
+        leistungszeitraum_von: document.getElementById('rechnung-leistungszeitraum-von') ? document.getElementById('rechnung-leistungszeitraum-von').value : '',
+        leistungszeitraum_bis: document.getElementById('rechnung-leistungszeitraum-bis') ? document.getElementById('rechnung-leistungszeitraum-bis').value : '',
+        baustellen_adresse: document.getElementById('rechnung-baustellen-adresse') ? document.getElementById('rechnung-baustellen-adresse').value : '',
+        vob_vereinbart: document.getElementById('rechnung-vob-vereinbart')?.checked ? 1 : 0,
+        ist_privatkunde: document.getElementById('rechnung-ist-privatkunde')?.checked ? 1 : 0,
+        unterliegt_bauabzugsteuer: document.getElementById('rechnung-unterliegt-bauabzugsteuer')?.checked ? 1 : 0,
+        unterliegt_13b: document.getElementById('rechnung-13b-ustg')?.checked ? 1 : 0,
+        vortext: document.getElementById('rechnung-vortext') ? document.getElementById('rechnung-vortext').value : '',
+        fusstext: document.getElementById('rechnung-fusstext') ? document.getElementById('rechnung-fusstext').value : '',
+        sicherheitseinbehalt: state.currentRechnungTotals ? state.currentRechnungTotals.sicherheitseinbehalt : 0,
+        kumulierte_leistung_netto: state.currentRechnungTotals ? state.currentRechnungTotals.kumulierte_leistung_netto : 0,
+        verrechnungen: [...(state.currentRechnungVerrechnungen || [])],
         isLocked: existing ? (existing.isLocked || false) : false
     };
 
     newDoc.type = state.isAngebotMode ? 'angebot' : 'rechnung';
 
-    try {
-        const savedId = await window.api.saveDocument(newDoc);
+    // MVC Validation via Controller
+    if (window.InvoiceController && window.InvoiceController.validateSaveDocument) {
+        const validation = window.InvoiceController.validateSaveDocument(newDoc);
+        if (!validation.valid) {
+            showToast(validation.message, 'error');
+            return;
+        }
+    }
 
-        // Reload state from DB to get fresh IDs and updated lists
-        const newState = await window.api.getFullState();
-        state.angebote = newState.angebote;
-        state.rechnungen = newState.rechnungen;
-        state.artikel = newState.artikel; // might have updated inventory
+    try {
+        const model = new window.InvoiceModel(window.api);
+        await model.saveDocument(newDoc);
+
+        const newState = await model.getFullState();
+        if (newState) {
+            state.angebote = newState.angebote || [];
+            state.rechnungen = newState.rechnungen || [];
+            state.artikel = newState.artikel || [];
+        }
 
         closeRechnungModal();
         showToast('Dokument erfolgreich gespeichert.', 'success');
 
-        // Re-render views
         if (state.isAngebotMode) {
             if (document.getElementById('view-angebote') && !document.getElementById('view-angebote').classList.contains('hidden')) {
-                renderAngebote();
+                if (typeof renderAngebote === 'function') renderAngebote();
             } else if (document.getElementById('view-projekt-details') && !document.getElementById('view-projekt-details').classList.contains('hidden')) {
-                // if we are in project details, reload the project to reflect changes
-                if (state.currentProjektId) {
+                if (state.currentProjektId && typeof openProjektDetails === 'function') {
                     openProjektDetails(state.currentProjektId);
                 }
             }
         } else {
             if (document.getElementById('view-dashboard') && !document.getElementById('view-dashboard').classList.contains('hidden')) {
-                renderDashboard();
+                if (typeof renderDashboard === 'function') renderDashboard();
             } else if (document.getElementById('view-rechnungen') && !document.getElementById('view-rechnungen').classList.contains('hidden')) {
-                renderRechnungen();
+                if (typeof renderRechnungen === 'function') renderRechnungen();
             } else if (document.getElementById('view-projekt-details') && !document.getElementById('view-projekt-details').classList.contains('hidden')) {
-                if (state.currentProjektId) {
+                if (state.currentProjektId && typeof openProjektDetails === 'function') {
                     openProjektDetails(state.currentProjektId);
                 }
             }
@@ -1482,3 +1262,14 @@ function handleRechtlicheCheckboxes(triggeredById) {
         calculateRechnungTotals();
     }
 }
+
+async function openAufmassModalForPosition(posId) {
+    if (!window.aufmassViewInstance) {
+        window.aufmassViewInstance = new window.AufmassView('aufmass-modal');
+    }
+    await window.aufmassViewInstance.openModal(posId, (total, targetId) => {
+        handlePositionChange(targetId, 'menge', total);
+        renderRechnungPositionen();
+    });
+}
+

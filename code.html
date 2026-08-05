@@ -2214,30 +2214,30 @@
     </main>
 
     <!-- PDF Preview Modal -->
-    <div id="pdf-preview-modal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] hidden flex-col">
-        <div class="h-16 bg-slate-800 text-white flex items-center justify-between px-6 shadow-md shrink-0">
+    <div id="pdf-preview-modal" class="fixed inset-0 h-screen max-h-screen w-screen overflow-hidden bg-slate-900/80 backdrop-blur-md z-[200] hidden flex-col">
+        <div class="h-16 bg-slate-800 text-white flex items-center justify-between px-6 shadow-md shrink-0 z-10">
             <h3 id="pdf-preview-title" class="text-lg font-semibold tracking-tight">PDF Vorschau</h3>
             <div class="flex items-center gap-4">
-                <button onclick="executePrint('print')"
+                <button id="pdf-preview-print-btn" onclick="executePrint('print')"
                     class="flex items-center gap-2 bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm shadow-lg shadow-slate-900/30">
                     <span class="material-symbols-outlined text-[18px]">print</span>
                     Drucken
                 </button>
-                <button onclick="executePrint('save')"
+                <button id="pdf-preview-save-btn" onclick="executePrint('save')"
                     class="flex items-center gap-2 bg-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm shadow-lg shadow-primary/30">
                     <span class="material-symbols-outlined text-[18px]">save</span>
                     Als PDF Speichern
                 </button>
-                <button onclick="closePdfPreview()"
+                <button id="pdf-preview-close-btn" onclick="closePdfPreview()"
                     class="text-slate-400 hover:text-white p-2 rounded-full transition-colors bg-slate-700 hover:bg-slate-600">
                     <span class="material-symbols-outlined">close</span>
                 </button>
             </div>
         </div>
 
-        <div class="flex-1 overflow-auto p-8 flex justify-center bg-slate-100">
+        <div id="pdf-preview-scroll-wrapper" class="flex-1 overflow-y-auto max-h-[calc(100vh-4rem)] p-8 flex justify-center items-start bg-slate-100">
             <!-- This container holds the exact print layout logic so user can verify -->
-            <div id="pdf-preview-container" class="bg-white shadow-2xl relative"
+            <div id="pdf-preview-container" class="bg-white shadow-2xl relative my-4"
                 style="width: 210mm; min-height: 297mm;">
                 <!-- Content injected here by JS instead of the hidden template -->
             </div>
@@ -2485,9 +2485,78 @@
         </div>
     </div>
 
+    <!-- Aufmaß Modal (Phase 2) -->
+    <div id="aufmass-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-primary/10 text-primary rounded-lg flex items-center justify-center">
+                        <span class="material-symbols-outlined text-[22px]">straighten</span>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800">Aufmaß / Mengenberechnung</h3>
+                        <p class="text-xs text-slate-500">Formeln eingeben & Menge automatisch berechnen</p>
+                    </div>
+                </div>
+                <button type="button" class="btn-close-aufmass-modal text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 p-1.5 rounded-full transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+
+            <!-- Modal Body: Table -->
+            <div class="p-6 overflow-y-auto space-y-4 flex-1">
+                <div class="border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                    <table class="w-full text-left text-sm border-collapse">
+                        <thead class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+                            <tr>
+                                <th class="px-4 py-2.5 text-center w-12">#</th>
+                                <th class="px-4 py-2.5">Bezeichnung / Raum</th>
+                                <th class="px-4 py-2.5 w-1/2">Formel (z.B. (5 + 3) * 2)</th>
+                                <th class="px-4 py-2.5 text-right w-28">Ergebnis</th>
+                                <th class="px-4 py-2.5 text-center w-12"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="aufmass-rows-body">
+                            <!-- JS injects rows live -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <button type="button" id="btn-add-aufmass-zeile" class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors">
+                    <span class="material-symbols-outlined text-[16px]">add</span>
+                    Zeile hinzufügen
+                </button>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-semibold text-slate-600">Gesamtergebnis:</span>
+                    <span id="aufmass-total-value" class="text-xl font-bold font-mono text-primary">0.00</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button type="button" class="btn-close-aufmass-modal px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors">
+                        Abbrechen
+                    </button>
+                    <button type="button" id="btn-apply-aufmass" class="inline-flex items-center gap-2 px-5 py-2 text-sm font-semibold text-white bg-primary hover:bg-primary-dark rounded-lg shadow-sm transition-colors">
+                        <span class="material-symbols-outlined text-[18px]">check</span>
+                        Menge in Rechnung übernehmen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Modules -->
     <script src="js/state.js"></script>
     <script src="js/utils.js"></script>
+    <script src="models/InvoiceModel.js"></script>
+    <script src="controllers/InvoiceController.js"></script>
+    <script src="views/InvoiceView.js"></script>
+    <script src="models/AufmassModel.js"></script>
+    <script src="controllers/AufmassController.js"></script>
+    <script src="views/AufmassView.js"></script>
     <script src="js/navigation.js"></script>
     <script src="js/kunden.js"></script>
     <script src="js/artikel.js"></script>

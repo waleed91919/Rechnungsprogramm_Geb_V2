@@ -1,0 +1,15 @@
+"Bevor wir neue Funktionen wie das Aufmaß-Modul entwickeln, müssen wir die Softwarearchitektur unseres ERP-Systems (W-Link ERP) auf ein sauberes MVC-Pattern (Model-View-Controller) umstellen. Der aktuelle Code muss einem Refactoring unterzogen werden, um Spaghetti-Code zu vermeiden, die Datenkapselung zu verbessern und die SQLite-Datenbanklogik strikt vom UI zu trennen.
+
+Bitte erstelle einen Plan und beginne mit dem Refactoring des Rechnungs-Moduls nach folgenden MVC-Prinzipien:
+
+1. Model (Datenzugriffsschicht):
+Erstelle eine saubere Struktur (z.B. im Ordner models/InvoiceModel.js). Hier dürfen NUR SQLite-Datenbankoperationen (CRUD) stattfinden. Keine Geschäftslogik, keine UI-Manipulationen.
+
+2. Controller (Geschäftslogik):
+Erstelle einen Controller (z.B. controllers/InvoiceController.js). Dieser übernimmt die komplexe Geschäftslogik (wie die Berechnung der § 13b Steuern, VOB/B, Sicherheitseinbehalte). Er holt Daten vom Model, verarbeitet sie und bereitet sie für die View vor.
+
+3. View (Präsentationsschicht):
+Die UI-Dateien (HTML und reine DOM-Manipulationen in separaten JS-Dateien wie views/InvoiceView.js) dürfen keine Berechnungen durchführen. Sie leiten lediglich User-Events (Klicks, Checkbox-Änderungen) an den Controller weiter und rendern die empfangenen Daten.
+
+Deine Aufgabe jetzt:
+Zeige mir als ersten Schritt die vorgeschlagene neue Ordner- und Dateistruktur für das Projekt. Nimm dir danach eine Kernfunktion (z.B. die Steuerberechnung calculateRechnungTotals) und zeige mir exemplarisch, wie dieser Codeblock aufgeteilt in Model, View und Controller aussehen würde. Gehe dabei schrittweise vor, damit wir das System nicht kaputt machen."

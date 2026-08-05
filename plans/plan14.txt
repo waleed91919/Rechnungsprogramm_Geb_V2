@@ -1,0 +1,36 @@
+"Ich verstehe, warum es zweimal speichert! Es gibt einen kritischen 'Double Fire'-Bug aufgrund sich duplizierender Event-Listener. Wenn ich den Button drücke, wird die Funktion mehrfach ausgeführt.
+
+Du hast meine vorherige Anweisung falsch interpretiert und rufst window.invoiceView.bindPdfModalControls() im finally-Block von executePrint auf! Das führt dazu, dass die Event-Listener nach jedem Klick NOCHMAL an die Buttons gehängt werden.
+
+Bitte bereinige das sofort mit dieser bombensicheren Lösung:
+
+1. executePrint() reparieren: Entferne den Aufruf von window.invoiceView.bindPdfModalControls() KOMPLETT aus dem finally-Block in der einstellungen.js. Das reine setButtonsState(false) reicht völlig aus, um die Buttons wieder klickbar zu machen. Das Neuladen der Listener ist gefährlich!
+
+2. onclick statt addEventListener nutzen: Gehe in die InvoiceView.js (bindPdfModalControls). Ändere das Binden der Buttons so ab, dass eventuell alte Listener immer überschrieben werden, indem du .onclick statt .addEventListener nutzt. Die komplizierten dataset.bound-Checks kannst du dann weglassen, da onclick ohnehin nur eine einzige Funktion zulässt und Duplikate verhindert.
+
+Beispiel für die InvoiceView.js:
+JavaScript
+
+if (saveBtn) {
+    saveBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof window.executePrint === 'function') window.executePrint('save');
+    };
+}
+if (printBtn) {
+    printBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof window.executePrint === 'function') window.executePrint('print');
+    };
+}
+if (closeBtn) {
+    closeBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.closePdfPreview();
+    };
+}
+
+Bitte setze diese beiden Änderungen exakt so um, damit der Double-Save-Bug verschwindet."

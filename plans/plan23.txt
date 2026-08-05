@@ -1,0 +1,26 @@
+"Super, das UI für das Aufmaß funktioniert perfekt! Jetzt machen wir Phase 3: Die Datenbank-Anbindung (Persistenz).
+
+Aktuell ist das Aufmaß nur flüchtig im Frontend. Wenn man die Rechnung schließt und neu lädt, sind die eingegebenen Räume und Formeln weg. Wir müssen das jetzt fest mit der SQLite-Datenbank verdrahten.
+
+Bitte implementiere die vollständige Logik zum Speichern und Laden der Aufmaß-Daten:
+
+1. Speichern (beim Übernehmen):
+Wenn der Nutzer im Modal auf 'Menge in Rechnung übernehmen' klickt, muss die View alle Zeilendaten (Bezeichnung, Formel, Ergebnis) sammeln. Der AufmassController muss diese Daten dann über das AufmassModel (via IPC window.api) in den Tabellen aufmass und aufmass_positionen speichern. Das Aufmaß muss zwingend mit der spezifischen position_id der Rechnungsposition verknüpft sein!
+
+2. Laden (beim Öffnen):
+Wenn der Nutzer den Lineal-Button einer Rechnungsposition klickt, muss der AufmassController prüfen, ob in der Datenbank bereits ein Aufmaß für diese position_id existiert.
+
+    Wenn JA: Lade die gespeicherten Zeilen in das Modal.
+
+    Wenn NEIN: Zeige eine leere Zeile an.
+
+3. Notwendige Code-Updates:
+Bitte gib mir die konkreten Code-Anpassungen (nur die geänderten oder neuen Funktionen) für:
+
+    AufmassView.js (Sammeln der Daten aus dem DOM beim Speichern & Rendern beim Laden)
+
+    AufmassController.js (Die Bridge zwischen View und Model)
+
+    AufmassModel.js und ggf. main.js/db.js (Falls die IPC-Handler für saveAufmassForPosition und loadAufmassForPosition noch nicht existieren).
+
+Bitte sorge dafür, dass die Verknüpfung zwischen Rechnungsposition und Aufmaß absolut robust ist!"

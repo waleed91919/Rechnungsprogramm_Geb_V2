@@ -159,6 +159,40 @@ function setupIpc() {
         return await dbAPI.deleteDocument(id);
     }));
 
+    // Aufmaß
+    ipcMain.handle('db:saveAufmass', wrapHandler(async (e, aufmass) => {
+        if (!aufmass || typeof aufmass !== 'object') {
+            throw new Error('Ungültige Aufmaß-Daten');
+        }
+        return await dbAPI.saveAufmass(aufmass);
+    }));
+
+    ipcMain.handle('db:deleteAufmass', wrapHandler(async (e, id) => {
+        if (typeof id !== 'number') throw new Error('Ungültige Aufmaß-ID');
+        return await dbAPI.deleteAufmass(id);
+    }));
+
+    ipcMain.handle('db:getAufmassById', wrapHandler(async (e, id) => {
+        if (typeof id !== 'number') throw new Error('Ungültige Aufmaß-ID');
+        return await dbAPI.getAufmassById(id);
+    }));
+
+    ipcMain.handle('db:getAufmassByPositionId', wrapHandler(async (e, positionId) => {
+        return await dbAPI.getAufmassByPositionId(positionId);
+    }));
+
+    ipcMain.handle('db:saveAufmassForPosition', wrapHandler(async (e, positionId, aufmassData) => {
+        return await dbAPI.saveAufmassForPosition(positionId, aufmassData);
+    }));
+
+    ipcMain.handle('db:getAufmasseByRechnungId', wrapHandler(async (e, rechnungId) => {
+        return await dbAPI.getAufmasseByRechnungId(rechnungId);
+    }));
+
+    ipcMain.handle('db:getAufmasseByProjektId', wrapHandler(async (e, projektId) => {
+        return await dbAPI.getAufmasseByProjektId(projektId);
+    }));
+
     // Projekte
     ipcMain.handle('db:saveProjekt', wrapHandler(async (e, projekt) => {
         if (!projekt || typeof projekt !== 'object' || !projekt.name) {
@@ -290,44 +324,64 @@ function setupIpc() {
         focusWin(win);
     }));
 
+    // Print Handler (Electron Main Process)
+    ipcMain.handle('app:printDocument', wrapHandler(async (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win && !win.isDestroyed()) {
+            return new Promise((resolve) => {
+                win.webContents.print({ silent: false, printBackground: true }, (success, failureReason) => {
+                    focusWin(win);
+                    resolve({ success: !!success, failureReason });
+                });
+            });
+        }
+        return { success: false, failureReason: 'Window not found' };
+    }));
+
     // PDF Generierung
     const fs = require('fs');
     ipcMain.handle('save:pdf', wrapHandler(async (event, bufferData, defaultName = 'Dokument.pdf') => {
         const { dialog } = require('electron');
         const win = BrowserWindow.fromWebContents(event.sender);
         
-        let pdfBuffer = bufferData;
-        let fileName = defaultName;
-        if (typeof bufferData === 'string') {
-            fileName = bufferData;
-            pdfBuffer = null;
-        }
-
-        const defaultPath = path.join(app.getPath('documents'), fileName || 'Dokument.pdf');
-
-        const { filePath } = await dialog.showSaveDialog(win, {
-            title: 'Als PDF speichern',
-            defaultPath: defaultPath,
-            filters: [{ name: 'PDF Dateien', extensions: ['pdf'] }]
-        });
-
-        if (filePath) {
-            let dataToWrite;
-            if (pdfBuffer && (pdfBuffer instanceof ArrayBuffer || ArrayBuffer.isView(pdfBuffer) || Buffer.isBuffer(pdfBuffer))) {
-                dataToWrite = Buffer.from(pdfBuffer);
-            } else {
-                dataToWrite = await event.sender.printToPDF({
-                    printBackground: true,
-                    pageSize: 'A4',
-                    margins: { marginType: 'custom', top: 0, bottom: 0, left: 0, right: 0 }
-                });
+        try {
+            let pdfBuffer = bufferData;
+            let fileName = defaultName;
+            if (typeof bufferData === 'string') {
+                fileName = bufferData;
+                pdfBuffer = null;
             }
-            fs.writeFileSync(filePath, dataToWrite);
+
+            const defaultPath = path.join(app.getPath('documents'), fileName || 'Dokument.pdf');
+
+            const { filePath } = await dialog.showSaveDialog(win, {
+                title: 'Als PDF speichern',
+                defaultPath: defaultPath,
+                filters: [{ name: 'PDF Dateien', extensions: ['pdf'] }]
+            });
+
+            if (filePath) {
+                let dataToWrite;
+                if (pdfBuffer && (pdfBuffer instanceof ArrayBuffer || ArrayBuffer.isView(pdfBuffer) || Buffer.isBuffer(pdfBuffer))) {
+                    dataToWrite = Buffer.from(pdfBuffer);
+                } else {
+                    dataToWrite = await event.sender.printToPDF({
+                        printBackground: true,
+                        pageSize: 'A4',
+                        margins: { marginType: 'custom', top: 0, bottom: 0, left: 0, right: 0 }
+                    });
+                }
+                fs.writeFileSync(filePath, dataToWrite);
+                focusWin(win);
+                return { success: true, path: filePath };
+            }
             focusWin(win);
-            return { success: true, path: filePath };
+            return { success: false, cancelled: true };
+        } catch (err) {
+            console.error('IPC save:pdf error:', err);
+            if (win) focusWin(win);
+            return { success: false, error: err.message || String(err) };
         }
-        focusWin(win);
-        return { success: false, cancelled: true };
     }));
 }
 

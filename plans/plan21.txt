@@ -1,0 +1,16 @@
+"Wir beginnen jetzt mit der Entwicklung des 'Aufmaß'-Moduls für das W-Link ERP. Da wir nun eine saubere MVC-Architektur haben, möchte ich, dass wir dieses neue Modul von Anfang an strikt nach diesem Pattern aufbauen.
+
+Das Aufmaß dient dazu, Mengen für Rechnungen aus physischen Maßen zu berechnen (z.B. Eingabe einer Formel wie '2 * 3.5' für Quadratmeter).
+
+Bitte erstelle den Architektur- und Code-Plan für Phase 1:
+
+1. Datenbank-Design (SQLite):
+Zeige mir die SQL-Queries zur Erstellung der nötigen Tabellen (z.B. aufmass und aufmass_positionen). Ein Aufmaß muss mit einer rechnung_id oder projekt_id verknüpft werden können.
+
+2. MVC-Klassen (Grundgerüst):
+Schreibe die Grundstruktur für models/AufmassModel.js, controllers/AufmassController.js und views/AufmassView.js.
+
+3. Der Formel-Rechner (Controller):
+Implementiere im AufmassController eine sichere Methode evaluateFormula(formulaString), die mathematische Strings (wie (5+3)*2) sicher berechnet, ohne das gefährliche eval() ungeschützt zu nutzen (z.B. über reguläre Ausdrücke oder den Function-Konstruktor mit strikter Validierung).
+
+Bitte gib mir das SQL-Schema und die drei JS-Dateien als Grundgerüst, damit wir sie in unser Projekt einbauen können."

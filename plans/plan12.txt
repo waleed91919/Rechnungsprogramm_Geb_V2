@@ -1,0 +1,23 @@
+"Leider ist das Problem noch nicht gelöst. Das UI ist immer noch eingefroren. Ich kann weder auf das 'X' klicken, noch die anderen Buttons bedienen, noch nach unten scrollen!
+
+Ich habe deinen Code analysiert. Der Fehler liegt auf der Hand:
+1. Fehlende Click-Listener: Du hast zwar die Methode closePdfPreview() definiert und an die ESC-Taste gebunden, aber du hast vergessen, diese Methode an die tatsächlichen HTML-Buttons (das 'X', 'Drucken', 'Als PDF Speichern') zu binden!
+2. Fehlendes Scrolling: Das Modal lässt sich nicht scrollen, weil dem Container-Element die CSS-Eigenschaften für den Overflow fehlen.
+
+Bitte korrigiere die InvoiceView.js und das HTML/CSS wie folgt:
+
+Schritt 1: Click-Events binden
+Füge in deiner initPdfModalEvents() Funktion die Event-Listener für die Buttons hinzu:
+JavaScript
+
+// Beispiel:
+const closeBtn = document.getElementById('deine-close-btn-id'); // ID des 'X' Buttons anpassen
+if (closeBtn) {
+    closeBtn.addEventListener('click', () => this.closePdfPreview());
+}
+// Mache dasselbe für den 'Drucken' und 'Speichern' Button, und verbinde sie mit den entsprechenden Funktionen im Controller oder in der PDF-Engine.
+
+Schritt 2: Scrolling ermöglichen
+Stelle sicher, dass der Modal-Container (z.B. #pdf-preview-modal oder dessen innerer Content-Wrapper) in der code.html die Tailwind-Klassen overflow-y-auto und max-h-screen (oder entsprechendes reguläres CSS overflow-y: auto; max-height: 100vh;) besitzt, damit der Nutzer die lange Rechnung nach unten scrollen kann.
+
+Bitte setze diese beiden Fixes sofort um und zeige mir den korrigierten Code der initPdfModalEvents."

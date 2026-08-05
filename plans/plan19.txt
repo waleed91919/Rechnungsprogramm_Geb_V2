@@ -1,0 +1,31 @@
+"Der Freeze ist leider IMMER NOCH da. Die UI blockiert komplett nach dem Speichern/Drucken. Wir müssen jetzt aufhören, blind Fixes zu versuchen, und stattdessen strukturiert debuggen. Da wir uns in einer Umgebung (wie Electron) befinden, gibt es zwei Hauptverdächtige, die den Main-Thread lautlos killen:
+
+Verdacht 1: Die IPC-Bridge (window.api.savePdf). Wenn der Main-Process (Node.js) das Promise niemals resolved oder rejected, hängt das Frontend unendlich und erreicht den finally-Block nie.
+Verdacht 2: Ein nativer Electron-Bug bei window.print(), der den Render-Prozess einfriert, wenn er nicht über den Main-Process (webContents.print()) aufgerufen wird.
+
+Bitte mache jetzt Folgendes, um den Bug exakt zu lokalisieren:
+
+1. Debug-Tracing einbauen:
+Baue in die executePrint-Funktion GANZ VIELE console.log (oder temporäre showToast/alert) ein, um jeden einzelnen Schritt zu tracken. Beispiel:
+
+    Log 1: 'Start executePrint'
+
+    Log 2: 'Vor html2pdf'
+
+    Log 3: 'Nach html2pdf ArrayBuffer generiert'
+
+    Log 4: 'Vor window.api.savePdf'
+
+    Log 5: 'Nach window.api.savePdf'
+
+    Log 6: 'Vor window.print()'
+
+    Log 7: 'Im finally Block'
+
+2. Main-Process prüfen (Node.js / IPC):
+Bitte analysiere sofort deinen Code im Main-Process (z.B. main.js, index.js oder preload.js), wo savePdf verarbeitet wird. Stelle sicher, dass IPC-Handler (z.B. ipcMain.handle) IMMER ein Ergebnis zurückgeben (return {success: true} oder return {success: false}), egal was passiert!
+
+3. Fallback für window.print():
+Falls der Freeze beim nativen Drucken passiert: Schreibe window.print() um. In Electron sollte man idealerweise den Main-Process bitten, zu drucken (window.api.printDocument()), anstatt den Browser-Befehl zu nutzen.
+
+Füge jetzt das Tracing ein und zeige mir, wie wir herausfinden, bei welchem Log-Schritt das Programm einfriert. Wir müssen den genauen Zeilen-Code finden, der den Tod verursacht!"

@@ -1,0 +1,31 @@
+"Das PDF-Modal schließt sich jetzt nach dem Speichern, ABER das Hauptmenü (die darunterliegende UI) ist danach komplett blockiert! Ich sehe die Oberfläche, kann aber absolut nichts anklicken.
+
+Das ist ein klassisches 'Invisible Glass Pane'-Problem. Ein unsichtbares Element (z.B. ein Überrest von html2pdf, ein nicht vollständig entferntes Modal oder ein globales Loading-Overlay) liegt über dem gesamten Bildschirm und fängt alle Klicks ab.
+
+Bitte implementiere diesen radikalen Cleanup im finally-Block der executePrint() Funktion (in einstellungen.js) und in der closePdfPreview() Methode (in InvoiceView.js):
+
+1. Verwaiste html2pdf-Container killen: html2pdf injiziert oft unsichtbare iframes oder Container in den Body, die den Bildschirm nach einem Fehler/Erfolg blockieren können. Füge das am Ende des finally-Blocks hinzu:
+JavaScript
+
+document.querySelectorAll('.html2pdf__container, iframe.html2canvas-container').forEach(el => {
+    el.remove();
+});
+
+2. Pointer-Events korrekt zurücksetzen: Setze document.body.style.pointerEvents = '' (leerer String, NICHT 'auto'!), damit das reguläre Stylesheet wieder das Sagen hat.
+
+3. Modal strikt verstecken (in InvoiceView.js): Die closePdfPreview() Methode muss aggressiver sein. Manchmal reicht .classList.add('hidden') nicht, wenn andere Klassen (wie flex) streiken.
+JavaScript
+
+closePdfPreview() {
+    const modal = document.getElementById('pdf-preview-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+        modal.style.display = 'none'; // Radikaler Fix
+        modal.style.zIndex = '-10';   // Aus dem Weg räumen
+    }
+}
+
+4. Lade-Overlays abschalten: Falls im System ein globaler Loading-Spinner (#loading-overlay, #spinner) existiert, schalte diesen im finally-Block zwingend aus.
+
+Bitte setze dieses aggressive Cleanup sofort um, um die unsichtbare Blockade über dem Hauptmenü zu zerstören!"

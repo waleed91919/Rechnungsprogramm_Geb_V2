@@ -1,0 +1,13 @@
+"Der Refactoring-Plan in mvc_refactoring_plan.md sieht extrem professionell und durchdacht aus. Die saubere Trennung der Schichten ist hervorragend!
+
+Lass uns nun den vorgeschlagenen Migrationspfad starten und die erste Phase physisch in die Codebase implementieren.
+
+Bitte führe folgende Schritte durch:
+1. Dateien erstellen: Erstelle die tatsächlichen physischen Dateien InvoiceModel.js, InvoiceController.js und InvoiceView.js in den entsprechenden neuen Ordnern (models/, controllers/, views/).
+2. Code migrieren: Implementiere die vorbereitete entkoppelte Logik für die Live-Berechnung (calculateRechnungTotals) in diese drei Schichten.
+3. Verkabelung (Wiring): Binde die neuen JS-Dateien korrekt in das Frontend (z.B. in der code.html) ein. Instanziiere die Klassen (Model, View, Controller) und verbinde sie miteinander (Dependency Injection oder einfaches Setup).
+4. Legacy Code bereinigen: Deaktiviere oder entferne die alte, monolithische calculateRechnungTotals Funktion in der alten js/editor.js, damit es keine Konflikte gibt.
+
+Das Ziel dieser Phase ist, dass die UI weiterhin exakt so funktioniert wie vorher (Live-Berechnungen, 13b-Checkboxes, Summenblock), aber der Datenfluss nun komplett durch das neue MVC-System gesteuert wird.
+
+Bitte setze das um und bestätige, dass die Berechnungen in der UI erfolgreich über das MVC-Pattern laufen."

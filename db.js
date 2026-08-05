@@ -96,6 +96,7 @@ function initDb() {
             artikelId INTEGER,
             name TEXT, -- Added for custom items
             menge REAL DEFAULT 1,
+            einheit TEXT DEFAULT 'Stk.',
             preis REAL DEFAULT 0,
             ek REAL DEFAULT 0, -- Purchase price snapshot
             mwst INTEGER DEFAULT 19,
@@ -103,8 +104,45 @@ function initDb() {
             FOREIGN KEY(dokumentId) REFERENCES dokumente(id)
         )`);
 
+    db.exec(`CREATE TABLE IF NOT EXISTS aufmass (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            position_id TEXT,
+            titel TEXT NOT NULL,
+            datum TEXT DEFAULT CURRENT_TIMESTAMP,
+            rechnung_id INTEGER,
+            projekt_id INTEGER,
+            bemerkung TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (rechnung_id) REFERENCES dokumente(id) ON DELETE SET NULL,
+            FOREIGN KEY (projekt_id) REFERENCES projekte(id) ON DELETE SET NULL
+        )`);
+
+    try {
+        db.exec(`ALTER TABLE aufmass ADD COLUMN position_id TEXT`);
+    } catch (e) {
+        // Column already exists
+    }
+
+    db.exec(`CREATE TABLE IF NOT EXISTS aufmass_positionen (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            aufmass_id INTEGER NOT NULL,
+            raum TEXT,
+            bezeichnung TEXT NOT NULL,
+            formel TEXT NOT NULL,
+            ergebnis REAL DEFAULT 0,
+            einheit TEXT DEFAULT 'm²',
+            sortier_index INTEGER DEFAULT 0,
+            FOREIGN KEY (aufmass_id) REFERENCES aufmass(id) ON DELETE CASCADE
+        )`);
+
     try {
         db.exec(`ALTER TABLE positionen ADD COLUMN ek REAL DEFAULT 0`);
+    } catch (e) {
+        // Column already exists
+    }
+
+    try {
+        db.exec(`ALTER TABLE positionen ADD COLUMN einheit TEXT DEFAULT 'Stk.'`);
     } catch (e) {
         // Column already exists
     }
@@ -262,7 +300,117 @@ const dbAPI = {
             }
         });
 
+        // Load aufmasse
+        const aufmassRows = await dbQuery('SELECT * FROM aufmass');
+        const aufmassPosRows = await dbQuery('SELECT * FROM aufmass_positionen');
+        aufmassRows.forEach(a => {
+            a.positionen = aufmassPosRows.filter(p => p.aufmass_id === a.id);
+        });
+        state.aufmasse = aufmassRows;
+
         return state;
+    },
+
+    // --- Aufmaß ---
+    async getAufmassById(id) {
+        const aufmass = db.prepare('SELECT * FROM aufmass WHERE id=?').get(id);
+        if (aufmass) {
+            aufmass.positionen = db.prepare('SELECT * FROM aufmass_positionen WHERE aufmass_id=? ORDER BY sortier_index ASC').all(id);
+        }
+        return aufmass || null;
+    },
+
+    async getAufmassByPositionId(positionId) {
+        if (!positionId) return null;
+        const posIdStr = String(positionId);
+        const aufmass = db.prepare('SELECT * FROM aufmass WHERE position_id=?').get(posIdStr);
+        if (aufmass) {
+            aufmass.positionen = db.prepare('SELECT * FROM aufmass_positionen WHERE aufmass_id=? ORDER BY sortier_index ASC').all(aufmass.id);
+        }
+        return aufmass || null;
+    },
+
+    async saveAufmassForPosition(positionId, data) {
+        if (!positionId) return null;
+        const posIdStr = String(positionId);
+
+        const saveTransaction = db.transaction((aufmassData) => {
+            let existing = db.prepare('SELECT id FROM aufmass WHERE position_id=?').get(posIdStr);
+            let aufmassId;
+
+            if (existing) {
+                aufmassId = existing.id;
+                db.prepare('UPDATE aufmass SET titel=?, rechnung_id=?, projekt_id=?, bemerkung=? WHERE id=?')
+                  .run(aufmassData.titel || ('Aufmaß Position ' + posIdStr), aufmassData.rechnung_id || null, aufmassData.projekt_id || null, aufmassData.bemerkung || '', aufmassId);
+                db.prepare('DELETE FROM aufmass_positionen WHERE aufmass_id=?').run(aufmassId);
+            } else {
+                const info = db.prepare('INSERT INTO aufmass (position_id, titel, rechnung_id, projekt_id, bemerkung) VALUES (?, ?, ?, ?, ?)')
+                  .run(posIdStr, aufmassData.titel || ('Aufmaß Position ' + posIdStr), aufmassData.rechnung_id || null, aufmassData.projekt_id || null, aufmassData.bemerkung || '');
+                aufmassId = info.lastInsertRowid;
+            }
+
+            if (aufmassData.positionen && Array.isArray(aufmassData.positionen)) {
+                const insertPos = db.prepare('INSERT INTO aufmass_positionen (aufmass_id, raum, bezeichnung, formel, ergebnis, einheit, sortier_index) VALUES (?, ?, ?, ?, ?, ?, ?)');
+                aufmassData.positionen.forEach((p, idx) => {
+                    const label = p.raum || p.bezeichnung || '';
+                    insertPos.run(aufmassId, label, label, p.formel || '', p.ergebnis || 0, p.einheit || 'm²', idx);
+                });
+            }
+
+            return aufmassId;
+        });
+
+        return saveTransaction(data);
+    },
+
+    async getAufmasseByRechnungId(rechnungId) {
+        const list = db.prepare('SELECT * FROM aufmass WHERE rechnung_id=?').all(rechnungId);
+        list.forEach(a => {
+            a.positionen = db.prepare('SELECT * FROM aufmass_positionen WHERE aufmass_id=? ORDER BY sortier_index ASC').all(a.id);
+        });
+        return list;
+    },
+
+    async getAufmasseByProjektId(projektId) {
+        const list = db.prepare('SELECT * FROM aufmass WHERE projekt_id=?').all(projektId);
+        list.forEach(a => {
+            a.positionen = db.prepare('SELECT * FROM aufmass_positionen WHERE aufmass_id=? ORDER BY sortier_index ASC').all(a.id);
+        });
+        return list;
+    },
+
+    async saveAufmass(aufmass) {
+        const saveTransaction = db.transaction((data) => {
+            let aufmassId = data.id;
+            if (aufmassId) {
+                db.prepare('UPDATE aufmass SET titel=?, rechnung_id=?, projekt_id=?, bemerkung=? WHERE id=?')
+                  .run(data.titel, data.rechnung_id || null, data.projekt_id || null, data.bemerkung || '', aufmassId);
+                db.prepare('DELETE FROM aufmass_positionen WHERE aufmass_id=?').run(aufmassId);
+            } else {
+                const info = db.prepare('INSERT INTO aufmass (titel, rechnung_id, projekt_id, bemerkung) VALUES (?, ?, ?, ?)')
+                  .run(data.titel, data.rechnung_id || null, data.projekt_id || null, data.bemerkung || '');
+                aufmassId = info.lastInsertRowid;
+            }
+
+            if (data.positionen && Array.isArray(data.positionen)) {
+                const insertPos = db.prepare('INSERT INTO aufmass_positionen (aufmass_id, raum, bezeichnung, formel, ergebnis, einheit, sortier_index) VALUES (?, ?, ?, ?, ?, ?, ?)');
+                data.positionen.forEach((p, idx) => {
+                    insertPos.run(aufmassId, p.raum || '', p.bezeichnung || '', p.formel || '', p.ergebnis || 0, p.einheit || 'm²', idx);
+                });
+            }
+
+            return aufmassId;
+        });
+
+        return saveTransaction(aufmass);
+    },
+
+    async deleteAufmass(id) {
+        const delTransaction = db.transaction((aufmassId) => {
+            db.prepare('DELETE FROM aufmass_positionen WHERE aufmass_id=?').run(aufmassId);
+            db.prepare('DELETE FROM aufmass WHERE id=?').run(aufmassId);
+        });
+        return delTransaction(id);
     },
 
     // --- Artikel ---
@@ -391,11 +539,11 @@ const dbAPI = {
                 // Performance Note: Using a prepared statement in a loop within a transaction
                 // is highly optimized in better-sqlite3 and outperforms batched inserts
                 // like 'INSERT INTO ... VALUES (?,?), (?,?)' by ~20% due to parsing overhead.
-                const insertPosStmt = db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, preis, ek, mwst, rabatt, steuer_schluessel, is13b) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+                const insertPosStmt = db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
                 const stockDeductionMap = new Map();
 
                 for (const p of d.positionen) {
-                    insertPosStmt.run(docId, p.artikelId || null, p.name || null, p.menge, p.preis, p.ek || 0, p.mwst, p.rabatt || 0, p.steuer_schluessel || null, p.is13b ? 1 : 0);
+                    insertPosStmt.run(docId, p.artikelId || null, p.name || null, p.menge, p.einheit || 'Stk.', p.preis, p.ek || 0, p.mwst, p.rabatt || 0, p.steuer_schluessel || null, p.is13b ? 1 : 0);
 
                     if (d.type === 'rechnung' && p.artikelId) {
                         stockDeductionMap.set(p.artikelId, (stockDeductionMap.get(p.artikelId) || 0) + p.menge);
@@ -436,7 +584,7 @@ const dbAPI = {
             const insertDocStmt = db.prepare('INSERT INTO dokumente (type, nr, datum, faellig, kundeId, projektId, status, isLocked, netto, steuer, brutto, globalRabattAbzug, globalRabattType, globalRabattValue, anzahlung, eingabemodus, vortext, fusstext, leistungszeitraum_von, leistungszeitraum_bis, baustellen_adresse, vob_vereinbart, ist_privatkunde, unterliegt_bauabzugsteuer, bauabzugsteuer_betrag, ausweis_35a_erforderlich, summe_lohnkosten_brutto, rechnungsart, kumulierte_leistung_netto, sicherheitseinbehalt, unterliegt_13b) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             const deletePosStmt = db.prepare('DELETE FROM positionen WHERE dokumentId=?');
             const deleteVerrechnungStmt = db.prepare('DELETE FROM rechnung_verrechnungen WHERE aktuelle_rechnung_id=?');
-            const insertPosStmt = db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, preis, ek, mwst, rabatt, steuer_schluessel, is13b) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            const insertPosStmt = db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             const insertVerrechnungStmt = db.prepare('INSERT INTO rechnung_verrechnungen (aktuelle_rechnung_id, vorherige_rechnung_id, abzugsbetrag_netto) VALUES (?, ?, ?)');
             const restoreStockStmt = db.prepare('UPDATE artikel SET bestand = bestand + ? WHERE id=?');
             const deductStockStmt = db.prepare('UPDATE artikel SET bestand = bestand - ? WHERE id=?');
@@ -477,7 +625,7 @@ const dbAPI = {
                     const stockDeductionMap = new Map();
 
                     for (const p of d.positionen) {
-                        insertPosStmt.run(docId, p.artikelId || null, p.name || null, p.menge, p.preis, p.ek || 0, p.mwst, p.rabatt || 0, p.steuer_schluessel || null);
+                        insertPosStmt.run(docId, p.artikelId || null, p.name || null, p.menge, p.einheit || 'Stk.', p.preis, p.ek || 0, p.mwst, p.rabatt || 0, p.steuer_schluessel || null, p.is13b ? 1 : 0);
 
                         if (d.type === 'rechnung' && p.artikelId) {
                             stockDeductionMap.set(p.artikelId, (stockDeductionMap.get(p.artikelId) || 0) + p.menge);

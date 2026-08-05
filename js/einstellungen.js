@@ -252,7 +252,7 @@ window.generatePdf = async function(id, isAngebot = false) {
 
         const tdMenge = document.createElement('td');
         tdMenge.className = 'py-3 text-center';
-        tdMenge.textContent = pos.menge;
+        tdMenge.textContent = `${pos.menge} ${pos.einheit || 'Stk.'}`;
         tr.appendChild(tdMenge);
 
         const tdPreis = document.createElement('td');
@@ -1122,7 +1122,7 @@ function generateMahnungItemsHtml(rech, MAHNGEBUHR) {
 
         const tdMenge = document.createElement('td');
         tdMenge.className = 'py-3 text-center';
-        tdMenge.textContent = pos.menge;
+        tdMenge.textContent = `${pos.menge} ${pos.einheit || 'Stk.'}`;
         tr.appendChild(tdMenge);
 
         const tdPreis = document.createElement('td');
@@ -1329,101 +1329,171 @@ function buildMahnungHtmlTemplate(data) {
 // --- PDF Preview Logic ---
 // --- PDF Preview & Export Logic ---
 function openPdfPreview(htmlContent, filename = 'Rechnung.pdf') {
-    const previewContainer = document.getElementById('pdf-preview-container');
-    const modal = document.getElementById('pdf-preview-modal');
-
-    // Inject content into preview
-    previewContainer.innerHTML = htmlContent;
-    previewContainer.dataset.filename = filename;
-
-    // Show Modal
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
+    if (window.invoiceView && typeof window.invoiceView.openPdfPreview === 'function') {
+        window.invoiceView.openPdfPreview(htmlContent, filename);
+    } else {
+        const previewContainer = document.getElementById('pdf-preview-container');
+        const modal = document.getElementById('pdf-preview-modal');
+        if (previewContainer && modal) {
+            previewContainer.innerHTML = htmlContent;
+            previewContainer.dataset.filename = filename;
+            modal.style.display = '';
+            modal.style.zIndex = '';
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+    }
 }
+window.openPdfPreview = openPdfPreview;
 
 function closePdfPreview() {
-    const modal = document.getElementById('pdf-preview-modal');
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
+    if (window.invoiceView && typeof window.invoiceView.closePdfPreview === 'function') {
+        window.invoiceView.closePdfPreview();
+    } else {
+        const modal = document.getElementById('pdf-preview-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            modal.style.display = 'none';
+            modal.style.zIndex = '-10';
+        }
+    }
 }
+window.closePdfPreview = closePdfPreview;
 
 async function executePrint(mode = 'print') {
-    const printTemplate = document.getElementById('print-template');
-    const previewContainer = document.getElementById('pdf-preview-container');
+    const printBtn = document.getElementById('pdf-preview-print-btn');
+    const saveBtn = document.getElementById('pdf-preview-save-btn');
+    const closeBtn = document.getElementById('pdf-preview-close-btn');
 
-    // Target ONLY the inner invoice document element (#invoice-paper or firstElementChild)
-    const invoiceElement = document.getElementById('invoice-paper') || previewContainer.querySelector('#invoice-paper') || previewContainer.firstElementChild || previewContainer;
-
-    if (mode === 'save') {
-        const filename = previewContainer.dataset.filename || 'Rechnung.pdf';
-        const opt = {
-            margin: [10, 10, 10, 10],
-            filename: filename,
-            image: { type: 'jpeg', quality: 0.98 },
-            html2canvas: {
-                scale: 2,
-                useCORS: location.protocol !== 'file:',
-                allowTaint: true,
-                windowWidth: 1024,
-                logging: false
-            },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak: { mode: ['css', 'legacy'], avoid: ['.avoid-break', '.pdf-no-break', '.pdf-footer'] }
-        };
-
-        if (typeof html2pdf !== 'undefined') {
-            try {
-                showToast('PDF-Export wird vorbereitet...', 'info');
-                const pdfArrayBuffer = await html2pdf().set(opt).from(invoiceElement).output('arraybuffer');
-                
-                if (window.api && window.api.savePdf) {
-                    const result = await window.api.savePdf(pdfArrayBuffer, filename);
-                    if (result && result.success) {
-                        showToast('PDF erfolgreich gespeichert', 'success');
-                    } else if (result && !result.cancelled) {
-                        showToast('Fehler beim Speichern der PDF', 'error');
-                    }
-                } else {
-                    // Browser environment direct download
-                    await html2pdf().set(opt).from(invoiceElement).save();
-                    showToast('PDF erfolgreich gespeichert', 'success');
-                }
-            } catch (error) {
-                console.error('html2pdf error:', error);
-                // Fallback to native printToPDF via Electron
-                try {
-                    printTemplate.innerHTML = invoiceElement.outerHTML || previewContainer.innerHTML;
-                    const result = await window.api.savePdf(null, filename);
-                    if (result && result.success) {
-                        showToast('PDF erfolgreich gespeichert', 'success');
-                    } else if (result && !result.cancelled) {
-                        showToast('Fehler beim Speichern der PDF', 'error');
-                    }
-                } catch (fallbackErr) {
-                    console.error('Save PDF fallback error:', fallbackErr);
-                    showToast('Fehler beim Speichern der PDF: ' + (error.message || error), 'error');
-                }
+    const setButtonsState = (isBusy) => {
+        [printBtn, saveBtn, closeBtn].forEach(btn => {
+            if (!btn) return;
+            btn.disabled = isBusy;
+            if (isBusy) {
+                btn.classList.add('opacity-50', 'pointer-events-none');
+            } else {
+                btn.classList.remove('opacity-50', 'pointer-events-none');
             }
-        } else {
-            // Fallback to electron savePdf when html2pdf is not loaded
-            try {
-                printTemplate.innerHTML = invoiceElement.outerHTML || previewContainer.innerHTML;
+        });
+    };
+
+    const closePdfModal = () => {
+        if (window.invoiceView && typeof window.invoiceView.closePdfPreview === 'function') {
+            window.invoiceView.closePdfPreview();
+        } else if (typeof window.closePdfPreview === 'function') {
+            window.closePdfPreview();
+        }
+    };
+
+    try {
+        setButtonsState(true);
+
+        const printTemplate = document.getElementById('print-template');
+        const previewContainer = document.getElementById('pdf-preview-container');
+
+        if (!previewContainer) {
+            console.warn('pdf-preview-container not found');
+            return;
+        }
+
+        const invoiceElement = document.getElementById('invoice-paper') || previewContainer.querySelector('#invoice-paper') || previewContainer.firstElementChild || previewContainer;
+        const filename = previewContainer.dataset.filename || 'Rechnung.pdf';
+
+        if (mode === 'save') {
+            if (window.api && typeof window.api.savePdf === 'function') {
+                // 100% Nativ Electron - Absolut Freeze-sicher (Bypass html2pdf & html2canvas)
                 const result = await window.api.savePdf(null, filename);
                 if (result && result.success) {
                     showToast('PDF erfolgreich gespeichert', 'success');
+                    closePdfModal();
                 } else if (result && !result.cancelled) {
                     showToast('Fehler beim Speichern der PDF', 'error');
                 }
-            } catch (error) {
-                console.error('Save PDF error:', error);
-                showToast('Fehler beim Speichern der PDF', 'error');
+            } else {
+                // Fallback nur für normale Webbrowser (ohne Electron window.api)
+                if (typeof html2pdf !== 'undefined') {
+                    const opt = {
+                        margin: [10, 10, 10, 10],
+                        filename: filename,
+                        image: { type: 'jpeg', quality: 0.98 },
+                        html2canvas: { scale: 2, useCORS: true, allowTaint: true, windowWidth: 1024, logging: false },
+                        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                        pagebreak: { mode: ['css', 'legacy'], avoid: ['.avoid-break', '.pdf-no-break', '.pdf-footer'] }
+                    };
+                    showToast('PDF-Export wird vorbereitet...', 'info');
+                    await html2pdf().set(opt).from(invoiceElement.cloneNode(true)).save();
+                    showToast('PDF erfolgreich gespeichert', 'success');
+                    closePdfModal();
+                } else {
+                    showToast('PDF-Export im Browser nicht möglich.', 'error');
+                }
+            }
+        } else {
+            // Druck-Modus
+            if (printTemplate) printTemplate.innerHTML = invoiceElement.outerHTML || previewContainer.innerHTML;
+            await new Promise(resolve => setTimeout(resolve, 150));
+
+            if (window.api && typeof window.api.printDocument === 'function') {
+                const printRes = await window.api.printDocument();
+                if (printRes && printRes.success) {
+                    showToast('Druckauftrag gesendet', 'success');
+                    closePdfModal();
+                }
+            } else {
+                window.print();
+                closePdfModal();
             }
         }
-    } else {
-        // Copy preview content to hidden print template for native browser print
-        printTemplate.innerHTML = invoiceElement.outerHTML || previewContainer.innerHTML;
-        setTimeout(() => {
-            window.print();
-        }, 100);
+    } catch (globalErr) {
+        console.error('executePrint unhandled error:', globalErr);
+        showToast('Druckvorgang konnte nicht ausgeführt werden.', 'error');
+    } finally {
+        // 1. Verwaiste html2pdf-Container killen
+        document.querySelectorAll('.html2pdf__container, iframe.html2canvas-container').forEach(el => {
+            el.remove();
+        });
+
+        // 2. Pointer-Events korrekt zurücksetzen
+        document.body.style.pointerEvents = '';
+        const modal = document.getElementById('pdf-preview-modal');
+        if (modal) modal.style.pointerEvents = '';
+
+        // 3. Lade-Overlays abschalten
+        ['loading-overlay', 'spinner', 'global-loading'].forEach(id => {
+            const spinner = document.getElementById(id);
+            if (spinner) {
+                spinner.classList.add('hidden');
+                spinner.style.display = 'none';
+            }
+        });
+
+        // 4. Frische Referenzen holen und hart entsperren
+        const pBtn = document.getElementById('pdf-preview-print-btn');
+        const sBtn = document.getElementById('pdf-preview-save-btn');
+        const cBtn = document.getElementById('pdf-preview-close-btn');
+        [pBtn, sBtn, cBtn].forEach(btn => {
+            if (btn) {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'pointer-events-none');
+            }
+        });
+
+        // 5. Events sicher neu binden
+        if (window.invoiceView && typeof window.invoiceView.bindPdfModalControls === 'function') {
+            window.invoiceView.bindPdfModalControls();
+        }
+
+        // 6. Fokus zurückholen
+        if (typeof window.focus === 'function') window.focus();
+
+        if (window.api && typeof window.api.focusWindow === 'function') {
+            try {
+                window.api.focusWindow();
+            } catch (e) {
+                // Focus API Fallback ignoriert
+            }
+        }
     }
 }
+window.executePrint = executePrint;

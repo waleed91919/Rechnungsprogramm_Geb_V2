@@ -1,0 +1,24 @@
+"Die Umsetzung der evaluateFormula Methode und der MVC-Struktur sieht hervorragend und sehr sicher aus!
+
+Da das Backend (Model & Controller) nun steht, müssen wir das Aufmaß im UI sichtbar und nutzbar machen. Der Nutzer kann das aktuell noch nirgends sehen.
+
+Bitte starte mit Phase 2 (UI Integration):
+
+1. HTML Modal für das Aufmaß:
+Entwirf ein sauberes Tailwind-CSS Modal (Popup), das wir in die code.html (die Rechnungs-Ansicht) einbauen können. Das Modal soll folgende Elemente haben:
+
+    Einen Titel (z.B. "Aufmaß / Mengenberechnung").
+
+    Eine Tabelle oder Liste, in der der Nutzer beliebig viele Zeilen hinzufügen kann. Jede Zeile braucht: "Bezeichnung/Raum", "Formel (Eingabefeld)" und "Ergebnis (wird live berechnet)".
+
+    Einen Bereich für das "Gesamtergebnis" aller Zeilen.
+
+    Einen Button: "Menge in Rechnung übernehmen", der das Modal schließt und die Zahl überträgt.
+
+2. Button in der Rechnungsposition:
+Zeige mir den HTML-Schnipsel für einen kleinen Button (z.B. ein Lineal-Icon oder "+ Aufmaß"), den wir neben dem "Menge"-Eingabefeld in den bestehenden Rechnungspositionen platzieren können, um dieses Modal zu öffnen.
+
+3. View-Logik (AufmassView.js):
+Gib mir den Code für die AufmassView.js, um das Modal zu öffnen/schließen, neue Zeilen hinzuzufügen und die Eingaben bei jedem Tastendruck (input-Event) live an den AufmassController.evaluateFormula() zu senden, damit der Nutzer das Ergebnis sofort sieht.
+
+Bitte gib mir den HTML-Code für das Modal, den Button und die Logik für die View."

@@ -1,0 +1,33 @@
+"BINGO! Der Trace-Log hat den Fehler exakt eingekreist. Wir haben zwei Dinge herausgefunden:
+
+1. Root Cause: html2canvas stürzt beim Rendern hart ab (IndexSizeError: Failed to execute 'setEnd' on 'Range'). Dadurch bleibt das DOM in einem korrupten Zustand zurück.
+2. Electron funktioniert perfekt: Der Trace zeigt [PDF-TRACE 8] Nach window.api.savePdf Fallback, result: {success: true}. Der native Export über Electron klappt einwandfrei!
+3. Alert-Deadlock: Der native alert() führt in Electron zu einem Thread-Lock und verursacht den finalen Freeze.
+
+Wir werfen html2pdf jetzt als primäre Methode für die Electron-App raus! Bitte schreibe die executePrint() Funktion (in einstellungen.js) komplett um, mit folgender Priorität:
+
+Schritt 1: Electron First (Bypass html2pdf):
+Prüfe ganz am Anfang des Try-Blocks, ob wir in Electron sind (if (window.api && window.api.savePdf)). Wenn JA, nutze SOFORT und AUSSCHLIESSLICH den nativen Export (window.api.savePdf bzw. window.api.printDocument), OHNE html2pdf aufzurufen!
+
+Schritt 2: html2pdf nur als Web-Fallback:
+Nutze html2pdf nur noch im else-Zweig (falls die App mal im normalen Webbrowser läuft).
+
+Schritt 3: Alert entfernen & Custom Modal:
+Entferne den nativen alert() komplett! Nutze stattdessen eine sanfte showToast('Erfolgreich', 'success') Benachrichtigung und rufe danach direkt (ohne Timeout) window.invoiceView.closePdfPreview() auf.
+
+So sollte die Architektur in executePrint für Speichern aussehen:
+JavaScript
+
+if (window.api && window.api.savePdf) {
+    // 100% Nativ Electron - Absolut Freeze-sicher!
+    const result = await window.api.savePdf(null, filename);
+    if (result && result.success) {
+        showToast('PDF erfolgreich gespeichert', 'success');
+        if (window.invoiceView) window.invoiceView.closePdfPreview();
+    }
+} else {
+    // Fallback nur für normale Webbrowser
+    // html2pdf Logik hier...
+}
+
+Bitte baue executePrint exakt nach diesem 'Electron-First'-Prinzip um. Da wir den html2canvas Crash komplett umgehen und den alert entfernen, wird das UI-Freeze-Problem für immer gelöst sein!"

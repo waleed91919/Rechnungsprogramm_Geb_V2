@@ -14,6 +14,14 @@ contextBridge.exposeInMainWorld('api', {
     bulkSaveDocuments: (docs) => ipcRenderer.invoke('db:bulkSaveDocuments', docs),
     deleteDocument: (id) => ipcRenderer.invoke('db:deleteDocument', id),
 
+    saveAufmass: (aufmass) => ipcRenderer.invoke('db:saveAufmass', aufmass),
+    deleteAufmass: (id) => ipcRenderer.invoke('db:deleteAufmass', id),
+    getAufmassById: (id) => ipcRenderer.invoke('db:getAufmassById', id),
+    getAufmassByPositionId: (positionId) => ipcRenderer.invoke('db:getAufmassByPositionId', positionId),
+    saveAufmassForPosition: (positionId, aufmassData) => ipcRenderer.invoke('db:saveAufmassForPosition', positionId, aufmassData),
+    getAufmasseByRechnungId: (rechnungId) => ipcRenderer.invoke('db:getAufmasseByRechnungId', rechnungId),
+    getAufmasseByProjektId: (projektId) => ipcRenderer.invoke('db:getAufmasseByProjektId', projektId),
+
     saveProjekt: (projekt) => ipcRenderer.invoke('db:saveProjekt', projekt),
 
     saveEinstellung: (key, value) => ipcRenderer.invoke('db:saveEinstellung', key, value),
@@ -22,6 +30,7 @@ contextBridge.exposeInMainWorld('api', {
     restoreDatabase: () => ipcRenderer.invoke('db:restore'),
 
     savePdf: (buffer, defaultName) => ipcRenderer.invoke('save:pdf', buffer, defaultName),
+    printDocument: () => ipcRenderer.invoke('app:printDocument'),
 
     generateQrCode: (text) => ipcRenderer.invoke('qr:generate', text),
 

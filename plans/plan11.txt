@@ -1,0 +1,11 @@
+"Gut, dass wir getestet haben! Es gibt ein kritisches Problem nach dem MVC-Refactoring: Ein UI-Freeze in der PDF-Vorschau (siehe 'grafik_9.png').
+
+Wenn ich die Rechnung speichere oder die PDF-Vorschau öffne, reagieren die Buttons ('Drucken', 'Als PDF Speichern' und das 'X' zum Schließen) nicht mehr. Die UI friert komplett ein und man kann nichts mehr anklicken.
+
+Das ist höchstwahrscheinlich ein JavaScript-Error (z.B. eine 'undefined function') oder verlorene Event-Listener, weil die Buttons noch auf alte Legacy-Funktionen verweisen, die wir im Rahmen des MVC-Refactorings verschoben oder gelöscht haben.
+
+Bitte behebe dieses Problem:
+1. Event-Listener reparieren: Stelle sicher, dass die Event-Handler für die Buttons im PDF-Modal (Schließen, Drucken, PDF Speichern) korrekt in der InvoiceView.js registriert sind und ihre entsprechenden Methoden im InvoiceController.js oder in der PDF-Engine aufrufen.
+2. Fehler im Save-Flow: Prüfe die Speicher-Funktion (z.B. saveRechnung). Falls dort am Ende ein Fehler geworfen wird (z.B. beim Aktualisieren des UI-States oder beim Schließen des Modals), blockiert das den Main-Thread.
+
+Bitte zeige mir den Code, um die Event-Listener für das PDF-Modal im MVC-Pattern korrekt zu 'verkabeln', damit der Freeze verschwindet."

@@ -1,0 +1,35 @@
+"Okay, der Double-Fire-Bug ist erfolgreich behoben durch .onclick! Aber dadurch haben wir jetzt das Problem, dass die Buttons nach dem Ausführen von executePrint ihre Event-Listener verlieren (vermutlich durch DOM-Veränderungen von html2pdf) oder die CSS-Klasse pointer-events-none nicht sauber entfernt wird.
+
+Da wir nun das extrem sichere .onclick in der InvoiceView verwenden (welches Duplikate unmöglich macht), ist es jetzt absolut sicher und sogar NOTWENDIG, das UI im finally-Block hart zu resetten!
+
+Bitte korrigiere die executePrint() Funktion (in einstellungen.js) mit diesen 2 extrem wichtigen Fixes:
+
+1. Frische DOM-Referenzen: Sorge dafür, dass setButtonsState(false) die Buttons im finally-Block FRISCH aus dem DOM holt (document.getElementById), anstatt sich auf alte Variablen am Anfang der Funktion zu verlassen. Entferne zwingend pointer-events-none, opacity-50 und disabled.
+
+2. Re-Bind der Controls: Füge den Aufruf window.invoiceView.bindPdfModalControls(); WIEDER in den finally-Block ein! Da wir jetzt .onclick nutzen, überschreibt dies einfach die toten Events mit frischen, lebendigen Events, ohne dass es zu einem Double-Fire kommt.
+
+Beispiel für den perfekten finally-Block in executePrint:
+JavaScript
+
+} finally {
+    // 1. Frische Referenzen holen und hart entsperren
+    const pBtn = document.getElementById('pdf-preview-print-btn');
+    const sBtn = document.getElementById('pdf-preview-save-btn');
+    const cBtn = document.getElementById('pdf-preview-close-btn');
+    [pBtn, sBtn, cBtn].forEach(btn => {
+        if (btn) {
+            btn.disabled = false;
+            btn.classList.remove('opacity-50', 'pointer-events-none');
+        }
+    });
+
+    // 2. Events sicher neu binden (Dank .onclick kein Double-Fire mehr!)
+    if (window.invoiceView && typeof window.invoiceView.bindPdfModalControls === 'function') {
+        window.invoiceView.bindPdfModalControls();
+    }
+
+    // 3. Fokus zurückholen
+    if (typeof window.focus === 'function') window.focus();
+}
+
+Bitte passe den finally-Block in executePrint genau so an. Das wird die toten Buttons nach dem Speichern/Drucken sofort wiederbeleben!"
