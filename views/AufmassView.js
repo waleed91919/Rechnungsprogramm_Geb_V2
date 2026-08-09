@@ -6,6 +6,7 @@ window.AufmassView = class AufmassView {
         this.modalId = modalId;
         this.targetPosId = null;
         this.onTransferCallback = null;
+        this.einheit = 'm²';
         this.isInitialized = false;
     }
 
@@ -48,11 +49,13 @@ window.AufmassView = class AufmassView {
      * Öffnet das Aufmaß-Modal und lädt bestehende Daten für die spezifische position_id aus der DB.
      * @param {string|number} posId - ID der Rechnungsposition
      * @param {Function} onTransfer - Callback-Funktion zur Übernahme der berechneten Menge
+     * @param {string} einheit - Einheit der Rechnungsposition (z. B. m², Std., Stk.)
      */
-    async openModal(posId, onTransfer = null) {
+    async openModal(posId, onTransfer = null, einheit = 'm²') {
         this.init();
         this.targetPosId = posId;
         this.onTransferCallback = onTransfer;
+        this.einheit = einheit || 'm²';
 
         const modal = document.getElementById(this.modalId);
         if (!modal) return;
@@ -62,11 +65,11 @@ window.AufmassView = class AufmassView {
             tbody.innerHTML = '';
         }
 
-        // Aufmaß aus DB zur Position laden
+        // Aufmaß aus DB zur Position laden (unter Angabe der aktuell gewählten Einheit)
         let loadedAufmass = null;
         if (window.AufmassController && typeof window.AufmassController.loadAufmassForPosition === 'function') {
             try {
-                loadedAufmass = await window.AufmassController.loadAufmassForPosition(posId);
+                loadedAufmass = await window.AufmassController.loadAufmassForPosition(posId, this.einheit);
             } catch (err) {
                 console.warn('Fehler beim Laden des Aufmaßes für Position', posId, err);
             }
@@ -78,9 +81,8 @@ window.AufmassView = class AufmassView {
                 this.addZeile(pos.bezeichnung || pos.raum || '', pos.formel || '');
             });
         } else {
-            // Standardmäßig 2 leere Zeilen bereitstellen, wenn kein Aufmaß existiert
-            this.addZeile('Raum 1 / Wand A', '4 * 2.5');
-            this.addZeile('Abzug Fenster', '- (1.2 * 1.5)');
+            // Standardmäßig 1 leere Zeile bereitstellen, wenn kein Aufmaß existiert
+            this.addZeile('', '');
         }
 
         this.recalculateAll();
@@ -153,7 +155,7 @@ window.AufmassView = class AufmassView {
                     bezeichnung,
                     formel,
                     ergebnis,
-                    einheit: 'm²'
+                    einheit: this.einheit || 'm²'
                 });
             }
         });
@@ -195,7 +197,7 @@ window.AufmassView = class AufmassView {
 
         const totalElement = document.getElementById('aufmass-total-value');
         if (totalElement) {
-            totalElement.textContent = total.toFixed(2);
+            totalElement.textContent = `${total.toFixed(2)} ${this.einheit || 'm²'}`;
         }
 
         return total;
@@ -212,7 +214,7 @@ window.AufmassView = class AufmassView {
         // Speichern in SQLite via Controller & Model (IPC)
         if (window.AufmassController && typeof window.AufmassController.saveAufmassForPosition === 'function' && this.targetPosId) {
             try {
-                await window.AufmassController.saveAufmassForPosition(this.targetPosId, zeilen);
+                await window.AufmassController.saveAufmassForPosition(this.targetPosId, zeilen, '', this.einheit);
             } catch (err) {
                 console.warn('Fehler beim Speichern des Aufmaßes für Position', this.targetPosId, err);
             }

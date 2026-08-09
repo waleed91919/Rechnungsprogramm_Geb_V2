@@ -123,6 +123,12 @@ function initDb() {
         // Column already exists
     }
 
+    try {
+        db.exec(`ALTER TABLE aufmass ADD COLUMN einheit TEXT`);
+    } catch (e) {
+        // Column already exists
+    }
+
     db.exec(`CREATE TABLE IF NOT EXISTS aufmass_positionen (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             aufmass_id INTEGER NOT NULL,
@@ -340,12 +346,12 @@ const dbAPI = {
 
             if (existing) {
                 aufmassId = existing.id;
-                db.prepare('UPDATE aufmass SET titel=?, rechnung_id=?, projekt_id=?, bemerkung=? WHERE id=?')
-                  .run(aufmassData.titel || ('Aufmaß Position ' + posIdStr), aufmassData.rechnung_id || null, aufmassData.projekt_id || null, aufmassData.bemerkung || '', aufmassId);
+                db.prepare('UPDATE aufmass SET titel=?, rechnung_id=?, projekt_id=?, bemerkung=?, einheit=? WHERE id=?')
+                  .run(aufmassData.titel || ('Aufmaß Position ' + posIdStr), aufmassData.rechnung_id || null, aufmassData.projekt_id || null, aufmassData.bemerkung || '', aufmassData.einheit || 'm²', aufmassId);
                 db.prepare('DELETE FROM aufmass_positionen WHERE aufmass_id=?').run(aufmassId);
             } else {
-                const info = db.prepare('INSERT INTO aufmass (position_id, titel, rechnung_id, projekt_id, bemerkung) VALUES (?, ?, ?, ?, ?)')
-                  .run(posIdStr, aufmassData.titel || ('Aufmaß Position ' + posIdStr), aufmassData.rechnung_id || null, aufmassData.projekt_id || null, aufmassData.bemerkung || '');
+                const info = db.prepare('INSERT INTO aufmass (position_id, titel, rechnung_id, projekt_id, bemerkung, einheit) VALUES (?, ?, ?, ?, ?, ?)')
+                  .run(posIdStr, aufmassData.titel || ('Aufmaß Position ' + posIdStr), aufmassData.rechnung_id || null, aufmassData.projekt_id || null, aufmassData.bemerkung || '', aufmassData.einheit || 'm²');
                 aufmassId = info.lastInsertRowid;
             }
 

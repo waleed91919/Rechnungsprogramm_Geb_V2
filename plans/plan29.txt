@@ -1,0 +1,11 @@
+"Im Aufmaß-Modal gibt es noch ein Problem bei den Standardwerten:
+
+Wenn man das Modal für eine neue Position öffnet (z. B. mit der Einheit Std.), stehen dort immer noch die fest einprogrammierten Beispiel-Texte Raum 1 / Wand A und Abzug Fenster aus dem früheren Quadratmeter-Beispiel.
+
+Bitte passe die openModal-Funktion in views/AufmassView.js wie folgt an:
+
+Entferne die festen Beispiel-Zeilen komplett! Wenn noch kein Aufmaß in der Datenbank für diese Position existiert, soll das Modal stattdessen einfach mit genau EINER leeren Zeile öffnen (Bezeichnung/Raum = leeres Feld "", Formel = leeres Feld "").
+
+So bleibt das Modal für alle Einheiten (ob Std., m², Stk. oder lfm) neutral, sauber und sofort einsatzbereit für die Eingabe des Nutzers.
+
+Bitte zeige mir die angepasste openModal-Funktion aus AufmassView.js."

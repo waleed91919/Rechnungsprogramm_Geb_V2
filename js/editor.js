@@ -618,6 +618,8 @@ function handleArtikelAutocomplete(posId, query) {
         pos.ek = art.ek; // Snapshot current purchase price
         pos.name = '';
         pos.mwst = art.mwst !== undefined ? art.mwst : 19;
+        pos.kostenart = art.kostenart || 'MATERIAL';
+        pos.lohnanteil_prozent = art.lohnanteil_prozent || 0;
 
         // Update input field to show correctly formatted string
         const inputField = document.querySelector(`input[list="artikel-datalist"][onchange*="${pos.id}"]`);
@@ -645,14 +647,19 @@ function handlePositionChange(id, field, value) {
             pos.ek = art.ek; // Snapshot current purchase price
             pos.mwst = art.mwst !== undefined ? art.mwst : 19;
             pos.rabatt = 0; // Reset user discount when changing article
+            pos.kostenart = art.kostenart || 'MATERIAL';
+            pos.lohnanteil_prozent = art.lohnanteil_prozent || 0;
         } else {
             pos.preis = 0;
             pos.rabatt = 0;
         }
     } else if (field === 'menge') {
-        pos.menge = parseFloat(value) || 0;
+        pos.menge = pos.einheit === 'Pauschal' ? 1 : (parseFloat(value) || 0);
     } else if (field === 'einheit') {
         pos.einheit = value || 'Stk.';
+        if (pos.einheit === 'Pauschal') {
+            pos.menge = 1;
+        }
     } else if (field === 'preis') {
         pos.preis = parseFloat(value) || 0;
     } else if (field === 'mwst') {
@@ -682,13 +689,13 @@ function createRechnungPositionRow(pos, index) {
 
     // Index cell
     const tdIdx = document.createElement('td');
-    tdIdx.className = 'px-6 py-3 text-center text-slate-400 font-mono text-xs';
+    tdIdx.className = 'px-2 py-2 text-center text-slate-400 font-mono text-xs';
     tdIdx.textContent = index + 1;
     tr.appendChild(tdIdx);
 
     // Article search cell
     const tdArt = document.createElement('td');
-    tdArt.className = 'px-6 py-3';
+    tdArt.className = 'px-3 py-2';
     const divRel = document.createElement('div');
     divRel.className = 'relative';
     const spanSearch = document.createElement('span');
@@ -708,24 +715,31 @@ function createRechnungPositionRow(pos, index) {
 
     // Menge cell mit Einheit & Aufmaß-Button
     const tdMenge = document.createElement('td');
-    tdMenge.className = 'px-6 py-3';
+    tdMenge.className = 'px-2 py-2';
     const divMengeWrapper = document.createElement('div');
-    divMengeWrapper.className = 'flex items-center gap-1';
+    divMengeWrapper.className = 'flex items-center rounded-lg border border-slate-300 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary overflow-hidden shadow-sm';
+
+    const currentEinheit = pos.einheit || 'Stk.';
+    if (currentEinheit === 'Pauschal') {
+        pos.menge = 1;
+    }
 
     const inputMenge = document.createElement('input');
     inputMenge.type = 'number';
     inputMenge.min = '0';
     inputMenge.step = 'any';
     inputMenge.value = pos.menge;
+    if (currentEinheit === 'Pauschal') {
+        inputMenge.disabled = true;
+    }
     inputMenge.onblur = (e) => handlePositionChange(pos.id, 'menge', e.target.value);
-    inputMenge.className = 'w-full px-2 py-1.5 border border-slate-300 rounded text-sm text-right focus:ring-1 focus:ring-primary focus:border-primary';
+    inputMenge.className = 'border-none text-right focus:ring-0 w-14 text-sm px-1 py-1.5 bg-transparent disabled:opacity-50 disabled:bg-slate-50';
 
     const selectEinheit = document.createElement('select');
-    selectEinheit.className = 'px-2 py-1.5 border border-slate-300 rounded text-xs bg-slate-50 focus:ring-1 focus:ring-primary focus:border-primary shrink-0';
+    selectEinheit.className = 'bg-slate-100 border-l border-r border-slate-300 text-xs px-1.5 py-1.5 font-medium text-slate-700 focus:ring-0 shrink-0 outline-none cursor-pointer';
     selectEinheit.onchange = (e) => handlePositionChange(pos.id, 'einheit', e.target.value);
 
     const einheitenOptions = ['Stk.', 'm²', 'm³', 'lfm', 'Std.', 'Pauschal'];
-    const currentEinheit = pos.einheit || 'Stk.';
     if (!einheitenOptions.includes(currentEinheit)) {
         einheitenOptions.push(currentEinheit);
     }
@@ -741,7 +755,7 @@ function createRechnungPositionRow(pos, index) {
     const btnAufmass = document.createElement('button');
     btnAufmass.type = 'button';
     btnAufmass.title = 'Aufmaß / Mengenberechnung öffnen';
-    btnAufmass.className = 'p-1.5 bg-slate-100 hover:bg-primary hover:text-white border border-slate-300 rounded text-slate-600 transition-colors flex items-center justify-center shrink-0';
+    btnAufmass.className = 'p-1.5 hover:bg-primary hover:text-white text-slate-500 transition-colors flex items-center justify-center shrink-0';
     btnAufmass.innerHTML = '<span class="material-symbols-outlined text-[16px]">straighten</span>';
     btnAufmass.onclick = () => openAufmassModalForPosition(pos.id);
 
@@ -753,7 +767,7 @@ function createRechnungPositionRow(pos, index) {
 
     // Preis cell
     const tdPreis = document.createElement('td');
-    tdPreis.className = 'px-6 py-3';
+    tdPreis.className = 'px-2 py-2';
     const inputPreis = document.createElement('input');
     inputPreis.type = 'number';
     inputPreis.step = '0.01';
@@ -769,7 +783,7 @@ function createRechnungPositionRow(pos, index) {
     
     // MwSt cell
     const tdMwst = document.createElement('td');
-    tdMwst.className = 'px-3 py-3';
+    tdMwst.className = 'px-2 py-2 min-w-[80px]';
     const selectMwst = document.createElement('select');
     selectMwst.onchange = (e) => handlePositionChange(pos.id, 'mwst', e.target.value);
     selectMwst.className = 'w-full pl-2 pr-6 py-1.5 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-primary focus:border-primary appearance-none bg-no-repeat';
@@ -815,7 +829,7 @@ function createRechnungPositionRow(pos, index) {
 
     // Rabatt cell
     const tdRabatt = document.createElement('td');
-    tdRabatt.className = 'px-3 py-3';
+    tdRabatt.className = 'px-2 py-2';
     const divRabatt = document.createElement('div');
     divRabatt.className = 'flex items-center justify-end';
     const inputRabatt = document.createElement('input');
@@ -837,13 +851,13 @@ function createRechnungPositionRow(pos, index) {
 
     // Total cell
     const tdTotal = document.createElement('td');
-    tdTotal.className = 'px-6 py-3 text-right font-medium text-slate-800';
+    tdTotal.className = 'px-3 py-2 text-right font-medium text-slate-800';
     tdTotal.textContent = formatCurrency(pos.menge * pos.preis * (1 - (pos.rabatt || 0) / 100));
     tr.appendChild(tdTotal);
 
     // Action cell
     const tdAction = document.createElement('td');
-    tdAction.className = 'px-6 py-3 text-center';
+    tdAction.className = 'px-2 py-2 text-center';
     const btnDel = document.createElement('button');
     btnDel.type = 'button';
     btnDel.onclick = () => removeRechnungPosition(pos.id);
@@ -992,6 +1006,36 @@ async function saveRechnung() {
         verrechnungen: [...(state.currentRechnungVerrechnungen || [])],
         isLocked: existing ? (existing.isLocked || false) : false
     };
+
+    // Calculate summe_lohnkosten_brutto for § 35a EStG tax notice
+    let totalLohnBrutto = 0;
+    (newDoc.positionen || []).forEach(pos => {
+        let art = null;
+        if (pos.artikelId) {
+            art = state.artikel ? state.artikel.find(a => a.id === pos.artikelId) : null;
+        }
+        const kostenart = pos.kostenart || (art ? art.kostenart : 'MATERIAL');
+        const lohnanteilPct = pos.lohnanteil_prozent !== undefined ? pos.lohnanteil_prozent : (art ? art.lohnanteil_prozent : 0);
+
+        const menge = pos.menge || 0;
+        const preis = pos.preis || 0;
+        const rabatt = pos.rabatt || 0;
+        const mwstRate = pos.mwst !== undefined ? pos.mwst : 19;
+        const is13b = newDoc.unterliegt_13b && pos.is13b;
+        const effectiveMwst = is13b ? 0 : mwstRate;
+
+        const posNetto = menge * preis * (1 - rabatt / 100);
+        const posBrutto = posNetto * (1 + effectiveMwst / 100);
+
+        if (kostenart === 'LOHN') {
+            totalLohnBrutto += posBrutto;
+        } else if (lohnanteilPct > 0) {
+            totalLohnBrutto += posBrutto * (lohnanteilPct / 100);
+        }
+    });
+
+    newDoc.summe_lohnkosten_brutto = Math.round(totalLohnBrutto * 100) / 100;
+    newDoc.ausweis_35a_erforderlich = (newDoc.summe_lohnkosten_brutto > 0) ? 1 : 0;
 
     newDoc.type = state.isAngebotMode ? 'angebot' : 'rechnung';
 
@@ -1267,9 +1311,11 @@ async function openAufmassModalForPosition(posId) {
     if (!window.aufmassViewInstance) {
         window.aufmassViewInstance = new window.AufmassView('aufmass-modal');
     }
+    const pos = (state.currentRechnungPositionen || []).find(p => p.id === posId);
+    const einheit = pos ? (pos.einheit || 'm²') : 'm²';
     await window.aufmassViewInstance.openModal(posId, (total, targetId) => {
         handlePositionChange(targetId, 'menge', total);
         renderRechnungPositionen();
-    });
+    }, einheit);
 }
 

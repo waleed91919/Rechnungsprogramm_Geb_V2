@@ -50,13 +50,28 @@ window.AufmassController = class AufmassController {
 
     /**
      * Lädt das Aufmaß für eine spezifische Rechnungsposition aus dem AufmassModel.
+     * Prüft, ob die gespeicherte Einheit der aktuell gewählten entspricht.
      * @param {string|number} positionId 
+     * @param {string} currentEinheit - Aktuell gewählte Einheit der Position
      * @returns {Promise<Object|null>}
      */
-    static async loadAufmassForPosition(positionId) {
+    static async loadAufmassForPosition(positionId, currentEinheit = null) {
         if (!positionId) return null;
         const model = new window.AufmassModel(window.api);
-        return await model.getAufmassByPositionId(positionId);
+        const loaded = await model.getAufmassByPositionId(positionId);
+
+        if (!loaded) return null;
+
+        // Gespeicherte Einheit ermitteln (vom Aufmaß-Stamm oder der 1. Aufmaßposition)
+        const savedEinheit = loaded.einheit || (loaded.positionen && loaded.positionen[0] && loaded.positionen[0].einheit);
+
+        // Wenn Einheit übergeben wurde und nicht mit der gespeicherten übereinstimmt: Verwerfen
+        if (currentEinheit && savedEinheit && savedEinheit !== currentEinheit) {
+            console.log(`Aufmaß für Position ${positionId} zurückgesetzt (Einheitswechsel von "${savedEinheit}" zu "${currentEinheit}").`);
+            return null;
+        }
+
+        return loaded;
     }
 
     /**
@@ -64,19 +79,22 @@ window.AufmassController = class AufmassController {
      * @param {string|number} positionId 
      * @param {Array} positionen 
      * @param {string} titel 
+     * @param {string} einheit 
      * @returns {Promise<number|null>}
      */
-    static async saveAufmassForPosition(positionId, positionen = [], titel = '') {
+    static async saveAufmassForPosition(positionId, positionen = [], titel = '', einheit = 'm²') {
         if (!positionId) return null;
         const model = new window.AufmassModel(window.api);
         const processed = positionen.map(p => ({
             ...p,
+            einheit: p.einheit || einheit,
             ergebnis: this.evaluateFormula(p.formel)
         }));
 
         const aufmassData = {
             position_id: positionId,
             titel: titel || `Aufmaß Position ${positionId}`,
+            einheit: einheit || 'm²',
             positionen: processed
         };
 
@@ -94,9 +112,9 @@ window.AufmassController = class AufmassController {
 
         const processedPositions = positionen.map(pos => {
             const ergebnis = this.evaluateFormula(pos.formel);
-            const einheit = (pos.einheit || 'm²').trim();
+            const einheit = (pos.einheit || 'Stk.').trim();
 
-            totalsByUnit[einheit] = (totalsByUnit[einheit] || 0) + ergebnis;
+            totalsByUnit[einheit] = Math.round(((totalsByUnit[einheit] || 0) + ergebnis) * 10000) / 10000;
             totalSum += ergebnis;
 
             return {
@@ -108,7 +126,7 @@ window.AufmassController = class AufmassController {
         return {
             processedPositions,
             totalsByUnit,
-            totalSum
+            totalSum: Math.round(totalSum * 10000) / 10000
         };
     }
 

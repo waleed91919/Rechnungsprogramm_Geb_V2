@@ -1,0 +1,14 @@
+"Das Redesign der Mengenspalte sieht optisch hervorragend aus! Allerdings drückt die Breite des Mengen-Wrappers jetzt die nachfolgenden Spalten weg, sodass das MwSt-Feld abgeschnitten/gestaucht ist.
+
+Bitte optimiere die Spaltenbreiten und das Layout der Tabelle in editor.js und code.html wie folgt:
+
+1. Mengenspalte kompakter machen:
+Reduziere die Breite des Input-Fields für die Menge von w-20 auf w-14 oder w-16 (z. B. className = 'border-none text-right focus:ring-0 w-14 text-sm px-1 py-1.5 bg-transparent...').
+
+2. Tabellenzellen-Padding reduzieren:
+Ändere das Padding aller <td>-Elemente in den Rechnungspositionen von px-6 py-3 auf px-2 py-2 (oder px-3 py-2.5), damit die Elemente mehr horizontalen Platz haben.
+
+3. MwSt-Spalte schützen:
+Stelle sicher, dass die MwSt-Spalte ein festsitzendes min-w-[80px] besitzt und die Select-Box für die MwSt (19%, 7%, 0%) ein ausreichendes Padding hat, um nicht abgeschnitten zu werden.
+
+Bitte liefere den angepassten Code-Ausschnitt für das Tabellen-Layout und die Zellen-Breiten in editor.js."

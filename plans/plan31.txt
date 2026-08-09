@@ -1,0 +1,24 @@
+"Das Autocomplete im Rechnungs-Editor und die Projekt-Zuordnung funktionieren bereits bestens.
+
+Die einzige Kleinigkeit, die im Fenster 'Neuer Artikel' (artikel-modal) noch fehlt, ist die Auswahl der Kostenart (Kostenart / Leistungsart).
+
+Bitte ergänze folgende Option im Artikel-Modal (code.html & artikel.js):
+
+1. Dropdown 'Kostenart' im Artikel-Modal:
+Füge im HTML des artikel-modal ein neues <select>-Feld für die 'Kostenart' mit folgenden Optionen hinzu:
+
+    Material (Standard)
+
+    Lohnleistung (Handwerkerleistung nach § 35a EStG)
+
+    Maschine / Gerät
+
+    Fahrtkosten
+
+2. Logik in artikel.js & db.js:
+Stelle sicher, dass das Feld kostenart beim Anlegen/Bearbeiten eines Artikels in der Tabelle artikel in der SQLite-Datenbank gespeichert und geladen wird.
+
+3. Verknüpfung mit der Rechnung:
+Wenn ein Artikel mit der Kostenart Lohnleistung über das Autocomplete in die Rechnung eingefügt wird, soll die Position automatisch als Lohnkosten erkannt werden, um die Lohnsumme im Fußbereich der Rechnung (§ 35a EStG) korrekt auszuweisen.
+
+Bitte zeige mir das HTML für das neue Select-Feld und die Anpassungen in artikel.js."

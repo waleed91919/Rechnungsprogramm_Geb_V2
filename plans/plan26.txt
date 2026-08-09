@@ -1,0 +1,22 @@
+"Das aktuelle UI in der Spalte 'Menge' wirkt noch sehr voll und unordentlich. Wir müssen das Design optimieren und die Berechnungen für alle Einheiten absichern.
+
+Bitte setze folgende zwei Punkte in editor.js und AufmassController.js um:
+
+1. UI-Redesign der Mengenspalte (editor.js):
+Baue das Wrapper-Element für Menge, Einheit und Aufmaß-Button zu einer eleganten, zusammenhängenden Input-Group um:
+
+    Ein übergeordnetes div mit flex items-center rounded-lg border border-slate-300 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary overflow-hidden shadow-sm.
+
+    Das Menge-Eingabefeld (<input type="number">) erhält keinen eigenen Rahmen mehr (border-none text-right focus:ring-0 w-20).
+
+    Die Einheit-Auswahl (<select>) schließt direkt daran an mit einer leicht abgesetzten Hintergrundfarbe (bg-slate-100 border-l border-r border-slate-300 text-xs px-2 py-1.5 font-medium text-slate-700 focus:ring-0).
+
+    Der Aufmaß-Button (straighten) bildet den rechten Abschluss (p-1.5 hover:bg-primary hover:text-white text-slate-500 transition-colors).
+
+2. Absicherung der Einheiten & Berechnungen:
+
+    Stelle sicher, dass die Berechnung Gesamt = Menge * Einzelpreis für ALLE Einheiten (Stk., m², m³, lfm, Std.) exakt gleich und präzise funktioniert.
+
+    Wenn die Einheit Pauschal gewählt wird, soll das Menge-Feld automatisch auf 1 gesetzt werden (oder deaktiviere das Menge-Feld optional, da Pauschalpositionen immer als Menge 1 gerechnet werden).
+
+Bitte zeige mir den angepassten Code-Block für das Rendering der Menge-Spalte in editor.js."

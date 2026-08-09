@@ -1,0 +1,17 @@
+"Danke! Die Anpassung aus plan29.txt funktioniert gut (das Modal öffnet jetzt sauber mit einer leeren Zeile).
+
+Es gibt aber noch ein wichtiges Logik-Problem mit der position_id und den gespeicherten Daten:
+
+Wenn ich für eine Position bereits ein Aufmaß gespeichert habe und danach die Einheit dieser Position ändere (z. B. von m² auf Std.), lädt das Modal beim erneuten Öffnen immer noch das alte Aufmaß aus der Datenbank, weil die position_id gleich bleibt.
+
+Bitte behebe dieses Verhalten in AufmassController.js und AufmassView.js:
+
+1. Einheit beim Speichern in aufmass aktualisieren:
+Stelle sicher, dass beim Speichern eines Aufmaßes (saveAufmassForPosition) auch die aktuelle einheit in der Tabelle aufmass gespeichert/aktualisiert wird.
+
+2. Einheits-Prüfung beim Laden:
+Wenn loadAufmassForPosition(posId) aufgerufen wird, vergleiche die gespeicherte Einheit des Aufmaßes mit der aktuell übergebenen einheit der Position:
+
+    Wenn sich die Einheit geändert hat (z. B. alt: m², neu: Std.), soll das alte Aufmaß zurückgesetzt/verworfen werden, sodass dem Nutzer eine leere Zeile für die neue Einheit angezeigt wird.
+
+Bitte zeige mir die angepasste Logik für das Laden/Speichern."

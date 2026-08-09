@@ -1,0 +1,7 @@
+"Das UI ist jetzt sehr gut strukturiert! Um das Aufmaß-Modal noch intuitiver zu machen, bitte folgende kleine Anpassung umsetzen:
+
+Einheit im Aufmaß-Modal anzeigen:
+Wenn das Aufmaß-Modal über den Lineal-Button einer Rechnungsposition geöffnet wird, übergib die aktuell gewählte einheit dieser Position (z. B. m², Std., Stk.) an die AufmassView.
+Zeige diese Einheit im Modal direkt neben dem Gesamtergebnis an (z. B. Gesamtergebnis: 8.20 m² anstelle von nur 8.20).
+
+Bitte zeige mir den kurzen Code-Ausschnitt für diese Dynamisierung in AufmassView.js."
