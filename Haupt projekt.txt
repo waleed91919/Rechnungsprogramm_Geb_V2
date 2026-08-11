@@ -1,0 +1,99 @@
+  ### 1. 🧾 Rechnungen & Neue Rechnung
+
+  • Unter „Rechnungen“ (Übersicht & Tabelle):
+      • Filter & Suche: Filterung nach Status (Alle, Offen, Bezahlt, Überfällig, Storniert, Entwurf), Suchfeld für Rechnungsnummer oder Kundenname sowie Datumsfilter.
+      • Rechnungsliste: Übersicht aller Rechnungen mit Rechnungs-Nr., Kunde, Erstellungsdatum, Fälligkeitsdatum, Gesamtbetrag und Farb-Status.
+      • Aktionen pro Rechnung:
+          • 👁️  Anzeigen / Bearbeiten: Öffnet die Rechnung im Editor.
+          • 📄 PDF-Vorschau & Drucken: Vorschau des Druckbilds, Herunterladen als PDF oder direktes Drucken.
+          • ✅ Als bezahlt markieren: Setzt den Status auf "Bezahlt" und erfasst das Zahlungsdatum.
+          • ⚠️ Mahnung erstellen: Generiert eine Mahnung bei Zahlungsverzug mit Fristverlängerung.
+          • 🔄 Stornieren / Gutschrift: Erstellt automatisch eine Stornorechnung / Gutschrift nach GoBD.
+          • 🗑️  Löschen: (Nut für Entwürfe).
+
+  • Unter „Neue Rechnung“ (Erstellfenster / Editor):
+      • Kopfdaten: Kundenauswahl (oder Schnell-Neuanlage), Rechnungsnummer, Rechnungsdatum, Fälligkeit, Projekt-Zuordnung, Rechnungsart (Einzelrechnung, Abschlagsrechnung, Schlussrechnung).
+      • Freitexte: Vortext (z. B. Begrüßung / Baustellenbezug) und Fußtext (Zahlungsbedingungen, Bankdaten).
+      • Steuer- & Eingabemodus: Umschaltung zwischen Netto- und Brutto-Preiseingabe sowie § 13b UStG (Reverse-Charge-Verfahren für Bauleistungen).
+      • Positionstabelle: Artikel aus Katalog wählen oder Freitext eingeben (Menge, Einheit, Einzelpreis, Rabatt %, MwSt-Satz 19%/7%/0%). Ausweis des Lohnanteils nach § 35a EStG für Privatkunden.
+      • Abschläge & Abzüge: Eingabe von globalem Rabatt (% oder €), Sicherheitseinbehalt (z. B. 5% nach VOB/B), Bauabzugsteuer (15%) und Verrechnung von Vorrechnungen.
+      • Live-Summenrechner: Automatische Berechnung von Zwischensumme, MwSt-Aufschlüsselung und Zahlbetrag.
+
+  ──────
+  ### 2. 📦 Artikel & Neuer Artikel
+
+  • Unter „Artikel“ (Katalog-Übersicht):
+      • Suche & Kategorie-Filter: Schnelle Suche nach Artikelnamen/Nummern sowie Filterung nach Kategorien (z. B. Material, Lohnarbeit, Maschinenleistung, Fahrtkosten).
+      • Artikel-Tabelle: Auflistung aller Stammdaten-Artikel mit Artikelnummer, Bezeichnung, Kategorie, Verkaufspreis (Netto/Brutto), MwSt-Satz und Einheit.
+      • Aktionen: Artikel bearbeiten oder aus dem Katalog löschen.
+  • Unter „Neuer Artikel“ (Eingabemaske):
+      • Stammdaten: Artikelnummer / EAN, Artikelbezeichnung und detaillierter Beschreibungstext.
+      • Kategorie: Zuordnung zu Material, Arbeitslohn, Werkzeug/Maschine oder Fahrtkosten.
+      • Preise & Steuern: Netto-Verkaufspreis, Einkaufspreis (EK zur Spannenberechnung) und MwSt-Satz (19%, 7%, 0%).
+      • Einheit: Auswahlliste (z. B. Stunden (Std), Stück (Stk), Meter (m), Quadratmeter (m²), Pauschal).
+      • § 35a EStG Kennzeichnung: Haken, ob diese Position als steuerbegünstigter Handwerker-Lohnanteil gilt.
+
+  ──────
+  ### 3. 📝 Angebote & Neues Angebot
+
+  • Unter „Angebote“ (Übersicht):
+      • Status-Filter: Filterung nach Entwurf, Versendet, Angenommen, Abgelehnt, In Rechnung gestellt.
+      • Angebots-Tabelle: Angebotsnummer, Kunde, Erstellungsdatum, Gültigkeitsdatum („Gültig bis“), Gesamtsumme und Status.
+      • Aktionen:
+          • Angebot bearbeiten / anzeigen & PDF exportieren.
+          • ⚡ In Rechnung umwandeln: Erstellt per Klick direkt eine fertige Rechnung aus dem Angebot.
+
+  • Unter „Neues Angebot“ (Erstellungsfenster):
+      • Kopfdaten & Gültigkeit: Kunde wählen, Angebotsdatum und Gültigkeitsdauer festlegen.
+      • Positionen & Texte: Gleicher flexibler Positionseditor wie bei Rechnungen (Materialien, Arbeitszeiten, Stundensätze, Pauschalen).
+      • Angebots-Texte: Individuelle Anschreiben/Vortexte (z. B. "Vielen Dank für Ihre Anfrage. Gerne unterbreiten wir Ihnen folgendes Angebot...").
+
+  ──────
+  ### 4. 👥 Kunden & Neuer Kunde
+
+  • Unter „Kunden“ (Adressbuch & Stammdaten):
+      • Suchleiste & Typ-Filter: Suche nach Name, Ort, Kundennummer oder Filterung nach Privat- vs. Firmenkunden.
+      • Kundenliste: Anzeige von Kundennummer, Name/Firma, Ansprechpartner, E-Mail, Telefon, Adresse sowie bisherigem Gesamtumsatz / offenem Saldo.
+      • Aktionen: Kundenprofil bearbeiten, Rechnungs-Historie des Kunden einsehen, Kunde löschen.
+  • Unter „Neuer Kunde“ (Eingabemaske):
+      • Kundentyp: Unterscheidung zwischen Privatkunde (wichtig für § 35a Steuerbonus) und Geschäftskunde / Firma (wichtig für § 13b UStG / B2B).
+      • Stammdaten: Firmenname, Nachname, Vorname, Ansprechpartner, USt-IdNr. / Steuernummer.
+      • Kontaktdaten: E-Mail-Adresse, Telefonnummer, Mobilnummer, Website.
+      • Hauptadresse: Straße, Hausnummer, PLZ, Ort, Land.
+      • Baustellen- / Lieferadresse: Optionale abweichende Liefer- oder Baustellenadresse.
+      • Zahlungskonditionen: Standard-Zahlungsziel in Tagen (z. B. 14 Tage), Skonto-Vereinbarungen, Haken für Bauleistender nach § 13b UStG.
+
+  ──────
+  ### 5. 📁 Projekte & Neues Projekt
+
+  • Unter „Projekte“ (Bauprojekt-Verwaltung):
+      • Projekt-Übersicht: Liste aller Bauvorhaben mit Projektname, zugeordnetem Kunden, Gesamtauftragsvolumen, bereits abgerechnetem Betrag, offenem Restbetrag und Projektstatus (In Planung, Aktiv, Abgeschlossen).
+      • Projekt-Detailansicht: Zentrale Übersicht für ein einzelnes Bauvorhaben: Zeigt alle verknüpften Angebote, Abschlagsrechnungen, die Schlussrechnung sowie den kumulierten Leistungsstand und Sicherheitseinbehalte an.
+  • Unter „Neues Projekt“ (Erstellfenster):
+      • Projektname: Bezeichnung der Baustelle (z. B. "Dachsanierung Musterstraße 5").
+      • Kundenzuweisung: Auswahl des Kunden aus den Stammdaten.
+      • Baustellenadresse: Exakte Adresse des Ausführungsortes.
+      • Budget / Auftragssumme: Geplantes Gesamtvolumen.
+      • Sicherheitseinbehalt: Prozentualer Einbehalt für Gewährleistung (z. B. 5% nach VOB/B).
+      • Zeitraum: Geplanter Start- und Endtermin.
+
+  ──────
+  ### 6. 📊 Berichte (Analysen & Finanzen)
+
+  • Unter „Berichte“ finden Sie folgende Auswertungen:
+      • Umsatz-Dashboards: Grafische und tabellarische Darstellung von Monats- und Jahresumsätzen (Netto, Brutto, Bezahlt vs. Offen).
+      • Steuerbericht / USt-Voranmeldung: Zusammenfassung der eingenommenen Umsatzsteuer aufgeteilt nach 19%, 7% und steuerfreien § 13b Umsätzen für das Finanzamt / den Steuerberater.
+      • Offene-Posten-Liste (OPOS): Detaillierte Aufstellung aller noch unbezahlten und überfälligen Rechnungen inklusive Fälligkeitstagen.
+      • Kundenumsätze: Ranking der umsatzstärksten Kunden.
+      • Daten-Export: Export der Buchhaltungsdaten als CSV oder PDF zur Weitergabe an den Steuerberater.
+
+  ──────
+  ### 7. ⚙️ Einstellungen (System- & Firmenkonfiguration)
+
+  • Unter „Einstellungen“ befinden sich:
+      • Firmendaten: Name Ihres Handwerksbetriebs, Inhaber, Adresse, Kontaktdaten, USt-IdNr., Steuernummer und Handelsregister.
+      • Bankverbindung: IBAN, BIC, Bankname und Kontoinhaber (werden automatisch in die Rechnungsfußzeile gedruckt).
+      • Briefpapier & Design: Hochladen des eigenen Firmenlogos, Anpassung von Schriftarten, Farben und Kopf-/Fußzeilen für PDF-Rechnungen.
+      • Standard-Texte: Hinterlegung von Standard-Einleitungstexten, Zahlungsbedingungen und Rechtshinweisen für Rechnungen & Angebote.
+      • Nummernkreise: Definition des automatischen Nummernformats für Rechnungen (z. B. RE-2026-0001), Angebote und Kunden.
+      • Backup & Wiederherstellung: Manuelle Erstellung von Datenbank-Sicherungen sowie Einspielen/Wiederherstellen vorhandener Backups.
