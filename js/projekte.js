@@ -512,4 +512,103 @@ function closeProjektDetails() {
     document.getElementById('view-projekte').classList.remove('hidden');
 }
 
-if (typeof module !== 'undefined' && module.exports) { module.exports = { calculateProjektUmsatz }; }
+function handleGAEBFileUpload(event) {
+    const file = event.target.files ? event.target.files[0] : null;
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const content = e.target.result;
+        if (typeof GAEBEngine !== 'undefined') {
+            try {
+                const parsed = GAEBEngine.parseGAEBXML(content);
+                renderGAEBPositionsTable(parsed.items || []);
+                showToast(`GAEB X83 (${parsed.items ? parsed.items.length : 0} Positionen) erfolgreich importiert.`, 'success');
+            } catch (err) {
+                console.error('GAEB Import error:', err);
+                showToast('Fehler beim Parsen der GAEB-Datei.', 'error');
+            }
+        } else {
+            showToast('GAEB-Engine nicht verfügbar.', 'error');
+        }
+    };
+    reader.readAsText(file);
+}
+
+function renderGAEBPositionsTable(items) {
+    const tbody = document.getElementById('gaeb-table-body');
+    const container = document.getElementById('gaeb-table-container');
+    if (!tbody || !container) return;
+
+    tbody.innerHTML = '';
+    if (!items || items.length === 0) {
+        container.classList.add('hidden');
+        return;
+    }
+
+    items.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition-colors';
+
+        const tdOz = document.createElement('td');
+        tdOz.className = 'px-4 py-2.5 font-mono text-xs font-semibold text-primary';
+        tdOz.textContent = item.oz || '-';
+        tr.appendChild(tdOz);
+
+        const tdTitle = document.createElement('td');
+        tdTitle.className = 'px-4 py-2.5 font-medium text-slate-800';
+        tdTitle.textContent = item.name || item.kurztext || '';
+        tr.appendChild(tdTitle);
+
+        const tdMenge = document.createElement('td');
+        tdMenge.className = 'px-4 py-2.5 text-center font-mono tabular-nums text-slate-700';
+        tdMenge.textContent = item.menge || 1;
+        tr.appendChild(tdMenge);
+
+        const tdEinheit = document.createElement('td');
+        tdEinheit.className = 'px-4 py-2.5 text-center text-xs text-slate-500 font-semibold';
+        tdEinheit.textContent = item.einheit || 'Stk.';
+        tr.appendChild(tdEinheit);
+
+        const tdEp = document.createElement('td');
+        tdEp.className = 'px-4 py-2.5 text-right font-mono tabular-nums text-slate-700';
+        tdEp.textContent = formatCurrency(item.preis || 0);
+        tr.appendChild(tdEp);
+
+        const tdGp = document.createElement('td');
+        tdGp.className = 'px-4 py-2.5 text-right font-mono tabular-nums font-bold text-slate-900';
+        const gp = (item.menge || 1) * (item.preis || 0);
+        tdGp.textContent = formatCurrency(gp);
+        tr.appendChild(tdGp);
+
+        tbody.appendChild(tr);
+    });
+
+    container.classList.remove('hidden');
+}
+
+function saveBautagebuchEntry() {
+    const pId = window.currentViewProjektId;
+    const datum = document.getElementById('bautagebuch-datum')?.value || new Date().toISOString().split('T')[0];
+    const wetter = document.getElementById('bautagebuch-wetter')?.value || '';
+    const arbeiter = document.getElementById('bautagebuch-arbeiter')?.value || '';
+    const geraete = document.getElementById('bautagebuch-geraete')?.value || '';
+    const notiz = document.getElementById('bautagebuch-notiz')?.value || '';
+
+    if (!notiz && !wetter && !arbeiter) {
+        showToast('Bitte geben Sie mindestens ein Datum oder Notizen ein.', 'warning');
+        return;
+    }
+
+    const p = state.projekte.find(x => x.id === pId);
+    if (p) {
+        p.bautagebuch = p.bautagebuch || [];
+        p.bautagebuch.push({ datum, wetter, arbeiter, geraete, notiz, timestamp: new Date().toISOString() });
+        showToast(`Bautagebuch-Eintrag für ${datum} gespeichert.`, 'success');
+        document.getElementById('bautagebuch-notiz').value = '';
+    } else {
+        showToast('Kein aktives Projekt für Bautagebuch gewählt.', 'error');
+    }
+}
+
+if (typeof module !== 'undefined' && module.exports) { module.exports = { calculateProjektUmsatz, saveBautagebuchEntry }; }

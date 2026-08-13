@@ -1,0 +1,55 @@
+### PROMPT: Entwicklung eines Architektur- und Datenkonzepts für ein Bau-ERP-System (B2G, B2B, B2C)
+
+#### 1. KONTEXT & ZIELSETZUNG
+Wir entwickeln eine umfassende ERP-Software für mittelständische Bauunternehmen (Bauhaupt- und Baunebengewerbe). Das bestehende System deckt derzeit nur grundlegende Back-Office-Funktionen ab (einfache Rechnungen, Artikelstamm, Kundenverwaltung, Angebote, Basissektoren für Projekte und einfache Finanzberichte). 
+
+Um den tatsächlichen Marktanforderungen von mittelständischen Baubetrieben gerecht zu werden, muss das System im ersten Schritt um die rechtlichen, regulativen und schnittstellentechnischen Spezifikationen für alle drei zentralen Geschäftsentitäten erweitert werden:
+1. B2G (Business-to-Government / Öffentliche Auftraggeber)
+2. B2B (Business-to-Business / Hauptunternehmer & Subunternehmer)
+3. B2C (Business-to-Consumer / Private Bauherren)
+
+---
+
+#### 2. Detaillierte Anforderungen nach Geschäftsentitäten
+
+##### A. B2G (Business-to-Government) – Öffentliche Ausschreibungen & Verwaltung
+- E-Rechnungspflicht & Standards: Vollständige Erzeugung und Verarbeitung von strukturierten Datensätzen nach der europäischen Norm EN 16931.
+  - Pflichtunterstützung für XRechnung (CII/UBL-XML) mit Erfassung der Leitweg-ID.
+  - Generierung von ZUGFeRD-Dokumenten (ab Version 2.0.1) mindestens im Profil EN 16931 (Profile wie MINIMUM oder BASIC-WL reichen rechtlich nicht aus).
+- GAEB-Schnittstelle (Gemeinsamer Ausschuss Elektronik im Bauwesen):
+  - Import und Export von Leistungsverzeichnissen (LV) in den Phasen X83 (Ausschreibung), X84 (Angebotsabgabe) und X89 (Rechnung).
+  - Nahtlose Verknüpfung der GAEB-Positionsdaten mit der internen Kalkulation und Belegerstellung.
+
+##### B. B2B (Business-to-Business) – Gewerbliche Partner & Subunternehmer
+- Steuerliche & Baurechtliche Sonderregeln:
+  - Bauabzugsteuer (§ 48b EStG): Verwaltung und automatische Gültigkeitsprüfung von Freistellungsbescheinigungen für Subunternehmer, um Haftungsrisiken zu vermeiden.
+  - Reverse-Charge-Verfahren (§ 13b UStG): Automatische Steuerschuldumkehr bei Bauleistungen zwischen Bauunternehmen inklusive korrekter Buchen auf DATEV-Kostenkonten.
+  - Sicherheitseinbehalte & Gewährleistung (z. B. nach VOB/B): Logik zur automatischen Einbehaltung von Sicherheitseinbehalten (z. B. 5 %) auf Abschlagsrechnungen sowie Nachverfolgung/Freigabe von Gewährleistungsforderungen bei der Schlussrechnung.
+- Dokumenten- & Zahlungsverkehr:
+  - Kumulierte Abrechnung (VOB-konform): Verrechnung aller bisher erbrachten Abschlagsrechnungen ($F_t = L_t - \sum F_i$) in Folgerechnungen und in der finalen Schlussrechnung zur Vermeidung von Doppelbesteuerung.
+
+##### C. B2C (Business-to-Consumer) – Private Auftraggeber
+- Steuerliche Anreize nach § 35a EStG:
+  - Automatisierte Ausweisung und Trennung von reinen Lohn- und Fahrtkosten gegenüber Materialkosten auf Angeboten und Rechnungen zur Steuervergünstigung für den Endverbraucher.
+- Dokumentenformat: Bereitstellung von ZUGFeRD (PDF/A-3 mit eingebettetem XML), da Verbraucher primär menschenlesbare Belege benötigen.
+
+---
+
+#### 3. DEINE AUFGABE ALS KI-ARCHITEKT
+
+Bitte erstelle auf Basis dieser Spezifikationen eine detaillierte technische und funktionale Ausarbeitung:
+
+1. Datenmodell & Entitäten-Erweiterung (Database Schema / JSON-Logik):
+   - Welches ER-Modell (Entity-Relationship) oder welche zusätzlichen Felder/Tabellen benötigen wir in der Datenbank für:
+     - Kunden/Partner (Unterscheidung B2G/B2B/B2C, Leitweg-ID, USt-IdNr, § 48b Status & Ablaufdatum, § 13b-Kennzeichnung)?
+     - Projekte & Dokumente (GAEB-Struktur, Kumulierte Abschlags-Logik, Sicherheitseinbehalte, HOAI/VOB-Flags)?
+     - Rechnungspositionen (§ 35a EStG Lohnkosten-Aufschlüsselung)?
+
+2. Workflow- & Schnittstellen-Architektur:
+   - Skizziere den technischen Ablauf vom Import einer GAEB-Ausschreibung (X83) über die Angebotserstellung (X84) bis hin zur kumulierten Abrechnung und dem Export als XRechnung/ZUGFeRD.
+   - Beschreibe die Schnittstellenanbindung an Finanzbuchhaltungssysteme (wie DATEV).
+
+3. Validierungs- und Logikregeln:
+   - Welche automatischen Prüfroutinen (z. B. KoSIT-Validierung für XRechnung, Prüfung fehlender Pflichtfelder vor dem Festschreiben nach GoBD) müssen im System hinterlegt werden?
+
+Bitte erstelle diese Übersicht strukturiert, präzise und in deutscher Sprache.

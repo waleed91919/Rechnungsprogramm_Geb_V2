@@ -1,6 +1,219 @@
-"Das UI für die Positionsebene sieht gut aus, aber wir brauchen noch eine kleine UX-Verbesserung, um die Nutzer nicht zu verwirren.
+================================================================================
+360°-SYSTEMDISCOVERY & ENTIRE APP WORKFLOW MAPPING (BAU-ERP SYSTEM V2)
+================================================================================
+Projekt: W-Link Bau-ERP System (Vollständige Systemanalyse & Architekturplan)
+Datei: plans/plan06.txt
+Erstellt am: 2026-08-13
+Status: Finaler 360° Voll-Abdeckungsplan (Version 2.0)
 
-Bitte passe die editor.js an:
-Wenn die Checkbox '13B (0%)' in einer Zeile aktiviert wird, muss das darüberliegende MwSt-Dropdown (Select-Feld) für diese Zeile zwingend deaktiviert (disabled) werden, und der angezeigte Wert sollte visuell auf '0%' oder leer springen. Wenn die Checkbox wieder deaktiviert wird, soll das Dropdown wieder freigegeben werden (enabled) und auf den Standardwert (z.B. 19%) zurückspringen.
+================================================================================
+1. EXECUTIVE SUMMARY & SYSTEM-ARCHITEKTUR (ELECTRON / BETTER-SQLITE3 / MVC)
+================================================================================
 
-Setze das bitte um, damit der Nutzer nicht gleichzeitig 19% im Dropdown sieht und 13B angehakt hat."
+Das W-Link Bau-ERP V2 ist eine gewerbliche Desktop-Anwendung auf Basis von 
+Electron, Node.js und Better-SQLite3 im WAL-Modus. Die Architektur folgt strikt 
+dem Model-View-Controller (MVC) Muster und unterteilt das Gesamtsystem in 
+8 Hauptmodule, ein mobiles Aufmaß- & Baustellen-System sowie automatisierte 
+E-Invoicing- und Compliance-Engines.
+
+Systemkomponenten & Datei-Zuordnung:
+- Backend Database: `db.js` (WAL-Modus, Foreign Keys, 11+ Tabellen, DDL & Transactions)
+- IPC Bridge: `preload.js` (ContextBridge Security, async Event Handler in `main.js`)
+- Frontend UI: `code.html` (Tailwind CSS, Material Symbols, 8 Hauptmodul-Views, Dynamic Modals)
+- Controllers: `controllers/AufmassController.js`, `controllers/CumulativeBillingController.js`, `controllers/InvoiceController.js`, `controllers/SubcontractorController.js`
+- Models: `models/AufmassModel.js`, `models/InvoiceModel.js`
+- Views: `views/AufmassView.js`, `views/InvoiceView.js`
+- Special Engines: `js/einvoice.js` (XRechnung / ZUGFeRD), `js/gaeb.js` (X83/X84 Parser), `js/gobd.js` (SHA-256 Hashing), `js/datev.js` (EXTF 700 Export)
+- Test & Generation Pipelines: `scripts/generate_and_test.js`, `scripts/run_full_system_test.js`
+
+================================================================================
+2. 360°-MODUL-SPEZIFIKATION (MODULE 1 BIS 8 & SUB-WORKFLOWS)
+================================================================================
+
+--------------------------------------------------------------------------------
+MODUL 1: VERTRIEB, AKQUISE & ANGEBOTE (PRE-CONSTRUCTION)
+--------------------------------------------------------------------------------
+- CRM & Lead-Verwaltung: Erfassung von Vergabeverfahren, Akquise-Status, Wiedervorlagefristen.
+- GAEB-Schnittstellenkette (`js/gaeb.js`):
+  * Import X83 (Ausschreibung): Parsing von Gewerk -> Titel -> Untertitel -> Position (OZ, Kurztitel, Einheiten, Menge).
+  * Vorkalkulation & Preisspiegel: Zuordnung von Einkaufspreisen (EK), Verkaufspreisen (VK), Lohnstundensätzen.
+  * Export X84 (Angebotsabgabe): Generierung der konformen X84 XML-Datei mit Bieterpreisen (EP/GP).
+  * Export X89 (Rechnungsdatenaufmaß): Strukturierte Übergabe für Bauabrechnung.
+- Angebotsversionierung & 1-Klick-Umwandlung (`js/angebote.js`):
+  * Status-Traversierung: `Entwurf` -> `Versendet` -> `Angenommen` / `Abgelehnt`.
+  * 1-Klick-Konvertierung von Angebot in ein aktives Bauprojekt (`projekte`) oder eine Rechnung (`dokumente`).
+- UI-Views: `#view-angebote` in `code.html`, Angebots-Editor Modal, GAEB Drag-&-Drop Zone.
+- DB-Tabellen: `dokumente` (type='angebot'), `positionen` (oz_code, cost_type).
+
+--------------------------------------------------------------------------------
+MODUL 2: PROJEKT-MANAGEMENT & KALKULATION (OFFICE & CONSTRUCTION)
+--------------------------------------------------------------------------------
+- HOAI- & VOB/B-Kalkulation: Differenzierte Kostenarten-Erfassung:
+  * `LOHN`: Arbeitslohnstunden & Stundensätze.
+  * `MATERIAL`: Baustoffe, Verbrauchsmaterialien, Einkaufspreise.
+  * `GERÄT`: Maschinen- & Fuhrparkstunden.
+  * `FAHRT`: Fahrt- & Transportkosten.
+- Soll-Ist-Vergleich & Projektcontrolling:
+  * Tagesaktuelle Deckungsbeitragsrechnung je Leistungsphase / Arbeitspaket.
+  * Berechnung: $Deckungsbeitrag = Gesamt-Ist-Leistung - (Lohnkosten + Materialkosten + Fremdleistungen)$.
+- Nachtragsmanagement:
+  * Erfassung von Hauptauftrag vs. Nachtragsangeboten (Nachtrag 1, 2, ...).
+  * Getrennte Ausweisung vom Grundhonorar und VOB/B Bauvertragspositionen.
+- UI-Views: `#view-projekte`, Projekt-Detailansicht mit Soll-Ist-Kacheln und Vorgangshistorie.
+- DB-Tabellen: `projekte`, `dokumente` (projektId), `positionen`.
+
+--------------------------------------------------------------------------------
+MODUL 3: RESOURCE & KAPAZITÄTSPLANUNG (PLANTAFEL & DISPOSITION)
+--------------------------------------------------------------------------------
+- Digitale Plantafel:
+  * Personaleinsatzplanung (Baustelle vs. Büro / Vorfertigung).
+  * Maschinen-, Werkzeug- & Fuhrparkdisposition.
+- Personalverwaltung & Kapazitäten:
+  * Erfassung von Urlaubsanträgen, Krankmeldungen, Auslastungsquoten.
+  * Berechnung interner Verrechnungssätze (Lohnstunden-Verrechnungskonto).
+- UI-Views: Integrated Resource Grid & Disposition Panel im Projektmodul.
+- DB-Tabellen: `einstellungen`, `kunden` (Mitarbeiter/Partner), `projekte`.
+
+--------------------------------------------------------------------------------
+MODUL 4: MOBILE BAUSTELLEN-APP & FIELD-DOKUMENTATION (FIELD APP)
+--------------------------------------------------------------------------------
+- Mobiles Aufmaß nach REB 23.003 (`controllers/AufmassController.js`, `views/AufmassView.js`):
+  * Formel-Messzeilen: Safe mathematical evaluation (`evaluateFormula`) von Ausdrücken z.B. `(5.50 + 3.20) * 2.10 * 0.30`.
+  * Raum- & Spaltenaufmaß mit Einheitsprüfungen (m², m³, m, Stk).
+- Bautagebuch & Baudokumentation: Erfassung von Witterung (Temperatur, Regen), Anwesenheit (Eigenpersonal, Subunternehmer), Großgeräten & Vorkommnissen.
+- Mängelerfassung & Abnahme: Fotodokumentation mit Planzuweisung, Notizen und Abnahmeprotokoll inkl. digitaler Unterschrift.
+- Mobile Zeiterfassung: Offline-first Stempeluhr/Rapporte mit Auto-Sync bei Re-Konnektivität.
+- UI-Views: `#aufmass-modal` in `code.html`, Live Aufmaß-Tabelle, Formel-Editor.
+- DB-Tabellen: `aufmass`, `aufmass_positionen`.
+
+--------------------------------------------------------------------------------
+MODUL 5: SUBUNTERNEHMER-, LIEFERANTEN- & MATERIALWIRTSCHAFT
+--------------------------------------------------------------------------------
+- Material- & Lagerverwaltung: Artikelstamm (`js/artikel.js`), Bestandsführung, Wareneingang & Barcode-Erfassung.
+- Großhändler-Schnittstellen: Schnittstellenfelder für DATANORM, IDS-Connect, Open MasterData, SIRADOS.
+- Subunternehmer-Compliance & Bauabzugsteuer (`controllers/SubcontractorController.js`):
+  * Automatisierte Prüfung der Freistellungsbescheinigung nach § 48b EStG (`checkSec48bStatus`).
+  * Wenn Abgelaufen / Fehlt: Warnmeldung im UI (`#subcontractor-sec48b-warning`) & automatischer 15 % Bauabzugsteuer-Einbehalt vom Bruttobetrag zur Abführung an das Finanzamt.
+  * Automatischer § 13b UStG Reverse-Charge Check für B2B Bauleistungen.
+- UI-Views: `#view-artikel`, `#view-kunden` (Subunternehmer-Stammdaten mit § 48b Status-Badge & Zertifikats-Upload).
+- DB-Tabellen: `artikel`, `kunden` (is_subcontractor, sec48b_status, sec48b_valid_until, sec48b_certificate_path).
+
+--------------------------------------------------------------------------------
+MODUL 6: ABRECHNUNG, E-INVOICING & LIQUIDITÄT (INVOICING)
+--------------------------------------------------------------------------------
+- Kumulierte Abschlags- & Schlussrechnung nach VOB/B (`controllers/CumulativeBillingController.js`):
+  * Berechnungsformel: $F_t = L_t - \sum F_i$
+  * $L_t$: Gesamte erbrachte Leistung kumuliert bis heute.
+  * $\sum F_i$: Summe der bisher abgerechneten Netto-Abschlagsrechnungen.
+  * $F_t$: Zahlbetrag/Leistung dieser Periode.
+- Sicherheitseinbehalt-Verwaltung nach VOB/B § 17:
+  * Automatischer Abzug von z.B. 5% Gewährleistungssicherheit auf die Gesamtleistung.
+  * Fristen- & Statusnachverfolgung (`security_retentions`: `HELD`, `RELEASED`, `GUARANTEE_SUBSTITUTED`).
+- E-Rechnungs-Standards (`js/einvoice.js`):
+  * XRechnung: CII XML nach EN 16931 mit Leitweg-ID (BT-10) für öffentlichen Auftraggeber (B2G).
+  * ZUGFeRD 2.0.1+: PDF/A-3 Hybrid-Format mit eingebetteter `factur-x.xml` für B2B & B2C.
+- B2C-Transparenz nach § 35a EStG: Detaillierter Ausweis steuerbegünstigter Handwerker-Lohn- & Fahrtkosten im Rechnungsfuß.
+- UI-Views: `#view-rechnungen`, Rechnungs-Editor Modal, VOB/B Kumulierungs-Block, PDF/XML Quick-Downloads.
+- DB-Tabellen: `dokumente`, `positionen`, `invoice_cumulative_states`, `security_retentions`, `rechnung_verrechnungen`.
+
+--------------------------------------------------------------------------------
+MODUL 7: FINANZEN, MAHNWESEN & SCHNITTSTELLEN (ACCOUNTING)
+--------------------------------------------------------------------------------
+- Offene-Posten-Verwaltung (OPOS): Live-Tracking aller unbezahlten & überfälligen Rechnungen (`#view-berichte`).
+- 4-stufiges Mahnwesen: Automatische Erstellung von Mahnungen (Erinnerung, Mahnung 1-3) mit Frist- & Gebührenrechner.
+- DATEV EXTF 700 Export Engine (`js/datev.js`):
+  * Erzeugung des offiziellen DATEV EXTF 700 CSV-Buchungsstapels (ISO-8859-1 / Latin1).
+  * Automatische Zuordnung von SKR03 / SKR04 Konten.
+  * Reverse Charge § 13b UStG: Erlöskonto 8337 (SKR03) / 4337 (SKR04) mit BU-Schlüssel 19 (SKR03) bzw. 68 (SKR04).
+  * Sicherheitseinbehalte: Abgrenzungsbuchung auf Konto 1540 (SKR03) / 1240 (SKR04).
+- UI-Views: `#view-berichte`, DATEV Export Modal, OPOS-Fälligkeitsanalyse.
+- DB-Tabellen: `dokumente` (mahnungLevel, mahnungDatum, mahnungGebuehr), `kunden`.
+
+--------------------------------------------------------------------------------
+MODUL 8: GOBD AUDIT, COMPLIANCE & SYSTEMVERWALTUNG
+--------------------------------------------------------------------------------
+- GoBD-Unveränderbarkeit & Audit Trail (`js/gobd.js`):
+  * Statusübergang: `Entwurf` / `DRAFT` -> `Festgeschrieben` / `POSTED`.
+  * Nach Status `POSTED`: Strikte Editier-Sperre (`isLocked = 1`). Stornierung ausschließlich über Stornorechnung / Gutschrift (`createStornoData`).
+  * SHA-256 Hash-Kettung: Jeder festgeschriebene Beleg generiert einen kryptografischen Hashwert in der Tabelle `audit_logs` (Verkettung mit `previous_hash`).
+- System-Einstellungen (`js/einstellungen.js`): Briefpapier/Logo-Upload, Nummernkreise, Bankverbindungen, SQLite Backup & Emergency Restore (`db.backup`, `db.restore`).
+- UI-Views: `#view-einstellungen`, Briefpapier-Editor, Backup/Restore Dialoge.
+- DB-Tabellen: `audit_logs`, `einstellungen`.
+
+================================================================================
+3. COMPREHENSIVE MERMAID.JS STATE-MACHINE & PROCESS WORKFLOW
+================================================================================
+
+```mermaid
+stateDiagram-v2
+    [*] --> InKalkulation: GAEB X83 Import / Manuelle Angebotserfassung
+    
+    InKalkulation --> AngebotVersendet: GAEB X84 Export / PDF Versand
+    
+    state AngebotVersendet {
+        [*] --> WartenAufZuschlag
+    }
+    
+    AngebotVersendet --> Abgelehnt: [Angebot abgelehnt]
+    AngebotVersendet --> ProjektAktiv: [Angebot angenommen / 1-Klick Umwandlung]
+    
+    state ProjektAktiv {
+        [*] --> InAusfuehrung
+        
+        InAusfuehrung --> SubunternehmerPruefung: Subunternehmer zugewiesen
+        state SubunternehmerPruefung {
+            [*] --> Check48b
+            Check48b --> Freigestellt: [§ 48b EStG gültig]
+            Check48b --> Bauabzugspflichtig: [§ 48b abgelaufen / fehlt -> 15% Bauabzugsteuer]
+        }
+        
+        InAusfuehrung --> AbschlagsrechnungErstellt: REB 23.003 Aufmaß erfasst
+        
+        state AbschlagsrechnungErstellt {
+            [*] --> F_t_Berechnung: Formel F_t = L_t - Σ F_i
+            F_t_Berechnung --> Sicherheitseinbehalt: 5% VOB/B § 17 Sicherheitseinbehalt
+            Sicherheitseinbehalt --> Steuerzuordnung: [B2B] § 13b Reverse Charge / [B2C] § 35a Lohnanteil / [B2G] Leitweg-ID
+        }
+        
+        AbschlagsrechnungErstellt --> InAusfuehrung: Abschlagszahlung verbucht & weiterbauen
+        InAusfuehrung --> SchlussrechnungErstellt: [Abnahme nach VOB/B erfolgt]
+    }
+    
+    state SchlussrechnungErstellt {
+        [*] --> Endverrechnung: Verrechnung aller n-Abschläge
+        Endverrechnung --> EInvoiceGen: B2G: XRechnung XML (EN 16931) / B2B & B2C: ZUGFeRD PDF/A-3
+    }
+    
+    SchlussrechnungErstellt --> Festgeschrieben: GoBD Festschreiben [Lock = true]
+    
+    state Festgeschrieben {
+        [*] --> SHA256Hashing: SHA-256 Hashkettung in audit_logs
+        SHA256Hashing --> DATEVExport: DATEV EXTF 700 Export (BU 19/68, SKR03/04)
+    }
+    
+    Festgeschrieben --> ProjektAbgeschlossen: Gewährleistungsfrist abgelaufen (z.B. 4 Jahre VOB/B)
+    ProjektAbgeschlossen --> [*]
+```
+
+================================================================================
+4. DATENFLUSS-, IPC- UND ENDPOINT-MATRIX
+================================================================================
+
++------------------------+------------------------------------+--------------------------------------+---------------------------------+
+| System-Prozess         | IPC Channel / DB Method            | Ausführungs-Logik / Controller       | Ziel-Tabelle / Artefakt         |
++------------------------+------------------------------------+--------------------------------------+---------------------------------+
+| GAEB X83 Import        | `IPC db:saveProjekt`               | `GAEBEngine.parseGAEBXML()`          | `projekte`, `positionen`        |
+| GAEB X84 Export        | Frontend Export                    | `GAEBEngine.generateGAEBX84XML()`    | `.xml` Datei (X84)              |
+| REB 23.003 Aufmaß      | `IPC db:saveAufmassForPosition`    | `AufmassController.evaluateFormula()`| `aufmass`, `aufmass_positionen` |
+| Subunternehmer Check   | `IPC db:saveKunde`                 | `SubcontractorController.checkSec48b`| `kunden` (§ 48b Spalten)        |
+| VOB Abschlagsrechnung  | `IPC db:saveDocument`              | `CumulativeBillingController`        | `dokumente`, `cumulative_states`|
+| § 35a Lohn-Ausweis     | `IPC db:saveDocument`              | `SubcontractorController`            | `dokumente` (summe_lohnkosten)  |
+| XRechnung Generation   | `IPC save:pdf` / Direct Export     | `EInvoiceEngine.generateXRechnungXML`| `./output/invoices/b2g_xrechn/` |
+| ZUGFeRD PDF Generation | `IPC save:pdf`                     | `EInvoiceEngine` & `html2pdf.js`     | `./output/invoices/b2b_zugferd/`|
+| GoBD Hashing           | `IPC db:saveDocument`              | `GoBDAuditEngine.createAuditEntry`   | `audit_logs` (SHA-256)          |
+| DATEV EXTF 700 Export  | Direct CSV Download                | `DATEVExporter.generateEXTFContent`  | `./output/invoices/datev_exp/`  |
++------------------------+------------------------------------+--------------------------------------+---------------------------------+
+
+================================================================================
+ENDE DER 360°-SYSTEMDISCOVERY & WORKFLOW MAPPING plan06.txt
+================================================================================

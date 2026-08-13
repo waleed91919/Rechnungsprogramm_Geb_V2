@@ -245,6 +245,27 @@ function createRechnungRow(rech, kundenMap) {
     tdKunde.textContent = kunde.name;
     tr.appendChild(tdKunde);
 
+    // Rechnungsart cell
+    const tdArt = document.createElement('td');
+    tdArt.className = 'px-4 text-center';
+    const artType = rech.rechnungsart || 'REGULAER';
+    let badgeClass = 'bg-slate-100 text-slate-700';
+    let badgeText = 'Einzelrechnung';
+
+    if (artType === 'ABSCHLAG_KUMULIERT' || artType === 'TEILRECHNUNG') {
+        badgeClass = 'bg-indigo-100 text-indigo-800 border border-indigo-200';
+        badgeText = 'Abschlagsrechnung';
+    } else if (artType === 'SCHLUSSRECHNUNG') {
+        badgeClass = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+        badgeText = 'Schlussrechnung';
+    } else if (rech.nr && (rech.nr.startsWith('STORNO') || rech.status === 'Storniert')) {
+        badgeClass = 'bg-red-100 text-red-800 border border-red-200';
+        badgeText = 'Storno';
+    }
+
+    tdArt.innerHTML = `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${badgeClass}">${badgeText}</span>`;
+    tr.appendChild(tdArt);
+
     // Betrag cell
     const tdBetrag = document.createElement('td');
     tdBetrag.className = 'px-4 text-right font-medium text-slate-800 tabular-nums';
@@ -265,9 +286,36 @@ function createRechnungRow(rech, kundenMap) {
 
     // Actions cell
     const tdActions = document.createElement('td');
-    tdActions.className = 'px-4 py-3 text-right w-24';
+    tdActions.className = 'px-4 py-3 text-right w-36';
     const divActions = document.createElement('div');
     divActions.className = 'flex justify-end items-center gap-1';
+
+    // Schnell-Download Buttons: PDF / ZUGFeRD & XRechnung XML
+    const btnPdf = document.createElement('button');
+    btnPdf.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof window.generatePdf === 'function') {
+            window.generatePdf(rech.id);
+        }
+    };
+    btnPdf.className = 'text-slate-400 hover:text-indigo-600 p-1 transition-colors flex items-center justify-center';
+    btnPdf.title = 'PDF / ZUGFeRD (PDF/A-3) herunterladen';
+    btnPdf.innerHTML = '<span class="material-symbols-outlined text-[18px]">picture_as_pdf</span>';
+    divActions.appendChild(btnPdf);
+
+    const btnXml = document.createElement('button');
+    btnXml.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof window.downloadXRechnungXML === 'function') {
+            window.downloadXRechnungXML(rech.id);
+        }
+    };
+    btnXml.className = 'text-slate-400 hover:text-blue-600 p-1 transition-colors flex items-center justify-center';
+    btnXml.title = 'XRechnung XML (EN 16931) herunterladen';
+    btnXml.innerHTML = '<span class="material-symbols-outlined text-[18px]">code</span>';
+    divActions.appendChild(btnXml);
 
     if (rech.status === 'Ausstehend' || rech.status === 'Überfällig') {
         const btnPaid = document.createElement('button');
@@ -758,3 +806,30 @@ function renderAngebote(searchQuery = '') {
 
     document.getElementById('kpi-angebote-offen').innerText = offeneAngebote;
 }
+
+window.downloadXRechnungXML = function(invoiceId) {
+    const idNum = parseInt(invoiceId);
+    const rech = state.rechnungen.find(r => parseInt(r.id) === idNum);
+    if (!rech) {
+        showToast('Rechnung nicht gefunden.', 'error');
+        return;
+    }
+
+    const kundeId = parseInt(rech.kundeId);
+    const kunde = state.kunden.find(k => parseInt(k.id) === kundeId) || { name: 'Empfänger' };
+
+    if (typeof EInvoiceEngine !== 'undefined') {
+        const xml = EInvoiceEngine.generateXRechnungXML(rech, kunde, state.einstellungen);
+        const blob = new Blob([xml], { type: 'application/xml;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `XRechnung_${rech.nr}.xml`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast(`XRechnung XML für ${rech.nr} heruntergeladen.`, 'success');
+    } else {
+        showToast('E-Rechnungs-Engine nicht bereit.', 'error');
+    }
+};

@@ -1,0 +1,136 @@
+================================================================================
+FRONTEND- UND UI-ERWEITERUNGSKONZEPT: BAU-ERP SYSTEM (B2G, B2B, B2C)
+================================================================================
+Projekt: W-Link ERP - Erweiterung Benutzeroberfläche & Frontend Refactoring
+Datei: plans/Ai/plan02.txt
+Erstellt am: 2026-08-13
+Status: Spezifikation & UI-Komponentenplan (Version 1.0)
+
+================================================================================
+1. RECHNUNGSÜBERSICHT & AUSBILDUNG DER TABELLEN-AKTIONEN
+================================================================================
+
+1.1 RECHNUNGSART-BADGES IN DER RECHNUNGSTABELLE
+--------------------------------------------------------------------------------
+In der Ausgangsrechnungs-Tabelle wird eine neue Spalte "Rechnungsart" ergänzt. 
+Jedes Dokument wird visuell durch ein spezifisches Tailwind-Style-Badge hervorgehoben:
+
+- `Einzelrechnung` / `REGULAER`:
+  Badge: `<span class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-xs font-semibold">Einzelrechnung</span>`
+- `Abschlagsrechnung (1., 2., ...)` / `ABSCHLAG_KUMULIERT`:
+  Badge: `<span class="bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full text-xs font-semibold">1. Abschlagsrechnung</span>`
+- `Schlussrechnung` / `SCHLUSSRECHNUNG`:
+  Badge: `<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-xs font-semibold">Schlussrechnung</span>`
+- `Stornorechnung` / `STORNO`:
+  Badge: `<span class="bg-red-100 text-red-800 px-2 py-0.5 rounded-full text-xs font-semibold">Storno / Gutschrift</span>`
+
+1.2 E-RECHNUNG SCHNELL-DOWNLOADS IN DER AKTIONSSPALTE
+--------------------------------------------------------------------------------
+Die Aktions-Spalte (`tdActions`) wird um zwei direkte Download-Buttons erweitert:
+
+1. **PDF / ZUGFeRD Button** (Kombiniertes PDF/A-3 mit Factur-X XML):
+   `<button onclick="downloadZUGFeRDPDF(id)" class="text-slate-400 hover:text-indigo-600 p-1" title="ZUGFeRD PDF/A-3 herunterladen">`
+   `  <span class="material-symbols-outlined text-[18px]">picture_as_pdf</span>`
+   `</button>`
+
+2. **XRechnung XML Button** (Strukturiertes CII XML nach EN 16931-1 für B2G):
+   `<button onclick="downloadXRechnungXML(id)" class="text-slate-400 hover:text-blue-600 p-1" title="XRechnung XML (EN 16931) herunterladen">`
+   `  <span class="material-symbols-outlined text-[18px]">code</span>`
+   `</button>`
+
+1.3 KUMULIERTER SUMMENBLOCK IN DER RECHNUNGSDETAIL-ANSICHT
+--------------------------------------------------------------------------------
+Visualisierung des VOB/B Abschlags-Abzugsmodells in der Rechnungsansicht:
+
+```html
+<div class="bg-indigo-50/60 border border-indigo-100 rounded-xl p-5 mb-6 space-y-3">
+    <h5 class="text-xs font-bold uppercase tracking-wider text-indigo-900 flex items-center gap-2">
+        <span class="material-symbols-outlined text-[18px] text-indigo-600">account_tree</span>
+        VOB/B Kumulierte Abrechnungsaufstellung (F_t = L_t - Σ F_i)
+    </h5>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        <div>
+            <span class="text-xs text-slate-500 block">1. Gesamterbrachte Leistung (L_t):</span>
+            <span class="font-bold text-slate-800" id="detail-kumulativ-leistung">€12.000,00</span>
+        </div>
+        <div>
+            <span class="text-xs text-slate-500 block">2. Bisher abgerechnet (Σ F_i):</span>
+            <span class="font-bold text-indigo-700" id="detail-kumulativ-bisher">-€8.000,00</span>
+        </div>
+        <div>
+            <span class="text-xs text-slate-500 block">3. Sicherheitseinbehalt (5%):</span>
+            <span class="font-bold text-amber-600" id="detail-sicherheitseinbehalt">-€600,00</span>
+        </div>
+        <div>
+            <span class="text-xs text-slate-500 block">4. Zahlbetrag dieser Periode (F_t):</span>
+            <span class="font-black text-emerald-700 text-base" id="detail-zahlbetrag">€4.046,00</span>
+        </div>
+    </div>
+</div>
+```
+
+
+================================================================================
+2. STEUER- & COMPLIANCE-PANEL IM RECHNUNGS-EDITOR
+================================================================================
+
+2.1 B2G / B2B / B2C AUTO-COMPLIANCE PANEL
+--------------------------------------------------------------------------------
+Im Kopfbereich des Rechnungs-Editors wird ein intelligentes Steuer- & Compliance-Panel 
+platziert, das sich dynamisch an den gewählten Kundentyp anpasst:
+
+- **B2G (Öffentlicher Auftraggeber)**:
+  Auto-Einblendung der Eingabefelder für `Leitweg-ID` (z.B. `991-12345678-12`) und `Buyer Reference` / Aktenzeichen.
+- **B2B (Gewerblicher Baupartner)**:
+  Auto-Aktivierung des `§ 13b UStG (Reverse Charge)` Toggles & Prüfung der USt-IdNr.
+- **B2C (Private Bauherren)**:
+  Auto-Aktivierung des `§ 35a EStG` Transparenzhinweises für Handwerkerleistungen und Lohnkostenaufteilung.
+
+2.2 SUBUNTERNEHMER & § 48b EStG STATUS-BANNER
+--------------------------------------------------------------------------------
+Visuelle Warnmeldung bei Eingangsrechnungen / Subunternehmer-Verwaltung:
+
+```html
+<div id="subcontractor-sec48b-warning" class="hidden bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg mb-6">
+    <div class="flex items-start gap-3">
+        <span class="material-symbols-outlined text-amber-600">warning</span>
+        <div>
+            <h5 class="font-bold text-amber-900 text-sm">Achtung: § 48b EStG Freistellungsbescheinigung ungültig!</h5>
+            <p class="text-xs text-amber-800 mt-1">
+                Für diesen Subunternehmer liegt keine gültige Freistellungsbescheinigung vor. 
+                Es müssen automatisch <strong>15% Bauabzugsteuer (€1.500,00)</strong> vom Rechnungsbetrag einbehalten und an das Finanzamt abgeführt werden.
+            </p>
+        </div>
+    </div>
+</div>
+```
+
+
+================================================================================
+3. PROJEKT-DETAILANSICHT & GAEB / AUFMASS-INTEGRATION
+================================================================================
+
+3.1 LEISTUNGSVERZEICHNIS (GAEB) TAB IN PROJEKT-DETAILS
+--------------------------------------------------------------------------------
+Erweiterung der Projektseite um den Tab **"Leistungsverzeichnis / GAEB"**:
+
+- **Drag-and-Drop GAEB Import-Zone**:
+  `<div id="gaeb-dropzone" class="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center bg-slate-50 hover:bg-slate-100 transition-colors">`
+  `  <span class="material-symbols-outlined text-4xl text-primary mb-2">upload_file</span>`
+  `  <p class="text-sm font-semibold text-slate-700">GAEB X83 Ausschreibungsdatei hierher ziehen oder klicken</p>`
+  `  <p class="text-xs text-slate-400 mt-1">Unterstützt GAEB XML 3.2 / 3.3 (X83, DA83)</p>`
+  `</div>`
+
+- **GAEB Positions-Tabelle**:
+  Anzeige aller Ordnungszahlen (OZ), Kurztitel, Einheiten, Mengengerüst und Einheitspreise (EP).
+
+3.2 INTEGRATION DES AUFMASSCENTERS (FORMEL-MESSZEILEN)
+--------------------------------------------------------------------------------
+Möglichkeit, Aufmaßzeilen direkt je GAEB-Position zu hinterlegen:
+
+- Formel-Editor: `Länge * Breite * Höhe` (z.B. `12.50 * 4.00 * 0.30 = 15.00 m³`).
+- Automatische Aufmaß-Summierung und Übertrag in die kumulierte Abschlagsrechnung.
+
+================================================================================
+ENDE DES FRONTEND- SPEZIFIKATIONSPRONS
+================================================================================

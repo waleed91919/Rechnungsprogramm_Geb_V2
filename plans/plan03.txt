@@ -1,1 +1,60 @@
-"Ja, bitte fokussiere dich als Nächstes unbedingt auf die PDF-Generierung! Das ist rechtlich extrem wichtig. Gemäß VOB/B muss am Ende der Rechnung eine transparente Zahlungsaufstellung (Summenblock) erscheinen. Diese muss den bisherigen Gesamtleistungsstand (netto), den Abzug des Sicherheitseinbehalts (netto) und jede einzelne abgezogene Vorrechnung (mit Rechnungsnummer, Datum und Netto-Betrag) detailliert auflisten. Erst danach darf der neue Netto-Zuwachs und die darauf anfallende Umsatzsteuer sowie der finale Brutto-Zahlbetrag ausgewiesen werden. Bitte passe die PDF-Engine so an, dass dieser Block dynamisch und korrekt gerendert wird."
+### PROMPT: Test-Automatisierung & Dokumenten-Generierung (Rechnungs- & Test-Ordner)
+
+#### 1. AUFGABE UND ZIELSETZUNG
+Bitte führe eine vollständige, automatisierte End-to-End-Testung unseres Bau-ERP-Systems durch. 
+
+Ziel ist es, alle entwickelten Backend- und Frontend-Funktionen (B2G, B2B, B2C, VOB/B kumulierte Abrechnung, § 48b / § 13b / § 35a Logik, GAEB-Import sowie GoBD-Hash-Protokolle) zu validieren, die Testergebnisse zu protokollieren und reale Beispiel-Rechnungen in allen Formaten zu generieren und in definierten Ordnern abzulegen.
+
+---
+
+#### 2. ORDNERSTRUKTUR & SPEICHERVORGABEN
+
+Bitte stelle sicher, dass alle generierten Dateien und Berichte automatisch in folgenden zwei Hauptordnern im Projektverzeichnis gespeichert werden (falls diese nicht existieren, lege sie an):
+
+1. Ordner für Testberichte & Logs:
+   📁 `./tests/test_results/`
+   - Hierin werden alle Test-Logs, JUnit/JSON-Testergebnisse und GoBD-Hash-Protokolle gespeichert.
+
+2. Ordner für Rechnungsdokumente:
+   📁 `./output/invoices/`
+   - Hierin werden alle erzeugten Belege abgelegt, unterteilt in entsprechende Unterordner:
+     - `./output/invoices/b2g_xrechnung/` (für reine .xml Dateien)
+     - `./output/invoices/b2b_zugferd/` (für hybride .pdf Dateien mit eingebettetem XML)
+     - `./output/invoices/b2c_privat/` (für PDF-Belege mit § 35a Ausweis)
+     - `./output/invoices/datev_exports/` (für .csv / EXTF 700 Buchungsstapel)
+
+---
+
+#### 3. AUSZUFUHRENDE TESTFÄLLE & GENERIERUNG
+
+Bitte erstelle ein entsprechendes Test-Skript (z. B. `generate_and_test.js`) und führe folgende Durchläufe aus:
+
+##### A. B2G Testfall (Öffentlicher Auftraggeber):
+- Erstelle eine **XRechnung (CII XML)** nach Standard EN 16931-1.
+- Befülle Pflichtfelder: `Leitweg-ID` (z. B. `991-12345678-12`), `Buyer Reference` und Lieferdatum.
+- Validierte Ausführung gegen die KoSIT-Regeln.
+- **Speicherort:** `./output/invoices/b2g_xrechnung/RE-2026-B2G-001.xml`
+
+##### B. B2B Testfall (VOB/B Kumulierte Abschlagsrechnung & Subunternehmer):
+- Erstelle eine **1. Abschlagsrechnung** und eine **2. kumulierte Abschlagsrechnung** ($F_t = L_t - \sum F_i$).
+- Berücksichtige **§ 13b UStG (Reverse Charge)** und berechne den **5 % Sicherheitseinbehalt**.
+- Simuliere eine Prüfung der **§ 48b EStG Freistellungsbescheinigung** (inkl. Warnungs-Log bei Ablauf).
+- Generiere das hybride **ZUGFeRD 2.0.1+ (PDF/A-3)** Format.
+- **Speicherort:** `./output/invoices/b2b_zugferd/RE-2026-B2B-AB1.pdf` und `RE-2026-B2B-AB2.pdf`
+
+##### C. B2C Testfall (Privatkunde):
+- Erstelle eine Handwerkerrechnung mit klarer Aufschlüsselung der Lohn-, Fahrt- und Materialkosten nach **§ 35a EStG**.
+- Generiere die PDF-Rechnung.
+- **Speicherort:** `./output/invoices/b2c_privat/RE-2026-B2C-001.pdf`
+
+##### D. DATEV & GoBD Validierung:
+- Generiere den **DATEV EXTF 700 Export** für die Buchhaltung.
+- Prüfe die Unveränderbarkeit (GoBD-Locking) und erstelle den SHA-256 Hash-Wert für das Audit-Log.
+- **Speicherort Export:** `./output/invoices/datev_exports/EXTF_2026_JULI.csv`
+- **Speicherort Audit-Log:** `./tests/test_results/gobd_audit_hashes.json`
+
+---
+
+#### 4. AUSGABE DER KI
+- Führe das Skript aus und zeige die Konsolen-Ausgabe (Console Logs / Test Summary) direkt an.
+- Bestätige die erfolgreiche Erstellung und Speicherung aller Testberichte und Rechnungsdateien in den vorgesehenen Ordnern.

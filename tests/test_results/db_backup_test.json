@@ -1,0 +1,9 @@
+{
+  "timestamp": "2026-08-13T12:28:47.061Z",
+  "tables": [
+    "kunden",
+    "dokumente",
+    "projekte",
+    "positionen"
+  ]
+}

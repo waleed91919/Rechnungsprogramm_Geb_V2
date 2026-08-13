@@ -1,0 +1,137 @@
+================================================================================
+UML STATE MACHINE & PROCESS WORKFLOW SPEZIFIKATION (BAU-ERP SYSTEM V2)
+================================================================================
+Projekt: W-Link Bau-ERP System - Prozess & Zustandsdiagramm
+Datei: plans/Ai/plan05.txt
+Erstellt am: 2026-08-13
+Status: Workflow & Diagramm-Spezifikation (Version 1.0)
+
+================================================================================
+1. SPEZIFIKATION DES LEBENSZYKLUS (STATES, TRANSITIONS, GUARDS)
+================================================================================
+
+Das Bau-ERP System durchläuft folgende 5 Hauptphasen:
+
+1. **Ausschreibung & Akquise**:
+   - GAEB X83 Import -> Zustand: `IN_KALKULATION`
+   - GAEB X84 Export -> Zustand: `ANGEBOT_VERSENDET`
+   - Entscheidung: [Angebot angenommen] -> `PROJEKT_AKTIV` / [Angebot abgelehnt] -> `ABGELEHNT`
+
+2. **Ausführung & Baustelle**:
+   - Zustand: `IN_AUSFUEHRUNG` (REB 23.003 Aufmaßcenter & Bautagebuch)
+   - Subunternehmer Guard: [§ 48b EStG gültig] vs. [§ 48b abgelaufen -> 15% Bauabzugsteuer-Sperre]
+
+3. **Abschlagsrechnungen (VOB/B Kumuliert)**:
+   - 1. bis n-te Abschlagsrechnung: $F_t = L_t - \sum F_i$
+   - Abzug von 5 % VOB/B § 17 Sicherheitseinbehalt
+   - § 13b UStG Reverse Charge Kennzeichnung bei B2B
+
+4. **Schlussrechnung & E-Invoicing**:
+   - Zustand: `SCHLUSSRECHNUNG_ERSTELLT`
+   - Verrechnung aller bisherigen Abschlagsrechnungen
+   - Generierung von XRechnung (XML) für B2G bzw. ZUGFeRD 2.0.1+ (PDF/A-3) für B2B/B2C
+
+5. **GoBD Festschreibung & DATEV Export**:
+   - Klick auf Festschreiben -> Zustand: `FESTGESCHRIEBEN` (Status `POSTED`)
+   - Erzeugung des SHA-256 Hashes im Audit-Log
+   - DATEV EXTF 700 Export -> Endzustand `PROJEKT_ABGESCHLOSSEN`
+
+================================================================================
+2. MERMAID.JS CODEBLOCK
+================================================================================
+
+```mermaid
+stateDiagram-v2
+    [*] --> InKalkulation: GAEB X83 Import / Manuelle Erfassung
+    
+    InKalkulation --> AngebotVersendet: GAEB X84 Export / PDF Versand
+    
+    state AngebotVersendet {
+        [*] --> WartenAufZuschlag
+    }
+    
+    AngebotVersendet --> Abgelehnt: [Angebot abgelehnt]
+    AngebotVersendet --> ProjektAktiv: [Angebot angenommen / Beauftragt]
+    
+    state ProjektAktiv {
+        [*] --> InAusfuehrung
+        
+        InAusfuehrung --> SubunternehmerPruefung: Subunternehmer zugewiesen
+        state SubunternehmerPruefung {
+            [*] --> Check48b
+            Check48b --> Freigestellt: [§ 48b EStG gültig]
+            Check48b --> Bauabzugspflichtig: [§ 48b abgelaufen / fehlt -> 15% Einbehalt]
+        }
+        
+        InAusfuehrung --> AbschlagsrechnungErstellt: Aufmaß REB 23.003 erfasst
+        
+        state AbschlagsrechnungErstellt {
+            [*] --> F_t_Berechnung: Formel F_t = L_t - Σ F_i
+            F_t_Berechnung --> Sicherheitseinbehalt: 5% VOB/B § 17 Abzug
+            Sicherheitseinbehalt --> Steuerzuordnung: § 13b UStG (B2B) / § 35a EStG (B2C)
+        }
+        
+        AbschlagsrechnungErstellt --> InAusfuehrung: Rechnung verbucht & weiterbauen
+        InAusfuehrung --> SchlussrechnungErstellt: [Bauwerk fertiggestellt / VOB Abnahme]
+    }
+    
+    state SchlussrechnungErstellt {
+        [*] --> Endverrechnung: Verrechnung aller n-Abschläge
+        Endverrechnung --> EInvoiceGen: XRechnung XML (B2G) / ZUGFeRD PDF/A-3 (B2B/B2C)
+    }
+    
+    SchlussrechnungErstellt --> Festgeschrieben: GoBD Festschreiben [Lock = true]
+    
+    state Festgeschrieben {
+        [*] --> SHA256Hashing: SHA-256 Hash im Audit-Log
+        SHA256Hashing --> DATEVExport: DATEV EXTF 700 Export (BU 19/68)
+    }
+    
+    Festgeschrieben --> ProjektAbgeschlossen: Gewährleistungsfrist abgelaufen
+    ProjektAbgeschlossen --> [*]
+```
+
+================================================================================
+3. PLANTUML CODEBLOCK
+================================================================================
+
+```plantuml
+@startuml
+skinparam state {
+    BackgroundColor White
+    BorderColor #2563EB
+    FontName Inter
+}
+
+[*] --> InKalkulation : GAEB X83 Import
+
+InKalkulation --> AngebotVersendet : GAEB X84 Export
+AngebotVersendet --> Abgelehnt : [Angebot abgelehnt]
+AngebotVersendet --> ProjektAktiv : [Angebot angenommen]
+
+state ProjektAktiv {
+    [*] --> InAusfuehrung
+    InAusfuehrung --> SubunternehmerCheck : Subunternehmer Einsatz
+    SubunternehmerCheck --> Freigestellt : [§ 48b EStG gültig]
+    SubunternehmerCheck --> Bauabzug15Percent : [§ 48b fehlt / abgelaufen]
+    
+    InAusfuehrung --> Abschlagsrechnung : Aufmaß REB 23.003
+    Abschlagsrechnung --> InAusfuehrung : Abschlagszahlung erhalten
+    InAusfuehrung --> Schlussrechnung : [Abnahme VOB/B]
+}
+
+state Schlussrechnung {
+    [*] --> Endverrechnung
+    Endverrechnung --> EInvoicing : XRechnung XML / ZUGFeRD PDF
+}
+
+Schlussrechnung --> Festgeschrieben : GoBD Locking
+Festgeschrieben --> DATEVExport : EXTF 700 Buchung
+DATEVExport --> ProjektAbgeschlossen
+ProjektAbgeschlossen --> [*]
+@startuml
+```
+
+================================================================================
+ENDE DER SPEZIFIKATION plan05.txt
+================================================================================

@@ -1,0 +1,72 @@
+================================================================================
+TEST-AUTOMATISIERUNG & DOKUMENTEN-GENERIERUNGSKONZEPT
+================================================================================
+Projekt: W-Link Bau-ERP System (B2G, B2B, B2C, VOB/B, GoBD)
+Datei: plans/Ai/plan03.txt
+Erstellt am: 2026-08-13
+Status: Spezifikation & Test-Automatisierungsplan (Version 1.0)
+
+================================================================================
+1. ZIELSETZUNG UND SPEICHERSTRUKTUR
+================================================================================
+
+Das Ziel dieses Plans ist die vollständige End-to-End Automatisierung der 
+Qualitätssicherung und der Beleg-Generierung für das Bau-ERP System.
+
+Es werden automatisiert folgende Ordnerstrukturen angelegt:
+
+📁 `./tests/test_results/`
+   - Test-Protokolle, JSON-Testergebnisse, GoBD-Audit-Logs und SHA-256 Prüfsummen.
+   - Datei: `./tests/test_results/gobd_audit_hashes.json`
+   - Datei: `./tests/test_results/e2e_test_report.json`
+
+📁 `./output/invoices/`
+   ├── 📁 `b2g_xrechnung/`   -> `./output/invoices/b2g_xrechnung/RE-2026-B2G-001.xml`
+   ├── 📁 `b2b_zugferd/`     -> `./output/invoices/b2b_zugferd/RE-2026-B2B-AB1.pdf` & `RE-2026-B2B-AB2.pdf`
+   ├── 📁 `b2c_privat/`      -> `./output/invoices/b2c_privat/RE-2026-B2C-001.pdf`
+   └── 📁 `datev_exports/`   -> `./output/invoices/datev_exports/EXTF_2026_JULI.csv`
+
+
+================================================================================
+2. IMPLEMENTIERUNG DES TEST- & GENERIERUNGS-SKRIPTS
+================================================================================
+
+Es wird ein dediziertes Node.js Skript `scripts/generate_and_test.js` sowie 
+eine entsprechende Test-Suite `tests/end_to_end_generate.test.js` erstellt.
+
+Das Skript führt 4 Hauptdurchläufe aus:
+
+1. **TESTFALL A: B2G Öffentlicher Auftraggeber (XRechnung EN 16931-1)**
+   - Stammdaten: Leitweg-ID `991-12345678-12`, Buyer Reference `AB-45001`.
+   - Validierung nach EN 16931-1 / KoSIT Regeln.
+   - Erzeugung und Speicherung der XML-Datei unter `./output/invoices/b2g_xrechnung/RE-2026-B2G-001.xml`.
+
+2. **TESTFALL B: B2B VOB/B Kumulierte Abschlagsrechnung & Subunternehmer**
+   - Berechnung der 1. Abschlagsrechnung ($L_1 = 5.000 €$) und 2. kumulierten Abschlagsrechnung ($L_2 = 12.000 €, F_2 = L_2 - F_1$).
+   - Abzug von 5 % VOB/B Sicherheitseinbehalt und Ausweis von § 13b UStG Reverse Charge.
+   - Simulation des § 48b EStG Freistellungsbescheinigungs-Checks für Subunternehmer.
+   - Erzeugung der PDFs unter `./output/invoices/b2b_zugferd/RE-2026-B2B-AB1.pdf` & `RE-2026-B2B-AB2.pdf`.
+
+3. **TESTFALL C: B2C Privatkunde (Handwerkerleistung § 35a EStG)**
+   - Aufschlüsselung der Positionen in Lohn-, Fahrt- und Materialkosten.
+   - Berechnung des nach § 35a EStG steuerlich absetzbaren Lohnkostenanteils (20% von max. 6.000 €).
+   - Speicherung der PDF unter `./output/invoices/b2c_privat/RE-2026-B2C-001.pdf`.
+
+4. **TESTFALL D: DATEV EXTF 700 & GoBD Immutability Logging**
+   - Export des Buchungsstapels nach DATEV EXTF Format 700 mit BU-Schlüsseln 19/68.
+   - Erzeugung von SHA-256 Hashwerten für GoBD Unveränderbarkeitssicherung.
+   - Speicherung unter `./output/invoices/datev_exports/EXTF_2026_JULI.csv` und `./tests/test_results/gobd_audit_hashes.json`.
+
+
+================================================================================
+3. MEILENSTEINE & AUSFÜHRUNGSSCHRITTE
+================================================================================
+
+1. **Erstellen der Ordnerstruktur**: `tests/test_results`, `output/invoices/...`
+2. **Entwickeln von `scripts/generate_and_test.js`**: Einbindung von PDFKit/PDF-Generator, EInvoiceEngine, CumulativeBillingController, DATEV Exporter und GoBD Hashing.
+3. **Ausführen des Skripts & Unit/E2E Testsuite**: Validierung via `cmd /c node scripts/generate_and_test.js` und `cmd /c npm test`.
+4. **Verifizieren aller Ausgabedateien**: Überprüfung des Vorhandenseins aller generierten Rechnungs- und Log-Dateien.
+
+================================================================================
+ENDE DES STRATEGIEPLANES plan03.txt
+================================================================================

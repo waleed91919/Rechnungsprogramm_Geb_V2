@@ -1,8 +1,50 @@
-"Gute Arbeit mit den Texten und dem UI! Aber ACHTUNG: Du hast einen kritischen buchhalterischen Fehler in der Logik für den Sicherheitseinbehalt gemacht. Du hast geschrieben, dass dieser vom Bruttobetrag abgezogen wird. Das ist falsch und führt zu fehlerhafter Umsatzsteuer!
+### PROMPT: Erweiterung der bestehenden UI für Bau-ERP-Funktionalitäten
 
-Korrektur:
-Der vertragliche Sicherheitseinbehalt (z.B. 5%) MUSS zwingend vom Netto-Betrag (dem kumulierten Leistungsstand netto) abgezogen werden, BEVOR die 19% Umsatzsteuer auf die verbleibende Netto-Forderung aufgeschlagen wird. Bitte korrigiere diese Logik in der editor.js sofort.
+#### 1. KONTEXT
+Wir haben bereits eine funktionierende Web-Oberfläche (React/Vue/HTML-Dashboard) für das ERP-System mit den Sektionen: Dashboard, Rechnungen, Artikel, Angebote, Kunden, Projekte, Berichte und Einstellungen.
 
-Nächster Schritt:
-Wenn du das korrigiert hast, ja, bitte starte mit dem Modul 'Kumulierte Abschlagsrechnungen'.
-Fokussiere dich dabei auf die in der Dokumentation beschriebene Parent-Child-Architektur in der Datenbank (Verknüpfung von aktueller Rechnung mit Vorrechnungen) und stelle sicher, dass auch hier alle Abzüge der Vorrechnungen strikt auf der Netto-Ebene passieren. Zeige mir, wie du die Datenbank-Tabellen und die Berechnungslogik dafür anpasst."
+Nun müssen wir die bestehende Benutzeroberfläche (UI) gezielt anpassen und erweitern, um den spezifischen Anforderungen von mittelständischen Bauunternehmen (B2G, B2B, B2C) sowie VOB/B-Regeln gerecht zu werden.
+
+---
+
+#### 2. GEZIELTE UI-ERWEITERUNGEN (FRONTEND REFACTORING)
+
+##### A. Rechnungsübersicht (`Ausgangsrechnungen` Tabelle)
+1. Typ-Spezifikation & Badges:
+   - Ergänze eine Spalte "Rechnungsart" in der bestehenden Tabelle mit farblichen Badges für:
+     - `Einzelrechnung`
+     - `Abschlagsrechnung (1., 2., ...)`
+     - `Schlussrechnung`
+     - `Stornorechnung`
+2. E-Rechnung Exporte:
+   - Erweitere die Aktions-Spalte (Aktionen pro Zeile) um Schnell-Download-Buttons für:
+     - `PDF / ZUGFeRD` (Kombiniertes PDF/A-3)
+     - `XRechnung (XML)` (inkl. Leitweg-ID Vorschau)
+3. Kumulierte Summen-Anzeige:
+   - In der Detailansicht/Bearbeitung einer Abschlags- oder Schlussrechnung muss ein visueller Block eingebunden werden, der die Formel $F_t = L_t - \sum F_i$ transparent darstellt:
+     - Gesamterbrachte Leistung (Netto/Brutto)
+     - Abzüglich bisherige Abschlagsrechnungen
+     - Abzüglich Sicherheitseinbehalt (z.B. 5 % nach VOB/B)
+     - Ausgewiesener Zahlbetrag
+
+##### B. Neue Rechnung / Rechnungs-Editor (`Neue Rechnung` UI)
+1. B2G/B2B/B2C Umschalter & Steuer-Modal:
+   - Integriere ein Steuer- & Compliance-Panel im Kopfbereich des Editors:
+     - Checkbox/Toggle für `§ 13b UStG (Reverse Charge)` für B2B-Bauleistungen.
+     - Automatische Einblendung des Eingabefeldes für `Leitweg-ID` & `Buyer Reference` bei B2G-Kunden.
+     - Automatische Aufschlüsselung der Lohn- und Fahrtkosten im Fußbereich gemäß `§ 35a EStG` für B2C-Kunden.
+2. Subunternehmer & § 48b Status-Banner:
+   - Falls die Rechnung an/von einem Subunternehmer gestellt wird: Einbindung einer visuellen Warnmeldung (Status-Banner), falls die Freistellungsbescheinigung nach § 48b EStG abgelaufen oder nicht vorhanden ist (inkl. Hinweis auf 15 % Steuerabzug).
+
+##### C. Projekt-Detailansicht (`Projekte` UI-Erweiterung)
+1. GAEB-Import Button & LV-Vorschau:
+   - Erweitere die Projekt-Detailansicht um ein Tab "Leistungsverzeichnis / GAEB".
+   - Drag-and-Drop-Feld zum Importieren von GAEB X83 Dateien inklusive tabellarischer Anzeige der Ordnungszahlen (OZ), Kurztitel und Einheiten.
+2. Aufmaß-Integration (Aufmaßcenter):
+   - Möglichkeit, Mengenzeilen direkt an GAEB-Positionen anzuhängen (z. B. Formel-Eingabe: `Länge * Breite * Höhe`).
+
+---
+
+#### 3. ANFORDERUNGEN AN DIE KI
+- Bitte erstelle die notwendigen Frontend-Komponenten/Anpassungen (React/Vue/JS Code-Snippets) zur Integration in unsere bestehende UI.
+- Achte darauf, dass das bestehende Design-Layout (Sidebar, Tabellenstruktur, Farbschema) exakt beibehalten wird.

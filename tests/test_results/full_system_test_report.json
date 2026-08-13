@@ -1,0 +1,103 @@
+{
+  "timestamp": "2026-08-13T12:28:47.048Z",
+  "modulesTested": [
+    {
+      "moduleName": "Dashboard",
+      "testName": "KPI OPOS Computation",
+      "isSuccess": true,
+      "details": "OPOS Sum = €3500"
+    },
+    {
+      "moduleName": "Dashboard",
+      "testName": "KPI Security Retention Computation",
+      "isSuccess": true,
+      "details": "Retention Sum = €425"
+    },
+    {
+      "moduleName": "Invoices",
+      "testName": "B2G EN 16931 Validation",
+      "isSuccess": true,
+      "details": ""
+    },
+    {
+      "moduleName": "Invoices",
+      "testName": "XRechnung XML Generation",
+      "isSuccess": true,
+      "details": "File: C:\\Users\\walee\\Desktop\\server\\Rechnungsprogramm_Geb_V2\\output\\invoices\\b2g_xrechnung\\RE-2026-B2G-002.xml"
+    },
+    {
+      "moduleName": "Invoices",
+      "testName": "GoBD Immutability Guard",
+      "isSuccess": true,
+      "details": "Lock check works: Das Dokument RE-2026-B2G-002 ist nach GoBD festgeschrieben/gesperrt und darf nicht direkt bearbeitet werden. Bitte erstellen Sie eine Stornorechnung / Korrekturrechnung."
+    },
+    {
+      "moduleName": "Quotes",
+      "testName": "GAEB X83 XML Parser",
+      "isSuccess": true,
+      "details": "Items parsed: 1"
+    },
+    {
+      "moduleName": "Quotes",
+      "testName": "GAEB X84 Export Generator",
+      "isSuccess": true,
+      "details": ""
+    },
+    {
+      "moduleName": "Articles",
+      "testName": "Cost Type Categorization & § 35a Relevance",
+      "isSuccess": true,
+      "details": "Eligible Brutto = €130.9"
+    },
+    {
+      "moduleName": "Customers",
+      "testName": "Subcontractor § 48b Expiration Check",
+      "isSuccess": true,
+      "details": ""
+    },
+    {
+      "moduleName": "Customers",
+      "testName": "15% Bauabzugsteuer Calculation",
+      "isSuccess": true,
+      "details": "Withholding Amount = €1500"
+    },
+    {
+      "moduleName": "Projects",
+      "testName": "REB 23.003 Aufmaß Formula Calculation",
+      "isSuccess": true,
+      "details": "Total Quantity = 25 m³"
+    },
+    {
+      "moduleName": "Projects",
+      "testName": "Bautagebuch Entry Logging",
+      "isSuccess": true,
+      "details": ""
+    },
+    {
+      "moduleName": "Reports",
+      "testName": "DATEV EXTF 700 Export Generation",
+      "isSuccess": true,
+      "details": "CSV Length = 424 bytes"
+    },
+    {
+      "moduleName": "Settings",
+      "testName": "Database Backup Generator",
+      "isSuccess": true,
+      "details": "Backup file: C:\\Users\\walee\\Desktop\\server\\Rechnungsprogramm_Geb_V2\\tests\\test_results\\db_backup_test.json"
+    }
+  ],
+  "passCount": 14,
+  "failCount": 0,
+  "generatedFiles": [
+    "C:\\Users\\walee\\Desktop\\server\\Rechnungsprogramm_Geb_V2\\output\\invoices\\b2g_xrechnung\\RE-2026-B2G-002.xml",
+    "C:\\Users\\walee\\Desktop\\server\\Rechnungsprogramm_Geb_V2\\output\\invoices\\datev_exports\\EXTF_FULL_SYSTEM.csv",
+    "C:\\Users\\walee\\Desktop\\server\\Rechnungsprogramm_Geb_V2\\tests\\test_results\\db_backup_test.json"
+  ],
+  "gobdAuditTrail": [
+    {
+      "docNr": "RE-2026-B2G-002",
+      "hash": "0b538f0d21a001b1a3e366e9949b209a40337ca726720a6ef5d79d464fddff58",
+      "timestamp": "2026-08-13T12:28:47.055Z"
+    }
+  ]
+}

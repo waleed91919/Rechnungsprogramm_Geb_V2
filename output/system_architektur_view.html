@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>W-Link Bau-ERP V2 Architecture Visualizer</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true, theme:'dark'});</script>
+    <style>
+        body { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; padding: 20px; }
+        h1 { color: #38bdf8; text-align: center; }
+        .section { background: #1e293b; border-radius: 12px; padding: 20px; margin-bottom: 25px; border: 1px solid #334155; }
+        svg { width: 100%; height: auto; }
+    </style>
+</head>
+<body>
+    <h1>W-Link Bau-ERP V2 — Vollständige 360° System-Architektur</h1>
+    
+    <div class="section">
+        <h2>1. System-Diagramm (SVG)</h2>
+        <?xml version="1.0" encoding="UTF-8"?>
+<svg width="1600" height="1200" xmlns="http://www.w3.org/2000/svg" font-family="Arial, sans-serif">
+    <!-- Background -->
+    <rect width="1600" height="1200" fill="#0f172a" />
+    
+    <!-- Title -->
+    <text x="800" y="45" font-size="26" font-weight="bold" fill="#38bdf8" text-anchor="middle">
+        W-LINK BAU-ERP V2 — 360° VOLLSTÄNDIGE SYSTEM- &amp; WORKFLOW-ARCHITEKTUR
+    </text>
+    <text x="800" y="75" font-size="14" fill="#94a3b8" text-anchor="middle">
+        Electron 32 / Node.js / Better-SQLite3 (WAL-Modus) / EN 16931 E-Invoicing / VOB/B &amp; GoBD Audit Engine
+    </text>
+
+    <!-- LAYER 1: UI & FRONTEND (ELECTRON RENDERER) -->
+    <rect x="50" y="100" width="1500" height="230" rx="12" fill="#1e293b" stroke="#3b82f6" stroke-width="2" />
+    <text x="70" y="130" font-size="18" font-weight="bold" fill="#60a5fa">1. FRONTEND / UI-SCHICHT (Electron Renderer Process — code.html &amp; Tailwind CSS)</text>
+    
+    <!-- UI Module Boxes -->
+    <g transform="translate(70, 150)">
+        <!-- Modul 1 -->
+        <rect x="0" y="0" width="170" height="160" rx="8" fill="#334155" stroke="#475569" />
+        <text x="85" y="25" font-size="12" font-weight="bold" fill="#f8fafc" text-anchor="middle">M1: Vertr. &amp; Angebote</text>
+        <text x="85" y="45" font-size="10" fill="#cbd5e1" text-anchor="middle">GAEB X83 / X84 / X89</text>
+        <text x="85" y="60" font-size="10" fill="#cbd5e1" text-anchor="middle">CRM &amp; Lead-Verwaltung</text>
+        <text x="85" y="75" font-size="10" fill="#cbd5e1" text-anchor="middle">1-Klick-Umwandlung</text>
+        <text x="85" y="140" font-size="9" font-weight="bold" fill="#38bdf8" text-anchor="middle">js/angebote.js</text>
+
+        <!-- Modul 2 -->
+        <rect x="180" y="0" width="170" height="160" rx="8" fill="#334155" stroke="#475569" />
+        <text x="265" y="25" font-size="12" font-weight="bold" fill="#f8fafc" text-anchor="middle">M2: Projekt &amp; Kalkulation</text>
+        <text x="265" y="45" font-size="10" fill="#cbd5e1" text-anchor="middle">HOAI &amp; VOB/B Kalkulation</text>
+        <text x="265" y="60" font-size="10" fill="#cbd5e1" text-anchor="middle">Deckungsbeitrags-Contr.</text>
+        <text x="265" y="75" font-size="10" fill="#cbd5e1" text-anchor="middle">Nachtragsmanagement</text>
+        <text x="265" y="140" font-size="9" font-weight="bold" fill="#38bdf8" text-anchor="middle">js/projekte.js</text>
+
+        <!-- Modul 3 -->
+        <rect x="360" y="0" width="170" height="160" rx="8" fill="#334155" stroke="#475569" />
+        <text x="445" y="25" font-size="12" font-weight="bold" fill="#f8fafc" text-anchor="middle">M3: Kapazität &amp; Plantafel</text>
+        <text x="445" y="45" font-size="10" fill="#cbd5e1" text-anchor="middle">Personal &amp; Baustellen</text>
+        <text x="445" y="60" font-size="10" fill="#cbd5e1" text-anchor="middle">Geräte &amp; Fuhrpark</text>
+        <text x="445" y="75" font-size="10" fill="#cbd5e1" text-anchor="middle">Urlaub &amp; Krankmeldungen</text>
+        <text x="445" y="140" font-size="9" font-weight="bold" fill="#38bdf8" text-anchor="middle">code.html / Navigation</text>
+
+        <!-- Modul 4 -->
+        <rect x="540" y="0" width="170" height="160" rx="8" fill="#334155" stroke="#475569" />
+        <text x="625" y="25" font-size="12" font-weight="bold" fill="#f8fafc" text-anchor="middle">M4: Mobile Field App</text>
+        <text x="625" y="45" font-size="10" fill="#cbd5e1" text-anchor="middle">REB 23.003 Aufmaßcenter</text>
+        <text x="625" y="60" font-size="10" fill="#cbd5e1" text-anchor="middle">Bautagebuch &amp; Mängel</text>
+        <text x="625" y="75" font-size="10" fill="#cbd5e1" text-anchor="middle">GPS Mobile Zeiterfassung</text>
+        <text x="625" y="140" font-size="9" font-weight="bold" fill="#38bdf8" text-anchor="middle">views/AufmassView.js</text>
+
+        <!-- Modul 5 -->
+        <rect x="720" y="0" width="170" height="160" rx="8" fill="#334155" stroke="#475569" />
+        <text x="805" y="25" font-size="12" font-weight="bold" fill="#f8fafc" text-anchor="middle">M5: Subunternehmer &amp; Mat.</text>
+        <text x="805" y="45" font-size="10" fill="#cbd5e1" text-anchor="middle">DATANORM / IDS / OpenMaster</text>
+        <text x="805" y="60" font-size="10" fill="#cbd5e1" text-anchor="middle">§ 48b EStG Bauabzug (15%)</text>
+        <text x="805" y="75" font-size="10" fill="#cbd5e1" text-anchor="middle">§ 13b UStG Reverse Charge</text>
+        <text x="805" y="140" font-size="9" font-weight="bold" fill="#38bdf8" text-anchor="middle">js/kunden.js &amp; artikel.js</text>
+
+        <!-- Modul 6 -->
+        <rect x="900" y="0" width="170" height="160" rx="8" fill="#334155" stroke="#475569" />
+        <text x="985" y="25" font-size="12" font-weight="bold" fill="#f8fafc" text-anchor="middle">M6: Abrechnung &amp; E-Inv.</text>
+        <text x="985" y="45" font-size="10" fill="#cbd5e1" text-anchor="middle">VOB/B Kumulier. F_t=L_t-ΣF_i</text>
+        <text x="985" y="60" font-size="10" fill="#cbd5e1" text-anchor="middle">XRechnung (B2G) &amp; ZUGFeRD</text>
+        <text x="985" y="75" font-size="10" fill="#cbd5e1" text-anchor="middle">§ 35a EStG Handwerkerlohn</text>
+        <text x="985" y="140" font-size="9" font-weight="bold" fill="#38bdf8" text-anchor="middle">js/editor.js &amp; views</text>
+
+        <!-- Modul 7 -->
+        <rect x="1080" y="0" width="170" height="160" rx="8" fill="#334155" stroke="#475569" />
+        <text x="1165" y="25" font-size="12" font-weight="bold" fill="#f8fafc" text-anchor="middle">M7: Finanzen &amp; DATEV</text>
+        <text x="1165" y="45" font-size="10" fill="#cbd5e1" text-anchor="middle">OPOS &amp; 4-Stufen Mahnwesen</text>
+        <text x="1165" y="60" font-size="10" fill="#cbd5e1" text-anchor="middle">DATEV EXTF 700 Export</text>
+        <text x="1165" y="75" font-size="10" fill="#cbd5e1" text-anchor="middle">BU 19 / BU 68 Schlüssel</text>
+        <text x="1165" y="140" font-size="9" font-weight="bold" fill="#38bdf8" text-anchor="middle">js/berichte.js &amp; datev.js</text>
+
+        <!-- Modul 8 -->
+        <rect x="1260" y="0" width="170" height="160" rx="8" fill="#334155" stroke="#475569" />
+        <text x="1345" y="25" font-size="12" font-weight="bold" fill="#f8fafc" text-anchor="middle">M8: GoBD &amp; Admin</text>
+        <text x="1345" y="45" font-size="10" fill="#cbd5e1" text-anchor="middle">GoBD Immutability (POSTED)</text>
+        <text x="1345" y="60" font-size="10" fill="#cbd5e1" text-anchor="middle">SHA-256 Audit Hashkettung</text>
+        <text x="1345" y="75" font-size="10" fill="#cbd5e1" text-anchor="middle">SQLite Backup &amp; Restore</text>
+        <text x="1345" y="140" font-size="9" font-weight="bold" fill="#38bdf8" text-anchor="middle">js/einstellungen.js</text>
+    </g>
+
+    <!-- LAYER 2: CONTROLLERS & LOGIC ENGINES -->
+    <rect x="50" y="360" width="1500" height="230" rx="12" fill="#1e293b" stroke="#10b981" stroke-width="2" />
+    <text x="70" y="390" font-size="18" font-weight="bold" fill="#34d399">2. GESCHÄFTSSCHICHT &amp; LOGIC ENGINES (Controllers &amp; Special Modules)</text>
+    
+    <g transform="translate(70, 410)">
+        <rect x="0" y="0" width="220" height="150" rx="8" fill="#064e3b" stroke="#059669" />
+        <text x="110" y="25" font-size="13" font-weight="bold" fill="#a7f3d0" text-anchor="middle">AufmassController</text>
+        <text x="110" y="50" font-size="10" fill="#d1fae5" text-anchor="middle">• evaluateFormula() (Safe Math)</text>
+        <text x="110" y="68" font-size="10" fill="#d1fae5" text-anchor="middle">• 4-Dezimalstellen Präzision</text>
+        <text x="110" y="86" font-size="10" fill="#d1fae5" text-anchor="middle">• Unit Validation (m², m³)</text>
+        <text x="110" y="125" font-size="9" font-weight="bold" fill="#6ee7b7" text-anchor="middle">controllers/AufmassController.js</text>
+
+        <rect x="240" y="0" width="230" height="150" rx="8" fill="#064e3b" stroke="#059669" />
+        <text x="355" y="25" font-size="13" font-weight="bold" fill="#a7f3d0" text-anchor="middle">CumulativeBillingController</text>
+        <text x="355" y="50" font-size="10" fill="#d1fae5" text-anchor="middle">• F_t = L_t - Σ F_i Berechnung</text>
+        <text x="355" y="68" font-size="10" fill="#d1fae5" text-anchor="middle">• 5% VOB/B § 17 Einbehalt</text>
+        <text x="355" y="86" font-size="10" fill="#d1fae5" text-anchor="middle">• Gewährleistungs-Tracking</text>
+        <text x="355" y="125" font-size="9" font-weight="bold" fill="#6ee7b7" text-anchor="middle">controllers/CumulativeBillingController.js</text>
+
+        <rect x="490" y="0" width="220" height="150" rx="8" fill="#064e3b" stroke="#059669" />
+        <text x="600" y="25" font-size="13" font-weight="bold" fill="#a7f3d0" text-anchor="middle">SubcontractorController</text>
+        <text x="600" y="50" font-size="10" fill="#d1fae5" text-anchor="middle">• § 48b EStG Check &amp; 15% Steuer</text>
+        <text x="600" y="68" font-size="10" fill="#d1fae5" text-anchor="middle">• § 13b UStG Reverse Charge</text>
+        <text x="600" y="86" font-size="10" fill="#d1fae5" text-anchor="middle">• § 35a EStG Handwerkerlohn</text>
+        <text x="600" y="125" font-size="9" font-weight="bold" fill="#6ee7b7" text-anchor="middle">controllers/SubcontractorController.js</text>
+
+        <rect x="730" y="0" width="220" height="150" rx="8" fill="#064e3b" stroke="#059669" />
+        <text x="840" y="25" font-size="13" font-weight="bold" fill="#a7f3d0" text-anchor="middle">InvoiceController</text>
+        <text x="840" y="50" font-size="10" fill="#d1fae5" text-anchor="middle">• calculateTotals() (Netto/Brutto)</text>
+        <text x="840" y="68" font-size="10" fill="#d1fae5" text-anchor="middle">• Global Rabatt &amp; Verrechnung</text>
+        <text x="840" y="86" font-size="10" fill="#d1fae5" text-anchor="middle">• Storno &amp; Gutschriften</text>
+        <text x="840" y="125" font-size="9" font-weight="bold" fill="#6ee7b7" text-anchor="middle">controllers/InvoiceController.js</text>
+
+        <rect x="970" y="0" width="230" height="150" rx="8" fill="#064e3b" stroke="#059669" />
+        <text x="1085" y="25" font-size="13" font-weight="bold" fill="#a7f3d0" text-anchor="middle">EInvoiceEngine &amp; GAEBEngine</text>
+        <text x="1085" y="50" font-size="10" fill="#d1fae5" text-anchor="middle">• XRechnung XML (EN 16931-1)</text>
+        <text x="1085" y="68" font-size="10" fill="#d1fae5" text-anchor="middle">• ZUGFeRD 2.0.1+ PDF/A-3</text>
+        <text x="1085" y="86" font-size="10" fill="#d1fae5" text-anchor="middle">• GAEB DA XML X83 / X84</text>
+        <text x="1085" y="125" font-size="9" font-weight="bold" fill="#6ee7b7" text-anchor="middle">js/einvoice.js &amp; js/gaeb.js</text>
+
+        <rect x="1220" y="0" width="210" height="150" rx="8" fill="#064e3b" stroke="#059669" />
+        <text x="1325" y="25" font-size="13" font-weight="bold" fill="#a7f3d0" text-anchor="middle">GoBD &amp; DATEV Engines</text>
+        <text x="1325" y="50" font-size="10" fill="#d1fae5" text-anchor="middle">• SHA-256 Hashkettung</text>
+        <text x="1325" y="68" font-size="10" fill="#d1fae5" text-anchor="middle">• DATEV EXTF 700 CSV</text>
+        <text x="1325" y="86" font-size="10" fill="#d1fae5" text-anchor="middle">• SKR03/04 &amp; BU 19/68</text>
+        <text x="1325" y="125" font-size="9" font-weight="bold" fill="#6ee7b7" text-anchor="middle">js/gobd.js &amp; js/datev.js</text>
+    </g>
+
+    <!-- LAYER 3: IPC BRIDGE & ELECTRON MAIN PROCESS -->
+    <rect x="50" y="620" width="1500" height="180" rx="12" fill="#1e293b" stroke="#8b5cf6" stroke-width="2" />
+    <text x="70" y="650" font-size="18" font-weight="bold" fill="#c084fc">3. IPC BRIDGE &amp; MAIN PROCESS (preload.js &amp; main.js)</text>
+    
+    <g transform="translate(70, 670)">
+        <rect x="0" y="0" width="440" height="110" rx="8" fill="#4c1d95" stroke="#7c3aed" />
+        <text x="220" y="25" font-size="13" font-weight="bold" fill="#ddd6fe" text-anchor="middle">ContextBridge (preload.js)</text>
+        <text x="220" y="50" font-size="10" fill="#ede9fe" text-anchor="middle">Exposes window.api: getFullState, saveArtikel, saveKunde,</text>
+        <text x="220" y="65" font-size="10" fill="#ede9fe" text-anchor="middle">saveDocument, saveAufmass, backupDatabase, printDocument...</text>
+
+        <rect x="470" y="0" width="480" height="110" rx="8" fill="#4c1d95" stroke="#7c3aed" />
+        <text x="710" y="25" font-size="13" font-weight="bold" fill="#ddd6fe" text-anchor="middle">IPC Main Event Handlers (main.js)</text>
+        <text x="710" y="50" font-size="10" fill="#ede9fe" text-anchor="middle">ipcMain.handle('db:saveDocument'), ipcMain.handle('save:pdf'),</text>
+        <text x="710" y="65" font-size="10" fill="#ede9fe" text-anchor="middle">ipcMain.handle('db:backup'), Focus Window Kick, Dialog Handlers</text>
+
+        <rect x="970" y="0" width="460" height="110" rx="8" fill="#4c1d95" stroke="#7c3aed" />
+        <text x="1200" y="25" font-size="13" font-weight="bold" fill="#ddd6fe" text-anchor="middle">Automated Test &amp; Pipeline Scripts</text>
+        <text x="1200" y="50" font-size="10" fill="#ede9fe" text-anchor="middle">scripts/generate_and_test.js (E2E Document Pipeline)</text>
+        <text x="1200" y="65" font-size="10" fill="#ede9fe" text-anchor="middle">scripts/run_full_system_test.js (Modules 1-8 System Validation)</text>
+    </g>
+
+    <!-- LAYER 4: DATABASE & PERSISTENCE (BETTER-SQLITE3) -->
+    <rect x="50" y="830" width="1500" height="320" rx="12" fill="#1e293b" stroke="#f59e0b" stroke-width="2" />
+    <text x="70" y="860" font-size="18" font-weight="bold" fill="#fbbf24">4. DATENBANK &amp; PERSISTENZ (db.js — Better-SQLite3 WAL-Modus)</text>
+
+    <g transform="translate(70, 880)">
+        <!-- Table 1 -->
+        <rect x="0" y="0" width="220" height="240" rx="8" fill="#78350f" stroke="#d97706" />
+        <text x="110" y="25" font-size="12" font-weight="bold" fill="#fef3c7" text-anchor="middle">Tabelle: kunden</text>
+        <text x="15" y="50" font-size="10" fill="#fde68a">• id, kundennummer, name</text>
+        <text x="15" y="68" font-size="10" fill="#fde68a">• customer_type (B2G/B2B/B2C)</text>
+        <text x="15" y="86" font-size="10" fill="#fde68a">• leitweg_id, buyer_reference</text>
+        <text x="15" y="104" font-size="10" fill="#fde68a">• ustId, tax_number</text>
+        <text x="15" y="122" font-size="10" fill="#fde68a">• ist_bauleistender_13b</text>
+        <text x="15" y="140" font-size="10" fill="#fde68a">• sec48b_status (VALID/EXPIRED)</text>
+        <text x="15" y="158" font-size="10" fill="#fde68a">• freistellung_gueltig_bis</text>
+        <text x="15" y="176" font-size="10" fill="#fde68a">• sec48b_certificate_path</text>
+
+        <!-- Table 2 -->
+        <rect x="240" y="0" width="230" height="240" rx="8" fill="#78350f" stroke="#d97706" />
+        <text x="355" y="25" font-size="12" font-weight="bold" fill="#fef3c7" text-anchor="middle">Tabelle: dokumente</text>
+        <text x="255" y="50" font-size="10" fill="#fde68a">• id, type ('rechnung'/'angebot')</text>
+        <text x="255" y="68" font-size="10" fill="#fde68a">• nr, datum, faellig, status</text>
+        <text x="255" y="86" font-size="10" fill="#fde68a">• kundeId, projektId</text>
+        <text x="255" y="104" font-size="10" fill="#fde68a">• netto, steuer, brutto, zahlbetrag</text>
+        <text x="255" y="122" font-size="10" fill="#fde68a">• rechnungsart (KUMULIERT/STORNO)</text>
+        <text x="255" y="140" font-size="10" fill="#fde68a">• kumulierte_leistung_netto</text>
+        <text x="255" y="158" font-size="10" fill="#fde68a">• sicherheitseinbehalt</text>
+        <text x="255" y="176" font-size="10" fill="#fde68a">• isLocked (GoBD Lock)</text>
+        <text x="255" y="194" font-size="10" fill="#fde68a">• sha256_hash</text>
+
+        <!-- Table 3 -->
+        <rect x="490" y="0" width="220" height="240" rx="8" fill="#78350f" stroke="#d97706" />
+        <text x="600" y="25" font-size="12" font-weight="bold" fill="#fef3c7" text-anchor="middle">Tabelle: positionen</text>
+        <text x="505" y="50" font-size="10" fill="#fde68a">• id, dokumentId, artikelId</text>
+        <text x="505" y="68" font-size="10" fill="#fde68a">• name, menge, einheit, preis</text>
+        <text x="505" y="86" font-size="10" fill="#fde68a">• mwst, rabatt, ek</text>
+        <text x="505" y="104" font-size="10" fill="#fde68a">• cost_type (LOHN/MAT/GERÄT)</text>
+        <text x="505" y="122" font-size="10" fill="#fde68a">• oz_code (GAEB Ordnungszahl)</text>
+        <text x="505" y="140" font-size="10" fill="#fde68a">• is_tax_deductible_35a</text>
+        <text x="505" y="158" font-size="10" fill="#fde68a">• is13b (Reverse Charge)</text>
+
+        <!-- Table 4 -->
+        <rect x="730" y="0" width="220" height="240" rx="8" fill="#78350f" stroke="#d97706" />
+        <text x="840" y="25" font-size="12" font-weight="bold" fill="#fef3c7" text-anchor="middle">Tabelle: aufmass &amp; pos</text>
+        <text x="745" y="50" font-size="10" fill="#fde68a">• aufmass.id, position_id</text>
+        <text x="745" y="68" font-size="10" fill="#fde68a">• titel, rechnung_id, projekt_id</text>
+        <text x="745" y="86" font-size="10" fill="#fde68a">• aufmass_positionen.id</text>
+        <text x="745" y="104" font-size="10" fill="#fde68a">• raum, bezeichnung, formel</text>
+        <text x="745" y="122" font-size="10" fill="#fde68a">• ergebnis (Evaluierte Formel)</text>
+        <text x="745" y="140" font-size="10" fill="#fde68a">• einheit (m², m³, m, Stk)</text>
+
+        <!-- Table 5 -->
+        <rect x="970" y="0" width="220" height="240" rx="8" fill="#78350f" stroke="#d97706" />
+        <text x="1080" y="25" font-size="12" font-weight="bold" fill="#fef3c7" text-anchor="middle">Spezial-Tabellen VOB</text>
+        <text x="985" y="50" font-size="10" fill="#fde68a">• invoice_cumulative_states</text>
+        <text x="985" y="68" font-size="10" fill="#fde68a">  (sequence_number, L_t, ΣF_i)</text>
+        <text x="985" y="90" font-size="10" fill="#fde68a">• security_retentions</text>
+        <text x="985" y="108" font-size="10" fill="#fde68a">  (retention_type, amount, due)</text>
+        <text x="985" y="130" font-size="10" fill="#fde68a">• rechnung_verrechnungen</text>
+        <text x="985" y="148" font-size="10" fill="#fde68a">  (aktuelle_id, vorherige_id)</text>
+
+        <!-- Table 6 -->
+        <rect x="1210" y="0" width="220" height="240" rx="8" fill="#78350f" stroke="#d97706" />
+        <text x="1320" y="25" font-size="12" font-weight="bold" fill="#fef3c7" text-anchor="middle">Audit &amp; System Tables</text>
+        <text x="1225" y="50" font-size="10" fill="#fde68a">• audit_logs</text>
+        <text x="1225" y="68" font-size="10" fill="#fde68a">  (entity_type, entity_id, action)</text>
+        <text x="1225" y="86" font-size="10" fill="#fde68a">  (previous_hash, current_hash)</text>
+        <text x="1225" y="110" font-size="10" fill="#fde68a">• projekte (budget, gaeb_phase)</text>
+        <text x="1225" y="128" font-size="10" fill="#fde68a">• artikel (ek, vk, cost_type)</text>
+        <text x="1225" y="146" font-size="10" fill="#fde68a">• einstellungen (firmenname, logo)</text>
+    </g>
+</svg>
+
+    </div>
+
+    <div class="section">
+        <h2>2. Dynamic Workflow State Machine (Mermaid)</h2>
+        <div class="mermaid">
+stateDiagram-v2
+    [*] --> InKalkulation: GAEB X83 Import / Manuelle Erfassung
+    InKalkulation --> AngebotVersendet: GAEB X84 Export / PDF Versand
+    AngebotVersendet --> Abgelehnt: [Angebot abgelehnt]
+    AngebotVersendet --> ProjektAktiv: [Angebot angenommen]
+    
+    state ProjektAktiv {
+        [*] --> InAusfuehrung
+        InAusfuehrung --> SubunternehmerPruefung: Subunternehmer zugewiesen
+        state SubunternehmerPruefung {
+            [*] --> Check48b
+            Check48b --> Freigestellt: [§ 48b EStG gültig]
+            Check48b --> Bauabzugspflichtig: [§ 48b abgelaufen / fehlt -> 15% Einbehalt]
+        }
+        InAusfuehrung --> AbschlagsrechnungErstellt: Aufmaß REB 23.003
+        AbschlagsrechnungErstellt --> InAusfuehrung: Abschlagszahlung verbucht
+        InAusfuehrung --> SchlussrechnungErstellt: [Bauwerk fertiggestellt / VOB Abnahme]
+    }
+    
+    state SchlussrechnungErstellt {
+        [*] --> Endverrechnung: Verrechnung aller n-Abschläge
+        Endverrechnung --> EInvoiceGen: XRechnung XML (B2G) / ZUGFeRD PDF (B2B/B2C)
+    }
+    
+    SchlussrechnungErstellt --> Festgeschrieben: GoBD Festschreiben [Lock = true]
+    Festgeschrieben --> DATEVExport: DATEV EXTF 700 Export (BU 19/68)
+    DATEVExport --> ProjektAbgeschlossen: Gewährleistungsfrist abgelaufen
+    ProjektAbgeschlossen --> [*]
+        </div>
+    </div>
+</body>
+</html>

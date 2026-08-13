@@ -1,16 +1,69 @@
-Die erweiterten Angaben und Rechtstexte auf dem PDF sehen schon sehr gut aus! Es gibt jedoch noch einen kritischen logischen Fehler in der UI und eine fehlende, aber gesetzlich zwingende Funktion für das Baugewerbe. Bitte setze diese 3 Punkte in der Benutzeroberfläche (code.html), der Logik (js/editor.js) und der PDF-Engine (js/einstellungen.js) um:
+### PROMPT: VOLLE IMPLEMENTIERUNG UND FERTIGSTELLUNG DER GESAMTEN BAU-ERP-ANWENDUNG
 
-1. UI-Logik für Checkboxen (Rechtliche Konfliktvermeidung):
-Aktuell kann man 'Privatkunde' und 'Bauabzugsteuer' gleichzeitig auswählen. Das ist rechtlich falsch, da Privatpersonen keine Bauabzugsteuer abführen. Bitte implementiere eine JavaScript-Logik, die diese Checkboxen gegenseitig ausschließt: Wenn 'Privatkunde' angehakt ist, muss 'Bauabzugsteuer' zwingend deaktiviert (disabled) werden – und umgekehrt.
+#### 1. KONTEXT & SYSTEMSTATUS
+Wir entwickeln ein vollwertiges, rechtssicheres ERP-System für mittelständische Bau- und Gebäudeunternehmen (Bauhaupt- und Baunebengewerbe) auf Basis der Pläne 01, 02 und 03. 
 
-2. Die fehlende § 13b UStG (Reverse Charge) Option:
-Füge eine neue Checkbox für '§ 13b UStG (Reverse Charge)' im Bereich 'Erweiterte Angaben' hinzu. Dies ist die wichtigste Regelung im B2B-Baugewerbe. Auch hier muss die Abhängigkeit gelten: Wenn 'Privatkunde' ausgewählt ist, darf '§ 13b UStG' nicht auswählbar sein (da es nur für B2B gilt).
+Das System verfügt bereits über:
+- Die Basistabellen und ein Backend-Fundament (SQLite/Better-SQLite3).
+- Die Core-Module für E-Invoicing (XRechnung XML & ZUGFeRD PDF/A-3 nach EN 16931).
+- Erste Logiken für § 13b UStG, § 48b EStG, § 35a EStG, VOB/B kumulierte Abrechnung ($F_t = L_t - \sum F_i$) und DATEV EXTF 700 Exporte.
+- Die grundlegende Dashboard-UI mit Badges, GAEB-Drag-and-Drop und Rechnungs-Editor.
 
-3. Berechnung und PDF-Ausgabe für § 13b UStG:
-Wenn die neue § 13b-Checkbox aktiviert ist, MUSS die Berechnungslogik der Rechnung umgeschaltet werden:
+---
 
-    Es darf systemseitig keine Umsatzsteuer (0%) aufgeschlagen werden. Der Rechnungs-Nettobetrag entspricht exakt dem finalen Zahlbetrag.
+#### 2. ZIELSETZUNG
+Deine Aufgabe ist es, **die gesamte Anwendung vollständig, Ende-zu-Ende (Full-Stack) fertigzustellen**. Es dürfen keine Platzhalter (Mocks, TODOs) oder unvollständigen Module verbleiben. Jedes Haupt- und Untermodul in der Seitennavigation (Dashboard, Rechnungen, Artikel, Angebote, Kunden, Projekte, Berichte, Einstellungen) sowie das mobile Baustellen-System müssen voll funktionsfähig implementiert werden.
 
-    Auf dem PDF darf keine Umsatzsteuer ausgewiesen werden. Stattdessen muss zwingend folgender Pflichttext abgedruckt werden: 'Leistungen unterliegen gemäß § 13b UStG dem Reverse-Charge-Verfahren. Die Steuerschuldnerschaft geht auf den Leistungsempfänger über.'
+---
 
-Bitte setze dies um und zeige mir den Code für die UI-Logik (Checkbox-Sperren) sowie die angepasste Steuerberechnung für § 13b."
+#### 3. ANFORDERUNGEN AN DIE EINZELNEN MODULE & SPEZIFIKATIONEN
+
+##### Modul 1: Dashboard (`/dashboard`)
+- **KPI-Kacheln:** Generierung und Echtzeit-Berechnung von Offene Posten (OPOS), Monatsumsatz (Netto/Brutto), Fällige Gewährleistungseinbehalte und Ablaufende § 48b Freistellungsbescheinigungen.
+- **Schnellaktionen & Verlauf:** Übersicht der letzten Aktivitäten mit direkten Links zu Entwürfen, überfälligen Mahnungen und aktuellen Projekten.
+
+##### Modul 2: Rechnungen & Rechnungs-Editor (`/invoices`)
+- **VOB/B Kumulations-Ablauf:** Vollständige Abwicklung von 1. bis n-ter Abschlagsrechnung und automatischer Verrechnung in der Schlussrechnung zur Vermeidung von Doppelbesteuerung.
+- **Compliance Automation:** 
+  - B2G: Automatisches Einblenden & Validieren von Leitweg-ID und Buyer Reference.
+  - B2B: Automatische Ermittlung von § 13b UStG (Reverse Charge) und Ausweis des 5 % Sicherheitseinbehalts.
+  - B2C: Automatische Extraktion und separater Ausweis von Lohn- und Fahrtkosten für den § 35a EStG Steuerbonus.
+- **GoBD-Festschreibung:** Klick auf "Festschreiben" sperrt das Bearbeiten (Status `POSTED`), generiert den kryptografischen SHA-256 Hash und schreibt das GoBD-Audit-Log. Stornierungen erzeugen automatisch eine GoBD-Stornorechnung.
+
+##### Modul 3: Angebote & GAEB/LV (`/quotes`)
+- **GAEB Engine:** Vollständiger Import von GAEB X83 (Ausschreibung), Preiskalkulation je Ordnungzahl (OZ) und Export als GAEB X84 (Angebotsabgabe).
+- **1-Klick-Umwandlung:** Umwandlung von angenommenen Angeboten in ein aktives Projekt oder direkt in eine Abschlagsrechnung.
+
+##### Modul 4: Artikel & Materialstamm (`/articles`)
+- **Kategorisierung:** Zuordnung zu Material, Lohnarbeit, Maschinenleistung und Fahrtkosten.
+- **Schnittstellen-Vorbereitung:** Kennzeichnung für DATANORM/IDS-Connect Importe und Voreinstellung der § 35a Relevanz.
+
+##### Modul 5: Kunden & Subunternehmer-Verwaltung (`/customers`)
+- **B2G/B2B/B2C-Profil:** Unterscheidung der Kundentypen.
+- **Subunternehmer-Compliance:** Ablage und automatische Fristenüberwachung der § 48b EStG Freistellungsbescheinigung (inkl. Dokumentenupload-Pfad). Bei abgelaufener Bescheinigung automatische Berechnung des 15 % Bauabzugsteuer-Einbehalts.
+
+##### Modul 6: Projekte, Aufmaß & Bautagebuch (`/projects`)
+- **Projekt-Sicht:** Verknüpfung aller Angebote, Abschlagsrechnungen, Schlussrechnungen und Nachkalkulation (Soll-Ist-Vergleich).
+- **Aufmaß-Center:** REB 23.003-konforme Erfassung von Formel-Messzeilen ($L \times B \times H$) gekoppelt an die GAEB-Ordnungszahlen.
+- **Bautagebuch-Modul:** Erfassung von Witterung, Arbeiter-Anwesenheiten, Großgeräten und Mängeldokumentation.
+
+##### Modul 7: Berichte & DATEV (`/reports`)
+- **Umsatz-Dashboard:** Auswertung nach Netto/Brutto, 19 %, 7 % und steuerfreien § 13b Umsätzen.
+- **OPOS-Liste:** Fälligkeitsstruktur der offenen Forderungen.
+- **DATEV EXTF 700 Export:** Erzeugung von voll validen Buchungsstapel-CSV-Dateien mit BU-Schlüsseln (19/68) auf SKR03/SKR04 Konten.
+
+##### Modul 8: Einstellungen (`/settings`)
+- Firmendaten, Bankverbindung (IBAN/BIC), PDF-Briefpapier/Logo-Upload, Nummernkreise (z. B. RE-2026-XXXX) und Datenbank-Backup/Restore-Mechanismus.
+
+---
+
+#### 4. AUTOMATISIERTE TESTS & OUTPUT-PFLICHTEN
+
+Bitte erstelle ein umfassendes Testskript (z. B. `run_full_system_test.js`) und führe es aus. Es muss sicherstellen, dass:
+1. Alle Datenbank-Migrationen und -Tabellen ohne Fehler angelegt werden.
+2. Alle API-Endpoints und UI-Routen erreichbar sind.
+3. Testfälle für B2G (XRechnung XML), B2B (ZUGFeRD PDF & VOB/B) und B2C (§ 35a PDF) fehlerfrei durchlaufen.
+4. Alle generierten Test-Dokumente im Ordner `./output/invoices/` abgelegt werden.
+5. Das GoBD SHA-256 Audit-Log und der e2e-Testbericht im Ordner `./tests/test_results/` gespeichert werden.
+
+**Bitte führe die Implementierung jetzt schrittweise und vollständig durch und liefere eine Zusammenfassung aller erstellten/aktualisierten Dateien sowie das Testergebnis.**

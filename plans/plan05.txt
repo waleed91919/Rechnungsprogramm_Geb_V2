@@ -1,10 +1,41 @@
-"Perfekt! Die Umsetzung der UI-Logik und der Datenbank ist exzellent. Wir haben nun die Phase 1 fast abgeschlossen. Es gibt jedoch noch ein kritisches Detail aus der rechtlichen Spezifikation für § 13b UStG, das wir anpassen müssen: 'Gemischte Rechnungen'.
+### PROMPT: UML STATE MACHINE & PROCESS WORKFLOW DIAGRAM FOR BAU-ERP
 
-Laut der Dokumentation können Rechnungen sowohl Positionen umfassen, die zwingend dem § 13b UStG unterliegen (z.B. Montage), als auch Positionen, die der regulären Versteuerung mit 19% unterliegen (z.B. reine Materiallieferungen). Die Softwarearchitektur muss daher zwingend eine Aufsplittung der Steuerlogik auf Positionsebene erlauben, nicht nur global auf Belegebene.
+#### 1. KONTEXT & ZIELSETZUNG
+Wir möchten die vollständige Prozess- und Zustandslogik (State Machine Diagram / Process Flow) unseres Bau-ERP-Systems visualisieren – ähnlich einem UML-Zustandsdiagramm für Bewerbungsprozesse, jedoch maßgeschneidert auf die Phasen eines Bauvorhabens.
 
-Bitte passe die editor.js, das UI (code.html) und die PDF-Engine (js/einstellungen.js) wie folgt an:
-1. Positionsebene: Wenn die globale Checkbox '§ 13b UStG' für die Rechnung aktiviert ist, blende bei jeder einzelnen Rechnungsposition (Artikel-Zeile) einen kleinen Schalter oder eine Checkbox '13b' ein.
-2. Berechnungslogik (calculateRechnungTotals): Setze nicht mehr pauschal totalTax = 0. Der Algorithmus muss pro Position prüfen: Ist der 13b-Haken bei diesem Artikel gesetzt? Wenn ja -> 0% Steuer für diesen Netto-Betrag. Wenn nein -> regulär 19% (oder 7%) Steuer für diesen Netto-Betrag berechnen.
-3. PDF-Ausgabe: Der Summenblock muss im Falle einer gemischten Rechnung transparent aufschlüsseln: Netto (regulär) zzgl. 19% USt. UND Netto (§ 13b) ohne Steuer. Der Pflichttext bleibt am Ende stehen.
+Bitte erstelle ein detailliertes **PlantUML**- sowie ein **Mermaid.js**-Diagramm, das den exakten Lebenszyklus eines Bauprojekts und dessen Abrechnung im System abbildet.
 
-Bitte zeige mir, wie du diese Logik für gemischte Rechnungen implementierst."
+---
+
+#### 2. INHALT UND PHASEN DES DIAGRAMMS
+
+Das Diagramm muss folgende Zustände (States), Übergänge (Transitions) und Bedingungen (Guards / Conditions) abbilden:
+
+1. **Start & Ausschreibung (B2G/B2B):**
+   - Import GAEB X83 (Ausschreibung) -> Zustand: `In Kalkulation`.
+   - Export GAEB X84 (Angebotsabgabe) -> Zustand: `Angebot Versendet`.
+   - Entscheidung: [Angebot angenommen] -> `Projekt Aktiv` OR [Timeout / Ablehnung] -> `Archiviert / Abgelehnt`.
+
+2. **Baustellen-Ausführung & Mip-Erfassung:**
+   - Erfassung von `Aufmaß (REB 23.003)`, `Bautagebuch` und `Zeiterfassung`.
+   - Subunternehmer-Prüfung: [§ 48b Freistellung gültig] vs. [§ 48b abgelaufen -> 15% Bauabzugsteuer-Sperre].
+
+3. **VOB/B Kumulative Abrechnung (Abschlagsrechnungen):**
+   - Erstellung 1. bis n-te `Abschlagsrechnung`.
+   - Logik: Berechnung $F_t = L_t - \sum F_i$, Abzug 5% `Sicherheitseinbehalt` und Kennzeichnung `§ 13b UStG (Reverse Charge)`.
+
+4. **Schlussrechnung & Endabrechnung:**
+   - Zustand: `Schlussrechnung Erstellt`.
+   - Verrechnung aller Vorrechnungen, Freigabe/Nachverfolgung der Gewährleistungsfrist für Sicherheitseinbehalte.
+   - Generierung von `XRechnung (XML)` für B2G bzw. `ZUGFeRD (PDF/A-3)` für B2B/B2C.
+
+5. **GoBD-Festschreibung & DATEV Export (Endzustand):**
+   - Zustand: `Festgeschrieben (POSTED)`.
+   - Erzeugung des SHA-256 Hashes im Audit-Log.
+   - DATEV EXTF 700 Export -> Endzustand `Projekt Abgeschlossen`.
+
+---
+
+#### 3. ANFORDERUNGEN AN DIE KI
+- Liefer den vollständigen Code sowohl als **Mermaid.js** Codeblock (direkt im Markdown renderbar) als auch als **PlantUML** Codeblock.
+- Nutze klare Beschriftungen für Bedingungen in eckigen Klammern (z. B. `[§ 48b gültig]`) und Aktionen auf den Verbindungslinien.

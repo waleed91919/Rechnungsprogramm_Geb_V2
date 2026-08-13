@@ -1,0 +1,16 @@
+Die erweiterten Angaben und Rechtstexte auf dem PDF sehen schon sehr gut aus! Es gibt jedoch noch einen kritischen logischen Fehler in der UI und eine fehlende, aber gesetzlich zwingende Funktion für das Baugewerbe. Bitte setze diese 3 Punkte in der Benutzeroberfläche (code.html), der Logik (js/editor.js) und der PDF-Engine (js/einstellungen.js) um:
+
+1. UI-Logik für Checkboxen (Rechtliche Konfliktvermeidung):
+Aktuell kann man 'Privatkunde' und 'Bauabzugsteuer' gleichzeitig auswählen. Das ist rechtlich falsch, da Privatpersonen keine Bauabzugsteuer abführen. Bitte implementiere eine JavaScript-Logik, die diese Checkboxen gegenseitig ausschließt: Wenn 'Privatkunde' angehakt ist, muss 'Bauabzugsteuer' zwingend deaktiviert (disabled) werden – und umgekehrt.
+
+2. Die fehlende § 13b UStG (Reverse Charge) Option:
+Füge eine neue Checkbox für '§ 13b UStG (Reverse Charge)' im Bereich 'Erweiterte Angaben' hinzu. Dies ist die wichtigste Regelung im B2B-Baugewerbe. Auch hier muss die Abhängigkeit gelten: Wenn 'Privatkunde' ausgewählt ist, darf '§ 13b UStG' nicht auswählbar sein (da es nur für B2B gilt).
+
+3. Berechnung und PDF-Ausgabe für § 13b UStG:
+Wenn die neue § 13b-Checkbox aktiviert ist, MUSS die Berechnungslogik der Rechnung umgeschaltet werden:
+
+    Es darf systemseitig keine Umsatzsteuer (0%) aufgeschlagen werden. Der Rechnungs-Nettobetrag entspricht exakt dem finalen Zahlbetrag.
+
+    Auf dem PDF darf keine Umsatzsteuer ausgewiesen werden. Stattdessen muss zwingend folgender Pflichttext abgedruckt werden: 'Leistungen unterliegen gemäß § 13b UStG dem Reverse-Charge-Verfahren. Die Steuerschuldnerschaft geht auf den Leistungsempfänger über.'
+
+Bitte setze dies um und zeige mir den Code für die UI-Logik (Checkbox-Sperren) sowie die angepasste Steuerberechnung für § 13b."

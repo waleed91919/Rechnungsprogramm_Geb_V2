@@ -92,6 +92,17 @@ document.getElementById('search-kunden')?.addEventListener('input', (e) => {
 });
 
 // Kunden CRUD functions
+function toggleKundeTypeFields() {
+    const typeSelect = document.getElementById('kunde-customer-type');
+    const b2gFields = document.getElementById('kunde-b2g-fields');
+    if (!typeSelect || !b2gFields) return;
+    if (typeSelect.value === 'B2G') {
+        b2gFields.classList.remove('hidden');
+    } else {
+        b2gFields.classList.add('hidden');
+    }
+}
+
 function openKundeModal(id = null) {
     document.getElementById('kunde-modal').classList.remove('hidden');
     if (id) {
@@ -106,6 +117,10 @@ function openKundeModal(id = null) {
         document.getElementById('kunde-telefon').value = item.telefon;
         document.getElementById('kunde-email').value = item.email || '';
         document.getElementById('kunde-ustid').value = item.ustId || '';
+        document.getElementById('kunde-customer-type').value = item.customer_type || 'B2C';
+        document.getElementById('kunde-leitweg-id').value = item.leitweg_id || '';
+        document.getElementById('kunde-buyer-reference').value = item.buyer_reference || '';
+        document.getElementById('kunde-peppol-id').value = item.peppol_id || '';
         document.getElementById('kunde-ist-bauleistender-13b').checked = !!item.ist_bauleistender_13b;
         document.getElementById('kunde-ust-1-tg-gueltig-bis').value = item.ust_1_tg_gueltig_bis || '';
         document.getElementById('kunde-hat-freistellungsbescheinigung').checked = !!item.hat_freistellungsbescheinigung;
@@ -115,21 +130,25 @@ function openKundeModal(id = null) {
         document.getElementById('kunde-modal-title').innerText = 'Neuer Kunde';
         document.getElementById('kunde-form').reset();
         document.getElementById('kunde-id').value = '';
-        document.getElementById('kunde-kundennummer').value = ''; // Let backend generate or use placeholder
+        document.getElementById('kunde-kundennummer').value = '';
+        document.getElementById('kunde-customer-type').value = 'B2C';
+        document.getElementById('kunde-leitweg-id').value = '';
+        document.getElementById('kunde-buyer-reference').value = '';
+        document.getElementById('kunde-peppol-id').value = '';
         document.getElementById('kunde-ist-bauleistender-13b').checked = false;
         document.getElementById('kunde-ust-1-tg-gueltig-bis').value = '';
         document.getElementById('kunde-hat-freistellungsbescheinigung').checked = false;
         document.getElementById('kunde-freistellung-gueltig-bis').value = '';
         document.getElementById('kunde-ist-umsatzsteuerfreie-vermietung').checked = false;
 
-        // Reset Quick Paste
         const qpContainer = document.getElementById('quick-paste-container');
         if (qpContainer) qpContainer.classList.add('hidden');
         const qpTextarea = document.getElementById('kunde-quick-paste');
         if (qpTextarea) qpTextarea.value = '';
     }
 
-    // Robust focus: first ensure webContents has OS-level focus, then focus the input
+    toggleKundeTypeFields();
+
     const doFocus = async () => {
         try {
             if (window.api && window.api.focusWindow) {
@@ -145,10 +164,7 @@ function openKundeModal(id = null) {
         });
     };
 
-    // Immediate attempt
     doFocus();
-    
-    // Delayed attempts to handle race conditions with other transitions
     setTimeout(doFocus, 200);
     setTimeout(doFocus, 500);
 }
@@ -166,6 +182,10 @@ async function saveKunde() {
     const telefon = document.getElementById('kunde-telefon').value;
     const email = document.getElementById('kunde-email').value;
     const ustId = document.getElementById('kunde-ustid').value;
+    const customer_type = document.getElementById('kunde-customer-type').value;
+    const leitweg_id = document.getElementById('kunde-leitweg-id').value;
+    const buyer_reference = document.getElementById('kunde-buyer-reference').value;
+    const peppol_id = document.getElementById('kunde-peppol-id').value;
     const ist_bauleistender_13b = document.getElementById('kunde-ist-bauleistender-13b').checked ? 1 : 0;
     const ust_1_tg_gueltig_bis = document.getElementById('kunde-ust-1-tg-gueltig-bis').value;
     const hat_freistellungsbescheinigung = document.getElementById('kunde-hat-freistellungsbescheinigung').checked ? 1 : 0;
@@ -177,7 +197,7 @@ async function saveKunde() {
         return;
     }
 
-    const kundeData = { kundennummer, name, adresse, plz, ort, telefon, email, ustId, ist_bauleistender_13b, ust_1_tg_gueltig_bis, hat_freistellungsbescheinigung, freistellung_gueltig_bis, ist_umsatzsteuerfreie_vermietung };
+    const kundeData = { kundennummer, name, adresse, plz, ort, telefon, email, ustId, customer_type, leitweg_id, buyer_reference, peppol_id, ist_bauleistender_13b, ust_1_tg_gueltig_bis, hat_freistellungsbescheinigung, freistellung_gueltig_bis, ist_umsatzsteuerfreie_vermietung };
 
     if (id) {
         kundeData.id = parseInt(id);

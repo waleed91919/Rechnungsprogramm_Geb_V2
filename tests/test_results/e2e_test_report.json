@@ -1,0 +1,22 @@
+{
+  "timestamp": "2026-08-13T12:00:19.593Z",
+  "testCasesRun": 3,
+  "testCasesPassed": 3,
+  "generatedFiles": [
+    "C:\\Users\\walee\\Desktop\\server\\Rechnungsprogramm_Geb_V2\\output\\invoices\\b2g_xrechnung\\RE-2026-B2G-001.xml",
+    "C:\\Users\\walee\\Desktop\\server\\Rechnungsprogramm_Geb_V2\\output\\invoices\\b2b_zugferd\\RE-2026-B2B-AB1.pdf",
+    "C:\\Users\\walee\\Desktop\\server\\Rechnungsprogramm_Geb_V2\\output\\invoices\\b2b_zugferd\\RE-2026-B2B-AB2.pdf",
+    "C:\\Users\\walee\\Desktop\\server\\Rechnungsprogramm_Geb_V2\\output\\invoices\\b2c_privat\\RE-2026-B2C-001.pdf",
+    "C:\\Users\\walee\\Desktop\\server\\Rechnungsprogramm_Geb_V2\\output\\invoices\\datev_exports\\EXTF_2026_JULI.csv"
+  ],
+  "auditHashes": [
+    {
+      "nr": "RE-2026-B2G-001",
+      "hash": "55166a73aeac6a112d176e44d9cd93b38f257976750921c78361d65505ed3e01"
+    },
+    {
+      "nr": "RE-2026-B2B-AB1",
+      "hash": "c2545fc9e88db66f9625ebbbdc9338154b66ce76eb59cc8321c3319e831ecea3"
+    }
+  ]
+}

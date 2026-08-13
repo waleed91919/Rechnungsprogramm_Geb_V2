@@ -1,0 +1,258 @@
+================================================================================
+ARCHITEKTUR- UND DATENKONZEPT: BAU-ERP-SYSTEM (B2G, B2B, B2C)
+================================================================================
+Projekt: W-Link ERP - Erweiterung für Bauhaupt- und Baunebengewerbe
+Datei: plans/Ai/plan01.txt
+Erstellt am: 2026-08-13
+Status: Entwurf & Spezifikation (Version 1.0)
+
+================================================================================
+1. DATENMODELL & ENTITÄTEN-ERWEITERUNG (DATABASE SCHEMA & JSON-LOGIK)
+================================================================================
+
+1.1 PARTNER- UND KUNDENVERWALTUNG (Entität: `contacts` / `partners`)
+--------------------------------------------------------------------------------
+Um B2G-, B2B- und B2C-Geschäftspartner abzubilden, wird die Kontakttabelle um 
+geschäftstypspezifische Felder und Validierungsstempel erweitert.
+
+[Erweiterte Spalten / DDL-Spezifikation (SQLite / Better-SQLite3)]
+
+ALTER TABLE contacts ADD COLUMN customer_type TEXT NOT NULL DEFAULT 'B2C' CHECK(customer_type IN ('B2G', 'B2B', 'B2C'));
+
+-- B2G-Spezifische Felder (Öffentliche Auftraggeber)
+ALTER TABLE contacts ADD COLUMN leitweg_id TEXT;               -- Format z.B. "991-12345678-12"
+ALTER TABLE contacts ADD COLUMN peppol_id TEXT;                -- Z.B. "0204:DE9911234567812"
+ALTER TABLE contacts ADD COLUMN buyer_reference TEXT;          -- Referenz des Auftraggebers / Aktenzeichen
+
+-- B2B-Spezifische Felder (Haupt- & Subunternehmer)
+ALTER TABLE contacts ADD COLUMN vat_id TEXT;                   -- USt-IdNr (z.B. DE123456789)
+ALTER TABLE contacts ADD COLUMN tax_number TEXT;               -- Steuernummer
+ALTER TABLE contacts ADD COLUMN is_subcontractor INTEGER DEFAULT 0; -- 1 = Subunternehmer, 0 = Kunde/Lieferant
+ALTER TABLE contacts ADD COLUMN sec48b_status TEXT DEFAULT 'NONE' CHECK(sec48b_status IN ('NONE', 'VALID', 'EXPIRED', 'PENDING'));
+ALTER TABLE contacts ADD COLUMN sec48b_valid_until DATE;       -- Ablaufdatum Freistellungsbescheinigung (§ 48b EStG)
+ALTER TABLE contacts ADD COLUMN sec48b_certificate_path TEXT;  -- Verpfadung zum hinterlegten PDF-Zertifikat
+ALTER TABLE contacts ADD COLUMN sec13b_reverse_charge_default INTEGER DEFAULT 0; -- 1 = Standardmäßig Steuerschuldumkehr
+
+-- B2C-Spezifische Felder (Private Auftraggeber)
+ALTER TABLE contacts ADD COLUMN is_consumer INTEGER DEFAULT 1; -- Verbraucher-Flag für § 35a Ausweis
+
+[JSON-Datenstruktur für Kontakte (Erweiterungs-Payload)]
+{
+  "id": "cnt_98234",
+  "name": "Stadtbauamt Musterstadt",
+  "customerType": "B2G",
+  "b2gDetails": {
+    "leitwegId": "991-12345678-12",
+    "peppolId": "0204:DE9911234567812",
+    "buyerReference": "4500012398"
+  },
+  "b2bDetails": {
+    "vatId": "DE123456789",
+    "taxNumber": "12/345/67890",
+    "isSubcontractor": false,
+    "sec48b": {
+      "status": "NONE",
+      "validUntil": null,
+      "certificatePath": null
+    },
+    "sec13bDefault": false
+  }
+}
+
+
+1.2 PROJEKTE, GAEB-STRUKTUR UND KUMULIERTE ABRECHNUNG (`projects`, `invoices`, `invoice_aggregates`)
+--------------------------------------------------------------------------------
+Baustellen abrechnen nach VOB/B erfordert kumulierte Abschlagsrechnungen, 
+Sicherheitseinbehalt-Verwaltung und GAEB-Strukturierung.
+
+[DDL für GAEB- und Projekterweiterung]
+
+ALTER TABLE projects ADD COLUMN gaeb_phase TEXT CHECK(gaeb_phase IN ('X80', 'X83', 'X84', 'X85', 'X86', 'X89'));
+ALTER TABLE projects ADD COLUMN hoai_vob_flag TEXT DEFAULT 'VOB' CHECK(hoai_vob_flag IN ('VOB', 'HOAI', 'BGB'));
+ALTER TABLE projects ADD COLUMN default_security_retention_rate REAL DEFAULT 5.0; -- Standard 5% Sicherheitseinbehalt
+
+[Tabelle für Kumulierte Abrechnungsphasen / Abschlagsrechnungen]
+CREATE TABLE IF NOT EXISTS invoice_cumulative_states (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    invoice_id INTEGER NOT NULL UNIQUE,
+    sequence_number INTEGER NOT NULL,            -- 1. Abschlagsrechnung = 1, 2. = 2, Schlussrechnung = N
+    billing_type TEXT NOT NULL CHECK(billing_type IN ('ADVANCE', 'PARTIAL_FINAL', 'FINAL')),
+    total_performance_net REAL NOT NULL,        -- L_t: Gesamterbachte Leistung kumuliert bis heute
+    total_performance_vat REAL NOT NULL,        -- Kumulierte USt auf Gesamtleistung
+    total_previous_billed_net REAL NOT NULL,   -- Summe F_i: Bisher abgerechnete Nettoleistung
+    total_previous_billed_vat REAL NOT NULL,   -- Bisher abgerechnete USt
+    current_period_net REAL NOT NULL,          -- F_t = L_t - Summe(F_i)
+    current_period_vat REAL NOT NULL,
+    security_retention_rate REAL DEFAULT 5.0,  -- Z.B. 5% Einbehalt auf aktuelle Netto-Leistung
+    security_retention_amount REAL DEFAULT 0.0,
+    net_payable_amount REAL NOT NULL,          -- Zahlbetrag dieser Rechnung nach Einbehalten
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projects(id),
+    FOREIGN KEY (invoice_id) REFERENCES invoices(id)
+);
+
+[Gewährleistung & Sicherheitseinbehalte Nachverfolgung]
+CREATE TABLE IF NOT EXISTS security_retentions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    invoice_id INTEGER NOT NULL,
+    retention_type TEXT CHECK(retention_type IN ('EXECUTION', 'WARRANTY')), -- Ausführungssicherheit / Gewährleistungssicherheit
+    amount REAL NOT NULL,
+    due_date DATE NOT NULL,                      -- Ablauf der Gewährleistungsfrist (z.B. 4 Jahre nach VOB/B)
+    status TEXT DEFAULT 'HELD' CHECK(status IN ('HELD', 'RELEASED', 'GUARANTEE_SUBSTITUTED')), -- Eingebehalten / Freigegeben / Durch Bankbürgschaft ersetzt
+    guarantee_document_ref TEXT,                 -- Aktenzeichen / Dateipfad der Bürgschaftsurkunde
+    FOREIGN KEY (project_id) REFERENCES projects(id),
+    FOREIGN KEY (invoice_id) REFERENCES invoices(id)
+);
+
+
+1.3 RECHNUNGSPOSITIONEN & § 35a EStG LOHNKOSTEN-AUFSCHLÜSSELUNG (`invoice_items`)
+--------------------------------------------------------------------------------
+Für Privatkunden (B2C) verlangt das Finanzamt nach § 35a EStG eine klare Trennung
+von Lohn-, Fahrt-, Maschinen- und Materialkosten.
+
+[DDL für Positions-Erweiterung]
+ALTER TABLE invoice_items ADD COLUMN cost_type TEXT DEFAULT 'MATERIAL' CHECK(cost_type IN ('LOHN', 'FAHRT', 'GERÄT', 'MATERIAL'));
+ALTER TABLE invoice_items ADD COLUMN oz_code TEXT;                             -- GAEB Ordnungszahl, z.B. "01.02.0040"
+ALTER TABLE invoice_items ADD COLUMN is_tax_deductible_35a INTEGER DEFAULT 0; -- 1 = Für Handwerkerleistung § 35a anrechenbar
+
+[Berechnete Summenfelder im Rechnungs-Header (`invoices`)]
+ALTER TABLE invoices ADD COLUMN sum_lohn_net REAL DEFAULT 0.0;
+ALTER TABLE invoices ADD COLUMN sum_fahrt_net REAL DEFAULT 0.0;
+ALTER TABLE invoices ADD COLUMN sum_geraet_net REAL DEFAULT 0.0;
+ALTER TABLE invoices ADD COLUMN sum_material_net REAL DEFAULT 0.0;
+ALTER TABLE invoices ADD COLUMN sum_sec35a_eligible_total REAL DEFAULT 0.0;    -- Gesamtsumme Lohn+Fahrt (brutto/netto ausgewiesen)
+
+
+================================================================================
+2. WORKFLOW- UND SCHNITTSTELLEN-ARCHITEKTUR
+================================================================================
+
+2.1 GAEB IMPORT / EXPORT WORKFLOW (DA XML X83 -> X84 -> X89)
+--------------------------------------------------------------------------------
+Der Workflow verbindet die Kalkulation im ERP nahtlos mit den standardisierten
+GAEB-Datenaustausch-Phasen:
+
++------------------------------------------------------------------------------+
+| PHASE X83: EXTERNE AUSSCHREIBUNG (B2G / B2B Hauptunternehmer)                |
+| - Import der GAEB-Datei (XML 3.2 / 3.3 oder DA83)                            |
+| - Parsing der Hierarchie: Gewerke -> Titel -> Untertitel -> Positionen       |
+| - Speicherung von OZ (Ordnungszahlen), Kurz- & Langtexten, Einheiten (m², m³) |
++------------------------------------------------------------------------------+
+                                      |
+                                      v
++------------------------------------------------------------------------------+
+| INTERNE KALKULATION & ANGEBOTSERSTELLUNG                                     |
+| - Zuordnung interner Artikel & Lohnstundensätze je OZ                        |
+| - Ermittlung des Einheitspreises (EP) & Gesamtpreises (GP)                   |
+| - Zuordnung der Kostenarten (Lohn, Material, Gerät) je Position              |
++------------------------------------------------------------------------------+
+                                      |
+                                      v
++------------------------------------------------------------------------------+
+| PHASE X84: ANGEBOTSABGABE                                                    |
+| - Generierung der GAEB X84 XML-Datei mit allen Bieterpreisen (EP / GP)       |
+| - Unerlässliche Validierung: Keine fehlenden EPs bei Pflichtpositionen       |
++------------------------------------------------------------------------------+
+                                      |
+                                      v
++------------------------------------------------------------------------------+
+| PROJEKTAUSFÜHRUNG & AUFMASS-ERFASSUNG                                        |
+| - Erfassung von Teilaufmaßen je Position (Mengenfortschritt)                 |
+| - Generierung von kumulierten Leistungsständen (L_t)                         |
++------------------------------------------------------------------------------+
+                                      |
+                                      v
++------------------------------------------------------------------------------+
+| PHASE X89: RECHNUNG / E-RECHNUNG MIT GAEB-BEZUG                              |
+| - Erzeugung der kumulierten Abschlags- oder Schlussrechnung                  |
+| - Export als GAEB X89 Rechnungs-XML + Generierung der XRechnung / ZUGFeRD    |
++------------------------------------------------------------------------------+
+
+
+2.2 E-RECHNUNGS-ENGINE (EN 16931, XRECHNUNG & ZUGFERD 2.0.1+)
+--------------------------------------------------------------------------------
+Das System integriert ein modulares E-Rechnungs-Modul auf Basis von Node.js:
+
+1. Modul `XRechnungBuilder` (CII & UBL Syntax):
+   - B2G-Pflicht: Erzeugt strukturiertes XML nach EN 16931-1 Standard.
+   - Einbettung der Leitweg-ID im Element `BT-10` (BuyerReference).
+   - Einbettung von Unterlagen/Aufmaßen (z.B. GAEB X89 / Aufmaßblatt) als Base64-Binary im XML (`BT-124`).
+
+2. Modul `ZUGFeRDBuilder` (Hybrid-Format PDF/A-3 + CII XML):
+   - B2C & B2B Standard: Erzeugt menschenlesbare PDF/A-3a Datei.
+   - Konforme Einbettung der `factur-x.xml` im PDF-Attachment-Stream.
+   - Profil: EN 16931 (COMFORT/EXTENDED) – erfüllt alle rechtlichen Vorgaben ab 2025/2026.
+
+[Matrix der Format-Zuordnung]
++-------------------+--------------------+-------------------------------------+
+| Geschäftsentität  | Primäres Format    | Technische Besonderheit             |
++-------------------+--------------------+-------------------------------------+
+| B2G               | XRechnung (XML)    | Pflicht: Leitweg-ID, KoSIT-konform  |
+| B2B               | ZUGFeRD / XRechn.  | § 13b Hinweistext, Kumulierte Werte |
+| B2C               | ZUGFeRD (PDF/A-3)  | § 35a Lohnkosten-Separierung im PDF |
++-------------------+--------------------+-------------------------------------+
+
+
+2.3 DATEV-FINANZBUCHHALTUNGSSCHNITTSTELLEN (EXTF-FORMAT)
+--------------------------------------------------------------------------------
+Für den Steuerberater wird ein DATEV EXTF 700 Export-Generator implementiert.
+
+[DATEV-Buchungsregeln für Bau-Besonderheiten]
+1. Reverse Charge (§ 13b UStG - B2B Bauleistungen):
+   - Erlöskonto: 8337 (SKR03) / 4337 (SKR04) "Erlöse aus Leistungen, für die der Leistungsempfänger die Steuer schuldet".
+   - Automatischer DATEV BU-Schlüssel: BU 19 / BU 68.
+
+2. Kumulierte Abschlagsrechnungen:
+   - Erfassung der Netto-Leistungsänderung $F_t = L_t - \sum F_i$.
+   - Buchung auf Erlöskonto nur für die Differenz der aktuellen Periode, um Doppelbesteuerung zu vermeiden.
+
+3. Sicherheitseinbehalt (§ 17 VOB/B):
+   - Splittung der Debitorenbuchung:
+     - Hauptforderung auf Kunden-Debitor.
+     - Sicherheitseinbehalt (z.B. 5%) auf Abgrenzungskonto "Einbehaltene Sicherheitseinbehalte" (Konto 1540 SKR03 / 1240 SKR04).
+
+
+================================================================================
+3. VALIDIERUNGS- UND LOGIKREGELN
+================================================================================
+
+3.1 AUTOMATISCHE PRÜFROUTINEN & FREIGABE-CHECKLISTE
+--------------------------------------------------------------------------------
+
+[1. KoSIT & XML-SCHEMA VALIDIERUNG (XRechnung / ZUGFeRD)]
+- Vor dem Belege-Festschreiben führt das System eine automatisierte XML-Validierung durch:
+  a) XSD-Schema-Prüfung gegen offizielle EN 16931 Schemata.
+  b) Schematron-Regelprüfung (z.B. KoSIT Validator Rules).
+  c) B2G-Prüfung: Ist die Leitweg-ID vorhanden und syntaktisch valide?
+
+[2. FREISTELLUNGSBESCHEINIGUNG § 48b EStG (BAUABZUGSTEUER-CHECK)]
+- Bei Eingangsrechnungen von Subunternehmern (B2B):
+  - Das System prüft vor Freigabe der Auszahlung den `sec48b_status` und `sec48b_valid_until`.
+  - Wenn Abgelaufen oder Nicht Vorhanden:
+    -> WARNUNG & AUTOMATISCHE SPERRE des vollen Rechnungsbetrags.
+    -> Berechnungslogik: Automatische Abspaltung von 15 % Bauabzugsteuer zur Einbehaltung und Abführung an das zuständige Finanzamt.
+
+[3. § 13b UStG REVERSE-CHARGE CHECK]
+- Wenn `customer_type == 'B2B'` und Leistung `is_construction_service == true`:
+  - Der USt-Satz auf der Rechnung wird automatisch auf 0 % gesetzt.
+  - Pflichttext auf der Rechnung: "Steuerschuldnerschaft des Leistungsempfängers gemäß § 13b UStG".
+  - Ausweisung der USt-Identifikationsnummern beider Parteien.
+
+[4. § 35a EStG TRANSPARENZ-CHECK (B2C)]
+- Wenn `customer_type == 'C2C' / 'B2C'`:
+  - Prüfung, ob jede Leistungsposition der Kostenart `LOHN`, `FAHRT`, `GERÄT` oder `MATERIAL` zugeordnet ist.
+  - Auf der gedruckten/generierten ZUGFeRD-Rechnung muss im Fuß- oder Summenbereich folgender Hinweis stehen:
+    "In der Gesamtsumme sind enthalten: Lohnkosten nettopositiv XX,XX € (zzgl. USt YY,YY € = Brutto ZZ,ZZ €) gemäß § 35a EStG."
+
+[5. GoBD-KONFORMITÄT & AUDIT LOGGING (UNVERÄNDERBARKEIT)]
+- Statusübergänge: `DRAFT` (Entwurf) -> `POSTED` (Festgeschrieben/Festgelegt) -> `CANCELLED` (Storniert).
+- Sobald eine Rechnung den Status `POSTED` erreicht:
+  - Absolute Editier-Sperre in der SQLite-Datenbank (Trigger-Schutz).
+  - Korrekturen sind ausschließlich über Korrekturrechnungen / Stornobelege mit Negativbuchung möglich.
+  - Jede Zustandsänderung erzeugt einen kryptografisch verketteten Audit-Log-Eintrag (`audit_logs` mit SHA-256 Hash-Summe des Belegs).
+
+================================================================================
+ENDE DES ARCHITEKTUR- UND DATENKONZEPTS
+================================================================================

@@ -561,12 +561,92 @@ function handleKundeSelect(event) {
         span.textContent = `Tel: ${kunde.telefon}`;
         div.appendChild(span);
 
+        // Auto-fill B2G fields if present on customer
+        const leitwegInput = document.getElementById('rechnung-leitweg-id');
+        const buyerRefInput = document.getElementById('rechnung-buyer-reference');
+
+        if (leitwegInput && kunde.leitweg_id) {
+            leitwegInput.value = kunde.leitweg_id;
+        }
+        if (buyerRefInput && kunde.buyer_reference) {
+            buyerRefInput.value = kunde.buyer_reference;
+        }
+
+        // Checkbox defaults for B2C/B2B
+        if (kunde.customer_type === 'B2C' || kunde.ist_privatkunde) {
+            const privCb = document.getElementById('rechnung-ist-privatkunde');
+            if (privCb) privCb.checked = true;
+        }
+        if (kunde.customer_type === 'B2B' && kunde.ist_bauleistender_13b) {
+            const cb13b = document.getElementById('rechnung-13b-ustg');
+            if (cb13b) cb13b.checked = true;
+        }
+
+        // § 48b Subunternehmer Warning Check
+        if (typeof SubcontractorController !== 'undefined') {
+            const sec48bCheck = SubcontractorController.checkSec48bStatus(kunde);
+            const warningBanner = document.getElementById('subcontractor-sec48b-warning');
+            const warningText = document.getElementById('subcontractor-sec48b-warning-text');
+            if (warningBanner) {
+                if (!sec48bCheck.isValid || sec48bCheck.warning) {
+                    warningBanner.classList.remove('hidden');
+                    if (warningText) warningText.textContent = sec48bCheck.warning || 'Freistellungsbescheinigung ungültig.';
+                } else {
+                    warningBanner.classList.add('hidden');
+                }
+            }
+        }
+
         detailsBox.appendChild(div);
     } else {
         const p = document.createElement('p');
         p.className = 'text-slate-400 italic text-center text-sm';
         p.textContent = 'Kein Kunde ausgewählt';
         detailsBox.appendChild(p);
+    }
+}
+
+function exportXRechnungXMLFromModal() {
+    const kundeId = parseInt(document.getElementById('rechnung-kunde')?.value);
+    const kunde = state.kunden.find(k => k.id === kundeId) || { name: 'Empfänger' };
+    const nr = document.getElementById('rechnung-nr')?.value || 'RE-000';
+    const datum = document.getElementById('rechnung-datum')?.value || new Date().toISOString().split('T')[0];
+    const faellig = document.getElementById('rechnung-faellig')?.value || datum;
+    const leitweg_id = document.getElementById('rechnung-leitweg-id')?.value || kunde.leitweg_id || '';
+    const buyer_reference = document.getElementById('rechnung-buyer-reference')?.value || kunde.buyer_reference || leitweg_id;
+    const unterliegt_13b = document.getElementById('rechnung-13b-ustg')?.checked ? 1 : 0;
+
+    const currentDoc = {
+        nr,
+        datum,
+        faellig,
+        leitweg_id,
+        buyer_reference,
+        unterliegt_13b,
+        netto: state.currentRechnungTotals ? state.currentRechnungTotals.netto : 0,
+        steuer: state.currentRechnungTotals ? state.currentRechnungTotals.steuer : 0,
+        brutto: state.currentRechnungTotals ? state.currentRechnungTotals.brutto : 0,
+        positionen: [...(state.currentRechnungPositionen || [])]
+    };
+
+    if (typeof EInvoiceEngine !== 'undefined') {
+        const validation = EInvoiceEngine.validateForEN16931(currentDoc, { ...kunde, customer_type: 'B2G', leitweg_id }, state.einstellungen);
+        if (!validation.isValid) {
+            showToast('B2G Validierung fehlgeschlagen: ' + validation.errors.join(' '), 'warning');
+        }
+
+        const xml = EInvoiceEngine.generateXRechnungXML(currentDoc, { ...kunde, leitweg_id, buyer_reference }, state.einstellungen);
+        const blob = new Blob([xml], { type: 'application/xml;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `XRechnung_${nr}.xml`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast(`XRechnung XML für ${nr} heruntergeladen.`, 'success');
+    } else {
+        showToast('E-Rechnungs-Engine nicht verfügbar.', 'error');
     }
 }
 
@@ -992,6 +1072,8 @@ async function saveRechnung() {
         status: status,
         eingabemodus: document.getElementById('rechnung-eingabemodus') ? document.getElementById('rechnung-eingabemodus').value : 'netto',
         rechnungsart: document.getElementById('rechnung-art') ? document.getElementById('rechnung-art').value : 'Standard',
+        leitweg_id: document.getElementById('rechnung-leitweg-id') ? document.getElementById('rechnung-leitweg-id').value : '',
+        buyer_reference: document.getElementById('rechnung-buyer-reference') ? document.getElementById('rechnung-buyer-reference').value : '',
         leistungszeitraum_von: document.getElementById('rechnung-leistungszeitraum-von') ? document.getElementById('rechnung-leistungszeitraum-von').value : '',
         leistungszeitraum_bis: document.getElementById('rechnung-leistungszeitraum-bis') ? document.getElementById('rechnung-leistungszeitraum-bis').value : '',
         baustellen_adresse: document.getElementById('rechnung-baustellen-adresse') ? document.getElementById('rechnung-baustellen-adresse').value : '',
@@ -1259,10 +1341,15 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function applyUnternehmensartVisibility() {
-    const isHandwerk = (state.einstellungen.unternehmensart || 'handwerk') === 'handwerk';
+    const art = state.einstellungen.unternehmensart || 'handwerk';
+    const isHandwerkOrBau = art === 'handwerk' || art === 'bauhauptgewerbe' || art === 'b2g_spezialist';
+    const isB2GSpezialist = art === 'b2g_spezialist' || art === 'bauhauptgewerbe';
+
     const handwerkSection = document.getElementById('rechnung-handwerk-section');
+    const b2gSection = document.getElementById('rechnung-b2g-section');
+
     if (handwerkSection) {
-        if (isHandwerk) {
+        if (isHandwerkOrBau) {
             handwerkSection.classList.remove('hidden');
             if (typeof toggleAbschlagsKumulationUI === 'function') {
                 toggleAbschlagsKumulationUI();
@@ -1273,6 +1360,14 @@ function applyUnternehmensartVisibility() {
             if (kumulationSection) {
                 kumulationSection.classList.add('hidden');
             }
+        }
+    }
+
+    if (b2gSection) {
+        if (isHandwerkOrBau || isB2GSpezialist) {
+            b2gSection.classList.remove('hidden');
+        } else {
+            b2gSection.classList.add('hidden');
         }
     }
 }

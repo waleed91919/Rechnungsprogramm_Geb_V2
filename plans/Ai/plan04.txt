@@ -1,0 +1,90 @@
+================================================================================
+GESAMTKONZEPT & FULL-STACK IMPLEMENTIERUNGSPLAN (BAU-ERP SYSTEM V2)
+================================================================================
+Projekt: W-Link Bau-ERP System (Volle Implementierung)
+Datei: plans/Ai/plan04.txt
+Erstellt am: 2026-08-13
+Status: Finaler Vollimplementierungsplan (Version 1.0)
+
+================================================================================
+1. ZIELSETZUNG & SYSTEMUMFANG
+================================================================================
+
+Ziel ist die vollständige, produktionsreife Fertigstellung aller 8 Kernmodule 
+sowie des mobilen Baustellen- & Bautagebuch-Systems ohne Platzhalter:
+
+1. **Dashboard & KPIs**: OPOS, Monatsumsatz, Gewährleistungseinbehalte, § 48b Fristen.
+2. **Rechnungen & Editor**: VOB/B Abschlagsaufstellung, B2G/B2B/B2C Automation, GoBD Locking.
+3. **Angebote & GAEB Engine**: GAEB X83 Import, X84 Export, 1-Klick-Umwandlung in Projekt/Rechnung.
+4. **Artikel & Materialstamm**: Kategorien (Lohn, Material, Fahrt, Gerät), DATANORM/IDS Vorbereitung.
+5. **Kunden & Subunternehmer**: Stammdaten, § 48b Dokumentenupload & 15% Bauabzugsteuer.
+6. **Projekte, Aufmaß & Bautagebuch**: REB 23.003 Aufmaßcenter ($L \times B \times H$), Bautagebuch (Witterung, Geräte, Personal, Mängel), Nachkalkulation.
+7. **Berichte & DATEV**: USt-Dashboard, OPOS-Fälligkeiten, DATEV EXTF 700 Export Engine.
+8. **Einstellungen & Backup**: Nummernkreise, Briefpapier/Logo, SQLite Backup/Restore.
+
+================================================================================
+2. MODULWEISE ARCHITEKTUR & IMPLEMENTIERUNGSSCHRITTE
+================================================================================
+
+--------------------------------------------------------------------------------
+MODUL 1: DASHBOARD (`js/dashboard.js`, `code.html`)
+--------------------------------------------------------------------------------
+- Berechne KPI-Kacheln dynamisch:
+  * Offene Posten (OPOS Gesamtsumme)
+  * Monatsumsatz (Netto & Brutto)
+  * Gewährleistungseinbehalte (Fällige 5% VOB/B Beträge)
+  * Ablaufende § 48b Bescheinigungen (< 30 Tage)
+- Schnellaktionen: Direkt-Verlinkung zu Rechnungsentwürfen, Mahnungen, Projekten.
+
+--------------------------------------------------------------------------------
+MODUL 2: RECHNUNGEN & RECHNUNGS-EDITOR (`js/editor.js`, `code.html`)
+--------------------------------------------------------------------------------
+- Abschlagsrechnungen 1. bis n-te Periode & Schlussrechnung mit automatischer Verrechnung.
+- Auto-Compliance: B2G Leitweg-ID, B2B § 13b, B2C § 35a Ausweis.
+- GoBD Festschreiben (Status `POSTED`, SHA-256 Hashkettung, Stornorechnung).
+
+--------------------------------------------------------------------------------
+MODUL 3: ANGEBOTE & GAEB ENGINE (`js/angebote.js`, `js/gaeb.js`, `code.html`)
+--------------------------------------------------------------------------------
+- GAEB X83 Import, Kalkulationsgitter je Ordnungszahl (OZ), GAEB X84 Export.
+- 1-Klick Umwandlung: Angebot -> Projekt / Rechnung.
+
+--------------------------------------------------------------------------------
+MODUL 4: ARTIKEL & MATERIALSTAMM (`js/artikel.js`, `code.html`)
+--------------------------------------------------------------------------------
+- Zuordnung: `LOHN`, `MATERIAL`, `FAHRT`, `GERÄT`.
+- Kennzeichnung für § 35a Relevanz und DATANORM/IDS-Connect Schnittstellenfelder.
+
+--------------------------------------------------------------------------------
+MODUL 5: KUNDEN & SUBUNTERNEHMER (`js/kunden.js`, `code.html`)
+--------------------------------------------------------------------------------
+- Kunden-Typisierung (B2C, B2B, B2G).
+- § 48b Freistellungsbescheinigungs-Verwaltung mit Fristwarnung & 15% Bauabzugsteuer.
+
+--------------------------------------------------------------------------------
+MODUL 6: PROJEKTE, AUFMASS & BAUTAGEBUCH (`js/projekte.js`, `code.html`)
+--------------------------------------------------------------------------------
+- REB 23.003-konformes Aufmaß-Center mit Formeleingabe ($L \times B \times H$).
+- Bautagebuch-Modul: Erfassung von Witterung, Personal, Großgeräten und Mängeln.
+- Soll-Ist Nachkalkulation (Kosten vs. Budget).
+
+--------------------------------------------------------------------------------
+MODUL 7: BERICHTE & DATEV (`js/berichte.js`, `js/datev.js`, `code.html`)
+--------------------------------------------------------------------------------
+- USt-Dashboard & OPOS Fälligkeitsanalyse.
+- DATEV EXTF 700 Export (SKR03/SKR04 mit BU 19/68).
+
+--------------------------------------------------------------------------------
+MODUL 8: EINSTELLUNGEN & BACKUP (`js/einstellungen.js`, `db.js`, `code.html`)
+--------------------------------------------------------------------------------
+- Nummernkreise, Logo-Upload, SQLite Backup/Restore Mechanismus.
+
+================================================================================
+3. SYSTEM-TESTING & AUTOMATISIERUNG (`scripts/run_full_system_test.js`)
+================================================================================
+- Ein zentrales Testskript führt die gesamte Full-Stack Validierung aus.
+- Erzeugung aller Testbelege unter `./output/invoices/` und Testberichte unter `./tests/test_results/`.
+
+================================================================================
+ENDE DES SYSTEMPLANS plan04.txt
+================================================================================
