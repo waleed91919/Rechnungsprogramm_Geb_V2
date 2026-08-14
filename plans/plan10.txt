@@ -1,0 +1,25 @@
+### FIX-PROMPT: PDF-DRUCKLAYOUT OPTIMIEREN & UNNÖTIGEN SEITENUMBRUCH AUF SEITE 2 BEHEBEN
+
+#### 1. PROBLEM-BESCHREIBUNG
+Beim Exportieren/Drucken des Aufmaßblatts (`AUFMASSBLATT & MENGENBERECHNUNG`) wird das Dokument bei wenigen Positionen (wie 1–5 Zeilen) unnötig auf **zwei Seiten** aufgeteilt. 
+Der Tabelleninhalt steht auf Seite 1, während die Freigabe- und Unterschriftenleiste (`Gemeinsame Feststellung & Freigabe § 14 VOB/B`) auf Seite 2 umbricht. Das Dokument wirkt dadurch unprofessionell und unvollständig.
+
+---
+
+#### 2. ERFORDERLICHE ANPASSUNGEN (PRINT CSS & TEMPLATE ENGINE)
+
+Bitte überarbeite das HTML/CSS-Drucktemplate (in der PDF-Generierungslogik / Renderer) wie folgt:
+
+##### A. Druckränder & Seitenformat (@page & Container)
+1. **DIN A4 Portrait Definition:**
+   ```css
+   @page {
+     size: A4 portrait;
+     margin: 12mm 14mm 12mm 14mm; /* Kompakte Ränder statt Default-Browserabstände */
+   }
+   body {
+     -webkit-print-color-adjust: exact;
+     print-color-adjust: exact;
+     font-size: 9pt; /* Leicht optimierte Grundschriftgröße */
+     line-height: 1.3;
+   }

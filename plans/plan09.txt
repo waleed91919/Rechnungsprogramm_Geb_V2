@@ -1,0 +1,40 @@
+### BUGFIX-PROMPT: Interaktive Kartenauswahl im Aufmaß-Erstellungs-Assistenten beheben
+
+#### 1. PROBLEM-BESCHREIBUNG
+Im Modal "Aufmaß-Erstellungs-Assistent" (Schritt 1: Aufmaßtyp & Variante) können die Auswahlkacheln für:
+1. **AUFMASSTYP** (`Freies Aufmaß`, `Spaltenaufmaß`, `Raumaufmaß`)
+2. **AUFMASSVARIANTE** (`Teilaufmaß`, `Einzelaufmaß`, `Schlussaufmaß`)
+
+nicht per Mausklick umgeschaltet werden. Die Kacheln reagieren nicht auf Klicks, die aktive blaue Rahmen-Hervorhebung wechselt nicht und die gewählten Werte werden nicht für Schritt 2 ("Stammdaten & Erfassung") gespeichert.
+
+---
+
+#### 2. ERFORDERLICHE BEHEBUNG (IN `code.html` & `js/projekte.js`)
+
+Bitte behebe das Verhalten in der Frontend-Logik wie folgt:
+
+##### A. Event-Listener & State-Verwaltung (`js/projekte.js`)
+1. Definiere im JavaScript State zwei reaktive Variablen:
+   - `currentAufmassTyp` (Default: `'FREI'`, Optionen: `'FREI'`, `'SPALTEN'`, `'RAUM'`)
+   - `currentAufmassVariante` (Default: `'TEIL'`, Optionen: `'TEIL'`, `'EINZEL'`, `'SCHLUSS'`)
+
+2. Füge allen Kachel-Elementen (Karten) entsprechende Click-Handler bzw. Data-Attribute hinzu:
+   - Für Aufmaßtyp: `data-aufmass-typ="FREI"`, `data-aufmass-typ="SPALTEN"`, `data-aufmass-typ="RAUM"`
+   - Für Variante: `data-aufmass-variante="TEIL"`, `data-aufmass-variante="EINZEL"`, `data-aufmass-variante="SCHLUSS"`
+
+3. Klick-Logik:
+   - Beim Klick auf eine Kachel für den Typ: Entferne die aktive Styling-Klasse (`border-blue-600 ring-2 ring-blue-500 bg-blue-50/20` o.ä.) von allen Typ-Karten und füge sie der angeklickten Karte hinzu. Aktualisiere `currentAufmassTyp`.
+   - Beim Klick auf eine Kachel für die Variante: Entferne die aktive Styling-Klasse von allen Varianten-Karten und füge sie der angeklickten Karte hinzu. Aktualisiere `currentAufmassVariante`.
+   - Stelle sicher, dass der Cursor auf allen Kacheln auf `cursor-pointer` steht (`hover:border-blue-400 hover:shadow-md transition-all`).
+
+##### B. Wizard-Weiterschaltung ("Weiter zu Schritt 2")
+1. Wenn der Benutzer auf den Button **"Weiter zu Schritt 2"** klickt:
+   - Blende Schritt 1 (`#aufmass-step-1`) aus und Schritt 2 (`#aufmass-step-2`) ein.
+   - Übertrage die gewählten Werte (`currentAufmassTyp` und `currentAufmassVariante`) in das Datenmodell des neuen Aufmaßblattes.
+   - Aktualisiere die Breadcrumb-/Step-Anzeige oben (Schritt 1 abgehakt/inaktiv, Schritt 2 aktiv hervorgehoben).
+
+---
+
+#### 3. PRÜFUNG & TESTS
+- Bitte stelle sicher, dass alle 3 Typen und alle 3 Varianten frei wählbar und miteinander kombinierbar sind.
+- Aktualisiere die UI-Komponenten und führe die automatisierten Tests aus, um sicherzustellen, dass keine JavaScript-Fehler auftreten.

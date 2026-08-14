@@ -296,6 +296,131 @@ function initDb() {
             status TEXT
         )`);
 
+    // --- Neue Tabellen für Produktivreife (plans/Ai/plan07.txt) ---
+    // 1. Aufmaßblätter & Zeilen (REB 23.003 & DA11)
+    db.exec(`CREATE TABLE IF NOT EXISTS aufmass_blaetter (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        invoice_id INTEGER,
+        blatt_nummer TEXT NOT NULL,
+        titel TEXT NOT NULL,
+        status TEXT DEFAULT 'DRAFT' CHECK(status IN ('DRAFT', 'SUBMITTED', 'VERIFIED', 'FINALIZED')),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (project_id) REFERENCES projekte(id),
+        FOREIGN KEY (invoice_id) REFERENCES dokumente(id)
+    )`);
+
+    db.exec(`CREATE TABLE IF NOT EXISTS aufmass_zeilen (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        blatt_id INTEGER NOT NULL,
+        oz_code TEXT NOT NULL,
+        zeilen_nr INTEGER NOT NULL,
+        bezeichnung TEXT,
+        formel_reb TEXT DEFAULT '91',
+        rechenansatz TEXT NOT NULL,
+        ergebnis REAL NOT NULL,
+        einheit TEXT NOT NULL DEFAULT 'm²',
+        vorzeichen INTEGER DEFAULT 1,
+        FOREIGN KEY (blatt_id) REFERENCES aufmass_blaetter(id) ON DELETE CASCADE
+    )`);
+
+    // 2. Nachtragsverwaltung (VOB/B)
+    db.exec(`CREATE TABLE IF NOT EXISTS nachtraege (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        nachtrag_nr TEXT NOT NULL,
+        titel TEXT NOT NULL,
+        beschreibung TEXT,
+        rechtsgrundlage TEXT DEFAULT 'VOB_2_6' CHECK(rechtsgrundlage IN ('VOB_2_5', 'VOB_2_6', 'VOB_2_3', 'BGB_650b')),
+        summe_netto REAL DEFAULT 0.0,
+        summe_brutto REAL DEFAULT 0.0,
+        status TEXT DEFAULT 'EINGEREICHT' CHECK(status IN ('ENTWURF', 'EINGEREICHT', 'IN_VERHANDLUNG', 'GENEHMIGT', 'ABGELEHNT')),
+        eingereicht_am DATE,
+        entschieden_am DATE,
+        begruendung TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (project_id) REFERENCES projekte(id)
+    )`);
+
+    db.exec(`CREATE TABLE IF NOT EXISTS nachtrag_positionen (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nachtrag_id INTEGER NOT NULL,
+        oz_code TEXT,
+        kurztext TEXT NOT NULL,
+        langtext TEXT,
+        menge REAL NOT NULL,
+        einheit TEXT NOT NULL,
+        einheitspreis REAL NOT NULL,
+        gesamtpreis REAL NOT NULL,
+        cost_type TEXT DEFAULT 'MATERIAL' CHECK(cost_type IN ('LOHN', 'MATERIAL', 'GERÄT', 'FAHRT')),
+        FOREIGN KEY (nachtrag_id) REFERENCES nachtraege(id) ON DELETE CASCADE
+    )`);
+
+    // 3. Bautagebuch
+    db.exec(`CREATE TABLE IF NOT EXISTS bautagebuch (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        bericht_nr INTEGER,
+        datum DATE NOT NULL,
+        wetter TEXT,
+        temperatur_min REAL,
+        temperatur_max REAL,
+        personal_eigen_anzahl INTEGER DEFAULT 0,
+        personal_eigen_stunden REAL DEFAULT 0.0,
+        personal_sub_json TEXT,
+        geraete_json TEXT,
+        tagesbericht TEXT NOT NULL,
+        vorkommnisse_behinderungen TEXT,
+        unterzeichnet_bauleiter INTEGER DEFAULT 0,
+        fotos_json TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (project_id) REFERENCES projekte(id)
+    )`);
+
+    // 4. Abnahmeprotokolle (VOB/B § 12)
+    db.exec(`CREATE TABLE IF NOT EXISTS abnahmeprotokolle (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER NOT NULL,
+        datum DATE NOT NULL,
+        ort TEXT NOT NULL,
+        auftraggeber_vertreter TEXT NOT NULL,
+        auftragnehmer_vertreter TEXT NOT NULL,
+        abnahme_status TEXT NOT NULL CHECK(abnahme_status IN ('OHNE_VORBEHALT', 'MIT_VORBEHALT', 'VERWEIGERT')),
+        gewaehrleistung_beginn DATE NOT NULL,
+        gewaehrleistung_ende DATE NOT NULL,
+        gewaehrleistung_jahre INTEGER DEFAULT 4,
+        sicherheitseinbehalt_prozent REAL DEFAULT 5.0,
+        maengel_json TEXT,
+        unterschrift_ag_data TEXT,
+        unterschrift_an_data TEXT,
+        pdf_pfad TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (project_id) REFERENCES projekte(id)
+    )`);
+
+    // 5. Eingangsrechnungen & Controlling
+    db.exec(`CREATE TABLE IF NOT EXISTS eingangsrechnungen (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        project_id INTEGER,
+        lieferant_id INTEGER,
+        rechnungs_nr TEXT NOT NULL,
+        rechnungs_datum DATE NOT NULL,
+        faelligkeits_datum DATE NOT NULL,
+        betrag_netto REAL NOT NULL,
+        steuersatz REAL DEFAULT 19.0,
+        betrag_ust REAL NOT NULL,
+        betrag_brutto REAL NOT NULL,
+        kostenart TEXT NOT NULL CHECK(kostenart IN ('MATERIAL', 'SUBCONTRACTOR', 'EQUIPMENT', 'OTHER', 'LOHN')),
+        sec48b_geprueft INTEGER DEFAULT 0,
+        bauabzugsteuer_einbehalten REAL DEFAULT 0.0,
+        zahlungs_status TEXT DEFAULT 'OFFEN' CHECK(zahlungs_status IN ('OFFEN', 'TEILWEISE', 'BEZAHLT')),
+        bezahlt_am DATE,
+        beleg_pfad TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (project_id) REFERENCES projekte(id),
+        FOREIGN KEY (lieferant_id) REFERENCES kunden(id)
+    )`);
+
     db.exec(`CREATE TABLE IF NOT EXISTS einstellungen (
         key TEXT PRIMARY KEY,
         value TEXT
@@ -743,6 +868,395 @@ const dbAPI = {
             db.prepare('DELETE FROM dokumente WHERE id=?').run(docId);
         });
         return delTransaction(id);
+    },
+
+    // --- Aufmaßcenter (REB 23.003 & DA11) ---
+    async getAufmassBlaetter(projectId) {
+        const blaetter = await dbQuery('SELECT * FROM aufmass_blaetter WHERE project_id = ? ORDER BY id ASC', [projectId]);
+        for (const blatt of blaetter) {
+            blatt.zeilen = await dbQuery('SELECT * FROM aufmass_zeilen WHERE blatt_id = ? ORDER BY zeilen_nr ASC', [blatt.id]);
+        }
+        return blaetter;
+    },
+
+    async saveAufmassBlatt(blattData, zeilen = []) {
+        const tx = db.transaction((b, zList) => {
+            let blattId = b.id;
+            if (blattId) {
+                db.prepare('UPDATE aufmass_blaetter SET blatt_nummer=?, titel=?, status=?, invoice_id=? WHERE id=?')
+                  .run(b.blatt_nummer, b.titel, b.status || 'DRAFT', b.invoice_id || null, blattId);
+                db.prepare('DELETE FROM aufmass_zeilen WHERE blatt_id=?').run(blattId);
+            } else {
+                const info = db.prepare('INSERT INTO aufmass_blaetter (project_id, invoice_id, blatt_nummer, titel, status) VALUES (?, ?, ?, ?, ?)')
+                               .run(b.project_id, b.invoice_id || null, b.blatt_nummer, b.titel, b.status || 'DRAFT');
+                blattId = info.lastInsertRowid;
+            }
+
+            const insertZeile = db.prepare(`
+                INSERT INTO aufmass_zeilen (blatt_id, oz_code, zeilen_nr, bezeichnung, formel_reb, rechenansatz, ergebnis, einheit, vorzeichen)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+
+            let idx = 1;
+            for (const z of zList) {
+                insertZeile.run(
+                    blattId,
+                    z.oz_code || '01.01.0010',
+                    z.zeilen_nr || idx++,
+                    z.bezeichnung || '',
+                    z.formel_reb || '91',
+                    z.rechenansatz || '',
+                    z.ergebnis !== undefined ? z.ergebnis : 0,
+                    z.einheit || 'm²',
+                    z.vorzeichen !== undefined ? z.vorzeichen : 1
+                );
+            }
+            return blattId;
+        });
+        return tx(blattData, zeilen);
+    },
+
+    async deleteAufmassBlatt(blattId) {
+        const tx = db.transaction((id) => {
+            db.prepare('DELETE FROM aufmass_zeilen WHERE blatt_id=?').run(id);
+            db.prepare('DELETE FROM aufmass_blaetter WHERE id=?').run(id);
+        });
+        return tx(blattId);
+    },
+
+    async mergeSchlussaufmass(projectId) {
+        // Aggregiert alle Aufmaßzeilen aller freigegebenen/verifizierten Blätter
+        const rows = await dbQuery(`
+            SELECT z.oz_code, z.einheit, SUM(z.ergebnis * z.vorzeichen) as summe_menge
+            FROM aufmass_zeilen z
+            JOIN aufmass_blaetter b ON z.blatt_id = b.id
+            WHERE b.project_id = ? AND b.status IN ('VERIFIED', 'FINALIZED', 'SUBMITTED', 'DRAFT')
+            GROUP BY z.oz_code, z.einheit
+        `, [projectId]);
+        return rows;
+    },
+
+    // --- Nachtragsverwaltung (VOB/B) ---
+    async getNachtraege(projectId) {
+        const rows = await dbQuery('SELECT * FROM nachtraege WHERE project_id = ? ORDER BY id ASC', [projectId]);
+        for (const n of rows) {
+            n.positionen = await dbQuery('SELECT * FROM nachtrag_positionen WHERE nachtrag_id = ? ORDER BY id ASC', [n.id]);
+        }
+        return rows;
+    },
+
+    async saveNachtrag(nachtragData, positionen = []) {
+        const tx = db.transaction((n, posList) => {
+            let nId = n.id;
+            let sumNetto = 0;
+            for (const p of posList) {
+                sumNetto += (p.menge || 0) * (p.einheitspreis || 0);
+            }
+            const sumBrutto = sumNetto * 1.19;
+
+            if (nId) {
+                db.prepare(`
+                    UPDATE nachtraege 
+                    SET nachtrag_nr=?, titel=?, beschreibung=?, rechtsgrundlage=?, summe_netto=?, summe_brutto=?, status=?, eingereicht_am=?, entschieden_am=?, begruendung=?
+                    WHERE id=?
+                `).run(
+                    n.nachtrag_nr, n.titel, n.beschreibung || '', n.rechtsgrundlage || 'VOB_2_6',
+                    sumNetto, sumBrutto, n.status || 'EINGEREICHT', n.eingereicht_am || null, n.entschieden_am || null, n.begruendung || '', nId
+                );
+                db.prepare('DELETE FROM nachtrag_positionen WHERE nachtrag_id=?').run(nId);
+            } else {
+                const info = db.prepare(`
+                    INSERT INTO nachtraege (project_id, nachtrag_nr, titel, beschreibung, rechtsgrundlage, summe_netto, summe_brutto, status, eingereicht_am, entschieden_am, begruendung)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `).run(
+                    n.project_id, n.nachtrag_nr, n.titel, n.beschreibung || '', n.rechtsgrundlage || 'VOB_2_6',
+                    sumNetto, sumBrutto, n.status || 'EINGEREICHT', n.eingereicht_am || null, n.entschieden_am || null, n.begruendung || ''
+                );
+                nId = info.lastInsertRowid;
+            }
+
+            const insertPos = db.prepare(`
+                INSERT INTO nachtrag_positionen (nachtrag_id, oz_code, kurztext, langtext, menge, einheit, einheitspreis, gesamtpreis, cost_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+
+            for (const p of posList) {
+                const gp = (p.menge || 0) * (p.einheitspreis || 0);
+                insertPos.run(
+                    nId,
+                    p.oz_code || '',
+                    p.kurztext || '',
+                    p.langtext || '',
+                    p.menge || 0,
+                    p.einheit || 'Stk.',
+                    p.einheitspreis || 0,
+                    gp,
+                    p.cost_type || 'MATERIAL'
+                );
+            }
+            return nId;
+        });
+        return tx(nachtragData, positionen);
+    },
+
+    async updateNachtragStatus(nachtragId, status) {
+        const decidedDate = (status === 'GENEHMIGT' || status === 'ABGELEHNT') ? new Date().toISOString().split('T')[0] : null;
+        await dbRun('UPDATE nachtraege SET status = ?, entschieden_am = COALESCE(?, entschieden_am) WHERE id = ?', [status, decidedDate, nachtragId]);
+        return { success: true };
+    },
+
+    async deleteNachtrag(nachtragId) {
+        const tx = db.transaction((id) => {
+            db.prepare('DELETE FROM nachtrag_positionen WHERE nachtrag_id=?').run(id);
+            db.prepare('DELETE FROM nachtraege WHERE id=?').run(id);
+        });
+        return tx(nachtragId);
+    },
+
+    // --- Bautagebuch ---
+    async getBautagebuch(projectId) {
+        return await dbQuery('SELECT * FROM bautagebuch WHERE project_id = ? ORDER BY datum DESC, bericht_nr DESC', [projectId]);
+    },
+
+    async saveBautagebuch(data) {
+        if (data.id) {
+            await dbRun(`
+                UPDATE bautagebuch 
+                SET bericht_nr=?, datum=?, wetter=?, temperatur_min=?, temperatur_max=?, personal_eigen_anzahl=?, personal_eigen_stunden=?,
+                    personal_sub_json=?, geraete_json=?, tagesbericht=?, vorkommnisse_behinderungen=?, unterzeichnet_bauleiter=?, fotos_json=?
+                WHERE id=?
+            `, [
+                data.bericht_nr || 1, data.datum, data.wetter || '', data.temperatur_min || null, data.temperatur_max || null,
+                data.personal_eigen_anzahl || 0, data.personal_eigen_stunden || 0,
+                typeof data.personal_sub_json === 'object' ? JSON.stringify(data.personal_sub_json) : (data.personal_sub_json || '[]'),
+                typeof data.geraete_json === 'object' ? JSON.stringify(data.geraete_json) : (data.geraete_json || '[]'),
+                data.tagesbericht, data.vorkommnisse_behinderungen || '', data.unterzeichnet_bauleiter || 0,
+                typeof data.fotos_json === 'object' ? JSON.stringify(data.fotos_json) : (data.fotos_json || '[]'),
+                data.id
+            ]);
+            return data.id;
+        } else {
+            const res = await dbRun(`
+                INSERT INTO bautagebuch (project_id, bericht_nr, datum, wetter, temperatur_min, temperatur_max, personal_eigen_anzahl, personal_eigen_stunden, personal_sub_json, geraete_json, tagesbericht, vorkommnisse_behinderungen, unterzeichnet_bauleiter, fotos_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+                data.project_id, data.bericht_nr || 1, data.datum, data.wetter || '', data.temperatur_min || null, data.temperatur_max || null,
+                data.personal_eigen_anzahl || 0, data.personal_eigen_stunden || 0,
+                typeof data.personal_sub_json === 'object' ? JSON.stringify(data.personal_sub_json) : (data.personal_sub_json || '[]'),
+                typeof data.geraete_json === 'object' ? JSON.stringify(data.geraete_json) : (data.geraete_json || '[]'),
+                data.tagesbericht, data.vorkommnisse_behinderungen || '', data.unterzeichnet_bauleiter || 0,
+                typeof data.fotos_json === 'object' ? JSON.stringify(data.fotos_json) : (data.fotos_json || '[]')
+            ]);
+            return res.id;
+        }
+    },
+
+    async deleteBautagebuch(id) {
+        return await dbRun('DELETE FROM bautagebuch WHERE id=?', [id]);
+    },
+
+    // --- Abnahmeprotokolle (VOB/B § 12) ---
+    async getAbnahmeprotokolle(projectId) {
+        return await dbQuery('SELECT * FROM abnahmeprotokolle WHERE project_id = ? ORDER BY datum DESC', [projectId]);
+    },
+
+    async saveAbnahmeprotokoll(data) {
+        if (data.id) {
+            await dbRun(`
+                UPDATE abnahmeprotokolle 
+                SET datum=?, ort=?, auftraggeber_vertreter=?, auftragnehmer_vertreter=?, abnahme_status=?, gewaehrleistung_beginn=?, gewaehrleistung_ende=?, gewaehrleistung_jahre=?, sicherheitseinbehalt_prozent=?, maengel_json=?, unterschrift_ag_data=?, unterschrift_an_data=?, pdf_pfad=?
+                WHERE id=?
+            `, [
+                data.datum, data.ort, data.auftraggeber_vertreter, data.auftragnehmer_vertreter, data.abnahme_status,
+                data.gewaehrleistung_beginn, data.gewaehrleistung_ende, data.gewaehrleistung_jahre || 4, data.sicherheitseinbehalt_prozent || 5.0,
+                typeof data.maengel_json === 'object' ? JSON.stringify(data.maengel_json) : (data.maengel_json || '[]'),
+                data.unterschrift_ag_data || '', data.unterschrift_an_data || '', data.pdf_pfad || '', data.id
+            ]);
+            return data.id;
+        } else {
+            const res = await dbRun(`
+                INSERT INTO abnahmeprotokolle (project_id, datum, ort, auftraggeber_vertreter, auftragnehmer_vertreter, abnahme_status, gewaehrleistung_beginn, gewaehrleistung_ende, gewaehrleistung_jahre, sicherheitseinbehalt_prozent, maengel_json, unterschrift_ag_data, unterschrift_an_data, pdf_pfad)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+                data.project_id, data.datum, data.ort, data.auftraggeber_vertreter, data.auftragnehmer_vertreter, data.abnahme_status,
+                data.gewaehrleistung_beginn, data.gewaehrleistung_ende, data.gewaehrleistung_jahre || 4, data.sicherheitseinbehalt_prozent || 5.0,
+                typeof data.maengel_json === 'object' ? JSON.stringify(data.maengel_json) : (data.maengel_json || '[]'),
+                data.unterschrift_ag_data || '', data.unterschrift_an_data || '', data.pdf_pfad || ''
+            ]);
+            return res.id;
+        }
+    },
+
+    // --- Eingangsrechnungen & Nachkalkulation ---
+    async getEingangsrechnungen(projectId = null) {
+        if (projectId) {
+            return await dbQuery(`
+                SELECT e.*, k.name as lieferant_name, k.sec48b_status, k.sec48b_valid_until
+                FROM eingangsrechnungen e
+                LEFT JOIN kunden k ON e.lieferant_id = k.id
+                WHERE e.project_id = ?
+                ORDER BY e.rechnungs_datum DESC
+            `, [projectId]);
+        }
+        return await dbQuery(`
+            SELECT e.*, k.name as lieferant_name, k.sec48b_status, k.sec48b_valid_until, p.name as projekt_name
+            FROM eingangsrechnungen e
+            LEFT JOIN kunden k ON e.lieferant_id = k.id
+            LEFT JOIN projekte p ON e.project_id = p.id
+            ORDER BY e.rechnungs_datum DESC
+        `);
+    },
+
+    async saveEingangsrechnung(data) {
+        // § 48b EStG Check
+        let bauabzug = 0;
+        let sec48bChecked = 0;
+        if (data.lieferant_id) {
+            const lieferant = db.prepare('SELECT * FROM kunden WHERE id = ?').get(data.lieferant_id);
+            if (lieferant && lieferant.is_subcontractor) {
+                sec48bChecked = 1;
+                const today = new Date().toISOString().split('T')[0];
+                const isValid = lieferant.sec48b_status === 'VALID' && (!lieferant.sec48b_valid_until || lieferant.sec48b_valid_until >= today);
+                if (!isValid && data.kostenart === 'SUBCONTRACTOR') {
+                    // 15 % Bauabzugsteuer einbehalten
+                    bauabzug = Math.round((data.betrag_brutto || (data.betrag_netto * 1.19)) * 0.15 * 100) / 100;
+                }
+            }
+        }
+
+        const ust = data.betrag_ust !== undefined ? data.betrag_ust : Math.round(data.betrag_netto * ((data.steuersatz || 19) / 100) * 100) / 100;
+        const brutto = data.betrag_brutto !== undefined ? data.betrag_brutto : Math.round((data.betrag_netto + ust) * 100) / 100;
+
+        if (data.id) {
+            await dbRun(`
+                UPDATE eingangsrechnungen 
+                SET project_id=?, lieferant_id=?, rechnungs_nr=?, rechnungs_datum=?, faelligkeits_datum=?, betrag_netto=?, steuersatz=?, betrag_ust=?, betrag_brutto=?, kostenart=?, sec48b_geprueft=?, bauabzugsteuer_einbehalten=?, zahlungs_status=?, bezahlt_am=?, beleg_pfad=?
+                WHERE id=?
+            `, [
+                data.project_id || null, data.lieferant_id || null, data.rechnungs_nr, data.rechnungs_datum, data.faelligkeits_datum,
+                data.betrag_netto, data.steuersatz || 19.0, ust, brutto, data.kostenart || 'MATERIAL',
+                sec48bChecked, bauabzug, data.zahlungs_status || 'OFFEN', data.bezahlt_am || null, data.beleg_pfad || '', data.id
+            ]);
+            return { id: data.id, bauabzugsteuer: bauabzug };
+        } else {
+            const res = await dbRun(`
+                INSERT INTO eingangsrechnungen (project_id, lieferant_id, rechnungs_nr, rechnungs_datum, faelligkeits_datum, betrag_netto, steuersatz, betrag_ust, betrag_brutto, kostenart, sec48b_geprueft, bauabzugsteuer_einbehalten, zahlungs_status, bezahlt_am, beleg_pfad)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+                data.project_id || null, data.lieferant_id || null, data.rechnungs_nr, data.rechnungs_datum, data.faelligkeits_datum,
+                data.betrag_netto, data.steuersatz || 19.0, ust, brutto, data.kostenart || 'MATERIAL',
+                sec48bChecked, bauabzug, data.zahlungs_status || 'OFFEN', data.bezahlt_am || null, data.beleg_pfad || ''
+            ]);
+            return { id: res.id, bauabzugsteuer: bauabzug };
+        }
+    },
+
+    async deleteEingangsrechnung(id) {
+        return await dbRun('DELETE FROM eingangsrechnungen WHERE id=?', [id]);
+    },
+
+    // --- Projekt Controlling / Soll-Ist-Analyse ---
+    async getControllingStats(projectId) {
+        const projekt = db.prepare('SELECT * FROM projekte WHERE id = ?').get(projectId);
+        if (!projekt) return null;
+
+        // 1. Soll-Kosten aus verknüpften Angeboten
+        const angebote = db.prepare("SELECT * FROM dokumente WHERE projektId = ? AND type = 'angebot'").all(projectId);
+        let sollNetto = 0;
+        let sollLohn = 0;
+        let sollMaterial = 0;
+        let sollGeraet = 0;
+        let sollSub = 0;
+
+        for (const ang of angebote) {
+            sollNetto += ang.netto || 0;
+            const pos = db.prepare('SELECT * FROM positionen WHERE dokumentId = ?').all(ang.id);
+            for (const p of pos) {
+                const gp = (p.menge || 0) * (p.preis || 0);
+                if (p.cost_type === 'LOHN') sollLohn += gp;
+                else if (p.cost_type === 'MATERIAL') sollMaterial += gp;
+                else if (p.cost_type === 'GERÄT') sollGeraet += gp;
+                else sollSub += gp;
+            }
+        }
+
+        // Falls keine differenzierten Angebotspositionen vorliegen, nutze Projektbudget
+        if (sollNetto === 0 && projekt.budget > 0) {
+            sollNetto = projekt.budget;
+        }
+
+        // 2. Genehmigte Nachträge (Erhöhung des Soll-Auftragsvolumens)
+        const nachtraege = db.prepare("SELECT * FROM nachtraege WHERE project_id = ? AND status = 'GENEHMIGT'").all(projectId);
+        let nachtragNetto = 0;
+        for (const n of nachtraege) {
+            nachtragNetto += n.summe_netto || 0;
+        }
+
+        // 3. Ist-Kosten aus Eingangsrechnungen
+        const eingangsrechnungen = db.prepare('SELECT * FROM eingangsrechnungen WHERE project_id = ?').all(projectId);
+        let istMaterial = 0;
+        let istSub = 0;
+        let istGeraet = 0;
+        let istSonstiges = 0;
+        let bauabzugsteuerGesamt = 0;
+
+        for (const er of eingangsrechnungen) {
+            const netto = er.betrag_netto || 0;
+            if (er.kostenart === 'MATERIAL') istMaterial += netto;
+            else if (er.kostenart === 'SUBCONTRACTOR') istSub += netto;
+            else if (er.kostenart === 'EQUIPMENT') istGeraet += netto;
+            else istSonstiges += netto;
+            bauabzugsteuerGesamt += er.bauabzugsteuer_einbehalten || 0;
+        }
+
+        // 4. Ist-Lohnkosten aus Bautagebuch
+        const tagebuch = db.prepare('SELECT SUM(personal_eigen_stunden) as gesamt_stunden FROM bautagebuch WHERE project_id = ?').get(projectId);
+        const istLohnStunden = (tagebuch && tagebuch.gesamt_stunden) || 0;
+        const stundensatzStd = 55.00; // Kalkulatorischer Standard-Verrechnungssatz
+        const istLohn = istLohnStunden * stundensatzStd;
+
+        const istGesamt = istMaterial + istSub + istGeraet + istSonstiges + istLohn;
+
+        // 5. Bisher abgerechneter Umsatz (Ausgangsrechnungen)
+        const rechnungen = db.prepare("SELECT * FROM dokumente WHERE projektId = ? AND type = 'rechnung'").all(projectId);
+        let istUmsatzNetto = 0;
+        for (const r of rechnungen) {
+            istUmsatzNetto += r.netto || 0;
+        }
+
+        // 6. Kennzahlen
+        const gesamtAuftragsvolumen = sollNetto + nachtragNetto;
+        const deckungsbeitrag = istUmsatzNetto - istGesamt;
+        const margeProzent = istUmsatzNetto > 0 ? Math.round((deckungsbeitrag / istUmsatzNetto) * 1000) / 10 : 0;
+        const budgetAuslastungProzent = gesamtAuftragsvolumen > 0 ? Math.round((istGesamt / gesamtAuftragsvolumen) * 1000) / 10 : 0;
+
+        return {
+            projektId: projectId,
+            projektName: projekt.name,
+            gesamtAuftragsvolumen: Math.round(gesamtAuftragsvolumen * 100) / 100,
+            sollNetto: Math.round(sollNetto * 100) / 100,
+            nachtragNetto: Math.round(nachtragNetto * 100) / 100,
+            sollKosten: {
+                lohn: Math.round(sollLohn * 100) / 100,
+                material: Math.round(sollMaterial * 100) / 100,
+                geraet: Math.round(sollGeraet * 100) / 100,
+                sub: Math.round(sollSub * 100) / 100
+            },
+            istKosten: {
+                lohn: Math.round(istLohn * 100) / 100,
+                lohnStunden: istLohnStunden,
+                material: Math.round(istMaterial * 100) / 100,
+                subcontractor: Math.round(istSub * 100) / 100,
+                geraet: Math.round(istGeraet * 100) / 100,
+                sonstiges: Math.round(istSonstiges * 100) / 100,
+                gesamt: Math.round(istGesamt * 100) / 100,
+                bauabzugsteuer: Math.round(bauabzugsteuerGesamt * 100) / 100
+            },
+            istUmsatzNetto: Math.round(istUmsatzNetto * 100) / 100,
+            deckungsbeitrag: Math.round(deckungsbeitrag * 100) / 100,
+            margeProzent,
+            budgetAuslastungProzent
+        };
     },
 
     // --- Projekte ---

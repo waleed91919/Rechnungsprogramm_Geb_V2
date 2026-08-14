@@ -22,6 +22,32 @@ contextBridge.exposeInMainWorld('api', {
     getAufmasseByRechnungId: (rechnungId) => ipcRenderer.invoke('db:getAufmasseByRechnungId', rechnungId),
     getAufmasseByProjektId: (projektId) => ipcRenderer.invoke('db:getAufmasseByProjektId', projektId),
 
+    // --- Aufmaß & DA11 ---
+    getAufmassBlaetter: (projectId) => ipcRenderer.invoke('db:getAufmassBlaetter', projectId),
+    saveAufmassBlatt: (blattData, zeilen) => ipcRenderer.invoke('db:saveAufmassBlatt', blattData, zeilen),
+    deleteAufmassBlatt: (blattId) => ipcRenderer.invoke('db:deleteAufmassBlatt', blattId),
+    mergeSchlussaufmass: (projectId) => ipcRenderer.invoke('db:mergeSchlussaufmass', projectId),
+    exportDA11: (projectId, blattId) => ipcRenderer.invoke('aufmass:exportDA11', projectId, blattId),
+
+    // --- Nachtragsverwaltung (VOB/B) ---
+    getNachtraege: (projectId) => ipcRenderer.invoke('db:getNachtraege', projectId),
+    saveNachtrag: (nachtragData, positionen) => ipcRenderer.invoke('db:saveNachtrag', nachtragData, positionen),
+    updateNachtragStatus: (nachtragId, status) => ipcRenderer.invoke('db:updateNachtragStatus', nachtragId, status),
+    deleteNachtrag: (nachtragId) => ipcRenderer.invoke('db:deleteNachtrag', nachtragId),
+
+    // --- Bautagebuch & Abnahmeprotokoll ---
+    getBautagebuch: (projectId) => ipcRenderer.invoke('db:getBautagebuch', projectId),
+    saveBautagebuch: (data) => ipcRenderer.invoke('db:saveBautagebuch', data),
+    deleteBautagebuch: (id) => ipcRenderer.invoke('db:deleteBautagebuch', id),
+    getAbnahmeprotokolle: (projectId) => ipcRenderer.invoke('db:getAbnahmeprotokolle', projectId),
+    saveAbnahmeprotokoll: (data) => ipcRenderer.invoke('db:saveAbnahmeprotokoll', data),
+
+    // --- Eingangsrechnungen & Controlling ---
+    getEingangsrechnungen: (projectId) => ipcRenderer.invoke('db:getEingangsrechnungen', projectId),
+    saveEingangsrechnung: (data) => ipcRenderer.invoke('db:saveEingangsrechnung', data),
+    deleteEingangsrechnung: (id) => ipcRenderer.invoke('db:deleteEingangsrechnung', id),
+    getControllingStats: (projectId) => ipcRenderer.invoke('db:getControllingStats', projectId),
+
     saveProjekt: (projekt) => ipcRenderer.invoke('db:saveProjekt', projekt),
 
     saveEinstellung: (key, value) => ipcRenderer.invoke('db:saveEinstellung', key, value),

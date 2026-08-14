@@ -1,0 +1,60 @@
+### MASTER-PROMPT: VOLLSTÄNDIGE FRONTEND- & UI-IMPLEMENTIERUNG ALLER PRAXISMODULE (BAU-ERP)
+
+#### 1. KONTEXT & ZIELSETZUNG
+Die Backend-Controller und Datenbanktabellen (aus Plan 07 für DA11, Aufmaß, Nachträge, Bautagebuch und Controlling) sind bereits funktional implementiert.
+Nun müssen die **dazugehörigen vollständigen grafischen Benutzeroberflächen (UI-Views, Dialoge, Modals und interaktive Komponenten)** exakt nach den Standards führender Handwerkslösungen (wie dem TopKontor Handwerk Aufmaßcenter) in der Anwendung (`code.html`, `js/projekte.js`, `views/AufmassView.js` etc.) fertiggestellt und verdrahtet werden. 
+
+Es dürfen keine reinen Backend-Routen ohne vollwertige UI-Bedienbarkeit verbleiben!
+
+---
+
+#### 2. DETAILLIERTE UI-ANFORDERUNGEN & MODAL-WORKFLOWS
+
+##### A. Interaktives Aufmaßcenter & Formelassistent (UI nach TopKontor-Vorbild)
+1. **Aufmaßcenter Hauptfenster:**
+   - Eigener Menüpunkt/Tab im Projektbereich mit zwei Unterregistern:
+     - *Register Informationen:* Tabelle aller erfassten Aufmaße mit Spalten (Nummer, Datum, Name, Typ, Variante, Status, Projekt).
+     - *Register Positionen:* Zweigeteilte Ansicht – links die GAEB-Positionen des Projekts/Dokuments, rechts das Detailaufmaß der markierten Position mit Berechnungszeilen, Verschnitt-Prozent und Gesamtergebnis.
+2. **Aufmaß-Erstellungs-Assistent (Wizard-Modal):**
+   - *Schritt 1:* Auswahl von **Aufmaßtyp** (Freies Aufmaß, Spaltenaufmaß, Raumaufmaß) und **Aufmaßvariante** (Einzelaufmaß, Teilaufmaß, Schlussaufmaß).
+   - *Schritt 2:* Eingabe von Grunddaten (Aufmaßnummer, Datum, Projekt-, Kundennummer, Bemerkung).
+3. **Formelauswahl- & Werteingabe-Assistent (Modal):**
+   - Formelbibliothek mit Direktauswahl (z. B. `Raum - Wände: 2*([länge]+[breite])*[höhe]`, `Wand - Tür: [höhe]*[breite]-[türh]*[türb]`, `Fensternische`, `Rechteck Fläche`).
+   - Dynamische Werteeingabemaske: Automatische Generierung von Eingabefeldern für die in der Formel enthaltenen Variablen mit Live-Summenberechnung im Ausdrück-Feld.
+4. **Aufmaß-Übergabe-Workflow (Dokumentenfluss):**
+   - Menü-Button `[Weiteres] -> [Aufmaß in Dokument übergeben]`.
+   - Dialog zur Auswahl der Ziel-Dokumentart (`Angebot`, `Auftragsbestätigung`, `Abschlagsrechnung / Teilrechnung`, `Schlussrechnung`).
+   - Abgleich-Dialog bei bestehenden Dokumenten: Auswahl zwischen *Mengen ins Dokument übernehmen*, *Dokument neu erzeugen* oder *Mengen und neue Positionen übernehmen*.
+   - Direkte Export-Schaltfläche: **`[DA11-Datei exportieren]`** zum Herunterladen der REB 23.003 konformen Datei.
+
+##### B. Nachtragsmanagement UI (VOB/B § 2)
+1. **Nachtrags-Dashboard im Projekt:**
+   - Übersicht aller Nachtragsangebote (Nachtrag 1, Nachtrag 2, ...) mit Kennzeichnung nach VOB/B § 2 Abs. 5 (geändert) oder § 2 Abs. 6 (zusätzlich).
+   - Status-Dropdown direkt in der Tabelle (`Entwurf`, `Eingereicht`, `In Verhandlung`, `Genehmigt`, `Abgelehnt`).
+2. **Nachtragserstellung & Rechnungs-Sync:**
+   - Modal zur schnellen Positionserfassung von Nachträgen.
+   - Button zur automatischen Verrechnung und Übernahme aller `Genehmigt`-Nachträge in die nächste kumulierte Abschlags- oder Schlussrechnung.
+
+##### C. Bautagebuch & Digitales Abnahmeprotokoll UI
+1. **Bautagebuch-Erfassungsmaske:**
+   - Tagesbericht-Eingabe: Witterung (Icon-Auswahl, Temperatur), Anwesenheitsliste (Kolonnen, Fremdfirmen/Subunternehmer, Mannstunden), Geräteeinsatz und VOB/B § 6 Behinderungsanzeigen.
+2. **Abnahmeprotokoll-Modal (VOB/B § 12 / BGB § 640):**
+   - Mängelerfassungs-Tabelle mit Fälligkeitsdaten für Restarbeiten.
+   - **Interaktive HTML5 Canvas-Signaturfelder** für Auftraggeber und Auftragnehmer mit "Unterschrift löschen"- und "Übernehmen"-Buttons.
+   - 1-Klick-Button `[Protokoll als PDF drucken/speichern]`.
+
+##### D. Eingangsrechnungen & Live Soll-Ist Controlling Widget
+1. **Eingangsrechnungs-Modal:**
+   - Erfassungsmaske für Lieferanten- und Subunternehmerrechnungen mit automatischer Zuordnung zur Kostenart (`MATERIAL`, `GERÄT`, `LOHN`, `SUBCONTRACTOR`).
+   - Visuelles § 48b Status-Tag mit automatischer Warnmeldung bei fehlender Freistellung.
+2. **Controlling-Widget (Visual Dashboard):**
+   - Grafische Fortschritts- und Budgetbalken im Projekt-Header:
+     - Soll-Kosten (Angebot) vs. Ist-Kosten (Summe Zeiterfassung + Eingangsrechnungen).
+     - Live-Berechnung von Deckungsbeitrag (€) und aktueller Marge (%).
+
+---
+
+#### 3. ANFORDERUNGEN AN DIE AUSFÜHRUNG
+- Implementiere die HTML-Markup-Strukturen, Styles (Tailwind CSS) und die gesamte Event-Handling-Logik in den entsprechenden Frontend-Dateien.
+- Stelle sicher, dass alle Modals und Wizards reibungslos über die bestehenden IPC-Handler (`preload.js` / `main.js`) Daten aus der SQLite-Datenbank laden und persistieren.
+- Führe abschließend einen Frontend-/Integrationstest durch und bestätige, dass alle neuen UI-Komponenten ohne Konsolenfehler gerendert und bedient werden können.

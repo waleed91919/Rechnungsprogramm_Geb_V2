@@ -1,0 +1,38 @@
+### PROMPT: Fertigstellung der Kernfunktionen zur Produktivreife (Bau-ERP)
+
+#### 1. KONTEXT & ZIEL
+Die grundlegende Architektur und die E-Rechnungsmodule sind vorhanden, jedoch fehlen für den realen Baustellen- und Bürobetrieb mittelständischer Betriebe entscheidende Praxis-Workflows. 
+Bitte implementiere folgende Kernmodule vollständig in der Anwendung (UI & Backend-Logik):
+
+---
+
+#### 2. UMZUSETZENDE FUNKTIONSBEREICHE
+
+##### A. Mobiles & Freies Aufmaß (REB 23.003 & DA11 Export)
+1. **Aufmaßcenter:**
+   - Eingabemaske für freies Aufmaß und Raumaufmaß je GAEB-Position mit Formelberechnung ($L \times B \times H$).
+   - Funktion: Zusammenführung aller Teilaufmaße zu einem verbindlichen `Schlussaufmaß`.
+   - Export-Schnittstelle: Generierung von validen **DA11-Dateien (REB 23.003)** zur Übergabe an Bauherren und Prüfingenieure.
+
+##### B. Nachtragsverwaltung (VOB/B Nachtragsmanagement)
+1. Erstellung von **Nachtragsangeboten (Nachtrag 1, 2, ...)** bei Leistungsänderungen.
+2. Status-Tracking: `Eingereicht`, `Genehmigt`, `Abgelehnt`.
+3. Automatische Übernahme genehmigter Nachtragspositionen in die kumulierte Rechnungsstellung ($F_t = L_t - \sum F_i$).
+
+##### C. Bautagebuch & Digitales Abnahmeprotokoll
+1. **Bautagebuch-Maske:**
+   - Erfassung von Datum, Witterung/Temperatur, anwesenden Mitarbeitern/Subunternehmern, Geräten und Tagesberichten.
+2. **Abnahmeprotokoll (VOB/B § 12):**
+   - Erstellung rechtssicherer Abnahmeprotokolle inklusive Erfassung von Restmängeln, Fristen und digitalem Unterschriftsfeld (Canvas-Signatur).
+
+##### D. Eingangsrechnungen & Einfache Nachkalkulation (Soll-Ist)
+1. Erfassung von Eingangsrechnungen (Material, Nachunternehmer) mit Projektzuordnung.
+2. Prüfung der § 48b Freistellungsbescheinigung bei Nachunternehmer-Rechnungen.
+3. Projekt-Controlling-Widget: Gegenüberstellung von kalkulierten Kosten (Angebot) und tatsächlichen Kosten (Zeiten + Eingangsrechnungen).
+
+---
+
+#### 3. ANFORDERUNGEN AN DIE AUSFÜHRUNG
+- Implementiere die Benutzeroberflächen (HTML/Tailwind/JS) passend zum bestehenden Systemlayout.
+- Ergänze die nötigen IPC-Handler und Datenbank-Tabellen in `db.js`.
+- Schreibe automatisierte Tests für die DA11-Generierung, die Aufmaßberechnung und die Nachtragslogik.

@@ -193,6 +193,106 @@ function setupIpc() {
         return await dbAPI.getAufmasseByProjektId(projektId);
     }));
 
+    // --- Aufmaßcenter & DA11 Export ---
+    ipcMain.handle('db:getAufmassBlaetter', wrapHandler(async (e, projectId) => {
+        return await dbAPI.getAufmassBlaetter(projectId);
+    }));
+
+    ipcMain.handle('db:saveAufmassBlatt', wrapHandler(async (e, blattData, zeilen) => {
+        return await dbAPI.saveAufmassBlatt(blattData, zeilen);
+    }));
+
+    ipcMain.handle('db:deleteAufmassBlatt', wrapHandler(async (e, blattId) => {
+        return await dbAPI.deleteAufmassBlatt(blattId);
+    }));
+
+    ipcMain.handle('db:mergeSchlussaufmass', wrapHandler(async (e, projectId) => {
+        return await dbAPI.mergeSchlussaufmass(projectId);
+    }));
+
+    ipcMain.handle('aufmass:exportDA11', wrapHandler(async (e, projectId, blattId = null) => {
+        const DA11Service = require('./js/da11');
+        const projekt = (await dbAPI.getFullState()).projekte.find(p => p.id === projectId) || { name: 'Projekt' };
+        let blaetter = await dbAPI.getAufmassBlaetter(projectId);
+        if (blattId) {
+            blaetter = blaetter.filter(b => b.id === blattId);
+        }
+        const da11Content = DA11Service.generateDA11(projekt, blaetter);
+
+        const { dialog } = require('electron');
+        const win = BrowserWindow.fromWebContents(e.sender);
+        const { filePath } = await dialog.showSaveDialog(win, {
+            title: 'DA11 Aufmaßdatei (REB 23.003) speichern',
+            defaultPath: path.join(app.getPath('documents'), `${(projekt.name || 'Aufmass').replace(/[^a-zA-Z0-9]/g, '_')}_REB23003.d11`),
+            filters: [
+                { name: 'DA11 REB 23.003 Aufmaß (*.d11, *.da11)', extensions: ['d11', 'da11', 'txt'] },
+                { name: 'Alle Dateien (*.*)', extensions: ['*'] }
+            ]
+        });
+
+        if (filePath) {
+            const fs = require('fs');
+            fs.writeFileSync(filePath, da11Content, 'latin1');
+            return { success: true, filePath, content: da11Content };
+        }
+        return { success: false, cancelled: true };
+    }));
+
+    // --- Nachtragsverwaltung (VOB/B) ---
+    ipcMain.handle('db:getNachtraege', wrapHandler(async (e, projectId) => {
+        return await dbAPI.getNachtraege(projectId);
+    }));
+
+    ipcMain.handle('db:saveNachtrag', wrapHandler(async (e, nachtragData, positionen) => {
+        return await dbAPI.saveNachtrag(nachtragData, positionen);
+    }));
+
+    ipcMain.handle('db:updateNachtragStatus', wrapHandler(async (e, nachtragId, status) => {
+        return await dbAPI.updateNachtragStatus(nachtragId, status);
+    }));
+
+    ipcMain.handle('db:deleteNachtrag', wrapHandler(async (e, nachtragId) => {
+        return await dbAPI.deleteNachtrag(nachtragId);
+    }));
+
+    // --- Bautagebuch & Abnahmeprotokoll ---
+    ipcMain.handle('db:getBautagebuch', wrapHandler(async (e, projectId) => {
+        return await dbAPI.getBautagebuch(projectId);
+    }));
+
+    ipcMain.handle('db:saveBautagebuch', wrapHandler(async (e, data) => {
+        return await dbAPI.saveBautagebuch(data);
+    }));
+
+    ipcMain.handle('db:deleteBautagebuch', wrapHandler(async (e, id) => {
+        return await dbAPI.deleteBautagebuch(id);
+    }));
+
+    ipcMain.handle('db:getAbnahmeprotokolle', wrapHandler(async (e, projectId) => {
+        return await dbAPI.getAbnahmeprotokolle(projectId);
+    }));
+
+    ipcMain.handle('db:saveAbnahmeprotokoll', wrapHandler(async (e, data) => {
+        return await dbAPI.saveAbnahmeprotokoll(data);
+    }));
+
+    // --- Eingangsrechnungen & Controlling ---
+    ipcMain.handle('db:getEingangsrechnungen', wrapHandler(async (e, projectId) => {
+        return await dbAPI.getEingangsrechnungen(projectId);
+    }));
+
+    ipcMain.handle('db:saveEingangsrechnung', wrapHandler(async (e, data) => {
+        return await dbAPI.saveEingangsrechnung(data);
+    }));
+
+    ipcMain.handle('db:deleteEingangsrechnung', wrapHandler(async (e, id) => {
+        return await dbAPI.deleteEingangsrechnung(id);
+    }));
+
+    ipcMain.handle('db:getControllingStats', wrapHandler(async (e, projectId) => {
+        return await dbAPI.getControllingStats(projectId);
+    }));
+
     // Projekte
     ipcMain.handle('db:saveProjekt', wrapHandler(async (e, projekt) => {
         if (!projekt || typeof projekt !== 'object' || !projekt.name) {

@@ -1,0 +1,438 @@
+================================================================================
+MASTER-IMPLEMENTIERUNGSPLAN: PRODUKTIVREIFE KERNFUNKTIONEN (BAU-ERP V2)
+================================================================================
+Projekt: W-Link Bau-ERP System - Kernmodule Produktivreife
+Datei: plans/Ai/plan07.txt
+Bezug: plans/plan07.txt
+Erstellt am: 2026-08-14
+Status: Vollständige technische Spezifikation & Implementierungs-Blueprint (Version 2.0)
+
+================================================================================
+1. EXECUTIVE SUMMARY & ZIELSETZUNG
+================================================================================
+Dieses Dokument definiert die vollständige Spezifikation und Architektur zur 
+Fertigstellung der vier praxisrelevanten Kernmodule des W-Link Bau-ERP Systems.
+Ziel ist es, die bestehende Basis (E-Rechnung, GAEB, VOB/B-Abschlagsrechnung)
+um die unverzichtbaren operativen Baustellen- und Büro-Workflows zu erweitern:
+
+1. **Modul A: Mobiles & Freies Aufmaß (REB 23.003 & DA11 Export/Import)**
+   - Freies Aufmaß, Raumaufmaß je GAEB-Position mit Formelparser ($L \times B \times H$, REB-Formeln).
+   - Aggregation aller Teilaufmaße zum verbindlichen `Schlussaufmaß`.
+   - Konforme Generierung von DA11-Dateien (REB 23.003 Ausgabe 1979/2009) für Bauherren & Prüfer.
+
+2. **Modul B: VOB/B Nachtragsverwaltung & Nachtragsangebote**
+   - Systematisches Nachtragsmanagement (Nachtrag 1, 2, ... / VOB/B § 2 Abs. 5 & 6).
+   - Workflow-Status: `Eingereicht` -> `In Verhandlung` -> `Genehmigt` / `Abgelehnt`.
+   - Automatische Übernahme genehmigter Nachtragspositionen in die kumulierte Abrechnung ($F_t = L_t - \sum F_i$).
+
+3. **Modul C: Bautagebuch & Digitales Abnahmeprotokoll (VOB/B § 12)**
+   - Bautagebuch-Erfassung: Witterung/Temperatur, Eigenpersonal, Subunternehmer, Großgeräte, Vorkommnisse/Behinderungen.
+   - VOB/B § 12 / BGB § 640 Abnahmeprotokoll mit Mängelliste, Fristsetzung und digitaler Canvas-Signatur (Export als PDF).
+
+4. **Modul D: Eingangsrechnungen & Soll-Ist Nachkalkulation (Projekt-Controlling)**
+   - Erfassung von Eingangsrechnungen (Material, Subunternehmer, Geräte) mit Projektzuordnung.
+   - Automatisierte § 48b EStG Freistellungsbescheinigungs-Validierung mit 15 % Bauabzugsteuer-Sperre.
+   - Live-Controlling-Widget: Soll (Angebotssumme/Kalkulation) vs. Ist (Lohnzeiten + Rechnungen) mit Deckungsbeitrag.
+
+
+===============================================================================
+2. MODUL A: MOBILES & FREIES AUFMASS (REB 23.003 & DA11)
+===============================================================================
+
+2.1 AUFMASSCENTER & FORMELBERECHNUNG
+--------------------------------------------------------------------------------
+Das Aufmaßcenter ermöglicht die Erfassung von Aufmaßen auf Positionsebene (mit GAEB-OZ-Bezug)
+sowie als freies Raum- und Aufmaßblatt.
+
+[Unterstützte Berechnungsarten]:
+1. **Standard-Formel ($L \times B \times H \times Faktor$ / Abzug)**:
+   - Formel-Ansatz: `Länge * Breite * Höhe * Faktor` mit automatischem Vorzeichen (+ / - für Abzüge nach VOB/C Übermessungsregeln).
+2. **Freie mathematische Ausdrücke**:
+   - Sichere mathematische Auswertung von Termen wie `(4.20 + 3.80) * 2.50 - (1.01 * 2.135)` über einen AST-basierten Parser (`evaluateFormula`).
+3. **REB 23.003 Standard-Formelkatalog**:
+   - Formel 01: Rechteck ($a \cdot b$)
+   - Formel 02: Dreieck / Trapez
+   - Formel 04: Quader ($a \cdot b \cdot c$)
+   - Formel 05: Zylinder / Kreisflächen ($\frac{\pi}{4} \cdot d^2 \cdot h$)
+   - Formel 91: Freie Rechenansätze mit bis zu 6 Operanden.
+
+[Schlussaufmaß-Zusammenführung]:
+- Jedes Teilaufmaß (z.B. Aufmaß 1 für Abschlagsrechnung 1, Aufmaß 2 für Abschlagsrechnung 2) wird versioniert gespeichert.
+- Die Funktion `mergeToFinalMeasurement(projectId)` aggregiert alle freigegebenen Teilaufmaße positionsscharf zu einem unveränderbaren `Schlussaufmaß` (Status `FINALIZED`).
+
+2.2 DA11 EXPORT & IMPORT ENGINE (REB 23.003 SPEZIFIKATION)
+--------------------------------------------------------------------------------
+DA11 ist das offizielle Austauschformat für Baudaten nach REB-VB 23.003. 
+
+[DA11 Zeilenstruktur (Fixed-Width, 80 Zeichen je Zeile)]:
+- Spalte 01-02: Satzart (z.B. `D11` für Adressdaten, `D12` für Rechenzeile / Zeilenaufmaß)
+- Spalte 03-11: Ordnungszahl (OZ) im Format `GGTTUUUPPPP` (Gewerk, Titel, Untertitel, Position)
+- Spalte 12-13: Kennung / Zeilennummer
+- Spalte 14-16: Blattnummer (Aufmaßblatt-Nummer, 3-stellig)
+- Spalte 17-18: Zeilennummer auf dem Blatt (01-99)
+- Spalte 19-20: Formelkennzeichen (z.B. `01`, `04`, `91`)
+- Spalte 21-70: Rechenansatz / Formelwerte (z.B. `4.50*3.20*0.25`)
+- Spalte 71-80: Zeilenergebnis (Format: `999999.999`)
+
+[Export-Workflow]:
+1. Abruf aller Aufmaßpositionen des Projekts/Abschlags.
+2. Formatierung jeder Aufmaßzeile nach REB 23.003 Fixed-Width Spaltenvorgaben.
+3. Hinzufügen des Dateikopfs mit Projektbezeichnung, Auftraggeber und Bauvorhaben.
+4. Generierung der Datei `.d11` (bzw. `.x31` für GAEB XML Aufmaß) und Download-Bereitstellung.
+
+
+===============================================================================
+3. MODUL B: NACHTRAGSVERWALTUNG (VOB/B NACHTRAGSMANAGEMENT)
+===============================================================================
+
+3.1 NACHTRAGSANGEBOTE & RECHTSGRUNDLAGEN
+--------------------------------------------------------------------------------
+Im Bauwesen entstehen Leistungsänderungen nach VOB/B:
+- **VOB/B § 2 Abs. 5**: Leistungsänderung durch Anordnung des Auftraggebers (Änderung des Bauentwurfs).
+- **VOB/B § 2 Abs. 6**: Zusätzliche Leistungen, die im ursprünglichen Vertrag nicht vorgesehen waren.
+- **VOB/B § 2 Abs. 3**: Mengenüber- oder -unterschreitungen (> 110% der Vordersätze).
+
+[Nachtrags-Entität & Nummerierung]:
+- Jedes Nachtragsangebot wird hierarchisch dem Hauptauftrag zugeordnet:
+  `Nachtrag N-01`, `Nachtrag N-02`, usw.
+- Nachtragspositionen erhalten ein eindeutiges Kennzeichen (z.B. OZ `N1.01.0010` oder Flag `is_supplement = 1`).
+
+3.2 STATUS-WORKFLOW & PRÜFPROZESS
+--------------------------------------------------------------------------------
++-------------------+      Genehmigung durch AG      +-------------------+
+|    EINGEREICHT    | -----------------------------> |     GENEHMIGT     |
+| (Nachtragsangebot)|                                | (Rechtswirksam)   |
++-------------------+                                +-------------------+
+          |                                                    |
+          | Ablehnung                                          v
+          v                                          +-------------------+
++-------------------+                                | AUTOMATISCHER     |
+|    ABGELEHNT      |                                | KREDIT-/RECHNUNGS-|
+| (Ggf. Rechtsstreit)|                               | ÜBERTRAG          |
++-------------------+                                +-------------------+
+
+3.3 AUTOMATISCHE ÜBERNAHME IN DIE KUMULIERTE ABRECHNUNG
+--------------------------------------------------------------------------------
+- Sobald ein Nachtrag den Status `GENEHMIGT` erhält:
+  1. Die Nachtragspositionen fließen automatisch in den Leistungsstand ($L_t$) des Projekts ein.
+  2. Im Rechnungs-Editor werden Nachtragspositionen in einem separaten Abschnitt "Genehmigte Nachträge" aufgeführt.
+  3. Bei der kumulierten Rechnungsstellung ($F_t = L_t - \sum F_i$) wird der Nachtragsbetrag in der Abrechnungsperiode berücksichtigt, in der die Leistung erbracht wurde.
+  4. Auf der Rechnung / XRechnung / ZUGFeRD werden Nachtragsnummer und Genehmigungsdatum referenziert.
+
+
+===============================================================================
+4. MODUL C: BAUTAGEBUCH & DIGITALES ABNAHMEPROTOKOLL
+===============================================================================
+
+4.1 BAUTAGEBUCH-MASKE & TAGESBERICHTE
+--------------------------------------------------------------------------------
+Rechtssichere Dokumentation nach HOAI Leistungsphase 8 und VOB/B § 4:
+
+[Erfassungsmaske & Struktur]:
+1. **Allgemeine Daten**: Datum, Tagesbericht-Nr., Projekt, Bauleiter.
+2. **Witterung & Umwelt**:
+   - Temperatur (8:00 Uhr, 12:00 Uhr, 16:00 Uhr), Witterung (Sonne, Regen, Schnee, Frost), Windstärke.
+   - Witterungsbedingte Arbeitsunterbrechungen (Schlechtwetter-Dokumentation).
+3. **Anwesenheit Personal & Fremdfirmen**:
+   - Eigenes Personal: Mitarbeiter-Anzahl & geleistete Stunden je Gewerk.
+   - Nachunternehmer: Firmenname, Mitarbeiter-Anzahl, ausgeführte Gewerke.
+4. **Geräte- & Maschineneinsatz**:
+   - Großgeräte (z.B. Kran, Bagger, Rüttelplatte) mit Betriebsstunden & Stillstandszeiten.
+5. **Leistungsfortschritt & Tagesbericht**:
+   - Detaillierte Beschreibung der erbrachten Tagesleistungen je Bauabschnitt.
+6. **Vorkommnisse, Behinderungen & Bedenken**:
+   - Erfassung von Behinderungsanzeigen gemäß VOB/B § 6.
+   - Bedenkenanmeldungen gemäß VOB/B § 4 Abs. 3.
+7. **Fotodokumentation**:
+   - Upload von Baustellenfotos mit Uhrzeitstempel, Geodaten-Tags und Notizen.
+
+4.2 DIGITALES ABNAHMEPROTOKOLL (VOB/B § 12 / BGB § 640)
+--------------------------------------------------------------------------------
+Die förmliche Bauabnahme ist der rechtliche Meilenstein für Gefahrenübergang, 
+Beweislastumkehr, Fälligkeit der Schlussrechnung und Beginn der Gewährleistungsfrist.
+
+[Komponenten des Abnahmeprotokolls]:
+1. **Kopfdaten**: Bauvorhaben, Auftraggeber, Auftragnehmer, Ort, Datum, Beginn/Fertigstellung.
+2. **Ergebnis der Abnahme**:
+   - `Abnahme ohne Vorbehalt erteilt`
+   - `Abnahme mit Vorbehalt wegen bekannter Mängel erteilt`
+   - `Abnahme verweigert wegen wesentlicher Mängel`
+3. **Mängeltabelle**:
+   - Mangel-ID, Beschreibung, Bauteil/Raum, Schweregrad (Leicht/Mittel/Schwer), Beseitigungsfrist (Datum), Verantwortlicher.
+4. **Gewährleistungsvereinbarung**:
+   - Fristdauer (z.B. 4 Jahre nach VOB/B § 13 bzw. 5 Jahre nach BGB § 634a).
+   - Exaktes Gewährleistungsende-Datum.
+   - Sicherheitseinbehalt (z.B. 5 % Bürgschaft).
+5. **Digitale Canvas-Signatur (E-Signature)**:
+   - Touch/Maus-fähiges HTML5 Canvas für die Unterschrift des Auftraggebers und Auftragnehmers.
+   - Speicherung der Signatur als PNG / Vector-Stream inklusive Zeitstempel und IP-/User-Signaturdaten.
+   - 1-Klick-Generierung des rechtssicheren Abnahmeprotokoll-PDFs.
+
+
+===============================================================================
+5. MODUL D: EINGANGSRECHNUNGEN & SOLL-IST NACHKALKULATION
+===============================================================================
+
+5.1 EINGANGSRECHNUNGS-VERWALTUNG & § 48b PRÜFUNG
+--------------------------------------------------------------------------------
+1. **Erfassungsmaske**:
+   - Kreditor (Lieferant / Subunternehmer), Rechnungsnummer, Datum, Fälligkeitsdatum, Netto, USt, Brutto.
+   - Zuordnung zum Bauprojekt (`project_id`) und Kostenart (`MATERIAL`, `SUBCONTRACTOR`, `EQUIPMENT`, `OTHER`).
+   - Skonto-Fristen und Zahlungsstatus (`OFFEN`, `TEILBEZAHLT`, `BEZAHLT`).
+
+2. **Automatisierte § 48b EStG Bauabzugsteuer-Prüfung**:
+   - Bei Rechnungen von Subunternehmern:
+     * Automatischer Abgleich mit der hinterlegten Freistellungsbescheinigung.
+     * Wenn `sec48b_status != 'VALID'` oder `sec48b_valid_until < Rechnungsdatum`:
+       -> **Zahlungsstopp-Warnung** im UI.
+       -> Automatische Aufteilung des Rechnungsbetrags: 85 % Auszahlungsbetrag an Subunternehmer, 15 % Abzug zur Abführung an das Finanzamt (Anmeldung nach § 48a EStG).
+
+5.2 SOLL-IST NACHKALKULATION & CONTROLLING-WIDGET
+--------------------------------------------------------------------------------
+Live-Projektcontrolling im Projekt-Dashboard:
+
+[Berechnungskennzahlen]:
+1. **Soll-Kosten (Vorkalkulation / Angebot)**:
+   - $Soll_{Lohn} = \sum (\text{Lohnstunden kalkuliert} \times \text{Stundensatz})$
+   - $Soll_{Material} = \sum (\text{Materialkosten kalkuliert})$
+   - $Soll_{Fremdleistung} = \sum (\text{Subunternehmer kalkuliert})$
+   - $Soll_{Gesamt} = Soll_{Lohn} + Soll_{Material} + Soll_{Fremdleistung} + Soll_{Gerät}$
+
+2. **Ist-Kosten (Baustellenerfassung & Rechnungen)**:
+   - $Ist_{Lohn} = \sum (\text{Tatsächlich erfasste Stunden} \times \text{Kostensatz})$
+   - $Ist_{Material} = \sum (\text{Material-Eingangsrechnungen})$
+   - $Ist_{Fremdleistung} = \sum (\text{Subunternehmer-Eingangsrechnungen})$
+   - $Ist_{Gesamt} = Ist_{Lohn} + Ist_{Material} + Ist_{Fremdleistung} + Ist_{Gerät}$
+
+3. **Controlling-Kennzahlen**:
+   - **Kostenabweichung**: $\Delta K = Ist_{Gesamt} - Soll_{Gesamt}$ (in € und %)
+   - **Deckungsbeitrag (DB)**: $DB = \text{Erbrachter Leistungsstand } (L_t) - Ist_{Gesamt}$
+   - **Margenanalyse (Ist-Gewinn)**: $\text{Ist-Marge} = \frac{DB}{L_t} \times 100\,\%$
+
+
+===============================================================================
+6. DATENBANK-SCHEMA & IPC-SCHNITTSTELLEN (SQLITE DDL & HANDLERS)
+===============================================================================
+
+6.1 DDL-ERWEITERUNGEN IN `db.js`
+--------------------------------------------------------------------------------
+
+```sql
+-- 1. AUFMASS-TABELLEN (REB 23.003 & DA11)
+CREATE TABLE IF NOT EXISTS aufmass_blaetter (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    invoice_id INTEGER,                     -- Optional verknüpft mit Abschlagsrechnung
+    blatt_nummer TEXT NOT NULL,             -- z.B. "001", "002"
+    titel TEXT NOT NULL,                    -- z.B. "Erdarbeiten & Fundamente"
+    status TEXT DEFAULT 'DRAFT' CHECK(status IN ('DRAFT', 'SUBMITTED', 'VERIFIED', 'FINALIZED')),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projekte(id),
+    FOREIGN KEY (invoice_id) REFERENCES dokumente(id)
+);
+
+CREATE TABLE IF NOT EXISTS aufmass_zeilen (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    blatt_id INTEGER NOT NULL,
+    oz_code TEXT NOT NULL,                  -- GAEB OZ z.B. "01.02.0030"
+    zeilen_nr INTEGER NOT NULL,             -- Laufende Zeilennummer auf dem Blatt
+    bezeichnung TEXT,                       -- Erläuterung / Raumbezug z.B. "Wand Nord EG"
+    formel_reb TEXT DEFAULT '91',           -- REB Formelkennzeichen (01, 04, 91)
+    rechenansatz TEXT NOT NULL,             -- z.B. "4.50 * 2.75 * 0.24"
+    ergebnis REAL NOT NULL,                 -- Berechneter Wert z.B. 2.97
+    einheit TEXT NOT NULL DEFAULT 'm²',     -- m, m², m³, Stk
+    vorzeichen INTEGER DEFAULT 1,           -- 1 = Plus, -1 = Abzug
+    FOREIGN KEY (blatt_id) REFERENCES aufmass_blaetter(id) ON DELETE CASCADE
+);
+
+-- 2. NACHTRAGSVERWALTUNG (VOB/B)
+CREATE TABLE IF NOT EXISTS nachtraege (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    nachtrag_nr TEXT NOT NULL,              -- z.B. "N-01", "N-02"
+    titel TEXT NOT NULL,                    -- z.B. "Zusätzliche Dämmung DG"
+    beschreibung TEXT,
+    rechtsgrundlage TEXT DEFAULT 'VOB_2_6' CHECK(rechtsgrundlage IN ('VOB_2_5', 'VOB_2_6', 'VOB_2_3', 'BGB_650b')),
+    summe_netto REAL DEFAULT 0.0,
+    summe_brutto REAL DEFAULT 0.0,
+    status TEXT DEFAULT 'EINGEREICHT' CHECK(status IN ('ENTWURF', 'EINGEREICHT', 'IN_VERHANDLUNG', 'GENEHMIGT', 'ABGELEHNT')),
+    eingereicht_am DATE,
+    entschieden_am DATE,
+    begruendung TEXT,
+    FOREIGN KEY (project_id) REFERENCES projekte(id)
+);
+
+CREATE TABLE IF NOT EXISTS nachtrag_positionen (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nachtrag_id INTEGER NOT NULL,
+    oz_code TEXT,                           -- z.B. "N1.02.0010"
+    kurztext TEXT NOT NULL,
+    langtext TEXT,
+    menge REAL NOT NULL,
+    einheit TEXT NOT NULL,
+    einheitspreis REAL NOT NULL,
+    gesamtpreis REAL NOT NULL,
+    cost_type TEXT DEFAULT 'MATERIAL' CHECK(cost_type IN ('LOHN', 'MATERIAL', 'GERÄT', 'FAHRT')),
+    FOREIGN KEY (nachtrag_id) REFERENCES nachtraege(id) ON DELETE CASCADE
+);
+
+-- 3. BAUTAGEBUCH
+CREATE TABLE IF NOT EXISTS bautagebuch (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    bericht_nr INTEGER NOT NULL,
+    datum DATE NOT NULL,
+    wetter TEXT,                            -- "Sonnig", "Regen", "Frost"
+    temperatur_min REAL,
+    temperatur_max REAL,
+    personal_eigen_anzahl INTEGER DEFAULT 0,
+    personal_eigen_stunden REAL DEFAULT 0.0,
+    personal_sub_json TEXT,                 -- JSON-Array: [{firma: "Sub A", anzahl: 3, gewerk: "Maler"}]
+    geraete_json TEXT,                      -- JSON-Array: [{geraet: "Kran", stunden: 6.5, stillstand: 0}]
+    tagesbericht TEXT NOT NULL,             -- Freitext der erbrachten Arbeiten
+    vorkommnisse_behinderungen TEXT,        -- Behinderungsanzeigen / Bedenken
+    unterzeichnet_bauleiter INTEGER DEFAULT 0,
+    fotos_json TEXT,                        -- JSON-Array von Bildpfaden
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projekte(id)
+);
+
+-- 4. ABNAHMEPROTOKOLLE (VOB/B § 12)
+CREATE TABLE IF NOT EXISTS abnahmeprotokolle (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    datum DATE NOT NULL,
+    ort TEXT NOT NULL,
+    auftraggeber_vertreter TEXT NOT NULL,
+    auftragnehmer_vertreter TEXT NOT NULL,
+    abnahme_status TEXT NOT NULL CHECK(abnahme_status IN ('OHNE_VORBEHALT', 'MIT_VORBEHALT', 'VERWEIGERT')),
+    gewaehrleistung_beginn DATE NOT NULL,
+    gewaehrleistung_ende DATE NOT NULL,
+    gewaehrleistung_jahre INTEGER DEFAULT 4,
+    sicherheitseinbehalt_prozent REAL DEFAULT 5.0,
+    maengel_json TEXT,                      -- JSON-Array: [{mangel: "...", frist: "...", status: "OFFEN"}]
+    unterschrift_ag_data TEXT,              -- Base64 PNG Canvas Signature AG
+    unterschrift_an_data TEXT,              -- Base64 PNG Canvas Signature AN
+    pdf_pfad TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projekte(id)
+);
+
+-- 5. EINGANGSRECHNUNGEN & KOSTENKONTROLLE
+CREATE TABLE IF NOT EXISTS eingangsrechnungen (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER,                     -- Zuordnung zum Bauprojekt
+    lieferant_id INTEGER,                   -- Kreditor / Subunternehmer aus 'kunden'
+    rechnungs_nr TEXT NOT NULL,
+    rechnungs_datum DATE NOT NULL,
+    faelligkeits_datum DATE NOT NULL,
+    betrag_netto REAL NOT NULL,
+    steuersatz REAL DEFAULT 19.0,
+    betrag_ust REAL NOT NULL,
+    betrag_brutto REAL NOT NULL,
+    kostenart TEXT NOT NULL CHECK(kostenart IN ('MATERIAL', 'SUBCONTRACTOR', 'EQUIPMENT', 'OTHER')),
+    sec48b_geprueft INTEGER DEFAULT 0,      -- 1 = Freistellungsbescheinigung geprüft
+    bauabzugsteuer_einbehalten REAL DEFAULT 0.0, -- 15 % Einbehalt falls § 48b fehlt
+    zahlungs_status TEXT DEFAULT 'OFFEN' CHECK(zahlungs_status IN ('OFFEN', 'TEILWEISE', 'BEZAHLT')),
+    bezahlt_am DATE,
+    beleg_pfad TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES projekte(id),
+    FOREIGN KEY (lieferant_id) REFERENCES kunden(id)
+);
+```
+
+6.2 IPC-HANDLER IN `preload.js` & `main.js`
+--------------------------------------------------------------------------------
+| IPC Channel | Parameter | Rückgabe | Beschreibung |
+|:---|:---|:---|:---|
+| `aufmass:getBlaetter` | `projectId` | `Array<AufmassBlatt>` | Lädt alle Aufmaßblätter eines Projekts |
+| `aufmass:saveBlatt` | `blattData, zeilen` | `{success, id}` | Speichert/Aktualisiert Aufmaßblatt & Zeilen |
+| `aufmass:exportDA11` | `projectId, blattId` | `{success, filePath, content}` | Generiert und exportiert DA11 REB 23.003 |
+| `aufmass:mergeSchlussaufmass`| `projectId` | `{success, finalMengen}` | Führt Teilaufmaße zum Schlussaufmaß zusammen |
+| `nachtrag:list` | `projectId` | `Array<Nachtrag>` | Lädt alle Nachträge zum Projekt |
+| `nachtrag:create` | `nachtragData, pos` | `{success, id}` | Legt neues Nachtragsangebot an |
+| `nachtrag:updateStatus` | `nachtragId, status` | `{success}` | Ändert Status (`GENEHMIGT`, etc.) & triggert Sync |
+| `bautagebuch:list` | `projectId` | `Array<Bautagebuch>` | Lädt Bautagebucheinträge |
+| `bautagebuch:save` | `tagebuchData` | `{success, id}` | Speichert Tagesbericht mit Witterung & Personal |
+| `abnahme:create` | `abnahmeData` | `{success, id, pdfPath}`| Erstellt Abnahmeprotokoll & generiert PDF |
+| `eingangsrechnung:list` | `projectId` | `Array<Eingangsrechnung>`| Lädt Eingangsrechnungen zum Projekt |
+| `eingangsrechnung:save` | `rechnungData` | `{success, id, warning}`| Speichert Rechnung inkl. § 48b Check |
+| `controlling:getSollIst` | `projectId` | `ControllingStats` | Liefert Soll-Ist Deckungsbeitrags-Analyse |
+
+
+===============================================================================
+7. UI/UX WIREFRAME & FRONTEND-KOMPONENTEN
+===============================================================================
+
+7.1 AUFMASSCENTER VIEW (TABELLEN- & FORMEL-GRID)
+--------------------------------------------------------------------------------
+- Dynamische Eingabematrix mit Tastaturnavigation (Pfeiltasten, Tab, Enter).
+- Formel-Live-Prüfung: Syntaxfehler werden in Echtzeit markiert.
+- Live-Spalten: `OZ` | `Bezeichnung / Raum` | `Formel` | `Rechenansatz (L x B x H)` | `Ergebnis` | `Einheit` | `Vorzeichen (+/-)` | `Aktionen`.
+- DA11-Export-Button mit 1-Klick-Download.
+
+7.2 NACHTRAGSMANAGER IM PROJEKT-DETAIL
+--------------------------------------------------------------------------------
+- Tab "Nachträge" im Projekt-Detailview `#view-projekt-details`.
+- Nachtrags-Übersichtskarten mit Status-Pills (`Eingereicht` = Gelb, `Genehmigt` = Grün, `Abgelehnt` = Rot).
+- Button "Neuen Nachtrag anlegen" mit Vorlage für VOB/B § 2 Abs. 5 / § 2 Abs. 6 Begründungstext.
+- "In Rechnung übernehmen"-Schalter für genehmigte Nachträge.
+
+7.3 BAUTAGEBUCH- & ABNAHME-MODALS
+--------------------------------------------------------------------------------
+- **Bautagebuch-Tab**: Kalenderansicht / Tagesliste mit Schnellfilter für Schlechtwettertage und Behinderungen.
+- **Abnahmeprotokoll-Modal**:
+  * Schritt 1: Mängelerfassung mit Fristkalender.
+  * Schritt 2: Gewährleistungsdaten.
+  * Schritt 3: Interaktives Canvas für Auftraggeber- & Auftragnehmer-Unterschriften.
+  * Schritt 4: PDF-Generierung mit Briefpapier und Signatur-Einbettung.
+
+7.4 SOLL-IST CONTROLLING WIDGET (DASHBOARD & PROJEKTE)
+--------------------------------------------------------------------------------
+- Fortschrittsbalken mit Soll-Ist-Kosten nach Kategorien (Lohn, Material, Sub, Gerät).
+- Deckungsbeitrags-Kachel mit Ampelsystem (Grün = Profitabel, Gelb = Gefährdet, Rot = Budgetüberschreitung).
+- Kreditor-Warnbox bei Subunternehmern mit abgelaufener § 48b Freistellungsbescheinigung.
+
+
+===============================================================================
+8. TEST- UND VALIDIERUNGSSTRATEGIE
+===============================================================================
+
+Es werden automatisierte End-to-End Tests in `tests/` und Skripte in `scripts/` erstellt:
+
+1. **`tests/da11_export.test.js`**:
+   - Prüfung der 80-Zeichen Fixed-Width Formatierung je Zeile.
+   - Validierung der Rechenansätze und Rundungsgenauigkeit nach REB 23.003.
+   - Test von Formel 01, Formel 04 und freien Formeln (Formel 91).
+
+2. **`tests/aufmass_calculation.test.js`**:
+   - Sichere Evaluierung von Rechenformeln (Klammern, Punkt-vor-Strich, Division durch Null Schutz).
+   - Test der Schlussaufmaß-Zusammenführung über mehrere Abschlagsphasen.
+
+3. **`tests/nachtrag_vob.test.js`**:
+   - Test des Genehmigungs-Workflows.
+   - Verifikation der Übernahme von Nachtragspositionen in die kumulierte Rechnung ($F_t = L_t - \sum F_i$).
+
+4. **`tests/controlling_soll_ist.test.js`**:
+   - Berechnung der kalkulierten vs. tatsächlichen Kosten.
+   - Simulation des 15 % Bauabzugsteuer-Abzugs bei abgelaufener § 48b Bescheinigung.
+
+
+===============================================================================
+9. IMPLEMENTIERUNGS-STEPS & CHECKLISTE
+===============================================================================
+
+- [x] **Schritt 1**: DDL Schema-Erweiterungen in `db.js` einpflegen (Aufmaß, Nachtrag, Bautagebuch, Abnahme, Eingangsrechnungen).
+- [x] **Schritt 2**: IPC Bridge Handler in `main.js` und `preload.js` implementieren.
+- [x] **Schritt 3**: Controller & Services erstellen:
+      - `controllers/AufmassController.js` (inkl. REB 23.003 & DA11 Generator).
+      - `controllers/NachtragController.js` (VOB/B Nachtragsverwaltung).
+      - `controllers/BautagebuchController.js` (Tagesberichte & Abnahmeprotokoll).
+      - `controllers/ControllingController.js` (Eingangsrechnungen, § 48b Check, Soll-Ist).
+- [x] **Schritt 4**: UI-Integration in `code.html` (Views, Modals, Canvas-Signatur, Controlling-Kacheln).
+- [x] **Schritt 5**: Automatisierte Test-Suiten ausführen und verifizieren.
+
+===============================================================================
+ENDE DES MASTER-IMPLEMENTIERUNGSPLANS (plans/Ai/plan07.txt)
+===============================================================================

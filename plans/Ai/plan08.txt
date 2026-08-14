@@ -1,0 +1,223 @@
+================================================================================
+MASTER-IMPLEMENTIERUNGSPLAN: VOLLSTÄNDIGE FRONTEND- & UI-INTEGRATION (BAU-ERP V2)
+================================================================================
+Projekt: W-Link Bau-ERP System - Vollständige UI/UX Fertigstellung
+Datei: plans/Ai/plan08.txt
+Bezug: plans/plan08.txt
+Erstellt am: 2026-08-14
+Status: Vollständige technische Spezifikation & UI/UX Blueprint (Version 2.0)
+
+================================================================================
+1. EXECUTIVE SUMMARY & ZIELSETZUNG
+================================================================================
+Dieses Dokument spezifiziert die vollständige grafische Benutzeroberfläche (UI), 
+Interaktionsmodelle, Dialoge und Wizards zur nahtlosen Bedienung aller in Plan 07 
+implementierten Backend-Controller und Datenbanktabellen.
+
+Die Benutzeroberfläche orientiert sich an etablierten Branchenstandards (TopKontor 
+Handwerk, Nevaris, GAEB-Viewer) und stellt sicher, dass alle 4 Kernmodule ohne 
+Medienbruch oder reine Backend-Schnittstellen vollständig visuell bedienbar sind:
+
+1. **Modul A: Interaktives Aufmaßcenter & Formelassistent (TopKontor-Vorbild)**
+   - Zweigeteilter Split-View: LV-Positionen links, Detailaufmaß & Berechnungszeilen rechts.
+   - 2-Schritt Aufmaß-Erstellungs-Assistent (Typ: Frei, Spalten, Raum / Variante: Einzel, Teil, Schluss).
+   - Interaktiver Formelassistent mit Variablen-Erkennung (`[länge]`, `[breite]`, `[höhe]`, etc.) und Live-Auswertung.
+   - Dokumentenfluss-Assistent: Aufmaß-in-Dokument-Übergabe (Angebot, AB, Abschlagsrechnung, Schlussrechnung) & DA11-Export.
+
+2. **Modul B: VOB/B Nachtragsmanagement UI**
+   - Projektweites Nachtrags-Dashboard mit Rechtsgrundlagen-Pills (§ 2 Abs. 5 / § 2 Abs. 6).
+   - Schnellerfassung von Nachtragspositionen und 1-Klick-Übernahme aller `Genehmigt`-Nachträge in kumulierte Rechnungen.
+
+3. **Modul C: Bautagebuch & Digitales Abnahmeprotokoll UI**
+   - Tagesberichte mit Witterungs-Icons, Kolonnen-/Subunternehmer-Anwesenheit, Geräteeinsatz und VOB/B § 6 Behinderungsanzeigen.
+   - Abnahmeprotokoll-Modal (VOB/B § 12) mit Mängelerfassung, Fristen, Dual-Canvas-Signatur (AG & AN) und 1-Klick PDF-Export.
+
+4. **Modul D: Eingangsrechnungen & Live Soll-Ist Controlling Widget**
+   - Eingangsrechnungs-Erfassung mit Kostenarten (`MATERIAL`, `GERÄT`, `LOHN`, `SUBCONTRACTOR`) & § 48b Status-Ampel.
+   - Controlling-Widget im Projekt-Header mit Deckungsbeitrag, Marge (%) und Budgetfortschritt.
+
+
+================================================================================
+2. MODUL A: TOPKONTOR-STYLE AUFMASSCENTER & FORMELASSISTENT
+================================================================================
+
+2.1 AUFMASSCENTER HAUPTFENSTER (ZWEIGETEILTES REGISTER-LAYOUT)
+--------------------------------------------------------------------------------
+Das Aufmaßcenter wird als primärer Arbeitsbereich innerhalb des Projekts realisiert:
+
+[Struktur des Aufmaßcenters]:
++------------------------------------------------------------------------------+
+| [Tab: Informationen]  |  [Tab: Positionen & Aufmaß (Split-View)]             |
++------------------------------------------------------------------------------+
+| REGISTER POSITIONEN:                                                         |
+| +--------------------------------+-----------------------------------------+ |
+| | LINKE SPALTE: LV-POSITIONEN    | RECHTE SPALTE: DETAILAUFMASS ZUR POS.   | |
+| | (GAEB X83 / Projektpositionen) |                                         | |
+| | - 01.01.0010 Baustelleneinr.   | OZ: 01.01.0020 Bodenbelag EG            | |
+| | - 01.01.0020 Bodenbelag EG ◄---| Formel: 2*([länge]+[breite])*[höhe]     | |
+| | - 01.02.0010 Innenputz         |                                         | |
+| |                                | +-------------------------------------+ | |
+| |                                | | # | Raum/Text | Ansatz | Erg. | +/- | | |
+| |                                | | 1 | Flur EG   | 5.5*2  | 11.0 |  +  | | |
+| |                                | | 2 | Türabzug  | 1.0*2.1| 2.1  |  -  | | |
+| |                                | +-------------------------------------+ | |
+| |                                | Verschnitt: [ 5 % ]                     | |
+| |                                | Gesamtergebnis Pos.: 9.35 m²            | |
+| |                                | [Formelassistent] [Zeile +] [DA11 Exp]  | |
+| +--------------------------------+-----------------------------------------+ |
++------------------------------------------------------------------------------+
+
+2.2 AUFMASS-ERSTELLUNGS-ASSISTENT (2-STEP WIZARD MODAL)
+--------------------------------------------------------------------------------
+Erzeugt strukturiert neue Aufmaßblätter oder Teilaufmaße:
+
+- **Schritt 1: Typ & Variante**
+  * *Aufmaßtyp:* 
+    - `Freies Aufmaß` (Mathematische Ausdrücke ohne feste Spaltenbindung)
+    - `Spaltenaufmaß` ($L \times B \times H \times Faktor$)
+    - `Raumaufmaß` (Hierarchisch nach Geschoss / Raum / Bauteil)
+  * *Aufmaßvariante:*
+    - `Einzelaufmaß` (Für spezifische Position)
+    - `Teilaufmaß (Abschlagsrechnung)` (Für laufenden Leistungsstand $L_t$)
+    - `Schlussaufmaß` (Verbindliche Gesamtabrechnung)
+
+- **Schritt 2: Stammdaten & Zuordnung**
+  * Aufmaßnummer (z.B. `AUF-2026-001`), Datum, Projektbezug, GAEB-LV-Bezug, Bemerkungsfeld.
+
+2.3 FORMELASSISTENT & DYNAMISCHE WERTEEINGABE-MASKE
+--------------------------------------------------------------------------------
+Erleichtert die Erfassung komplexer Bauaufmaße durch Vorlagen mit Parametern:
+
+[Vordefinierte Formelbibliothek]:
+1. `Raum - Wandflächen`: Formel: `2 * ([laenge] + [breite]) * [hoehe]`
+2. `Wand mit Türabzug`: Formel: `[wand_b] * [wand_h] - ([tuer_b] * [tuer_h])`
+3. `Fensternische`: Formel: `2 * [leibung_t] * [fenster_h] + [fenster_b] * [leibung_t]`
+4. `Bodenfläche mit Abzug`: Formel: `[laenge] * [breite] - [abzug_flaeche]`
+5. `Zylinder / Säule`: Formel: `(3.14159 / 4) * [durchmesser]^2 * [hoehe]`
+
+[Interaktive Parameter-Maske]:
+- Beim Klick auf eine Vorlage scannt der Parser alle eckigen Klammern `[variable]`.
+- Generiert dynamisch beschriftete Eingabefelder für jeden Parameter.
+- Berechnet in Echtzeit den aufgelösten mathematischen Ausdruck und das Ergebnis:
+  `Ansatz: 2 * (5.20 + 4.10) * 2.75 = 51.15 m²`
+- 1-Klick-Übernahme in die aktive Aufmaßzeile.
+
+2.4 AUFMASS-ÜBERGABE-WORKFLOW (DOKUMENTENFLUSS)
+--------------------------------------------------------------------------------
+- Schaltfläche `[Aufmaß in Dokument übergeben]`:
+  * Auswahl des Ziel-Dokuments: `Angebot`, `Auftragsbestätigung`, `Abschlagsrechnung (1..n)`, `Schlussrechnung`.
+  * **Abgleich-Dialog bei bestehenden Dokumenten:**
+    1. *Mengen im bestehenden Dokument aktualisieren* (Preise bleiben unverändert).
+    2. *Neues Rechnungsdokument mit Aufmaßwerten erzeugen*.
+    3. *Mengen aktualisieren und neue Positionen automatisch anfügen*.
+- Direkte Export-Schaltfläche: `[DA11-Datei exportieren]` nach REB-VB 23.003.
+
+
+================================================================================
+3. MODUL B: VOB/B NACHTRAGSMANAGEMENT UI
+================================================================================
+
+3.1 NACHTRAGS-DASHBOARD & INLINE-STATUS-VERWALTUNG
+--------------------------------------------------------------------------------
+- Übersichtskarten mit Gesamtvolumen der Nachträge (Eingereicht, Genehmigt, Abgelehnt).
+- Tabelle aller Nachträge mit folgenden Spalten:
+  * `Nachtrag-Nr.` (z.B. N-01, N-02)
+  * `Titel & Beschreibung`
+  * `Rechtsgrundlage Badge` (VOB/B § 2.5, VOB/B § 2.6, VOB/B § 2.3, BGB § 650b)
+  * `Kostenarten-Aufteilung` (Lohn / Material / Gerät / Fahrt)
+  * `Summe Netto / Brutto`
+  * `Status-Dropdown`: Direktes Umschalten mit automatischer Farbkodierung:
+    - `ENTWURF` (Grau)
+    - `EINGEREICHT` (Gelb)
+    - `IN_VERHANDLUNG` (Blau)
+    - `GENEHMIGT` (Grün)
+    - `ABGELEHNT` (Rot)
+
+3.2 NACHTRAGSERSTELLUNG & 1-KLICK RECHNUNGS-SYNC
+--------------------------------------------------------------------------------
+- Modal zur schnellen Erfassung von Nachtragspositionen mit EP, Menge, Einheit und Kostenart.
+- Button `[Genehmigte Nachträge in Rechnung übernehmen]`:
+  * Fügt genehmigte Nachtragspositionen mit Kennzeichnung `[N-01]` direkt in den Positionsstamm der aktuellen Abschlagsrechnung ein.
+
+
+================================================================================
+4. MODUL C: BAUTAGEBUCH & DIGITALES ABNAHMEPROTOKOLL UI
+================================================================================
+
+4.1 BAUTAGEBUCH-ERFASSUNGSMASKE
+--------------------------------------------------------------------------------
+- **Witterungsauswahl:** Klickbare Wetter-Icons (☀️ Sonnig, ⛅ Bewölkt, 🌧️ Regen, ❄️ Frost) + Temperatur-Eingabe.
+- **Anwesenheitsmatrix:**
+  * Eigenpersonal: Anzahl Arbeiter & Gesamtstunden.
+  * Subunternehmer-Liste: Firma, Gewerk, Kopfzahl, Stunden.
+- **Geräteeinsatz:** Großgeräte (Kran, Bagger) mit Einsatz- & Stillstandsstunden.
+- **Rechtsrelevante Dokumentation:**
+  * Tagesbericht der erbrachten Bauleistungen.
+  * VOB/B § 6 Behinderungsanzeigen & VOB/B § 4 Abs. 3 Bedenkenanmeldungen.
+
+4.2 DIGITALES ABNAHMEPROTOKOLL (VOB/B § 12 / BGB § 640)
+--------------------------------------------------------------------------------
+- **Mängelerfassung:** Tabelle mit Mangelbeschreibung, Raum/Bauteil, Fristsetzung und Status (`OFFEN`, `BEHOBEN`).
+- **Gewährleistungsfristen:** Automatische Berechnung des 4-Jahres-VOB/B-Enddatums ab Abnahmetag.
+- **HTML5 Dual-Canvas-Signaturfelder:**
+  * Signaturfeld 1: Unterschrift Auftraggeber (AG).
+  * Signaturfeld 2: Unterschrift Auftragnehmer (AN / Bauleiter).
+  * Interaktive Buttons: `[Unterschrift löschen]` und `[Signatur speichern]`.
+- **1-Klick PDF-Export:** Erzeugt rechtssicheres Abnahmeprotokoll mit Briefpapier und eingebetteten Signaturen.
+
+
+================================================================================
+5. MODUL D: EINGANGSRECHNUNGEN & LIVE SOLL-IST CONTROLLING WIDGET
+================================================================================
+
+5.1 EINGANGSRECHNUNGS-MODAL & § 48b STATUS-AMPEL
+--------------------------------------------------------------------------------
+- Erfassungsmaske für Rechnungen von Lieferanten und Subunternehmern.
+- Auswahl der Kostenart: `MATERIAL`, `SUBCONTRACTOR`, `EQUIPMENT`, `LOHN`, `OTHER`.
+- **Visuelle § 48b Status-Ampel:**
+  * Wenn Kreditor Subunternehmer ist: Live-Prüfung der Freistellungsbescheinigung.
+  * Bei ungültig/abgelaufen: Prominenter Warnhinweis im Modal und automatische Ausweisung der 15 % Bauabzugsteuer.
+
+5.2 LIVE CONTROLLING-WIDGET (VISUAL DASHBOARD)
+--------------------------------------------------------------------------------
+- Integriert im Projekt-Header und im Controlling-Tab:
+  * KPI 1: Soll-Auftragsvolumen (Angebot + genehmigte Nachträge).
+  * KPI 2: Ist-Kosten Gesamt (Lohn + Material + Subunternehmer + Geräte).
+  * KPI 3: **Deckungsbeitrag (€)** mit dynamischer Ampelfarbe (Grün bei Gewinn, Rot bei Budgetüberschreitung).
+  * KPI 4: **Ist-Marge (%)** ($DB / Umsatz \times 100$).
+  * Fortschrittsbalken für Budgetauslastung und Kostenarten-Splitting.
+
+
+================================================================================
+6. DATEI- & KOMPONENTEN-ZUORDNUNG
+================================================================================
+
+| Komponente / Bereich | Betroffene Datei(en) | Beschreibung |
+|:---|:---|:---|
+| Aufmaßcenter Split-View & Tabs | `code.html`, `js/projekte.js` | Tab-Navigation & Split-Layout für GAEB-Positionen & Detailaufmaß |
+| Formelassistent Modal | `code.html`, `controllers/AufmassController.js` | Formelbibliothek & dynamische Parameter-Generierung |
+| Aufmaß-in-Dokument Übergabe | `js/projekte.js`, `js/editor.js` | Übergabe-Workflow in Abschlags-/Schlussrechnungen |
+| Nachtragsmanagement UI | `code.html`, `js/projekte.js` | Dashboard, Inline-Status & Übernahme-Buttons |
+| Bautagebuch & Wetter | `code.html`, `js/projekte.js` | Erfassungsmaske mit Wetter-Icons & Personalmatrix |
+| Abnahmeprotokoll & Canvas | `code.html`, `js/projekte.js` | Mängelliste, Gewährleistungsdaten & Dual-Canvas Signatur |
+| Eingangsrechnungen & Controlling | `code.html`, `js/projekte.js` | Kostenarten-Erfassung, § 48b Warnungen & Controlling-KPIs |
+| DA11 Export & Import | `js/da11.js`, `main.js`, `preload.js` | REB 23.003 Dateidownload & Roundtrip-Parser |
+
+
+================================================================================
+7. TEST- & INTEGRATIONS-STRATEGIE
+================================================================================
+
+1. **Frontend-Rendering- & Integrationsprüfung:**
+   - Sicherstellung fehlerfreier Initialisierung aller Dialoge und Modals in Electron.
+   - Überprüfung aller Event-Listener und IPC-Calls (`window.api.*`).
+
+2. **End-to-End Workflow-Validierung:**
+   - Erfassung eines Aufmaßes mit Formelassistent $\rightarrow$ DA11 Export $\rightarrow$ Übergabe in Abschlagsrechnung.
+   - Anlegen eines Nachtrags $\rightarrow$ Status auf `GENEHMIGT` $\rightarrow$ Rechnungs-Sync.
+   - Bautagebuch-Eintrag $\rightarrow$ Abnahmeprotokoll mit Canvas-Signatur $\rightarrow$ PDF-Export.
+   - Eingangsrechnung mit abgelaufener § 48b Bescheinigung $\rightarrow$ 15% Bauabzugsteuer im Controlling Widget.
+
+===============================================================================
+ENDE DES MASTER-IMPLEMENTIERUNGSPLANS (plans/Ai/plan08.txt)
+===============================================================================

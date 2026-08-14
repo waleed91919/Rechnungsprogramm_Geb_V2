@@ -1,8 +1,9 @@
 /**
- * AufmassController.js - Geschäftsschicht & Formel-Rechner für Aufmaße
- * Berechnet physische Maße aus Formel-Strings und koordiniert Aufmaß-Operationen.
+ * AufmassController.js - Geschäftsschicht & Formel-Rechner für Aufmaße nach REB 23.003
+ * Berechnet physische Maße aus Formel-Strings und koordiniert Aufmaß- & DA11-Operationen.
  */
-window.AufmassController = class AufmassController {
+
+class AufmassController {
     /**
      * Berechnet mathematische Strings (z.B. "(5 + 3.5) * 2") sicher ohne unsicheres eval().
      * @param {string} formulaString - Mathematischer Ausdruck
@@ -49,23 +50,44 @@ window.AufmassController = class AufmassController {
     }
 
     /**
+     * REB 23.003 Standard-Formel-Berechnung
+     * @param {string} formelCode - z.B. '01' (Rechteck), '04' (Quader), '91' (Frei)
+     * @param {Array<number>} params - Parameterwerte [a, b, c, d]
+     * @returns {number}
+     */
+    static calculateREBFormula(formelCode, params = []) {
+        const [a = 0, b = 0, c = 0, d = 0] = params.map(p => parseFloat(p) || 0);
+
+        switch (formelCode) {
+            case '01': // Rechteck: a * b
+                return Math.round(a * b * 10000) / 10000;
+            case '02': // Dreieck: (a * b) / 2
+                return Math.round(((a * b) / 2) * 10000) / 10000;
+            case '03': // Trapez: ((a + c) / 2) * h (b)
+                return Math.round((((a + c) / 2) * b) * 10000) / 10000;
+            case '04': // Quader: a * b * c
+                return Math.round(a * b * c * 10000) / 10000;
+            case '05': // Zylinder: (PI / 4) * d^2 * h -> (PI / 4) * a^2 * b
+                return Math.round(((Math.PI / 4) * Math.pow(a, 2) * b) * 10000) / 10000;
+            case '91': // Freie Formel: Standardprodukt a * b * c
+            default:
+                if (c > 0) return Math.round(a * b * c * 10000) / 10000;
+                if (b > 0) return Math.round(a * b * 10000) / 10000;
+                return a;
+        }
+    }
+
+    /**
      * Lädt das Aufmaß für eine spezifische Rechnungsposition aus dem AufmassModel.
-     * Prüft, ob die gespeicherte Einheit der aktuell gewählten entspricht.
-     * @param {string|number} positionId 
-     * @param {string} currentEinheit - Aktuell gewählte Einheit der Position
-     * @returns {Promise<Object|null>}
      */
     static async loadAufmassForPosition(positionId, currentEinheit = null) {
-        if (!positionId) return null;
+        if (!positionId || typeof window === 'undefined' || !window.AufmassModel) return null;
         const model = new window.AufmassModel(window.api);
         const loaded = await model.getAufmassByPositionId(positionId);
 
         if (!loaded) return null;
 
-        // Gespeicherte Einheit ermitteln (vom Aufmaß-Stamm oder der 1. Aufmaßposition)
         const savedEinheit = loaded.einheit || (loaded.positionen && loaded.positionen[0] && loaded.positionen[0].einheit);
-
-        // Wenn Einheit übergeben wurde und nicht mit der gespeicherten übereinstimmt: Verwerfen
         if (currentEinheit && savedEinheit && savedEinheit !== currentEinheit) {
             console.log(`Aufmaß für Position ${positionId} zurückgesetzt (Einheitswechsel von "${savedEinheit}" zu "${currentEinheit}").`);
             return null;
@@ -76,14 +98,9 @@ window.AufmassController = class AufmassController {
 
     /**
      * Speichert die Aufmaßzeilen für eine spezifische Rechnungsposition.
-     * @param {string|number} positionId 
-     * @param {Array} positionen 
-     * @param {string} titel 
-     * @param {string} einheit 
-     * @returns {Promise<number|null>}
      */
     static async saveAufmassForPosition(positionId, positionen = [], titel = '', einheit = 'm²') {
-        if (!positionId) return null;
+        if (!positionId || typeof window === 'undefined' || !window.AufmassModel) return null;
         const model = new window.AufmassModel(window.api);
         const processed = positionen.map(p => ({
             ...p,
@@ -103,15 +120,13 @@ window.AufmassController = class AufmassController {
 
     /**
      * Berechnet die Summe aller Positionsergebnisse für ein Aufmaß.
-     * @param {Array} positionen - Liste von Positionsobjekten
-     * @returns {Object} Aufschlüsselung nach Einheiten und Gesamtergebnis
      */
     static calculateAufmassTotals(positionen = []) {
         const totalsByUnit = {};
         let totalSum = 0;
 
         const processedPositions = positionen.map(pos => {
-            const ergebnis = this.evaluateFormula(pos.formel);
+            const ergebnis = pos.formel ? this.evaluateFormula(pos.formel) : (parseFloat(pos.ergebnis) || 0);
             const einheit = (pos.einheit || 'Stk.').trim();
 
             totalsByUnit[einheit] = Math.round(((totalsByUnit[einheit] || 0) + ergebnis) * 10000) / 10000;
@@ -132,8 +147,6 @@ window.AufmassController = class AufmassController {
 
     /**
      * Validiert ein Aufmaß-Objekt vor dem Speichern.
-     * @param {Object} aufmass - Aufmaß-Stammdaten mit Positionen
-     * @returns {Object} { valid: boolean, message?: string }
      */
     static validateAufmass(aufmass) {
         if (!aufmass || !aufmass.titel || aufmass.titel.trim() === '') {
@@ -147,4 +160,11 @@ window.AufmassController = class AufmassController {
         }
         return { valid: true };
     }
-};
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = AufmassController;
+}
+if (typeof window !== 'undefined') {
+    window.AufmassController = AufmassController;
+}
