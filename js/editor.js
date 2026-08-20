@@ -1145,22 +1145,24 @@ async function saveRechnung() {
         showToast('Dokument erfolgreich gespeichert.', 'success');
 
         if (state.isAngebotMode) {
-            if (document.getElementById('view-angebote') && !document.getElementById('view-angebote').classList.contains('hidden')) {
-                if (typeof renderAngebote === 'function') renderAngebote();
-            } else if (document.getElementById('view-projekt-details') && !document.getElementById('view-projekt-details').classList.contains('hidden')) {
+            if (document.getElementById('view-projekt-details') && !document.getElementById('view-projekt-details').classList.contains('hidden')) {
                 if (state.currentProjektId && typeof openProjektDetails === 'function') {
                     openProjektDetails(state.currentProjektId);
                 }
+            } else if (typeof switchView === 'function') {
+                switchView('angebote');
+            } else if (typeof renderAngebote === 'function') {
+                renderAngebote();
             }
         } else {
-            if (document.getElementById('view-dashboard') && !document.getElementById('view-dashboard').classList.contains('hidden')) {
-                if (typeof renderDashboard === 'function') renderDashboard();
-            } else if (document.getElementById('view-rechnungen') && !document.getElementById('view-rechnungen').classList.contains('hidden')) {
-                if (typeof renderRechnungen === 'function') renderRechnungen();
-            } else if (document.getElementById('view-projekt-details') && !document.getElementById('view-projekt-details').classList.contains('hidden')) {
+            if (document.getElementById('view-projekt-details') && !document.getElementById('view-projekt-details').classList.contains('hidden')) {
                 if (state.currentProjektId && typeof openProjektDetails === 'function') {
                     openProjektDetails(state.currentProjektId);
                 }
+            } else if (typeof switchView === 'function') {
+                switchView('rechnungen');
+            } else if (typeof renderRechnungen === 'function') {
+                renderRechnungen();
             }
         }
     } catch (e) {

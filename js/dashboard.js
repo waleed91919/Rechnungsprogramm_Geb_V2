@@ -174,7 +174,10 @@ function filterRechnungenData(rechnungen, query, filter, kundenMap) {
         const q = query.toLowerCase();
         filtered = filtered.filter(r => {
             const kunde = getKunde(parseInt(r.kundeId)) || { name: 'Unbekannt' };
-            return r.nr.toLowerCase().includes(q) || kunde.name.toLowerCase().includes(q) || r.brutto.toString().includes(q);
+            const rNr = r.nr ? String(r.nr).toLowerCase() : '';
+            const kName = kunde.name ? String(kunde.name).toLowerCase() : '';
+            const rBrutto = r.brutto !== undefined && r.brutto !== null ? String(r.brutto) : '';
+            return rNr.includes(q) || kName.includes(q) || rBrutto.includes(q);
         });
     }
 
@@ -211,7 +214,7 @@ function createRechnungRow(rech, kundenMap) {
     // Fallback if kundenMap is not provided
     const getKunde = (id) => kundenMap ? kundenMap.get(id) : state.kunden.find(k => k.id === id);
     const kunde = getKunde(parseInt(rech.kundeId)) || { name: 'Unbekannt' };
-    const dateStr = new Date(rech.datum).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' });
+    const dateStr = rech.datum ? new Date(rech.datum).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
 
     const tr = document.createElement('tr');
     tr.className = 'hover:bg-blue-50/50 transition-colors group';
@@ -431,20 +434,6 @@ function createRechnungRow(rech, kundenMap) {
 
         divActions.appendChild(btnMahn);
     }
-
-    const btnPdf = document.createElement('button');
-    btnPdf.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        window.generatePdf(rech.id);
-    };
-    btnPdf.className = 'text-slate-400 hover:text-primary p-1 transition-colors flex items-center justify-center';
-    btnPdf.title = 'PDF generieren';
-    const spanPdf = document.createElement('span');
-    spanPdf.className = 'material-symbols-outlined text-[18px]';
-    spanPdf.textContent = 'picture_as_pdf';
-    btnPdf.appendChild(spanPdf);
-    divActions.appendChild(btnPdf);
 
     tdActions.appendChild(divActions);
     tr.appendChild(tdActions);
