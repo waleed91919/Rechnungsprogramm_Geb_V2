@@ -119,8 +119,8 @@ window.InvoiceView = class InvoiceView {
         if (modal) {
             modal.classList.add('hidden');
             modal.classList.remove('flex');
-            modal.style.display = 'none'; // Radikaler Fix
-            modal.style.zIndex = '-10';   // Aus dem Weg räumen
+            modal.style.removeProperty('display');
+            modal.style.removeProperty('z-index');
         }
     }
 
