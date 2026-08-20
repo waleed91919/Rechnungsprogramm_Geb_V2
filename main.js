@@ -389,7 +389,9 @@ function setupIpc() {
         });
     }));
 
-    // Focus Window (fixes Windows input focus bug after modal transitions)
+    /**
+     * Fokussiert das Zielfenster nach Modal- und Dialog-Schließungen unter Windows.
+     */
     ipcMain.handle('app:focusWindow', wrapHandler(async (event) => {
         const win = BrowserWindow.fromWebContents(event.sender);
         focusWin(win);
