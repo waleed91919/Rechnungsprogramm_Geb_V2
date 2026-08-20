@@ -2,7 +2,7 @@
  * InvoiceController.js - Geschäftsschicht & Berechnungslogik für Rechnungen
  * Steuert Berechnungen von § 13b UStG, Rabatten, Sicherheitseinbehalt, Verrechnungen, Anzahlungen, Stornierung & Speichervalidierung.
  */
-window.InvoiceController = class InvoiceController {
+class InvoiceController {
     /**
      * Berechnet alle Netto-, Brutto-, Steuersummen und Zahlbeträge einer Rechnung.
      */
@@ -221,4 +221,11 @@ window.InvoiceController = class InvoiceController {
 
         return { updatedOriginal, stornoDoc, stornoNr };
     }
-};
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = InvoiceController;
+}
+if (typeof window !== 'undefined') {
+    window.InvoiceController = InvoiceController;
+}
