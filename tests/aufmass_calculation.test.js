@@ -19,6 +19,20 @@ testCases.forEach(tc => {
     const result = AufmassController.evaluateFormula(tc.formula);
     assert.strictEqual(result, tc.expected, `Formel "${tc.formula}" ergab ${result}, erwartet ${tc.expected}`);
 });
+
+// Test specifically for the catch block to ensure coverage of error handling (e.g. bypassing regex but invalid syntax)
+let warnCalled = false;
+const originalWarn = console.warn;
+console.warn = (msg, errorMsg) => {
+    if (msg.includes('Fehler bei Berechnung')) {
+        warnCalled = true;
+    }
+};
+const errorResult = AufmassController.evaluateFormula('5 + * 3');
+assert.strictEqual(errorResult, 0, 'Sollte 0 zurückgeben bei SyntaxError');
+assert.strictEqual(warnCalled, true, 'console.warn sollte bei Fehler aufgerufen werden');
+console.warn = originalWarn; // Restore original console.warn
+
 console.log('✓ Formel-Parser & AST-Evaluation arbeiten mathematisch korrekt und sicher.');
 
 // 2. REB 23.003 Standardformeln
