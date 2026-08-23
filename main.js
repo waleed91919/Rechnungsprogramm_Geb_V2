@@ -91,7 +91,7 @@ function createWindow() {
 
 // Set up IPC Handlers
 function setupIpc() {
-    const { dbAPI } = require('./db');
+    const { db, dbAPI } = require('./db');
 
     // Generic error wrapper for IPC handlers
     const wrapHandler = (fn) => async (event, ...args) => {
@@ -482,6 +482,82 @@ function setupIpc() {
         } catch (err) {
             console.error('IPC save:pdf error:', err);
             if (win) focusWin(win);
+            return { success: false, error: err.message || String(err) };
+        }
+    }));
+
+    // ZUGFeRD 2.x Export (PDF/A-3 mit eingebetteter E-Rechnungs-XML)
+    ipcMain.handle('invoice:exportZugferdPdf', wrapHandler(async (event, payload = {}) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        try {
+            const doc = payload.doc;
+            const customer = payload.customer || null;
+            if (!doc || typeof doc !== 'object' || !doc.nr) {
+                throw new Error('Ungültige Rechnungsdaten für den ZUGFeRD-Export.');
+            }
+
+            const profile = payload.profile === 'XRECHNUNG' ? 'XRECHNUNG' : 'EN16931';
+            const EInvoiceEngine = require('./js/einvoice');
+            const { ZugferdBuilder } = require('./main/zugferd-builder');
+            const profileInfo = EInvoiceEngine.getZUGFeRDProfileInfo(profile);
+
+            const seller = (await dbAPI.getFullState()).einstellungen;
+            const xmlString = EInvoiceEngine.generateZUGFeRDXML(doc, customer, seller, { profile });
+
+            const buffer = await ZugferdBuilder.build({
+                basePdfBuffer: null,
+                xmlString,
+                meta: {
+                    nr: doc.nr,
+                    datum: doc.datum,
+                    sellerName: seller.firmenname || seller.name || '',
+                    conformanceLevel: profileInfo.conformanceLevel,
+                    fileName: profileInfo.fileName,
+                    title: `Rechnung ${doc.nr}`
+                }
+            });
+
+            const { dialog } = require('electron');
+            const fileNameHint = String(payload.fileNameHint || `ZUGFeRD_${doc.nr}.pdf`).replace(/[\\/:*?"<>|]/g, '_');
+
+            const { filePath } = await dialog.showSaveDialog(win, {
+                title: 'ZUGFeRD-PDF (PDF/A-3) speichern',
+                defaultPath: path.join(app.getPath('documents'), fileNameHint),
+                filters: [
+                    { name: 'ZUGFeRD PDF (*.pdf)', extensions: ['pdf'] },
+                    { name: 'Alle Dateien (*.*)', extensions: ['*'] }
+                ]
+            });
+
+            if (!filePath) {
+                focusWin(win);
+                return { success: false, cancelled: true };
+            }
+
+            fs.writeFileSync(filePath, buffer);
+
+            try {
+                const crypto = require('crypto');
+                const lastRow = db.prepare('SELECT current_hash FROM audit_logs ORDER BY id DESC LIMIT 1').get();
+                const currentHash = crypto.createHash('sha256').update(buffer).digest('hex');
+                db.prepare('INSERT INTO audit_logs (entity_type, entity_id, action, previous_hash, current_hash, details) VALUES (?, ?, ?, ?, ?, ?)')
+                    .run(
+                        'DOCUMENT',
+                        typeof doc.id === 'number' ? doc.id : 0,
+                        'ZUGFERD_EXPORT',
+                        (lastRow && lastRow.current_hash) || '',
+                        currentHash,
+                        JSON.stringify({ nr: doc.nr, profile, fileName: path.basename(filePath), bytes: buffer.length })
+                    );
+            } catch (auditErr) {
+                console.error('Audit-Log für den ZUGFeRD-Export fehlgeschlagen:', auditErr);
+            }
+
+            focusWin(win);
+            return { success: true, path: filePath };
+        } catch (err) {
+            console.error('IPC invoice:exportZugferdPdf error:', err);
+            if (win && !win.isDestroyed()) focusWin(win);
             return { success: false, error: err.message || String(err) };
         }
     }));

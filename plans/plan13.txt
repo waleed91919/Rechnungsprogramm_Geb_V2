@@ -1,0 +1,621 @@
+================================================================================
+PLAN 13 - FEATURE F5: ECHTER ZUGFeRD 2.x PDF/A-3-EXPORT
+Projekt: W-Link ERP (Electron ^32, better-sqlite3, Plain-JS-SPA)
+Datum:   2026-08-23
+Status:  Planung (kein Implementierungscode, nur Pseudocode)
+================================================================================
+
+## 1. Ziel & Abnahmekriterien
+
+ZIEL:
+Der ZUGFeRD-Export erzeugt ab sofort ein ECHTES, maschinenlesbares Hybrid-
+Rechnungsdokument nach ZUGFeRD 2.x / Factur-X (technisch identisch seit 2.1/1.0):
+ein PDF/A-3 (ISO 19005-3), in das die CII-Rechnungs-XML (EN 16931) als Embedded
+File `factur-x.xml` mit korrekter AFRelationship und korrekten XMP-Metadaten
+eingebettet ist. Die bisherige Mock-Lösung (Textdatei mit "%PDF"-Präfix) wird
+komplett ersetzt.
+
+ABNAHMEKRITERIEN (messbar):
+1. Der Export über den Rechnungs-Editor (Format "ZUGFERD") und über die
+   Schnell-Download-Buttons im Dashboard liefert eine Datei mit gültigem
+   PDF-Header `%PDF-1.7` und gültiger EOF-Markierung (`%%EOF`) - keine
+   Mock-Textdateien mehr.
+2. Das PDF enthält einen Dokument-Katalog-Eintrag `/AF` (Associated Files),
+   der auf das FileSpec-Dictionary der eingebetteten `factur-x.xml` zeigt.
+3. Das FileSpec-Dictionary enthält `/AFRelationship /Alternative`,
+   `/Type /Filespec`, `/UF (factur-x.xml)` sowie `/Desc`.
+4. Die XML ist zusätzlich im Namensbaum `/Names /EmbeddedFiles` verzeichnet,
+   damit auch Viewer ohne AF-Unterstützung sie extrahieren können.
+5. Das XMP-Metadaten-Paket des PDFs enthält:
+   - `pdfaid:part = 3` (+ `pdfaid:conformance`, Ziel: B oder U)
+   - `fx:DocumentType = INVOICE`
+   - `fx:DocumentFileName = factur-x.xml`
+   - `fx:Version = 1.0`
+   - `fx:ConformanceLevel = EN 16931`
+   - die zwingend erforderliche PDF/A Extension-Schema-Deklaration
+     (pdfaExtension:schemas) für den fx-Namespace
+     `urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#`.
+6. Das PDF enthält einen OutputIntent mit eingebettetem sRGB-ICC-Profil.
+7. Die eingebettete XML ist dieselbe CII-Struktur, die EInvoiceEngine erzeugt;
+   der Guideline-URN entspricht dem gewählten Profil (siehe Schritt 3).
+8. `npm test` läuft grün; neue Unit-Tests prüfen die Strukturmerkmale 2-7
+   automatisiert am erzeugten Binär-PDF (ohne VeraPDF).
+9. Ein manuell durchgeführter VeraPDF-Run (PDF/A-3b) + Mustang-Validator/
+   KoSIT-Check ist dokumentiert; bekannte Restrisiken sind benannt (Kap. 8).
+10. GoBD: Der Export-Vorgang erzeugt einen Audit-Log-Eintrag (audit_logs),
+    bestehende Hashkette wird nicht gebrochen.
+
+NICHT-ZIEL (Scope-Grenze):
+- Vollständige semantische EN-16931-Feldabdeckung der CII-XML (Adressen,
+  Kontakte, Steueraufschlüsselung je Satz) -> gehört zu F6 Validierung.
+- Digitale Signatur des PDFs.
+- Empfang/Import von ZUGFeRD-Dateien.
+
+--------------------------------------------------------------------------------
+
+## 2. Ist-Analyse (mit exakten Datei-/Zeilenreferenzen)
+
+2.1 XML-Erzeugung - js/einvoice.js (Dual-Modul: Node via module.exports Zeile 170-172,
+    Renderer via window.EInvoiceEngine Zeile 173):
+    * js/einvoice.js:44-150  `generateXRechnungXML(invoice, customer, seller)`:
+      erzeugt vollständiges CII-CrossIndustryInvoice-XML.
+      - Zeile 105: Guideline-URN fest auf XRechnung 2.3:
+        `urn:cen.eu:en16931:2017#compliant#urn:xoev-de:kosit:standard:xrechnung_2.3`
+      - Zeile 99: XML-Header `<?xml version="1.0" encoding="UTF-8"?>`.
+    * js/einvoice.js:155-157 `generateZUGFeRDXML()`: delegiert NUR auf
+      generateXRechnungXML() - es entsteht kein PDF, nur dieselbe XML.
+    * js/einvoice.js:159-167 `escapeXML()` Hilfsfunktion.
+    * Konsequenz: "ZUGFeRD" existiert im Code nur als Label; es gibt KEINEN
+      Weg von Daten zu einem Hybrid-PDF.
+
+2.2 PDF-Erzeugung - Standard-PDF ohne PDF/A:
+    * main.js:93   `setupIpc()` - alle IPC-Handler werden hier registriert.
+    * main.js:97   `wrapHandler(fn)` - Fehler-/Fokus-Wrapper für Handler.
+    * main.js:445-487  IPC-Handler `save:pdf`:
+      - :459 `dialog.showSaveDialog(...)` Speicherdialog.
+      - :467-468 Wenn Buffer übergeben wurde, wird dieser geschrieben.
+      - :470-474 SONST `event.sender.printToPDF({ printBackground: true,
+        pageSize: 'A4', margins custom })` -> Standard-PDF von Chromium,
+        KEIN PDF/A, keine Metadaten, kein OutputIntent, kein Attachment.
+    * preload.js:58 `savePdf(buffer, defaultName)` exponiert 'save:pdf'.
+    * js/einstellungen.js:1404-1412 (savePdf-Pfad im PDF-Modal): ruft
+      `window.api.savePdf(null, filename)` -> damit läuft IMMER der
+      printToPDF-Zweig (:470). Das ist der "echte" Rechnungsdruck.
+    * js/einstellungen.js:201 `window.generatePdf(id, isAngebot)` baut das
+      HTML (#invoice-paper) und öffnet die PDF-Vorschau (GoBD-Lock :207-221).
+
+2.3 UI-Zugänge zum Export:
+    * code.html:2887-2921 B2G-E-Rechnungs-Sektion im Rechnungs-Modal:
+      - :2909-2912 Select `rechnung-erechnung-format` mit Optionen
+        `XRECHNUNG` (default) und `ZUGFERD` ("ZUGFeRD 2.0.1+ (PDF/A-3 + XML)")
+        - die ZUGFERD-Option tut aktuell NICHTS Unterschiedliches.
+      - :2916 Button `exportXRechnungXMLFromModal()`.
+    * js/editor.js:609-651 `exportXRechnungXMLFromModal()`: liest Modal-Felder
+      (Leitweg-ID :615, Buyer-Reference :616, §13b :617), validiert (:633),
+      generiert XML (:638) und lädt es als Blob herunter (:639-647).
+      Der Format-Select wird NICHT ausgewertet -> immer XML-Download.
+    * js/dashboard.js:296-321 Schnell-Buttons je Rechnungszeile:
+      - :297-308 btnPdf, Title "PDF / ZUGFeRD (PDF/A-3) herunterladen"
+        (:306 - irreführend, es passiert nichts ZUGFeRD-spezifisches),
+        ruft window.generatePdf(rech.id).
+      - :310-321 btnXml -> window.downloadXRechnungXML(rech.id).
+    * js/dashboard.js:799-824 `downloadXRechnungXML(invoiceId)`: generiert XML
+      clientseitig (:811) und triggert Browser-Download als Blob (:812-819).
+
+2.4 Tests & Mock-Daten:
+    * tests/bau_erp.test.js:84-117 (Testfall 4): prüft validateForEN16931 und
+      generateXRechnungXML (Leitweg-ID, URN, Rechnungsnummer). Kein Test für
+      ZUGFeRD-PDF vorhanden.
+    * scripts/generate_and_test.js:128-139: schreibt MOCK-"PDFs":
+      - :132/:133 `fs.writeFileSync(abXPath, '%PDF-1.7\n% ZUGFeRD ... Mock ...')`
+        -> reine UTF-8-Textdateien unter output/invoices/b2b_zugferd/.
+    * tests/end_to_end_generate.test.js:16-24: assertiert nur Existenz dieser
+      Mock-Dateien (:23-24) - der Test würde auch bei echten PDFs bestehen,
+      aber er beweist keine PDF/A-3-Konformität.
+
+2.5 Abhängigkeiten (package.json):
+    * package.json:59-66 devDependencies (electron ^32.3.3 u.a.),
+      package.json:67-70 dependencies: NUR better-sqlite3 ^12.6.2 und qrcode
+      ^1.5.4. Es gibt KEINE PDF-Bibliothek im Projekt.
+    * Projekt-Lizenz: package.json:58 "MIT"; App ist proprietär-kommerziell
+      vertrieben -> AGPL-Komponenten sind tabu (siehe Kap. 4).
+
+2.6 GoBD/Audit:
+    * schema.js:137 audit_logs Tabelle (SHA-256-Hashkette); Anbindung über
+      GoBDAuditEngine (js/gobd.js, genutzt in tests/end_to_end_generate.test.js:20).
+      Ein neuer Export sollte protokolliert werden (Schritt 6).
+
+FAZIT DER IST-ANALYSE:
+Alle Bausteine für die XML existieren (einvoice.js), alle UI-Hooks existieren
+(code.html/dashboard.js/editor.js), aber die Kette "Daten -> PDF/A-3-Hybrid"
+fehlt komplett. Der natürliche Hebel ist der Main-Prozess (printToPDF liegt
+dort), ergänzt um einen PDF/A-3-Postprozessor.
+
+--------------------------------------------------------------------------------
+
+## 3. ZUGFeRD-Technische Anforderungen (PDF/A-3, AFRelationship, XMP, Namensbaum, ICC)
+
+3.1 Container: PDF/A-3 (ISO 19005-3)
+    * Das visuelle PDF MUSS konform zu PDF/A-3 sein (Level a, b oder u erlaubt;
+      realistisch anpeilbar: PDF/A-3b bzw. 3u).
+    * PDF-Version im Header: %PDF-1.7 (PDF/A-2/3 basieren auf PDF 1.7).
+    * Pflichtmerkmale von PDF/A (relevant für uns):
+      - Alle Fonts eingebettet (Subset reicht) -> Chromium/printToPDF bettet
+        Fonts standardmäßig ein (erfüllt i.d.R. automatisch).
+      - Eingebettetes OutputIntent-ICC-Profil; DeviceRGB-Farben brauchen ein
+        sRGB-OutputIntent.
+      - XMP-Metadaten mit pdfaid:part/pdfaid:conformance.
+      - Dokument-/ID im Trailer/Katalog.
+      - Keine Verschlüsselung, kein JavaScript, keine Notation-Annotationen.
+      - XMP muss UNkomprimiert als /Metadata-Stream vorliegen.
+
+3.2 Attachment (das Herzstück):
+    * Genau EINE Invoice-XML als Embedded File auf DOKUMENT-Ebene:
+      - Katalog: `/AF [ <filespec-ref> ]` (Associated Files, neu in PDF/A-3).
+      - FileSpec: `/Type /Filespec /F (factur-x.xml) /UF (factur-x.xml)`
+        `/Desc (...) /AFRelationship /Alternative`
+        `/EF << /F <embeddedfile-ref> /UF <embeddedfile-ref> >>`
+      - EmbeddedFile-Stream: `/Subtype /text#2Fxml` (MIME text/xml),
+        `/Params << /Size n /ModDate (D:...) >>`.
+    * Dateiname PFLICHT (Fixnamen!):
+      - ZUGFeRD 2.1+/Factur-X (Profil EN 16931/BASIC/EXTENDED): `factur-x.xml`
+      - Ausnahme Referenzprofil XRECHNUNG: `xrechnung.xml`
+    * AFRelationship-Wert - WICHTIGE NUANCE (honest):
+      - Für ZUGFeRD/Factur-X in DEUTSCHLAND mit Profil EN 16931 ist
+        `/Alternative` vorgeschrieben (XML und PDF sind zwei gleichwertige
+        Darstellungen desselben Inhalts).
+      - `/Source` wäre zulässig, wenn das PDF aus der XML erzeugt wurde und
+        der Empfänger außerhalb Deutschlands sitzt (Factur-X-Regel).
+      - `/Data` taucht in frühen Factur-X-1.0-Beispielen auf und wird teils
+        von Tools akzeptiert, ist aber laut aktueller Spezifikation für
+        EN 16931 nicht der empfohlene Wert. ENTSCHEIDUNG: Wir setzen
+        `/Alternative` (sicherster, in DE akzeptierter Wert).
+    * Zusätzlich MUSS die XML im klassischen Namensbaum hängen:
+      `/Names << /EmbeddedFiles << /Names [ (factur-x.xml) <filespec-ref> ] >> >>`
+      (Kompatibilität mit Viewern/Tools ohne AF-Support).
+
+3.3 XMP-Metadaten (exakte Felder):
+    * PDF/A-Identification: `pdfaid:part=3`, `pdfaid:conformance=B|U`.
+    * Basis (dc, xmp, pdf): dc:title/dc:creator optional sinnvoll,
+      pdf:Producer, xmp:CreatorTool, dc:format="application/pdf".
+    * Factur-X/ZUGFeRD-Extension (Namespace
+      `urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#`, Prefix `fx`):
+      - fx:DocumentType       = INVOICE            (immer)
+      - fx:DocumentFileName   = factur-x.xml       (MUSS zum Attachment-Namen passen!)
+      - fx:Version            = 1.0                (ZUGFeRD 2.1+ = Factur-X 1.0)
+      - fx:ConformanceLevel   = EN 16931           (oder BASIC/XRECHNUNG ...)
+    * KRITISCH (häufigster VeraPDF-Fehler): Die vier fx:-Properties sind KEINE
+      vordefinierten XMP-Schemata. PDF/A verlangt ISO 19005-3, Clause 6.6.2.3.1,
+      eine Extension-Schema-Deklaration:
+      pdfaExtension:schemas -> rdf:Bag ->
+        pdfaSchema:schema       = "Factur-X PDFA Extension Schema"
+        pdfaSchema:namespaceURI = urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#
+        pdfaSchema:prefix       = fx
+        pdfaProperty[] für DocumentType (external), DocumentFileName (external),
+        Version (external), ConformanceLevel (external) mit value-type Text.
+    * XMP-Paket: `<?xpacket ...?>`-Wrapper, unkomprimierter Stream im Katalog
+      unter /Metadata.
+
+3.4 OutputIntent / ICC:
+    * Katalog: `/OutputIntents [ << /Type /OutputIntent /S /GTS_PDFA1
+      /DestOutputProfile <icc-stream-ref> /OutputConditionIdentifier (sRGB) >> ]`
+    * ICC-Profil: sRGB. Woher nehmen (Lizenz beachten)?
+      - @cantoo/pdf-lib bringt beim convertToPDFA()/embedFacturX()-Weg ein
+        eingebautes sRGB-ICC-Profil MIT (in der Bibliothek gebündelt) ->
+        wir müssen KEIN eigenes Profil mitschleppen. (Empfehlung!)
+      - Falls Eigenbau-Fallback nötig: frei lizenzierbare Profile wie
+        sRGB2014.icc (ICC/color.org, freie Nutzung) oder sRGB-v4-preference -
+        NICHT Ghostscript-Profildateien als "Code" behandeln; die reine
+        .icc-Binärdatei ist zwar datenseitig unproblematisch, sauberer ist
+        die color.org-Variante.
+
+3.5 Konsistenzregeln (werden von Empfängern geprüft):
+    * fx:DocumentFileName == tatsächlicher Attachment-Dateiname.
+    * fx:ConformanceLevel == Guideline-URN der eingebetteten XML:
+      - Profil EN 16931 =>
+        urn:cen.eu:en16931:2017 (bzw. streng:
+        urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:en16931)
+      - Aktuell erzeugt einvoice.js aber den XRECHNUNG-URN (:105)! Entweder
+        XML-URN je Profil parametrieren (Schritt 3) ODER Profil XRECHNUNG
+        deklarieren (dann Filename xrechnung.xml). -> Beides vorgesehen.
+    * Beträge in PDF-Sicht vs. XML müssen übereinstimmen (BR-CO-Risiko;
+      da beide aus denselben state-Daten generiert werden, gegeben).
+
+--------------------------------------------------------------------------------
+
+## 4. Optionsvergleich
+
+| # | Ansatz | Aufwand | Risiken | Lizenz | Entscheidung |
+|---|--------|---------|---------|--------|--------------|
+| a | @cantoo/pdf-lib (aktiv gepflegter pdf-lib-Fork, v2.9.1, MIT): printToPDF-Basis-PDF post-processen; API: `embedFacturX(doc, xmlBytes,{conformanceLevel})` setzt AF+EmbeddedFiles+XMP(fx:, ExtensionSchema)+PDF/A-3 sicher; `convertToPDFA({conformance:'3B'|'3U'})` liefert /ID, OutputIntent inkl. gebündeltem sRGB-ICC, pdfaid-XMP, Header 1.7 | Niedrig-mittel (~2-3 Tage) | Chromium-PDFs enthalten Elemente, deren strenge VeraPDF-Konformität nicht garantiert ist (Font-Details, Annotations-Flags); Fork-Abhängigkeit (Community-Fork statt Upstream) - aber aktiv maintained, MIT, große Installationsbasis | MIT -> kommerziell OK | EMPFOHLEN. Deckt 100% der Container-Pflichten (AF, Names, XMP incl. Extension Schema, OutputIntent/ICC) out-of-the-box; kein natives Modul (reines JS -> Electron-safe, kein better-sqlite3-artiges Rebuild-Problem); funktioniert identisch im node --test |
+| b | Eigenes minimal PDF/A-3-Postprocessing auf Basis von pdf-lib (upstream): attach()+manuelle PDFRawObject für /AF, Names, XMP-String, OutputIntent + selbst beschafftes sRGB-ICC | Mittel-hoch (~5-8 Tage) | XMP-Extension-Schema & Escaping fehleranfällig (VeraPDF 6.6.2.3.1!); ICC-Profil selbst zu beschaffen/bundlen; Wartungslast; zwei Implementierungen derselben Logik | pdf-lib MIT; ICC color.org frei | Fallback (Plan B), falls embedFacturX in Praxis scheitert; Architektur kapselt Builder so, dass Tausch möglich bleibt |
+| c | Headless-Chromium/Electron printToPDF direkt mit PDF/A | - | NICHT MÖGglich: printToPDF hat keinen PDF/A-Modus (keine Parameter); CDP Page.printToPDF ebenfalls nicht; Prince/weasyprint wären externe Engines | - | VERWORFEN (technisch nicht abbildbar) |
+| d | Externe CLI-Tools: Ghostscript (PDF/A-3 + zugferd.ps), mutool/MuPDF-wasm | Hoch (Integration+Bundling ~4-6 Tage) | AGPL v3! Kommerzielle Closed-Source-Verbreitung bräuchte AGPL-des Gesamterzeugnisses oder kommerzielle Lizenz (Artifex, teuer); exe-Bundling pro Plattform; subprocess-Fehlerbehandlung | Ghostscript/MuPDF: AGPL -> Risiko hoch | VERWORFEN (Lizenz). Nur denkbar als optionaler, vom Nutzer separat installierter "Validierungs-/Konvertierungs-Pfad" - nicht Bestandteil dieses Features |
+| e | Kommerzielle SDKs (PDFlib 11, Apryse, iText 7 pdfHTML+pdfA) | Niedrig (Dev), Kosten (Runtime-Lizenzen) | Lizenzkosten pro Deployment; vendor lock-in; SDK-Bundling in Electron | kommerziell | VERWORFEN für MVP (Budget); als Upgrade-Pfad dokumentiert |
+
+BEGRÜNDUNG DER ENTSCHEIDUNG (a):
+1. Lizenz: MIT passt zur proprietären Vertriebsform; AGPL (d/e-Familie) ist
+   im Projektkontext (package.json:58 MIT, kommerzieller Vertrieb) ein No-Go.
+2. Technologie-Fit: reines JavaScript, kein native rebuild (im Gegensatz zu
+   besser-sqlite3, package.json:52-55 asarUnpack!) -> läuft im Electron-Main
+   UND in node --test identisch.
+3. Funktionsdeckung: embedFacturX() implementiert genau die Anforderungen aus
+   Kap. 3 (AFRelationship, /AF, /Names EmbeddedFiles, fx:-XMP inkl. zwingender
+   pdfaExtension-Deklaration, PDF/A-3-Promotion mit sRGB-OutputIntent).
+   Damit entfällt die riskanteste Handarbeit (XMP-Extension-Schema).
+4. Restrisiko ehrlich benannt: Die PDF/A-Strenge des CHROMIUM-AusgangspDFs ist
+   der offene Punkt (nicht die Container-Logik). Gegenmaßnahmen in Kap. 8.
+
+--------------------------------------------------------------------------------
+
+## 5. Ziel-Architektur
+
+5.1 Neue Module / geänderte Kanäle:
+
+  NEU  main/zugferd-builder.js     PDF/A-3-Hybrid-Builder (Main-Prozess, pure JS,
+                                   keine electron-imports -> testbar via node --test)
+  NEU  assets/srgb.icc             (NICHT nötig bei Variante a - ICC kommt aus
+                                   @cantoo/pdf-lib; Ordner nur für Fallback b)
+  ÄND  js/einvoice.js              generateZUGFeRDXML profil-parametrisiert
+                                   (Guideline-URN, Filename factur-x.xml/xrechnung.xml)
+  ÄND  main.js                     neuer IPC-Handler invoice:exportZugferdPdf
+                                   (+ audit-log Aufruf), save:pdf unverändert
+  ÄND  preload.js                  api.exportZugferdPdf(payload)
+  ÄND  js/editor.js                exportXRechnungXMLFromModal(): Format-Select
+                                   auswerten; bei ZUGFERD -> ipc statt Blob-Download
+  ÄND  js/dashboard.js             btnXml bleibt XML; NEUER btnZugferd (Hybrid-PDF);
+                                   btnPdf-Title korrigieren
+  ÄND  code.html                   Button "ZUGFeRD-PDF (PDF/A-3)" in B2G-Sektion
+  ÄND  scripts/generate_and_test.js Mocks ersetzen durch echten Builder-Aufruf
+  ÄND  tests/*.test.js             neue Struktur-Tests (Kap. 7)
+
+5.2 IPC-Design:
+
+  ipcMain.handle('invoice:exportZugferdPdf', wrapHandler(async (event, payload) => {...}))
+    payload = {
+      doc:        {...}  // Rechnungsobjekt (wie editor.js currentDoc, Zeile 619-630)
+      customer:   {...}  // Kunde inkl. leitweg_id/buyer_reference/customer_type
+      profile:    'EN16931' | 'XRECHNUNG'   // default 'EN16931'
+      fileNameHint: 'RE-2026-001_ZUGFeRD.pdf'
+    }
+    return { success, path?, cancelled?, error? }   // gleiche Form wie save:pdf
+
+  Bewusste Entscheidung: XML-Generierung LAUFT IM MAIN-PROZESS (einvoice.js ist
+  per module.exports dort ladbar, siehe main.js:214 Vorbild DA11-require).
+  Vorteil: EIN Codepfad, Main besitzt PDF-Buffer sowieso, kein großer
+  ArrayBuffer-Transfer Renderer->Main nötig.
+
+5.3 Datenfluss (Diagramm in Text):
+
+  RENDERER (editor.js/dashboard.js)
+        │  Nutzer wählt "ZUGFeRD-PDF exportieren"
+        │  window.api.exportZugferdPdf({doc, customer, profile})
+        ▼
+  PRELOAD (preload.js)  ── ipcRenderer.invoke('invoice:exportZugferdPdf')
+        ▼
+  MAIN-PROZESS (main.js, Handler in setupIpc())
+        │  1. EInvoiceEngine.generateZUGFeRDXML(doc, customer, seller, {profile})
+        │       -> xmlString (factur-x.xml-Inhalt)
+        │  2. Hidden print-Ziel ODER übergebenes Basis-PDF:
+        │     - bevorzugt: webContents.printToPDF() vom unsichtbaren
+        │       Invoice-Print-Window (Phase 1: Übergabe des gerenderten
+        │       HTML an hidden BrowserWindow; alternativ Phase A: sender-
+        │       Window wie save:pdf:470)
+        │       -> basePdfBuffer (Standard-PDF)
+        │  3. ZugferdBuilder.build(basePdfBuffer, xmlString, meta)
+        ▼
+  main/zugferd-builder.js  (@cantoo/pdf-lib)
+        │  load(basePdf) -> attach(xmlBytes,'factur-x.xml',{mimeType:'text/xml'})
+        │  embedFacturX(doc, xml, {conformanceLevel}) / convertToPDFA('3B')
+        │  setTitle/setProducer -> save()
+        ▼
+     zugferdPdfBuffer (PDF/A-3)
+        │  4. dialog.showSaveDialog (Filter 'ZUGFeRD PDF (*.pdf)')
+        │  5. fs.writeFileSync(path, buffer)
+        │  6. dbAPI audit-log: 'ZUGFERD_EXPORT' (nr, sha256(buffer))
+        ▼
+  Rückgabe an Renderer -> Toast Erfolg/Pfad
+
+5.4 Schichtenprinzip (wichtig für Tests):
+  ZugferdBuilder.build(pdfBufferOrNull, xmlString, meta) ist ELECTRON-FREI:
+  - Ist pdfBufferOrNull === null, erzeugt der Builder selbst eine minimale
+    1-Seiten-Basis-PDF mit @cantoo/pdf-lib (eingebetteter Font) - genau dafür
+    gedacht, dass scripts/generate_and_test.js echte Hybrids im CI bauen kann.
+  - Der Electron-spezifische Teil (printToPDF, Dialog, fs) bleibt dünn in main.js.
+
+--------------------------------------------------------------------------------
+
+## 6. Schritt-für-Schritt-Umsetzungsplan
+
+SCHRITT 1: Abhängigkeit installieren & Smoke-Test          Aufwand: 1 h
+  Datei: package.json, (neu) scripts/zugferd_smoke.js (temporär, nicht committen
+         oder als verify_*-Skript im .gitignore-Stil)
+  Inhalt:
+    npm install @cantoo/pdf-lib@^2.9.1
+    - Smoke: minimal-PDF erzeugen, embedFacturX mit Demo-XML aufrufen,
+      Buffer schreiben, Header/Attachment grob prüfen.
+  Akzeptanz: Skript läuft unter plain `node` (kein Electron) fehlerfrei.
+  Hinweis Build: electron-builder "files": ["**/*"] (package.json:30-51)
+  schließt node_modules nicht aus -> keine Pack-Konfigänderung nötig;
+  asarUnpack NICHT erforderlich (pure JS).
+
+SCHRITT 2: einvoice.js - ZUGFeRD-XML profilfähig machen      Aufwand: 2 h
+  Datei: js/einvoice.js
+  Funktion: generateZUGFeRDXML(invoice, customer, seller, options = {})
+  Inhalt/Pseudocode:
+    // options.profile: 'EN16931' (default) | 'XRECHNUNG'
+    const profile = options.profile || 'EN16931';
+    if (profile === 'XRECHNUNG') return this.generateXRechnungXML(...);
+    // sonst: Kopie der CII-Logik mit anderem Guideline-URN:
+    guideline = 'urn:cen.eu:en16931:2017'
+                + '#conformant#urn:factur-x.eu:1p0:en16931';
+    // Refaktor-Tipp: generateXRechnungXML intern um private
+    // buildCII(guidelineId, ...) erweitern, damit keine Doppel-Logik entsteht.
+  Akzeptanz: Unit-Test prüft beide URNs (Testfall 4 erweitert, Kap. 7).
+
+SCHRITT 3: Neues Modul main/zugferd-builder.js               Aufwand: 4 h
+  Datei: main/zugferd-builder.js (neu)
+  Funktionen:
+    class ZugferdBuilder / oder Objekt-Literal:
+      static async build({ basePdfBuffer=null, xmlString, meta })
+    meta = { nr, datum, sellerName, conformanceLevel='EN 16931',
+             fileName='factur-x.xml', title, producer='W-Link ERP' }
+  Pseudocode (Variante a, @cantoo/pdf-lib):
+    const { PDFDocument, embedFacturX } = require('@cantoo/pdf-lib');
+    let pdfDoc;
+    if (basePdfBuffer) {
+      pdfDoc = await PDFDocument.load(basePdfBuffer,
+                 { ignoreEncryption: true, updateMetadata: false });
+    } else {
+      pdfDoc = await PDFDocument.create();
+      // minimale Sichtseite: eingebettete Font PFLICHT für PDF/A
+      // (14 Standardfonts sind nicht PDF/A-konform!)
+      register fontkit; embed TTF (z.B. mitgelieferte Roboto-Regular.ttf
+      oder Systemfont-Datei im Repo assets/fonts/); drawText Kopfzeile
+      'Rechnung <nr> - menschenlesbare Ansicht' + Hinweis auf Attachment.
+    }
+    pdfDoc.setTitle(meta.title); pdfDoc.setProducer(meta.producer);
+    await embedFacturX(pdfDoc, Buffer.from(xmlString,'utf8'), {
+        conformanceLevel: meta.conformanceLevel });   // 'EN 16931' | 'XRECHNUNG'
+    // embedFacturX promoted intern zu PDF/A-3 (3B) inkl. OutputIntent+sRGB-ICC,
+    // /AF, /Names EmbeddedFiles, fx:-XMP + pdfaExtension.
+    // Defensive: falls Bibliotheksversion das nicht deckt, explizit:
+    //   pdfDoc.convertToPDFA({ conformance: '3B' });
+    const bytes = await pdfDoc.save({ useObjectStreams: false });
+    return Buffer.from(bytes);
+  Randbedingungen:
+    - useObjectStreams:false erhöht Kompatibilität mit älteren Prüfern.
+    - Keine electron-Imports! Nur require('@cantoo/pdf-lib') + Buffer.
+    - Fehler: throw Error mit klarem deutschem Text; Handler mappt später.
+
+SCHRITT 4: IPC-Handler in main.js                            Aufwand: 2 h
+  Datei: main.js (innerhalb setupIpc(), nach save:pdf-Block :487)
+  Funktion: neuer Handler
+    ipcMain.handle('invoice:exportZugferdPdf', wrapHandler(async (event, payload) => {
+      // 1) Validierung: payload.doc, payload.customer vorhanden
+      // 2) XML: const EInvoiceEngine = require('./js/einvoice');
+      //    seller = (await dbAPI.getFullState()).einstellungen (wie DA11 :215)
+      //    xml = EInvoiceEngine.generateZUGFeRDXML(doc, customer, seller,
+      //                                            { profile: payload.profile })
+      // 3) Basis-PDF:
+      //    basePdf = payload.basePdfBuffer (optional vom Renderer)
+      //    SONST hidden-window printToPDF (Phase 2, Schritt 7);
+      //    MVP: basePdf = null -> Builder-Ersatzseite (sofort funktionsfähig)
+      // 4) buffer = await ZugferdBuilder.build({...})
+      // 5) dialog.showSaveDialog(win,{ filters:[{name:'ZUGFeRD PDF (PDF/A-3)',
+      //       extensions:['pdf']}], defaultPath: Dokumente/<fileNameHint> })
+      // 6) fs.writeFileSync(filePath, buffer)
+      // 7) audit: GoBDAuditEngine/DB-Insert 'ZUGFERD_EXPORT' + sha256(buffer)
+      // 8) return { success:true, path }
+    }))
+  Fehlerpfade analog save:pdf (:482-486): console.error + {success:false,error}.
+
+SCHRITT 5: preload.js + Renderer-Anbindung                   Aufwand: 2.5 h
+  Datei: preload.js
+    exportZugferdPdf: (payload) => ipcRenderer.invoke('invoice:exportZugferdPdf', payload),
+  Datei: js/editor.js (exportXRechnungXMLFromModal, :609-651):
+    const format = document.getElementById('rechnung-erechnung-format')?.value
+                   || 'XRECHNUNG';                    // :2909 Select nutzen!
+    if (format === 'ZUGFERD') {
+      validation zuerst (wie :633);
+      const res = await window.api.exportZugferdPdf({
+        doc: currentDoc, customer: {...kunde, leitweg_id, buyer_reference},
+        profile: 'EN16931',
+        fileNameHint: `ZUGFeRD_${nr}.pdf`
+      });
+      showToast nach res.success/cancelled/error; return;
+    }
+    // XRECHNUNG-Pfad unverändert (Blob-Download :638-647)
+  Datei: js/dashboard.js:
+    - :306 Titel korrigieren zu 'PDF herunterladen (Standard)' ODER btnPdf
+      für Rechnungen auf exportZugferdPdf umbiegen (EMPFEHLUNG: eigener
+      dritter Button btnZugferd, icon 'receipt_long', Title
+      'ZUGFeRD 2.x PDF/A-3 (E-Rechnung) herunterladen'); lädt rech + kunde
+      aus state (Muster wie downloadXRechnungXML :799-811) und ruft api.
+    - Alte btnXml bleibt (XRechnung-XML für B2G-Portale).
+
+SCHRITT 6: code.html UI                                      Aufwand: 0.5 h
+  Datei: code.html (:2915-2920 Button-Zeile)
+    Zweiten Button ergänzen:
+      onclick="exportZugferdPdfFromModal()" - Label
+      'ZUGFeRD-PDF (PDF/A-3) herunterladen', Stil wie :2916 (grün/indigo).
+    Optional Tooltip am Select (:2911) mit Profilinfo.
+
+SCHRITT 7: Echter Sichtseiten-Druck (Phase 2)                Aufwand: 3 h
+  Ziel: Statt Builder-Ersatzseite die GERENDERTE Rechnung als Sichtteil.
+  Datei: main.js (+ ggf. neues main/invoice-print-window.js)
+    - Hidden BrowserWindow ('invoice-print', show:false, preload: none,
+      sandbox ok) erzeugen; loadURL/loadFile eines Print-Templates;
+      send('print-invoice', htmlPayload) ODER direkter: contents.loadURL
+      'data:text/html;charset=utf-8,...' mit dem HTML, das der Renderer
+      bereits baut (js/einstellungen.js:225-330 erzeugt itemsHtml etc.).
+    - Pragmatischer Weg (empfohlen): Renderer rendert #invoice-paper wie
+      gehabt, serialisiert outerHTML (Muster einstellungen.js:1434) und
+      ÜBERGIBT html im payload; Main lädt data:-URL im Hidden-Window,
+      wartet 'did-finish-load', dann printToPDF (Optionen wie :470-474),
+      Fenster destroy().
+  Akzeptanz: Sichtseite sieht wie Dashboard-PDF aus; Attachment + Metadaten
+  aus Schritt 3 bleiben identisch.
+
+SCHRITT 8: Mocks & End-to-End-Skript umstellen               Aufwand: 1.5 h
+  Datei: scripts/generate_and_test.js (:128-139)
+    - require('../main/zugferd-builder') + ../js/einvoice
+    - statt writeFileSync(Mock): build({basePdfBuffer:null, xmlString:
+      generateZUGFeRDXML(ab1Doc, b2bKunde, settings)}) -> echte PDFs schreiben
+    - report.generatedFiles weiterhin listen; PIPELINE COMPLETE bleibt.
+
+SCHRITT 9: Tests (Details in Kap. 7)                         Aufwand: 4 h
+  Dateien: tests/zugferd.test.js (neu), tests/bau_erp.test.js (Testfall 4
+  erweitern), tests/end_to_end_generate.test.js (Strukturchecks statt
+  Existenz-only).
+
+SCHRITT 10: Manuelle Validierung + Doku                      Aufwand: 2 h
+  - VeraPDF (GUI/CLI) gegen 3 Beispiel-Exports (EN16931, XRECHNUNG-Profil,
+    mehrseitige Rechnung) -> Reports in tests/test_results/verapdf/.
+  - Mustang-Validator bzw. portalexperten-Check (Kap. 7.3) einmalig.
+  - doc/changelog.md Eintrag; kurzer Abschnitt in Features/7_ist-stand.txt
+    ([~] -> [+]).
+
+GESAMTSCHÄTZUNG: ca. 22,5 h (Puffer 15% -> ~26 h realistisch)
+
+--------------------------------------------------------------------------------
+
+## 7. Testplan
+
+7.1 Unit-Tests (node --test, tests/zugferd.test.js - NEU):
+    Setup: EInvoiceEngine + ZugferdBuilder require'n (beide electron-frei!).
+    Testfall Z1 "Builder erzeugt strukturell gültiges ZUGFeRD-PDF":
+      buffer = await ZugferdBuilder.build({xmlString: demoCII, meta:{...}})
+      asserts:
+        - buffer.slice(0,8) beginnt mit '%PDF-1.7'
+        - ASCII-Suche nach '/AF' (Katalog) >= 1 Treffer
+        - Suche nach '/EmbeddedFiles' >= 1
+        - Suche nach '/AFRelationship /Alternative' >= 1
+        - Suche nach 'factur-x.xml' >= 2 (Filespec + Names)
+        - Ende enthält '%%EOF'
+    Testfall Z2 "XMP-Metadaten":
+      - Buffer als latin1-String durchsuchen (XMP ist unkomprimiert):
+        'pdfaid:part>3<' ODER 'pdfaid:part">3' Varianten tolerant,
+        'fx:DocumentType>INVOICE<', 'fx:DocumentFileName>factur-x.xml<',
+        'fx:Version>1.0<', 'fx:ConformanceLevel>EN 16931<',
+        'pdfaExtension:schemas' UND
+        'urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#'
+      - HINWEIS: XMP kann Flate-komprimiert landen, falls Bibliothek ändert ->
+        Fallback im Test: Stream mit pako inflate versuchen (pako ist als
+        Dependency von @cantoo/pdf-lib transitiv vorhanden; notfalls
+        zlib.inflateSync über gefundene Stream-Segmente). Pseudocode:
+          function extractXmp(buf){ try raw match; else inflate streams }
+    Testfall Z3 "OutputIntent/ICC":
+      - Suche '/OutputIntents' und '/GTS_PDFA1'; ICCStream vorhanden
+        (Suche nach '/DestOutputProfile').
+    Testfall Z4 "EmbeddedFile-Extraktion Roundtrip":
+      - Mit @cantoo/pdf-lib laden und Attachments lesen
+        (pdfDoc.getAttachments? bzw. low-level EF-Streams) -> Bytes ==
+        ursprüngliches xmlString (UTF-8).
+    Testfall Z5 "Profilvarianten":
+      - profile 'XRECHNUNG': XML enthält xrechnung_2.3-URN; meta.fileName =
+        'xrechnung.xml' -> XMP fx:DocumentFileName>xrechnung.xml<
+      - profile 'EN16931': URN enthält '#conformant#urn:factur-x.eu'.
+
+7.2 Erweiterung bestehender Tests:
+    - tests/bau_erp.test.js Testfall 4 (:84-117): zusätzliche asserts auf
+      generateZUGFeRDXML-URNs (beide Profile).
+    - tests/end_to_end_generate.test.js: nach generate_and_test-Run (:10)
+      die beiden b2b_zugferd-PDFs (:16-17) mit denselben Strukturchecks wie
+      Z1/Z2 prüfen statt nur existsSync (:23-24).
+
+7.3 Wie man OHNE VeraPDF automatisiert prüft (Methodik):
+    1) Byte-Level-Checks (oben): robust, schnell, deckt Kap.-3-Liste ab.
+    2) Struktur-Parser: @cantoo/pdf-lib selbst als Parser nutzen
+       (PDFDocument.load + catalog.lookup('AF')) -> echter Objektgraph-Test
+       statt Stringsuche (Empfehlung für Z1-Z4 Kernasserts).
+    3) XML-Sanity: eingebaute CII gegen einfache Regex-/DOM-Prüfungen
+       (jsdom ist als devDependency vorhanden, package.json:64!):
+       rsm:CrossIndustryInvoice Root, Guideline-URN, GrandTotalAmount.
+    4) Grenze ehrlich benannt: Diese Checks beweisen CONTAINER-Korrektheit,
+       keine ISO-19005-3-Konformitätsgarantie. Deshalb:
+7.4 Manuelles VeraPDF-Verfahren (dokumentieren in doc/zugferd-validation.md):
+    - Download veraPDF (Open Source, GPL - NUR Entwicklungswerkzeug,
+      wird NICHT ausgeliefert -> kein Lizenzproblem fürs Produkt).
+    - CLI: verapdf --flavour 3b --format text datei.pdf
+    - Ziel: 0 FAILURES; Abweichungen -> Kap.-8-Fallbacks.
+    - Zweiter Blick: Mustang-Validator (Java, OSS) prüft ZUGFeRD-Above +
+      Schematron der XML; KoSIT-Tester für XRECHNUNG-Profil.
+    - Ablage der Reports unter tests/test_results/verapdf/.
+
+--------------------------------------------------------------------------------
+
+## 8. Risiken & Fallbacks
+
+R1  Chromium-Basis-PDF ist nicht 100% PDF/A-streng (Fonts-Subset-Tags,
+    Annotation-Flags, Transparenz ist ab PDF/A-2 erlaubt, JPEG2000 verbietet
+    Chromium ohnehin).
+    -> Wahrscheinlichkeit: mittel; Impact: VeraPDF meldet Details.
+    -> Gegenmaßnahme: (a) embedFacturX/convertToPDFA normalisiert Struktur;
+       (b) Fallback b: Sichtseite komplett mit @cantoo/pdf-lib selbst zeichnen
+       (eingebettete TTF) -> volle Kontrolle; (c) Doku der veraPDF-Befunde +
+       ggf. gezielter Fixes (z.B. printToPDF-Optionen: keine Headers/Footers,
+       scale 1).
+
+R2  Fork-Risiko @cantoo/pdf-lib (kein Upstream-Hopding): Breaking Changes /
+    Einstellung der Pflege.
+    -> Lock Version (^2.9.1 pinning in package.json), Adapterlayer nur in
+       zugferd-builder.js (eine Datei austauschbar), Fallback b als
+       dokumentierter Escape-Hatch (API-Fläche klein: attach+convert).
+
+R3  AFRelationship-Verwirrung (/Alternative vs /Data vs /Source).
+    -> Entscheidung fixiert: /Alternative (DE, EN 16931). In Konstante
+       AF_RELATIONSHIP im Builder zentral; Kommentar mit Quellenverweis.
+
+R4  Guideline-URN-Mismatch (aktueller Code hart auf XRechnung 2.3,
+    einvoice.js:105) vs fx:ConformanceLevel.
+    -> Schritt 2 löst das sauber (Profilparameter); Testfall Z5 sichert ab.
+
+R5  Semantische Lücken der CII (fehlende Adressen/Kontakte/Steueraufschlüs-
+    selung je USt-Satz) -> Empfänger-Schematron (EN16931-Check) könnte
+    meckern, obwohl Container valide ist.
+    -> Scope-Kommunikation: F5 = Container; Feldlücken via F6-Validierung/
+       Stammdaten-Ausbau. Im UI-Hinweistext "Container-konform, semantische
+       Vollständigkeit gemäß Stammdaten".
+
+R6  IPC-Payload-Größe (HTML der Sichtseite bei Schritt 7 > MB-Bereich).
+    -> printToPDF im Hidden-Window hält HTML im Main; Transfer Renderer->Main
+       nur einmalig; bei sehr großen Belegen: Grenze prüfen, ggf. Template-
+       Datei + JSON-Daten senden statt HTML-String.
+
+R7  Windows-Pfad/Lizenzdetails ICC: gebündeltes Profil der Bibliothek
+    verwenden; kein Ghostscript-Material committen (AGPL-Hygiene).
+
+R8  Regression im bestehenden save:pdf-Flow.
+    -> save:pdf bleibt UNANGETASTET; neuer Kanal parallel; Tests laufen via
+       npm test (node --test, package.json:8) komplett ohne Electron.
+
+--------------------------------------------------------------------------------
+
+## 9. Definition of Done Checkliste
+
+[ ] @cantoo/pdf-lib installiert, version gepinnt, npm test grün
+[ ] js/einvoice.js: generateZUGFeRDXML(profile) liefert korrekte URNs
+    (EN16931 + XRECHNUNG), alte Aufrufer unverändert kompatibel
+[ ] main/zugferd-builder.js existiert, electron-frei, baut aus
+    (basePdf|null)+XML ein PDF/A-3-Hybrid
+[ ] IPC invoice:exportZugferdPdf in main.js registriert (wrapHandler,
+    SaveDialog, Write, Audit-Log-Eintrag)
+[ ] preload.js exponiert api.exportZugferdPdf
+[ ] Editor: Format-Select ZUGFERD führt zu Hybrid-PDF-Export (code.html
+    :2909-2912 wird ausgelesen), XRECHNUNG-Pfad regressionsfrei
+[ ] Dashboard: separater ZUGFeRD-Button pro Rechnungszeile; irreführender
+    :306-Titel korrigiert
+[ ] output/invoices/b2b_zugferd/ enthält ECHTE PDFs (generate_and_test.js
+    nutzt Builder, keine Mock-writeFileSync mehr)
+[ ] Automatische Strukturtests Z1-Z5 grün (%PDF-1.7, /AF, /AFRelationship,
+    /Names EmbeddedFiles, XMP fx:* + pdfaExtension, OutputIntent, Roundtrip
+    der XML)
+[ ] VeraPDF-Lauf (3b) dokumentiert; Ergebnis archiviert; offene Findings
+    mit Fallback-Entscheidung versehen
+[ ] GoBD: Export erscheint in audit_logs, Hashkette intakt
+[ ] doc/changelog.md + Features/7_w-link-erp_ist-stand.txt aktualisiert
+[ ] Keine AGPL-Abhängigkeit im Produktionscode; Lizenzprüfung dokumentiert
+================================================================================
+ENDE PLAN 13
+================================================================================

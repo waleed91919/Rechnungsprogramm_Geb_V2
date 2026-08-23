@@ -1,0 +1,310 @@
+========================
+PROGRAMM: PDS Software (pds Handwerkersoftware / pds ERP-Software)
+========================
+Recherche-Stand: 23.08.2026
+
+WICHTIGE VORBEMERKUNG ZUR KANDIDATEN-AUSWAHL:
+Es gibt mehrere Firmen mit "PDS" im Namen. Der mit Abstand beste Kandidat im
+Kontext Gebäude-Unternehmen ist die pds GmbH aus Rotenburg (Wümme) – Hersteller
+der "pds Software" (Handwerkersoftware/ERP). Sie wird explizit von
+Gebäudemanagement- und Gebäudetechnik-Unternehmen genutzt (u.a. Krone
+Gebäudemanagement Berlin, Gebrüder Peters Gebäudemanagement Ingolstadt) und hat
+ein eigenes Modul für Objekt-, Mieter- und Immobilienverwaltung.
+
+Andere Kandidaten/Unsicherheiten:
+- "PDS Reinigung und Dienstleistungen GmbH" (Wolkersdorf, Österreich) ist ein
+  REINIGUNGSUNTERNEHMEN, kein Softwarehersteller -> nicht relevant.
+- Eine eigenständige "PDS Gebäudemanagement Software", "PDS Facility
+  Management"-Software oder "PDS Reinigungssoftware" konnte als eigenes Produkt
+  NICHT gefunden werden. Suchergebnisse zu diesen Begriffen führen immer auf
+  pds.de bzw. auf irrelevante Reinigungsfirmen.
+- Es existiert eine "pds Novis it-systeme GmbH" (Tochter/Partner) sowie
+  bundesweite "pds Partner" (IT-Dienstleister, die pds vertreiben und
+  implementieren) – Vertrieb läuft teilweise über diese Partner.
+- Hinweis: OMR Reviews listet das Produkt unter "pds" ohne eigene Reviews;
+  Capterra/G2-Profil wurde nicht gefunden (Markt fast ausschließlich DACH).
+
+------------------------------------------------------------------------
+1. ÜBERBLICK / HERSTELLER
+------------------------------------------------------------------------
+- Hersteller: pds GmbH ("Eine Software voraus"), Mühlenstraße 22-24,
+  27356 Rotenburg an der Wümme, Niedersachsen.
+- Gegründet: 1974 (teilweise wird auch 1973 angegeben), also über 50 Jahre
+  Markterfahrung; stiftungsgetragene Unternehmensgruppe -> laut eigenen Angaben
+  langfristig unabhängig und investitionssicher aufgestellt.
+- Größe: über 300 Mitarbeitende bei pds und im bundesweiten pds Partner-Netz;
+  über 52.000 Anwender (frühere Kommunikation: ~45.000 Nutzer).
+- Positionierung: einer der führenden Anbieter cloud-fähiger ERP-/Handwerkersoftware
+  im DACH-Raum, spezialisiert auf Bauhaupt- und Baunebengewerbe: SHK
+  (Sanitär/Heizung/Klima), Elektro- und Gebäudetechnik, Photovoltaik, Kälte-
+  und Klimatechnik, Maler/Trockenbau, Boden-/Fliesenleger, Dachdecker/Zimmerer
+  sowie serviceorientierte Gewerke und Gebäudemanagement.
+- DATEV-Softwarepartner seit März 2018; Einsatz in Deutschland und Österreich.
+- Technologie: Java-basierte Architektur, Windows-Oberfläche (Client),
+  cloudfähig (eigene "pds Cloud" in deutschen Rechenzentren, DSGVO-konform)
+  oder On-Premise auf eigenem Server; rollenbasierte Bedienung.
+- Mobile Apps: pds Mitarbeiter App, Service App, Projekt App, Material App,
+  Lager App, Werkzeug App, Zeit App, pds Portal, pds Ort (Fahrzeugortung), pds Kasse.
+- Zusatzprodukte: KI-Telefonassistenz "Hey Telo", Formular-Tool "Offpaper",
+  Recruiting-Lösung "Jobcluster".
+
+------------------------------------------------------------------------
+2. FEATURES (vollständige Liste, nach Modulen gegliedert)
+------------------------------------------------------------------------
+KAUFMÄNNISCHER KERN (Serienausstattung):
+- Angebotserstellung und Angebotskalkulation (inkl. GAEB-Ausschreibungsimport,
+  paralleler Bearbeitung, Nachtragsverwaltung, Festschreibung, Karteikarte)
+- Auftragsverwaltung, Auftrag aus Angebot
+- Aufmaß und Abrechnung (VOB-konform, REB-konforme Maßkettenerfassung,
+  Positionsaufmaß, Formalassistent, mobiles Aufmaß mit Fotodokumentation)
+- Rechnungen: Teil-/Abschlagsrechnungen, Schlussrechnung, Gutschriften,
+  E-Rechnung (ZUGFeRD, X-Rechnung, Peppol-Plattform) -> E-Rechnungspflicht
+- Mahn- und Zahlwesen: Mahnlauf, Lieferantenzahlungen, OP-Verwaltung,
+  digitale Zusammenarbeit mit Steuerberater (DATEV Unternehmen online)
+- CRM inkl. Telefonbuch, Telefonie-Anbindung (IP, TAPI, CSTA), variable Felder,
+  Aktivitäten- und Aufgabenverwaltung
+- Artikel-/Leistungsverwaltung, Kataloge, automatische Vorkalkulation
+  (schlägt Positionen aus Artikelkatalog und bisherigen Vorgängen vor)
+
+EINKAUF & LAGER:
+- Bestellwesen inkl. Preisanfragen, eigene Preisausschreibung an Lieferanten
+  mit Preisspiegel
+- E-Commerce-Schnittstellen zum Großhandel: IDS 2.5, Open Masterdata, DATANORM,
+  UGL 5.0, SHK Connect/Open Connect, ÖNORM, Mareon, easysquare, immoffice
+  (Artikelbilder, Preise, Verfügbarkeit direkt im System; Eingangsrechnungen
+  digital per ZUGFeRD, automatischer Preis-/Mengenabgleich = Rechnungsprüfung)
+- Lagerwirtschaft, Wareneingangserfassung, Inventur
+
+SERVICE / WARTUNGSMANAGEMENT (besonders relevant für Gebäude-Unternehmen):
+- Objektverwaltung: digitale Abbildung von Immobilien, Gewerbeimmobilien,
+  Wohnsiedlungen, Einfamilienhäusern mit Standard- und individuellen Datenfeldern
+- Anlagenverwaltung: technische Anlagen mit Leistungsparametern,
+  Dokumentation, lückenlose Auftragshistorie je Anlage
+- Mieter-/Immobilienverwaltung: Mieter, Hausmeister, Eigentümer hinterlegt,
+  verschiedene Rechnungsempfänger steuerbar
+- Wartungsmanagement: Wartungsintervalle je Anlage, automatische Generierung
+  fälliger Wartungsaufträge, Terminrechnungen (z.B. Wartungspauschalen),
+  VDMA-Services für TGA/Gebäudeautomation
+- Notdienst-/Störungsaufträge: Erfassung im Büro oder mobil durch Monteure
+  (auch Neukunden), Notdiensthandy-Szenario
+- pds Service App: mobile Auftragsabwicklung, Checklisten, Scanner,
+  Kundenunterschrift, offline-fähig, Abrechnung direkt aus dem Einsatz
+
+PROJEKT & BAUSTELLE:
+- Digitale Projektakte/Baustellenakte (Dokumente, Vorgänge, Auswertungen,
+  Nachkalkulation, GoBD-zertifizierte Dokumentenverwaltung/Archiv)
+- Bautagebuch, Projektleistung und Regie, Nachtragsmanagement
+- Ressourcenplanung: Mitarbeiter, Fahrzeuge, Geräte, Plantafel,
+  Fahrzeugortung (pds Ort), interaktive Karte
+- Workflow/Automatisierung (z.B. Urlaubsanträge, Eingangsrechnungsfreigaben)
+
+ZEITERFAHRUNG & PERSONAL:
+- Digitale Zeiterfassung (stationär und mobil), Stundenerfassung,
+  Urlaubsverwaltung/-workflow, Datenübergabe ans Steuerbüro
+- Personalwesen optional: Lohn- und Gehaltsabrechnung, Baulohn, Personalakte,
+  Personalkennzahlen, digitaler Lohnbelegservice, Recruiting (Jobcluster)
+
+FINANZWESEN (v.a. ERP-Linie):
+- Finanzbuchhaltung/Rechnungswesen, Anlagenbuchhaltung, Kostenrechnung und
+  Controlling, Konzern-/Mandantenverwaltung (mehrmandantenfähig bis 5 Firmen,
+  konzernkonsolidierende Auswertungen)
+- Invoice Reader (KI-Erfassung von Papier-/PDF-Eingangsrechnungen)
+- Dashboards und Business Intelligence (pds Analytics, Qlik Sense BI,
+  DrillDown-Auswertungen, individuell konfigurierbare Dashboards)
+
+MOBILE APPS:
+- Mitarbeiter App (Zeiterfassung, zentraler Einstieg), Service App (Kundendienst/
+  Wartung), Projekt App (Bautagebuch, Dokumente), Material App (Bestellungen,
+  Bedarfsmeldungen), Lager App (Lagerbewegungen, Inventuren), Werkzeug App
+  (Geräte-/Werkzeugverwaltung inkl. Prüftermine), mobile Rechnungsfreigabe
+
+SONSTIGES:
+- Offene REST-API, Microsoft 365/Outlook/Teams-Anbindung
+- Multi-Mandanten-/Multi-Standort-Fähigkeit, Homeoffice-tauglich via Cloud
+- GoBD-konformes Archiv; Hosting in deutschen Rechenzentren
+
+------------------------------------------------------------------------
+3. PREIS-/LIZENZMODELL
+------------------------------------------------------------------------
+Modell: BEIDES möglich – SaaS-Abo (monatlich pro Office-Arbeitsplatz) ODER
+Einmalkauflizenz; zusätzlich Apps pro Mitarbeiter und optionale Cloud-Gebühr.
+Alle Preise lt. offizieller Preisseite (pds.de/preise), Stand Recherche:
+
+SaaS (mieten):
+- pds Handwerkersoftware: ab 90 € bis 130 € / Office-Arbeitsplatz / Monat
+  (inkl. Customer Service, Updates und pds Cloud)
+- pds ERP-Software (mit Finanzwesen/Kostenrechnung/Controlling/Konzern):
+  ab 180 € bis 230 € / Office-Arbeitsplatz / Monat (Cloud inklusive)
+- pds Apps: ca. 16 € / Mitarbeiter / Monat (je nach Ausstattung, frei kombinierbar)
+- Personalwesen (Lohn/Gehalt): Volumenlizenz nach Mitarbeiterzahl,
+  Beispiel: 200 Mitarbeiter = 500 €/Monat (SaaS)
+
+Kauf (Einmalzahlung):
+- pds Handwerkersoftware: ab 1.400 € bis 2.100 € einmalig / Office-Arbeitsplatz
+- pds ERP-Software: ab 2.200 € bis 3.400 € einmalig / Office-Arbeitsplatz
+- pds Cloud dann zusätzlich: ca. 32 € (Handwerk) bzw. 38 € (ERP) pro
+  Office-Arbeitsplatz/Monat (Beispielrechnung Betrieb mit 10 Arbeitsplätzen)
+- Personalwesen Kauf: Beispiel 200 Mitarbeiter = 12.000 € einmalig
+- Bei Kauf: Betreuungsvertrag für Support gesondert; Updates/Wartung teils
+  über Service-SLA
+
+Sonstiges:
+- "pds Digitalbonus": eigenes Herstellerrabatt-/Förderprogramm bei Umstieg
+- Optionale Module (Service-/Wartungsmanagement, Ressourcenplanung, Workflows,
+  Kostenrechnung, BI etc.) werden zugebucht -> Endpreis nur über individuelles
+  Angebot verbindlich; Drittquellen bestätigen: Richtpreise transparent, aber
+  Gesamtkosten hängen stark von Modulwahl/Konfiguration ab
+- Einführung realistisch als Projekt (Stammdatenmigration, Schulung),
+  geschätzt 6–12 Wochen Laufzeit
+
+------------------------------------------------------------------------
+4. KUNDENMEINUNGEN (positiv)
+------------------------------------------------------------------------
+Bewertungslage gesamt:
+- Softwareabc24 (Nutzerbewertungen): Durchschnitt 8,0/10
+  (Funktionen 9,5 | Nutzerfreundlichkeit 9,0 | Support 8,8 | Preis nur 6,5 |
+  Weiterempfehlung 7,0)
+- trusted.de (Aggregat aus trusted, Apple App Store, Google Play, Google
+  Places): 3,4/5 – Google Places (Standortbewertungen) 4,1–4,2/5 (~30 Reviews),
+  Apple App Store 3,5/5 (18 Reviews), Google Play 3,2/5 (~104 Reviews)
+- Trustpilot: 3,3/5 ("Akzeptabel"), sehr wenige Bewertungen
+- OMR Reviews: Produkt gelistet (als führende ERP-Lösung beschrieben), aber
+  0 eigene User-Reviews; Capterra/G2: keine relevanten Profile gefunden
+- kununu (Arbeitgeberbewertungen, nicht Produkt): 3,9/5, 68 Bewertungen
+
+Konkrete positive Zitate (echte Nutzer, Softwareabc24):
+- Note 9,7/10 (Dienstleistungen, 11–20 MA, April 2021): "Technologisch ist die
+  PDS klar die beste Software am Markt. Die Cloud-Fähigkeit und die Apps, die
+  nicht mal zwingend eine permanente Internetverbindung benötigen, sind
+  hervorragend. Alle unsere Mitarbeiter vom jungen Azubi bis hin zu unseren
+  älteren Kollegen sind begeistert!" / "Die Implementierung hat reibungslos
+  funktioniert... können uns ein Arbeiten ohne unsere PDS Software nicht mehr
+  vorstellen."
+- Note 8,7/10 (Handwerk, 21–50 MA, Juni 2023): "Guter Support bei Nachfragen.
+  Insgesamt ein verlässliches Softwareprogramm für Handwerker."
+- Note 8,7/10 (Dezember 2019): "Das Programm ist gut strukturiert und hat einen
+  sehr umfassenden Leistungsumfang. Es werden bei uns im Betrieb alle wichtigen
+  Bereiche von der Software abgedeckt."
+
+Positive Punkte aus Redaktionstests:
+- ki-syndikat.de Test (2026): 4/5 Sterne – "Im Kern, der Verznahmung von
+  Wartungsmanagement und Handwerks-ERP, gehört pds zur Spitzengruppe im
+  deutschen Markt: automatische Terminplanung aus Intervallen, lückenlose
+  Anlagenhistorie, mobiler Auftragspool und durchgängige Abrechnung sind sauber
+  gelöst und praxiserprobt." Plus: deutsche Datenhaltung, bundesweites
+  Partnernetz, ~50 Jahre Markthistorie, >52.000 Nutzer.
+- trusted.de Test lobt: umfangreiche/übersichtliche Kontaktverwaltung, einfaches
+  Aufmaß mit Fotodokumentation, automatische Vorkalkulation aus Artikeldaten,
+  Drag-and-Drop-Kalender, gute Einrichtungshilfe/Schulungen durch Support.
+- Referenzkunden (pds.de/referenzen, Video-Testimonials): u.a. Sanitheram Köln
+  (>85 MA, seit 30+ Jahren Kunde, ermöglicht angeblich Vier-Tage-Woche), Elektro
+  Heikes Münster (~170 MA, seit 1990), Krone Gebäudemanagement Berlin (160 MA):
+  "Für uns ist die Mitarbeiter App eine geniale Idee, da sie alle Funktionen
+  unserer vorherigen Apps vereint." / "Im Entscheidungsprozess haben wir einen
+  hohen Grad an Digitalisierung und Automatisierung erreicht..." (Gebrüder
+  Peters) / "Die Schnittstellen zum Großhandel vereinfachen die Bearbeitung von
+  Angeboten und das Erstellen von Rechnungen erheblich."
+  Achtung: Referenzen sind herstellereigenes Marketing, keine unabhängigen Reviews.
+
+------------------------------------------------------------------------
+5. KUNDENMEINUNGEN (negativ/Kritik)
+------------------------------------------------------------------------
+Konkrete negative Zitate (echte Nutzer):
+- trusted.de, Andreas (verifiziert, Juni 2026), Titel "Es gibt bessere
+  Marktbegleiter", 2/5 Sternen: "Keine Möglichkeit fehlerhafte Eingaben
+  rückgängig zu machen; CRM integriert, jedoch in der Form nicht oder nur
+  bedingt nutzbar, öfters Systemabbrüche."
+- trusted.de, Den (verifiziert, Dez. 2023), Titel "Im Kern smart, im Detail
+  umständlich oder am Prozess vorbei. Generell zu teuer!": "Das Programm hat
+  scheinbar eine riesige Tiefe, im Detail stößt man aber IMMER an einen Punkt,
+  den man nicht ... dauerhaft vernünftig lösen kann. Da wird einem dann ein
+  bypass vom Dienstleister verkauft, der wie fremd angeflanscht wirkt. Auch die
+  Kunden-Vertragsverwaltung bei Anlagen und die Materialwirtschaft ist verrückt
+  komplex - am Thema VORBEI und KOMPLETT UNGENÜGEND."
+- Softwareabc24, Julian T. (Handwerk, 51–200 MA, April 2023), Note 4,9/10,
+  "Qualität der Software hängt stark vom Dienstleister ab, die Region Stuttgart
+  ist kritisch": "Durch die hohe Individualität muss die Software von einem
+  PDS-Partner eingerichtet werden, hat dieser schlecht ausgebildetes Personal,
+  wird die Nutzbarkeit der Software auch schlecht." / "Sehr teuer,
+  intransparente Preisgestaltung - Software Häuser haben Exklusivrechte."
+- Softwareabc24 (Juni 2023): "Teurer als andere Programme" (Preis-Teilnote 6,5).
+- Trustpilot (14.03.2025): "Sieht modern aus, aber überfrachtet mit Dingen die
+  man nicht braucht, auch in den Apps - hingegen andere wichtige Elemente für
+  den Geschäftsbetrieb fehlen einfach." (Gesamt-Score 3,3 "Akzeptabel")
+- handwerker-kosmos.de (Redaktion): "Die Software ist sehr hochpreisig und ...
+  viel zu teuer für Kleinbetriebe"; Kundenbewertungen durchwachsen bei Preis
+  und Support; eigene Cloud nicht zwingend Vorteil gegenüber Hyperscalern.
+
+Strukturelle Kritikpunkte (aus Tests/Drittanbieter):
+- Für Kleinstbetriebe/Ein-Mann-Betriebe (<~5 MA) überdimensioniert und
+  unverhältnismäßig komplex
+- Einführung = mehrwöchiges Projekt (6–12 Wochen realistisch), hoher
+  Migrations-/Schulungsaufwand, kein Self-Service-Onboarding
+- Oberfläche klassisch/Windows-basiert, neben modernen Cloud-Tools schwerfällig,
+  spürbare Lernkurve ("wirkt überladen")
+- Intransparenz beim Endpreis trotz veröffentlichter Richtpreise (Module,
+  Konfiguration, Partner-Abhängigkeit); Unterschied Handwerker- vs. ERP-Linie
+  nicht selbsterklärend
+- Qualität der Implementierung hängt vom jeweiligen regionalen pds Partner ab
+  (Partnersystem kann Qualitätsrisiko sein)
+- KI nur Randthema (Telefonassistent "Hey Telo"), Kernprodukt klassische
+  regelbasierte ERP-Logik
+- Schwache App-Store-Bewertungen (Google Play 3,2/5) deuten auf Probleme bei
+  mobilen Apps/Stabilität hin
+
+------------------------------------------------------------------------
+6. ZIELGRUPPE
+------------------------------------------------------------------------
+- Kernzielgruppe: Handwerks- und Servicebetriebe des Bauhaupt- und
+  Baunebengewerbs in DE/AT – insbesondere SHK (Sanitär/Heizung/Klima),
+  Elektro- und Gebäudetechnik, Photovoltaik, Kälte-/Klimatechnik, Lüftung,
+  MSR, Maler/Trockenbau, Boden-/Fliesenleger, Dachdecker/Zimmerer sowie
+  weitere serviceorientierte Gewerke und Gebäudemanagement-Unternehmen.
+- Größenordnung: ausdrücklich "jede Größenordnung" beworben, aber realistische
+  Sweet Spots: mittelständische Betriebe (~20 bis mehrere Hundert MA) und
+  Konzerne/Unternehmensgruppen mit mehreren Standorten; Referenzen reichen von
+  ~10-MA-Betrieben bis zu Konzernen mit 800+ Mitarbeitern (Gebrüder Peters).
+- Besonders geeignet für Betriebe mit ernsthaftem Wartungs-/Kundendienst-
+  geschäft an technischen Anlagen (= typische Gebäude-Unternehmen: Gebäudetechnik,
+  technisches Gebäudemanagement, Facility-Service).
+- Weniger geeignet: Kleinst-/Ein-Personen-Betriebe und reine
+  Gebäudereinigungsunternehmen (keine spezifische Reinigungsbranche-Funktionalität;
+  hier gibt es Spezialanbieter wie CleanManager, DIGRAS etc.).
+- Käuferprofil: Geschäftsführung/kaufmännische Leitung, die ein komplettes ERP
+  inkl. FiBu/Lohn ersetzen oder vernetzen will (DATEV-Anbindung), Wert auf
+  deutsche Cloud/Datensicherheit und persönliche Betreuung legt.
+- Vertriebsmodell: Direktvertrieb + bundesweites Partnernetz (regionale
+  IT-Systemhäuser), Beratung/Betreuung persönlich vor Ort oder online.
+
+------------------------------------------------------------------------
+7. QUELLEN (URLs)
+------------------------------------------------------------------------
+- https://pds.de/ (Hersteller-Startseite)
+- https://pds.de/software (Produktübersicht Software + Apps)
+- https://pds.de/preise (offizielle Preisseite SaaS/Kauf/Cloud/Apps)
+- https://pds.de/software/handwerk/service-und-wartungsmanagment
+  (Objekt-/Anlagen-/Mieter-/Wartungsmanagement)
+- https://pds.de/gewerke/shk und https://pds.de/gewerke (Branchen/Zielgruppen)
+- https://pds.de/referenzen (Kundenreferenzen/Testimonials)
+- https://pds.de/unternehmen (Firmenhistorie, 52.000 Anwender, 300+ MA, Stiftung)
+- https://www.datev.de/web/de/marktplatz/pds-software (DATEV-Marktplatz:
+  Featureliste + Firmendaten, DATEV-Partner seit 2018)
+- https://www.softwareabc24.de/handwerker-software/pds-handwerkersoftware
+  (Nutzerbewertungen 8,0/10 mit konkreten Vor-/Nachteilen)
+- https://trusted.de/pds-handwerk (Aggregierte Bewertungen 3,4/5 inkl. zwei
+  ausführliche Nutzerkritiken, App-Store/Google-Play-Werte)
+- https://omr.com/de/reviews/product/pds (OMR Reviews: Profil, 0 Reviews)
+- https://de.trustpilot.com/review/www.pds.de (Trustpilot 3,3 "Akzeptabel",
+  Kritik-Zitat; Seite blockt automatisierten Zugriff, Auszug via Suchindex)
+- https://www.ki-syndikat.de/tools/pds-handwerk/ (Redaktionstest 4/5,
+  Preisrichtwerte, Schwächenanalyse)
+- https://handwerker-kosmos.de/handwerker-software/erfahrungsbericht/pds/
+  (Redaktions-Erfahrungsbericht, Preis-/Support-Kritik)
+- https://www.wlw.de/de/firma/pds-gmbh-317998 (Wer lief was: Firmenprofil)
+- https://www.pds-gebaeudereinigung.at/impressum (Gegencheck: PDS Reinigung =
+  österreichisches Reinigungsunternehmen, KEIN Softwarehersteller -> ausgeschlossen)
+
+Hinweis zur Datenlage: Echte, unabhängige Bewertungen sind rar (OMR: 0 Reviews,
+keine relevanten Capterra/G2/Trustpilot-Volumina). Die aussagekräftigsten echten
+Nutzerstimmen stammen von softwareabc24 und trusted.de; beide wurden oben wörtlich
+zitiert. Arbeitgeberbewertungen (kununu 3,9/5) betreffen die Firma, nicht die Software.

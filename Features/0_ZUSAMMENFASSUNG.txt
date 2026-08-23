@@ -1,0 +1,172 @@
+================================================================================
+ZUSAMMENFASSUNG: WETTBEWERBSANALYSE - 6 KONKURRENZPROGRAMME
+Ziel: Verkauf unseres Rechnungsprogramms an Gebäude-Unternehmen
+(Gebäudereinigung, Hausverwaltung, Facility Management)
+Datum: 23.08.2026
+Quellen: siehe Detail-Dateien im Ordner Features/ (1-6)
+================================================================================
+
+--------------------------------------------------------------------------------
+ÜBERSICHTSTABELLE
+--------------------------------------------------------------------------------
+
+| # | Programm              | Hersteller / Ort                  | Preismodell                     | Bewertungen            |
+|---|-----------------------|-----------------------------------|--------------------------------|------------------------|
+| 1 | baufaktura            | Huonker Softwaretechnik, Dormettingen | Einmalkauf 375-695 EUR + Module | ProvenExpert 4,59/5 (714) |
+| 2 | EasyFirma             | EasyFirma GmbH & Co KG, Wien      | Einmalkauf 295-495 EUR netto    | Google ~4,6-4,9/5      |
+| 3 | shm profit Handwerk   | shm software GmbH & Co KG, Bad Tölz | Einmalkauf ~1.780 EUR + Mietoption | softwareabc24 8,8/10 (nur 3 Rezensionen) |
+| 4 | pds                   | pds GmbH, Rotenburg/Wümme         | SaaS 90-230 EUR/Monat ODER Einmalkauf ab 1.400-3.400 EUR | gemischt: 3,3-8,0 |
+| 5 | STREIT V.1 (heute "STREIT") | STREIT Software GmbH, Haslach i.K. | Kauf- oder Mietlizenz, Preise intransparent | OMR 4,6/5 (109), App Store nur 3,8 |
+| 6 | kwp-bnWin.net         | KWP Informationssysteme GmbH, Ergolding | Einmalkauf ab 900 EUR (REGIE) bzw. 2.900 EUR (BASIS) netto | kaum Bewertungen; App 2,4/5 Google Play |
+
+--------------------------------------------------------------------------------
+DETAILPROFIL JE PROGRAMM
+--------------------------------------------------------------------------------
+
+1. BAUFAKTURA (Features/1_baufaktura.txt)
+   - Desktop-Abrechnungs-/Kalkulationssoftware, seit 1987 am Markt,
+     seit 2025 Teil des OneQrew-Konzerns, über 5.000 gewerbliche Nutzer.
+   - Features: Angebote, Rechnungen inkl. E-Rechnung (XRechnung/ZUGFeRD),
+     Mahnwesen, Aufmaß, Kalkulation, Tagesberichte, mobile Zeiterfassungs-
+     und Bautagebuch-App (ab 7 EUR/Monat/Nutzer).
+   - Preise: Einmallizenz ECO 375 EUR / PREMIUM 695 EUR zzgl. Module
+     (90-495 EUR), optionale Servicevereinbarung 210-354 EUR/Jahr,
+     alternativ Miete ab ca. 13 EUR/Monat.
+   - Kundenmeinungen positiv: einfache Bedienung für IT-Laien, fairer
+     Preis, exzellenter persönlicher Support per Fernwartung.
+   - Kritik: versteckte Fenster, keine Undo-Funktion, keine dokumentü-
+     bergreifende Suche, kein Cloud-Angebot, keine API.
+
+2. EASYFIRMA (Features/2_easyfirma.txt)
+   - Windows-Desktop-Rechnungssoftware für Kleinunternehmen/Handwerker
+     in DACH ("EasyFirma 3", früher WoAx-iT). NICHT von SHM Bad Tölz.
+   - Features: E-Rechnung (ZUGFeRD/XRechnung), Angebote mit Aufmaß-
+     berechnung, Lohnkostenausweis (§35a EStG), Teil-/Abschlags-/
+     Schlussrechnungen, WaWi, EÜR, Zeiterfassung nur in Ultimate.
+   - Preise (Einmalkauf): Standard 295 EUR, Premium 395 EUR,
+     Ultimate 495 EUR netto; Module: E-Rechnung 150 EUR, Plus 150 EUR,
+     DATEV 95 EUR.
+   - Kundenmeinungen positiv: Bedienbarkeit, Support (Google ~500+
+     Bewertungen, Eigenangabe).
+   - Kritik: keine Cloud, keine Mobile App, keine API, eingeschränkte
+     Vorlagen/Auswertungen, wichtige Funktionen erst in Ultimate;
+     kaum unabhängige Bewertungen (OMR/Capterra/G2: keine).
+
+3. SHM PROFIT HANDWERK (Features/3_shm_software.txt)
+   - Handwerkersoftware der shm software GmbH & Co. KG aus Bad Tölz
+     (gegr. 1997, ~14 Mitarbeiter).
+   - Features: Faktura, Teil-/Abschlags-/Schlussrechnungen, E-Rechnung
+     (XRechnung/ZUGFeRD), Kalkulation/Nachkalkulation, Wartungsmodul,
+     CRM, Apps (shm Time, shm Mobil).
+   - Preise: Einmalkauf ~1.780 EUR netto (Vollversion), optionale
+     Mietoption, Zusatzmodule kostenpflichtig, 2 Monate kostenlos testen.
+   - Kundenmeinungen positiv: Funktionen, Nutzerfreundlichkeit, telefo-
+     nisch erreichbarer Support (8,8/10 auf softwareabc24, aber nur
+     3 Rezensionen).
+   - Kritik: zu hoher Preis, Installationsaufwand; keine Präsenz auf
+     OMR Reviews, Capterra, G2 oder Trustpilot.
+
+4. PDS (Features/4_pds.txt)
+   - ERP-Handwerkersoftware der pds GmbH aus Rotenburg/Wümme (seit
+     1974, stiftungsgetragen, 300+ MA, 52.000+ Anwender); auch für
+     Gebäudemanagement-/Gebäudetechnik-Firmen.
+   - Features: Rechnungen/E-Rechnung (ZUGFeRD/XRechnung/Peppol),
+     Angebot/Kalkulation/VOB-Aufmaß, Objekt-, Anlagen-, Mieter- und
+     Wartungsverwaltung mit automatischen Wartungsaufträgen, Service-
+     App, Zeiterfassung, Lager/Einkauf mit Großhandel-Schnittstellen,
+     optionales Finanz- und Personalwesen.
+   - Preise: dual - SaaS ab 90-230 EUR/Arbeitsplatz/Monat + 16 EUR/
+     Mitarbeiter/Monat für Apps ODER Einmalkauf ab 1.400-3.400 EUR/
+     Arbeitsplatz zzgl. Cloud-Gebühr; Endpreise teils intransparent.
+   - Kundenmeinungen positiv: Funktionsumfang, Cloud-Fähigkeit, Apps.
+   - Kritik: hoher Preis, partnerabhängige Qualität, Systemabbrüche,
+     überkomplexe Anlagen-/Materialverwaltung, fehlende Rückgängig-
+     Funktion. Zielgruppe Mittelstand/Konzern - Kleinbetriebe <5 MA
+     werden schlecht bedient.
+
+5. STREIT V.1 (Features/5_streit_v1.txt)
+   - Kaufmännische Handwerker-ERP-Software der STREIT Software GmbH
+     aus Haslach im Kinzigtal (40+ Jahre am Markt, ~36.000 Anwender,
+     150 MA); seit Anfang 2026 heißt das Produkt nur noch "STREIT".
+   - Features: Voll-ERP (Angebot -> Auftrag -> Rechnung -> Nachkalku-
+     lation), GAEB/XRechnung/ZUGFeRD, Lager/Einkauf, Zeiterfassung,
+     Wartung & Service, GoBD-Archiv, Finanzbuchhaltung inkl. DATEV,
+     Workflow, ab V27 KI-Funktionen, Apps für iOS/Android/Windows.
+   - Preise: komplett intransparent; Wahl zwischen Kauf- und Mietli-
+     zenz ("STREIT Complete" mit Zukunftsgarantie), Apps kosten extra,
+     Existenzgründer 1 Jahr mietfrei.
+   - Kundenmeinungen positiv: Telefon-Support, Durchgängigkeit, mobile
+     Monteure-Apps (OMR Reviews 4,6/5 aus 109 Bewertungen - Achtung:
+     viele per Anbieter-Einladung mit Incentive; Google 4,4-4,5).
+   - Kritik: Einarbeitungsaufwand/kostenpflichtige Schulungen, Lade-
+     zeiten/Performance-Probleme nach Updates, hohe Preise, App-Limits
+     (keine Kundenneuanlage mobil), teils unmoderne Oberfläche
+     (Apple App Store nur 3,8).
+
+6. KWP-BNWIN.NET (Features/6_kwp-bnwin.txt)
+   - Modular aufgebaute Handwerkersoftware ("Handwerkerbetriebssystem")
+     der KWP Informationssysteme GmbH aus Ergolding bei Landshut
+     (gegr. 1991, ~40 MA, über 6.000 Installationen, DATEV-Partner).
+   - Features: kompletter kaufmännischer Prozess (Angebot, Rechnung,
+     Mahnwesen, OP, Kunden-/Artikelverwaltung, Kalkulation, Aufmaß,
+     Wartungswesen, DATEV-Schnittstelle, mobile Apps); Zielgruppe nur
+     Baunebenhandwerk (SHK, Elektro/PV, Maler, Holzbau).
+   - Preise (Einmalkauf, "Kaufen statt Mieten"): REGIE ab 900 EUR
+     netto, BASIS ab 2.900 EUR netto; laufende Kosten über faktisch
+     nötigen Pflegevertrag, kostenpflichtige Hotline und Schulungen.
+   - Kundenmeinungen positiv: Stabilität, Hotline (Handwerker-Forum).
+   - Kritik: Folgekosten, mobile App KWP bnApp nur 2,4/5 Sterne auf
+     Google Play (Abstürze, Login-Probleme, fehlende UI); kaum
+     unabhängige Bewertungen.
+
+--------------------------------------------------------------------------------
+ZENTRALE ERKENNTNISSE FÜR UNSEREN VERKAUF AN GEBÄUNDE-UNTERNEHMEN
+--------------------------------------------------------------------------------
+
+1. MARKTLÜCKE: Alle 6 Programme sind Handwerks-/Bau-ERP-Systeme.
+   KEINES deckt Gebäudereinigung / Hausverwaltung / Facility Management
+   mit eigenen Branchenmodulen richtig ab (Objektverwaltung,
+   Flächenabrechnung, Leistungsverzeichnisse für Reinigung etc.).
+   -> Das ist unsere Differenzierungsmöglichkeit.
+
+2. EINMALKAUF FUNKTIONIERT: baufaktura, EasyFirma, SHM und KWP verkaufen
+   erfolgreich per Einmalkauf (295 EUR bis 1.780 EUR). Das bestätigt das
+   Geschäftsmodell "einmal verkaufen" im deutschen Handwerk/Gebäude-Markt.
+   -> Ein transparenter Einmalkauf-Preis ist ein starkes Verkaufsargument
+      gegen Abo-Anbieter.
+
+3. HÄUFIGSTE SCHWÄCHEN DER KONKURRENZ = UNSERE CHANCEN:
+   - Teure Folgekosten (Pflegeverträge, Modul-Zukauf, Hotline-Gebühren,
+     Schulungen) -> bei uns transparent kalkulieren und kommunizieren
+   - Schwache Mobile-Apps (STREIT App Store 3,8; KWP Google Play 2,4;
+     EasyFirma gar keine) -> stabile, moderne Mobile-Lösung als USP
+   - Keine/few Cloud & API (baufaktura, EasyFirma, SHM Desktop-only)
+   - Intransparente Preise (STREIT, pds) -> wir: klare Preisliste
+   - Komplexität/Schulungsbedarf (pds, STREIT) -> wir: einfach wie
+     baufaktura ("Bedienbar ohne IT-Kenntnisse" wird überall gelobt)
+
+4. SUPPORT IST ENTSCHEIDEND: Durchgängig werden persönlich erreichbare
+   Support-Teams gelobt (baufaktura Fernwartung, STREIT Telefon-Support,
+   SHM Hotline). Support-Qualität ist ein Hauptkaufkriterium.
+
+5. BEWERTUNGEN SIND RAR UND TEILS GEFÄRBT: Nur baufaktura hat viele echte
+   unabhängige Bewertungen (ProvenExpert 714 Stück). STREITs OMR-Bewer-
+   tungen sind teils incentiviert. Unabhängige Bewertungsplattformen
+   (Capterra, G2, Trustpilot) sind fast leer.
+   -> Für uns: früh ProvenExpert/Google-Bewertungen aufbauen = Vertrauens-
+      vorsprung gegenüber allen 6 Konkurrenten.
+
+6. PREISANKER FÜR UNSERE PREISGESTALTUNG:
+   - Kleinbetrieb-Segment: 300-700 EUR Einmalkauf (EasyFirma, baufaktura)
+   - Mittel-Segment: 900-1.800 EUR (KWP REGIE, SHM)
+   - Groß/Mittelstand: 1.400-3.400 EUR pro Arbeitsplatz (pds)
+
+================================================================================
+DETAILBERICHTE:
+  Features/1_baufaktura.txt
+  Features/2_easyfirma.txt
+  Features/3_shm_software.txt
+  Features/4_pds.txt
+  Features/5_streit_v1.txt
+  Features/6_kwp-bnwin.txt
+================================================================================

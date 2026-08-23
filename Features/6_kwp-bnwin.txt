@@ -1,0 +1,352 @@
+================================================================================
+PROGRAMM: kwp-bnWin.net (auch "bnWin.net" / "KWP bnWin")
+Recherche-Stand: 23.08.2026 | Zweck: Konkurrenzanalyse für eigenes
+Rechnungsprogramm (Zielgruppe: Gebäudereinigung, Hausverwaltung, FM)
+================================================================================
+
+WICHTIGER HINWEIS VORAB (Einordnung zur Wettbewerbsanalyse):
+kwp-bnWin.net ist KEINE Software für Gebäudereinigung / Hausverwaltung /
+Facility Management, sondern eine kaufmännische BRANCHENSOFTWARE für das
+BAU-NEBENHANDWERK (Elektro, SHK/Sanitär-Heizung-Klima, Maler/Stuckateure,
+Holzbau). Es ist daher nur ein INDIREKTER Wettbewerber: relevant als
+Referenz für Funktionsumfang, Preis-/Lizenzmodell (Kauf statt Abo) und
+Vertriebsmodell im deutschen Handwerk. Für unsere Zielgruppe gibt es keine
+spezifischen Module (keine Objekt-/Putzpläne, keine Hausverwaltungs-
+Abrechnungen, kein Nebenkosten-WEG-Wesen).
+
+================================================================================
+1. ÜBERBLICK / HERSTELLER
+================================================================================
+- Produkt: kwp-bnWin.net – modular aufgebautes "Handwerkerbetriebssystem"
+  (ERP/Faktura) für Büro & Baustelle; aktuelle Version 8.1 N4 (Stand Juli 2026)
+- Hersteller: KWP Informationssysteme GmbH, Keplerring 7, 84030 Ergolding
+  bei Landshut (Bayern); HRB 2900, Amtsgericht Landshut
+- Gegründet: 1991; Software wird seit ca. 1995 vertrieben (SoftGuide-Angabe:
+  Erstinstallation 1995); ca. 40 Mitarbeiter; Umsatz <5 Mio. EUR;
+  Geschäftsführer: Stephan Rixinger
+- Positionierung: "Handwerkerbetriebssystem für Büro & Baustelle" –
+  "Handwerkersoftware kaufen statt mieten" (bewusste Anti-Abo-Positionierung),
+  persönlicher Support vor Ort, Organisationsberatung und Schulungen als
+  Teil des Geschäftsmodells ("Software. Organisation. Training.")
+- Marktdurchdringung: laut Anbieter/SoftGuide über 6.000 installierte Betriebe
+  der Größenordnung 1 bis 600 Mitarbeiter
+- DATEV-Partner seit Juni 2013; kwp-bnWin.net ist im DATEV-Marktplatz gelistet
+  als "operatives Vorsystem zur DATEV"
+- Schwesterprodukt: Vaillant winSOFT (OEM-Version der gleichen Software,
+  von Vaillant subventioniert an SHK-Betriebe vertrieben); KWP entwickelt und
+  betreut beide Produkte
+- Vertrieb auch über Partner (z.B. PK-Soft), Integration in Make.com
+  (Automatisierungsplattform) vorhanden
+- Betrieb: klassisch On-Premise auf eigener Hardware mit Microsoft SQL-Datenbank
+  (ab Version 2017) – häufigste Betriebsart; optional Cloud-Betrieb über
+  "KWP BaaS Cloud" ("BNWIN as a Service", Hosting in ISO-zertifiziertem
+  Rechenzentrum inkl. Updates/Backup/Monitoring)
+
+================================================================================
+2. FEATURES (vollständige Liste, nach Modulen gegliedert)
+================================================================================
+
+--- VERSIONEN (Stufenmodell) ---
+
+REGIE-Version (Einstiegsstufe, "einfach.günstig.leistungsstark"):
+- Adressen-Stammdatenverwaltung (Kundenverwaltung): Terminverwaltung,
+  Kundenindividualisierung, Notizblock-Funktion, Rechnungs-/Angebotsjournal,
+  Zugriff/Anzeige aller Aufträge
+- bnInfoCenter + kostenfreie mobile App KWP bnApp (Zugriff auf lokale
+  SQL-Datenbank)
+- Integration von Microsoft Word, Excel und Outlook
+- Artikel-Stammdatenverwaltung: für unterschiedliche Lieferantenkataloge,
+  automatische Verarbeitung/Import von DATANORM 3.0/4.0/5.0, ELDANORM,
+  UGS/UGL, Arbeitszeiten; Bild- und Leistungskataloge (DATABILD, DIGIS);
+  OCI- und IDS-Anbindung an Großhandelssysteme
+- Auftragsverarbeitung: Angebot, Auftragsbestätigung, Montageauftragsjournal,
+  Lieferschein, Einzel- und Sammelrechnung, Rechnungsversand per E-Mail,
+  Gutschrift
+- Positionsbearbeitung: komfortable Schnellerfassung, Einzelinformationen im
+  Direktzugriff, Positionsüberblick, Artikelstatistik
+- Auswertungen: Rechnungsjournal inkl. MAHNUNG, OP-Liste,
+  Zahlungseingangsverwaltung, optionale Übergabe an die FiBu,
+  Angebotsjournal mit Angebotsauswertung, integriertes individuelles Reporting
+
+BASIS-Version (enthält ALLE Funktionen von REGIE zusätzlich):
+- Projektverwaltung: Angebot / Anlage LV / Festpreisangebote,
+  Leistungsverzeichnis, Preisanfragen, Schnellerfassung Aufmaß-Mengen,
+  Abschlagsrechnung / Teilrechnung / Schlussrechnung, Nachtragsverwaltung,
+  Geräte-, Maschinen-, Werkzeug- und Fuhrparkverwaltung
+- GAEB-Schnittstelle (Ausschreibungssoftware/Kalkulation von LVs)
+- Softwareanbindung UGL / UGS / IDS / OCI; Import aus
+  Konfigurationsprogrammen (optional kostenpflichtig)
+
+--- ZUSATZMODULE (zur BASIS-Version, einzeln zubuchbar) ---
+- Modul Kalkulation: exakte Kalkulation von Angeboten (Nachfolger
+  "Kalkulation Classic", 2026 abgekündigt/neu entwickelt)
+- Modul Aufmaß: Aufmaß-Erfassung
+- Modul Material- und Zeitwirtschaft: permanente Baustellen-Begleit-/
+  Nachkalkulation, Lagerhaltung
+- Modul Bestellwesen: Bestellerfassung, -verwaltung, -kontrolle
+- Modul Wartungswesen: Kundendienst-, Wartungs- und Serviceleistungen,
+  Vertragsverwaltung mit automatischen Erinnerungen (+ Kartendienst bnMap)
+- Modul Aktivitäten-Management: Aufgaben definieren, verteilen, überwachen
+- Modul Archivierung: vorgangsbezogene Belegablage (DMS)
+
+--- KWP ADD-ONS ---
+- Monteursteuerung (Einsatz-/Monteurplanung, Kalender)
+- Eingangsrechnungsbuch / Kreditoren
+- Telefonie mit TAPI (CTI)
+- FiBu und Lohn (Anbindung Finanzbuchhaltung/Lohn)
+- Mareon (Serviceplattform-Anbindung)
+- Schnittstellen zum Großhandel (Kataloge, Online-Shops, OCI; laut
+  systemhaus.com Live-Preisabgleich über BID-Schnittstelle mit tagesaktuellen
+  Großhandelspreisen in Echtzeit – Alleinstellungsmerkmal im Elektro-Bereich)
+- Leistungskataloge (optional kostenpflichtig)
+- Lohnveredelung
+- Kartendienst bnMap
+
+--- SOFTWAREERGÄNZUNGEN ---
+- bnInfoCenter (Unternehmer-Cockpit/Infozentrale, kostenfrei laut SoftGuide)
+- EDi – Büroautomation
+- ZUGFeRD eRechnungskontrolle (E-Rechnung: Prüfung eingehender XRechnung/
+  ZUGFeRD-Rechnungen, Übergabe an FiBu via Beleg2Buchen/BDS)
+
+--- MOBILE ARBEITEN ---
+- Mobiler Monteur classic / Mobiles Büro (Schreibarbeit direkt beim Kunden,
+  Rechnungsvorbereitung mobil, ohne Medienbruch)
+- KWP Mobiler Monteur (PWA, 2. Generation): mobile Abwicklung von
+  Montage-/Serviceaufträgen online/offline
+- KWP bnApp (PWA + native Apps iOS/Android): Adressverwaltung, Aktivitäten,
+  Archiv (offline-fähig), Artikelscan (Barcode), Checklisten, Benutzerkalender,
+  Lieferscheinverbuchung, Monteursteuerung, Projektampel, Vorgangsanzeige,
+  Wartungswesen, Zeiterfassung (online/offline)
+- KWPBOX (Hardware-/Backend-Lösung für mobilen Betrieb ohne eigenen Server)
+
+--- KÜNSTLICHE INTELLIGENZ / API ---
+- API-Anbindung, KI-Telefonie "Hey Telo" und "HalloPetra"
+  (annimmt Anrufe, legt Vorgänge an)
+- Make.com-Integration (Adressen/Kontakte automatisieren)
+- E-Learning-System mit 24/7 KI-Chatbot
+
+--- EXTERNE ADD-ONS (Drittanbieter, angebunden) ---
+- Keil BarcodeOCR, ODV Cockpit, ODV Craftnote Connector, Seneca Controlling,
+  SOFTGEWERK (bauzeit/material/fotobox), Angebotskonfigurator Heizung/Bad,
+  combit Report Server
+
+--- TECHNIK / SONSTIGES ---
+- Windows-Desktop-Anwendung (Win 10/11, Server), mehrplatzfähig/netzwerkfähig;
+  MS SQL-Datenbank; nur deutsche Dialogsprache
+- Clients: Desktop, Webbrowser (PWAs), Apps (iOS/Android)
+- Buchhaltungs-Schnittstellen: DATEV (Buchungsdatenservice BDS, Belege online,
+  LODAS, Kanzlei-Rechnungswesen, Unternehmen online u.a.), diverse FiBu-Übergaben
+- Fernwartung via Internet durch den Support
+
+================================================================================
+3. PREIS-/LIZENZMODELL
+================================================================================
+GRUNDPRINZIP: EINMALKAUF statt Abo ("kaufen statt mieten") – zeitlich
+unbeschränktes Nutzungsrecht; laufende Kosten entstehen primär über den
+optionalen/nötigen Software-Pflegevertrag (Updates + Hotline).
+
+Belegte Preise (Quelle: SoftGuide-Eintrag Feb. 2026 + Herstellerseite):
+- REGIE-Version: ab 900 EUR zzgl. 19% MwSt (= 1.071 EUR brutto), einmalig
+  -> für Existenzgründer, Kleinst- und Kleinbetriebe
+- BASIS-Version: ab 2.900 EUR zzgl. 19% MwSt (= 3.451 EUR brutto), einmalig
+  -> für mittlere Betriebe (Upgrade REGIE->BASIS möglich "mit geringer
+  Investition" ohne Datenverlust)
+- Einstiegspaket "Handwerksmeister 2.0": REGIE + Mobiler Monteur + bnApp +
+  Installation + Einrichtung + Schulung + telefonische Unterstützung
+  (Preis auf Anfrage, eigens für Existenzgründer geschnürt)
+- Zusatzmodule, Leistungskataloge, Import-Schnittstellen: optional /
+  kostenpflichtig (Preise nur auf Anfrage – kein öffentlicher Preisliste)
+- Software-Pflegevertrag (Online-Updates + Hotline): gegen Entgelt, jährlich;
+  Online-Updates NUR mit aktivem Pflegevertrag verfügbar. Historischer
+  Forumshinweis: Wartungsvertrag "recht teuer", Hilfe ohne Vertrag "richtig
+  teuer"; >250 EUR pro Schulungstag (2004er-Angabe)
+- Schulungen (aktuell): Einsteigerschulung kompakt 344 EUR/Tag,
+  Fachseminare (Kalkulation, Aufmaß/Abrechnung, Wartungswesen etc.)
+  200-300 EUR pro Person/Tag; Standorte u.a. Landshut, Bottrop, Chemnitz,
+  Stuttgart, Barleben + online
+- Hotline: kostenpflichtig (eigene Service-Hotline-Nummer)
+- KWP BaaS Cloud (Hosting SaaS-Variante): Preis auf Anfrage
+- Gesamtinvestition lt. Hersteller-FAQ: Kleinstbetrieb (1-2 MA) ca.
+  2.000-3.000 EUR inkl. Software, Einrichtung und Einweisungen; mittlere
+  Betriebe "mittlerer vierstelliger Bereich"
+- softwareabc24 listet zusätzlich eine MIETOPTION (monatlich/jährlich, pro
+  Nutzer) – das widerspricht leicht dem Kauf-Marketing; vermutlich für
+  Cloud/Pflege-Kombinationen. Unsicherheit: genaue Mietpreise nicht öffentlich.
+
+FAZIT PREIS: transparenter Einstieg (900 € netto), danach intransparente
+Modul-/Pflegekosten; Gesamtkosten über Lebensdauer v.a. durch Pflegevertrag,
+Schulungen und Hotline getrieben.
+
+================================================================================
+4. KUNDENMEINUNGEN (positiv) – ECHTE FUNDSTELLEN
+================================================================================
+HINWEIS ZUR QUELLENLAGE: Es existieren KEINE Bewertungen auf den großen
+Portalen (Capterra, G2, OMR Reviews, Trustpilot: nicht gelistet bzw. keine
+Treffer; softwareabc24: "Aktuell liegen noch keine Bewertungen";
+ProvenExpert-Profil seit Okt. 2025 vorhanden, aber "Nicht bewertet").
+Echte Nutzerstimmen fanden sich nur in einem alten Handwerker-Forum und in
+App-Store-Rezensionen:
+
+POSITIV:
+- HaustechnikDialog-Forum (2003/2004, zu Vorgängerprodukten KWP
+  "Bauhandwerk 2000" / Vaillant winSOFT 2000 – ALT, aber authentisch):
+  * Georg, 03.08.2003: "Ich setze schon Winsoft 2000 seit Anfang an ein.
+    Ich bin sehr zufrieden. Vor allen Du kauft einmal die Software und hast
+    keine weiteren Kosten mehr, denn die Updates sind kostenlos."
+    (Achtung: kostenlose Updates galten damals – heute Pflegepflicht!)
+  * Peter711, 07.01.2004: "Ich habe KWP und bin damit sehr zufrieden weil es
+    sehr stabil läuft. Die Hotline konnte auch immer schnell helfen."
+  * sh, 25.05.2004 (winSOFT im Netz): "läuft bei uns auf 13 Client-Rechner
+    im Netz ... sehr stabil."
+  * Jürgen, 29.08.2003: "Bin schon zufrieden damit ..." (siehe aber Kritik)
+- kununu (Arbeitgeberbewertung KWP GmbH, NICHT Produkt): 4,7/5 aus 2
+  Bewertungen, 100% Weiterempfehlung; gelobt: Arbeitsatmosphäre, Kommunikation,
+  Kollegenzusammenhalt; Verbesserungspotenzial: "Interessante Aufgaben"
+- systemhaus.com (Redaktionelle Einschätzung, kein Nutzerreview):
+  "Service-orientierte SHK-Betriebe mit 10-50 Mitarbeitern finden in
+  kwp bnwin.net eine optimale Lösung"; hervorgehoben wird der Live-
+  Preisabgleich mit Großhändlern (BID, Echtzeit-Sync tagesaktueller Preise)
+  als deutliches Differenzierungsmerkmal gegenüber Wettbewerbern
+- Herstellereigene Anwenderporträts (Marketing, aber konkret benannte
+  Betriebe): Peter Bohl (46-MA-Betrieb, Projektgeschäft/Monteursteuerung),
+  Süssenbach Heizungsbau ("Mehr Zeit fürs Handwerk"), Franz Sicherungstechnik
+  (Sicherheitstechnik), Kohl Wasser + Wärme – Lob für Zeitersparnis im Büro,
+  Medienbruch-freie Zusammenarbeit Büro/Baustelle, Transparenz
+
+================================================================================
+5. KUNDENMEINUNGEN (negativ / Kritik) – ECHTE FUNDSTELLEN
+================================================================================
+- Google Play Store, KWP bnApp (mobile Begleit-App zu kwp-bnWin.net):
+  NUR 2,4 von 5 Sternen bei 13 Rezensionen (Stand Aug. 2026). Konkrete Zitate:
+  * Edy G., 21.06.2026: "Muss den Dreck täglich gezwungenermaßen nutzen.
+    Hängt ständig, immer weißer Bildschirm. Aktualisierung findet irgendwann
+    statt. Aktuelles Handy mit Betriebssystem ist vorhanden und trotzdem geht
+    der Dreck nicht." (1x hilfreich)
+  * Nikola Stherev, 20.07.2026: Login/Passwort-Rücksetzung funktioniert nicht
+    – "Kein Zugang... falsche Email oder Kennwort ... das ist ganz schlechte app!"
+  * Daniel Bauer, 14.05.2025: "Nicht nutzbar! Die komplette Leiste unten um
+    etwas hinzuzufügen fehlt komplett egal in welchem Bereich! ich kann NICHTS
+    machen! ... Nutze Samsung S24 Ultra."
+  => Interpretation: Der mobile Zweig (Apps) wirkt deutlich schwächer als die
+     Desktop-Stammsoftware – typische Schwachstelle etablierter
+     Desktop-Herstellersoftware.
+- HaustechnikDialog-Forum (2003/04):
+  * Jürgen, 29.08.2003: "...aber die Folgekosten sind enorm hoch. z.B. Updates
+    und Hotline. Nimm lieber die Winsoft von Vaillant. Die ist genausogut und
+    günstiger."
+  * Peter711, 07.01.2004: "Wartungsvertrag aber recht teuer. Aber richtig teuer
+    wird es wenn du den nicht hast und mal Hilfe brauchst. ... Pro Schulungstag
+    verlangen die über 250 Euro und da es das nur in Landshut und Chemnitz
+    gibt kommt noch Hotel dazu." (=> Folgekosten + Zentralisierung der
+    Schulungsorte als Kritikpunkte)
+  * Hendrik, 07.09.2003 (nach Test mehrerer Programme inkl. Winsoft):
+    hatte Probleme (Antivirus-Konflikt, wurde zurückgenommen) und zog ein
+    Konkurrenzprodukt vor – Einzelfall, aber Beleg dafür, dass nicht alle
+    Wechselwilligen bei KWP landeten.
+- Strukturelle Kritikpunkte aus der Quellenlage (nicht direkte Zitate):
+  * Kein moderner SaaS-Client: Kernprogramm bleibt Windows-Desktop-Anwendung
+    mit SQL-Server-Pflicht (On-Premise) – hoher Installations-/Adminaufwand;
+    Cloud nur via gehostetem Zugriff (BaaS), nicht echte Web-Anwendung
+  * Nur Deutsch -> für internationale Teams ungeeignet
+  * Intransparenz der Preise für Module/Pflege/Cloud ("auf Anfrage")
+  * Pflegevertrag faktisch Pflicht für Updates -> wiederkehrende Kosten trotz
+    "Kaufen statt Mieten"-Versprechen
+  * Kein Review-Footprint auf Capterra/G2/OMR -> schwer unabhängig vergleichbar
+  * Vaillant winSOFT: Wegfall der Vaillant-Subvention für Pflege ab 2025
+    (Vaillant zahlt nicht mehr zu; KWP bot Überleitung auf bnWin an) – erzeugte
+    Verunsicherung, Wettbewerber (TAIFUN) warb aktiv winSOFT-Kunden ab;
+    KWP veröffentlichte eine "Fake News"-Gegendarstellung.
+
+================================================================================
+6. ZIELGRUPPE
+================================================================================
+- Branche: Baunebenhandwerk – explizit genannt werden:
+  * SHK: Sanitär / Heizung / Klima / Lüftung / Spengler
+  * Elektro / PV (Elektroinstallation, Anlagenbau)
+  * Maler / Lackierer / Stuckateure / Trockenbau
+  * Holzbau / Schreiner / Zimmerer
+  * Sicherheits-/Errichtungshandwerk (Sicherungstechnik-Anlagen)
+- Größenklassen: bewusst ALLE – von Meisterschüler/Existenzgründer/Einzelkämpfer
+  (REGIE, "Handwerksmeister 2.0") über kleine/mittlere Betriebe bis
+  Großunternehmen 25-500 Mitarbeiter (Herstellerangabe); SoftGuide nennt
+  realisierte Installationen von 1 bis 600 Mitarbeitern
+- Region: deutschsprachiger Raum (Deutschland, Österreich – Messen in Wels);
+  Dialogsprache ausschließlich Deutsch
+- Typischer Anwender laut systemhaus.com: serviceorientierte SHK-Betriebe
+  mit 10-50 Mitarbeitern und hohem Wartungs-/Serviceanteil
+- NICHT adressiert: Gebäudereinigung, Hausverwaltung, Facility Management,
+  GaLaBau, Bauhauptgewerbe (Rohbau/Hochbau) -> für unser Vorhaben
+  (Rechnungsprogramm für Gebäude-Unternehmen) besteht hier eine klare
+  MARKTLÜCKE: KWP deckt unsere Zielgruppe funktional nicht ab.
+
+================================================================================
+7. QUELLEN (URLs)
+================================================================================
+Hersteller / Produktdokumentation:
+- https://www.kwpsoftware.de/software/kwp-bnwin-net/          (Produktübersicht)
+- https://www.kwpsoftware.de/software/kwp-bnwin-net/regie/    (REGIE-Version, 900€)
+- https://www.kwpsoftware.de/software/kwp-bnwin-net/basis/    (BASIS-Version)
+- https://www.kwpsoftware.de/software/module/                 (Zusatzmodule)
+- https://www.kwpsoftware.de/software/kwp-add-ons/            (Add-Ons, über Navigation)
+- https://www.kwpsoftware.de/software/kwp-baas-cloud/         (BNWIN as a Service)
+- https://www.kwpsoftware.de/                                 (Firma, FAQ, Preise-FAQ)
+- https://www.kwp-app.de/                                     (bnApp/Mobiler Monteur, Technik, Impressum)
+- https://www.kwpsoftware.de/stellungnahme-zu-falschbehauptungen-bezueglich-der-vaillant-winsoft-zukunft/
+                                                               (winSOFT-Subventionsende, Nutzungsrecht)
+
+Marktplätze / Portale:
+- https://www.datev.de/web/de/marktpatz/kwp-bnwin-net         (DATEV-Marktplatz: Firmenhistorie, DATEV-Module, 1991 gegründet, Partner seit 06/2013)
+  (korrekte URL: https://www.datev.de/web/de/marktplatz/kwp-bnwin-net)
+- https://www.softguide.de/programm/kwp-bnwin-net             (Preise 900€/2.900€, Funktionen, Technik, 6000 Installationen, Erstinstallation 1995)
+- https://www.softguide.de/alternativen/kwp-bnwin-net         (Wettbewerberliste)
+- https://www.softwareabc24.de/handwerker-software/kwp-bnwin-net (Features/Preismodelle, "keine Bewertungen vorhanden")
+- https://systemhaus.com/shk-software/kwp-bnwinnet-2397       (Empfehlung SHK-Betriebe 10-50 MA)
+- https://systemhaus.com/elektro-software/kwp-bnwinnet-2369   (BID-Live-Preisabgleich als USP)
+- https://apps.make.com/kwp-u1l4xr                            (Make.com-Integration)
+- https://pk-soft.de/kwp-erweiterungen/                       (Vertriebspartner)
+
+Bewertungen / Erfahrungsquellen:
+- https://play.google.com/store/apps/details?id=de.kwpsoftware.bnApp2&hl=de
+  (Google Play: 2,4 Sterne / 13 Rezensionen – negative Zitate s.o.)
+- https://www.haustechnikdialog.de/Forum/t/2425/Software-fuer-SHK-Betriebe
+  (Handwerker-Forum 2003/2004: positive UND negative Nutzerstimmen zu
+   KWP Bauhandwerk/winSOFT – Vorgängerprodukte)
+- https://www.provenexpert.com/de-de/kwp-informationssysteme-gmbh/
+  (Profil vorhanden, aber "Nicht bewertet")
+- https://www.kununu.com/de/kwp-informationssysteme2/kommentare
+  (Arbeitgeberbewertung 4,7/5, 2 Bewertungen)
+- https://elektrikersoftware.de/kwp-bnwin-net/
+  ("Aktuell fehlt uns noch ein authentischer Erfahrungsbericht" – bestätigt
+   dünne Review-Lage)
+
+Firmendaten:
+- https://www.keytobavaria.com/company-details/kwp-informationssysteme-gmbh-4320
+  (Gründung 1991, ~40 MA, Umsatz <5 Mio. EUR)
+- https://www.northdata.de/KWP%20Informationssysteme%20GmbH%2C%20Ergolding/Amtsgericht%20Landshut%20HRB%202900
+  (HRB 2900, Gegenstand Unternehmensregister)
+
+Nicht gefunden / Negativbefunde:
+- Capterra: kein Eintrag für kwp-bnWin.net gefunden
+- G2: kein Eintrag gefunden
+- OMR Reviews: kein Eintrag gefunden
+- Trustpilot: keine Präsenz gefunden
+
+================================================================================
+UNSICHERHEITEN / OFFENE PUNKTE
+================================================================================
+1. Identifizierung ist EINDEUTIG: "kwp-bnWin.net" = Handwerkersoftware der
+   KWP Informationssysteme GmbH (Ergolding/Landshut). Die Vermutung
+   "Kommunales Wirtschaften" trifft NICHT zu; KWP steht firmengeschichtlich
+   schlicht für den Firmennamen (ursprünglich vermutlich "Kaufmännische
+   Wirtschaftsprogramme"/ähnl. – offiziell nicht dokumentiert, reine Spekulation).
+2. Exakte Preise für Zusatzmodule, Pflegevertrag, BaaS Cloud: nicht öffentlich
+   (nur "auf Anfrage"); die 900€/2.900€ sind Einstiegspreise der Basisversionen.
+3. Die Mietoption (laut softwareabc24) ist nicht auf der Herstellerseite
+   belegt – möglicherweise veraltet oder auf Cloud-Varianten beschränkt.
+4. Forenzitate stammen aus 2003/2004 und betreffen die Vorgängerprodukte
+   (KWP Bauhandwerk 2000 / Vaillant winSOFT 2000) – Aussagen zu Stabilität
+   und Folgekosten sind Indikatoren, aber nicht 1:1 auf die heutige
+   Version 8.x übertragbar.
+5. Google-Maps-Bewertungen des Herstellers konnten nicht ausgelesen werden
+   (JS-lastige Seite); dort könnten weitere Kundenstimmen existieren.
+================================================================================

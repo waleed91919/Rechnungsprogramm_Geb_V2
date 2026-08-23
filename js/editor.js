@@ -606,7 +606,7 @@ function handleKundeSelect(event) {
     }
 }
 
-function exportXRechnungXMLFromModal() {
+function collectERechnungExportData() {
     const kundeId = parseInt(document.getElementById('rechnung-kunde')?.value);
     const kunde = state.kunden.find(k => k.id === kundeId) || { name: 'Empfänger' };
     const nr = document.getElementById('rechnung-nr')?.value || 'RE-000';
@@ -629,25 +629,68 @@ function exportXRechnungXMLFromModal() {
         positionen: [...(state.currentRechnungPositionen || [])]
     };
 
-    if (typeof EInvoiceEngine !== 'undefined') {
-        const validation = EInvoiceEngine.validateForEN16931(currentDoc, { ...kunde, customer_type: 'B2G', leitweg_id }, state.einstellungen);
-        if (!validation.isValid) {
-            showToast('B2G Validierung fehlgeschlagen: ' + validation.errors.join(' '), 'warning');
-        }
+    return { currentDoc, customer: { ...kunde, leitweg_id, buyer_reference }, nr };
+}
 
-        const xml = EInvoiceEngine.generateXRechnungXML(currentDoc, { ...kunde, leitweg_id, buyer_reference }, state.einstellungen);
-        const blob = new Blob([xml], { type: 'application/xml;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", `XRechnung_${nr}.xml`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        showToast(`XRechnung XML für ${nr} heruntergeladen.`, 'success');
-    } else {
+function validateERechnungForB2G(currentDoc, customer) {
+    if (typeof EInvoiceEngine === 'undefined') {
         showToast('E-Rechnungs-Engine nicht verfügbar.', 'error');
+        return false;
     }
+    const validation = EInvoiceEngine.validateForEN16931(currentDoc, { ...customer, customer_type: 'B2G', leitweg_id: currentDoc.leitweg_id }, state.einstellungen);
+    if (!validation.isValid) {
+        showToast('B2G Validierung fehlgeschlagen: ' + validation.errors.join(' '), 'warning');
+    }
+    return true;
+}
+
+async function exportZugferdPdfFromModal() {
+    const { currentDoc, customer, nr } = collectERechnungExportData();
+    if (!validateERechnungForB2G(currentDoc, customer)) return;
+
+    if (!(window.api && typeof window.api.exportZugferdPdf === 'function')) {
+        showToast('ZUGFeRD-PDF/A-3-Export ist in dieser App-Version nicht verfügbar.', 'error');
+        return;
+    }
+    try {
+        const res = await window.api.exportZugferdPdf({
+            doc: currentDoc,
+            customer,
+            profile: 'EN16931',
+            fileNameHint: `ZUGFeRD_${nr}.pdf`
+        });
+        if (res && res.success) {
+            showToast(`ZUGFeRD PDF/A-3 gespeichert: ${res.path}`, 'success');
+        } else if (res && res.cancelled) {
+            showToast('ZUGFeRD-Export abgebrochen.', 'info');
+        } else {
+            showToast('ZUGFeRD-Export fehlgeschlagen: ' + ((res && res.error) || 'Unbekannter Fehler'), 'error');
+        }
+    } catch (err) {
+        showToast('ZUGFeRD-Export fehlgeschlagen: ' + err.message, 'error');
+    }
+}
+
+async function exportXRechnungXMLFromModal() {
+    const format = document.getElementById('rechnung-erechnung-format')?.value || 'XRECHNUNG';
+    if (format === 'ZUGFERD') {
+        await exportZugferdPdfFromModal();
+        return;
+    }
+
+    const { currentDoc, customer, nr } = collectERechnungExportData();
+    if (!validateERechnungForB2G(currentDoc, customer)) return;
+
+    const xml = EInvoiceEngine.generateXRechnungXML(currentDoc, customer, state.einstellungen);
+    const blob = new Blob([xml], { type: 'application/xml;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `XRechnung_${nr}.xml`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast(`XRechnung XML für ${nr} heruntergeladen.`, 'success');
 }
 
 // Line Items

@@ -1,0 +1,226 @@
+========================
+PROGRAMM: STREIT V.1 (heute nur noch "STREIT")
+========================
+Recherche-Stand: 23.08.2026
+
+WICHTIGER HINWEIS ZUM NAMEN: Das Produkt hieß ursprünglich "Streit V.1" (bzw. "Streit Datec").
+Zum Jahresbeginn 2026 wurde die Software vom Hersteller in "STREIT" umbenannt, zuvor (bereits
+früher) erfolgte die Umfirmierung der Firma von "Streit Datentechnik GmbH" zu "STREIT Software GmbH".
+(Quelle: SBZ Online 13.02.2026). Alle Angaben beziehen sich daher auf dasselbe Produkt.
+
+------------------------------------------------------------------------
+1. ÜBERBLICK / HERSTELLER
+------------------------------------------------------------------------
+- Hersteller: STREIT Software GmbH (ehemals Streit Datentechnik GmbH), Julius-Allgeyer-Str. 1,
+  77716 Haslach im Kinzigtal (Schwarzwald), Tel. +49 7832/995-0, info@streit-software.de
+- mittelständisches deutsches Softwareunternehmen ("Made in Germany"), über 40 Jahre Erfahrung
+- ca. 150 Mitarbeiter, davon ~50 % im Bereich Beratung/Support; mehr als 36.000 Anwender
+- Produkt: kaufmännische Komplett-/ERP-Software für das Handwerk (Desktop-Anwendung auf
+  Windows-Basis, vollständig mit Microsoft-Entwicklungstools entwickelt) plus mobile Apps für
+  iOS, Android und Windows; aktuelle Version 27.0 (2026), inkl. neuer KI-Funktionen
+  ("STREIT KI & Automation") und Aufgaben-Management
+- Auszeichnungen: OMR Reviews "Leader Handwerk ERP" und "Leader Handwerkersoftware" Q3/26,
+  Trusted-Testsiegel "Sehr gut", GoBD-konform-Siegel, Haustec Award 2023
+- Verfügbarkeit: Cloud UND On-Premise möglich; Serverstandort DE/EU; deutschsprachiger Support
+  ohne Ticketsystem (direkter Telefonsupport); keine kostenlose Version, keine Testversion
+- Für uns relevant: Gebäudereinigung, Hausverwaltung und Rohr-/Kanalreinigung sind als Branche
+  im Kontaktformular des Herstellers auswählbar – STREIT bewirbt diese aber NICHT als eigene
+  Kernbranchen mit dedizierten Modulseiten. Kernbranchen sind Elektro, SHK, Kälte/Klima, Bedachung.
+
+------------------------------------------------------------------------
+2. FEATURES (vollständige Liste, nach Modulen gegliedert)
+------------------------------------------------------------------------
+DESKTOP-HAUPTANWENDUNG (alle Module im Lizenzpaket enthalten):
+- Stammdatenverwaltung: Kunden-, Mitarbeiter-, Lieferantendaten inkl. kompletter Historie,
+  Zuweisung von Aufträgen, Vorbereitung Lohnabrechnung, Lieferantenrechnungen
+- Auftragsbearbeitung: Angebote, Rechnungen, Teilrechnungen, Gutschriften, Lieferscheine,
+  Arbeits- und Serviceaufträge, Auftragsbestätigungen, Rapporte & Regieaufträge,
+  Barverkauf/Kassenabwicklung, Mahnwesen, Kunden-OPs, Belegweiterverarbeitung
+  (Angebot->Auftrag->Lieferschein->Rechnung), individuelle Druckdesigns
+- Projektbearbeitung / Kalkulation / Leistungsverzeichnisse (LV): Kalkulationen, GAEB-
+  Import/-Ausgabe, Material- und Lohnformeln, Nachkalkulation/Mitkalkulation, Projekt-Cashflow,
+  Übernahme von Positionen aus vergangenen Kalkulationen, Projekte >1000 Positionen möglich
+- Aufmaß: verschiedene Aufmaßvarianten, mobil oder in Hauptanwendung
+- Einkauf/Bestellwesen/Warenwirtschaft: Bestellungen, Wareneingänge, Lieferantenanfragen,
+  Preispiegel (günstigste Preise), Artikeldatenbank mit >5 Mio. Artikeln
+- Lagerverwaltung: manuelle/automatische Lagerverbuchung, Bestandsübersicht, Inventur
+- Wartung & Service: Verwaltung/Planung von Service- und Wartungsverträgen + Terminen
+- Checklisten: anpassbare Checklisten und dynamische Freifelder
+- Kalender & Terminplaner: Einzel-/Gruppenkalender, Outlook-/Exchange-Synchronisation
+- CRM Kommunikation: Kommunikationsmanager (Versenden/Speichern von Dokumenten direkt aus der
+  Software), integrierte Telefonanlage (CTI) und Texterfassung
+- Digitales Archiv: vollintegriert, automatische revisionssichere Ablage aller Dokumente,
+  E-Mails und Vorgänge nach GoBD (auch PDFs/E-Mails am Beleg)
+- Artikel- und Leistungskataloge: z. B. für Elektro und Dachdeckerhandwerk
+- Digitale Zeiterfassung: stationär, mobil oder per App "Zeit+" (auch ganze Montagetrupps),
+  Zeitfreigabe, Urlaubs-/Abwesenheitsanträge (neu ab V27)
+- Werkzeugverwaltung (inkl. neue App Werkzeug+ ab V27)
+- Betriebsbuchhaltung: internes Rechnungswesen, Kennzahlen, Kostenstellen
+- Finanzbuchhaltung: Umsatzsteuer-Voranmeldung, GuV, BWA, Bilanz - selbst machbar;
+  DATEV-Schnittstelle zum Steuerberater
+- Anlagenbuchhaltung, Inventur
+- Auswertungen: frei gestaltbare Reports, automatisierte Report-Ausgabe/Ablage/Benachrichtigung
+- Aufgaben-Management: zentrale Aufgaben, verknüpfbar mit Projekten/Aufträgen (neu ab V27)
+- Workflow-Management: Automatisierung wiederkehrender Abläufe und Freigabeprozesse
+
+MOBILE APPS (zusätzlicher Lizenzbedarf, NICHT in Complete-Desktop-Lizenz enthalten):
+- Monteur+ (mobile Auftragsabwicklung vor Ort, digitale Unterschrift des Kunden)
+- Zeit+ (mobile Zeiterfassung), Zeitfreigabe+
+- Aufmaß+ (mobiles Aufmaß), Bautagebuch+
+- Bestell+, Lager+ (Android), CRM+
+- NEU ab Version 27.0: Werkzeug+ und Lieferschein+
+
+SCHNITTSTELLEN:
+- E-Rechnung: ZUGFeRD, XRechnung (elektronische Rechnungsformate)
+- GAEB, Datanorm, Eldanorm, IDS, UGL, OCI, OMD (Großhandel/Artikeldaten)
+- DATEV (Finanzbuchhaltung), Microsoft Excel, Microsoft Exchange/Outlook
+- REST-API; Shop-Schnittstelle (Anbindung Online-Shop)
+
+SONSTIGES:
+- GoBD-konform, rechtssicher, datenschutzkonform (Server DE/EU)
+- KI-Funktionen & Automation ab V27.0 (Unterstützung Büro/Baustelle)
+- Datenübernahme-Service bei Umstellung, Schulungen, Online-Akademie, Webinare, Praxisseminare,
+  Digitalisierungsberatung, Fördermittelberatung (Investition förderfähig)
+
+------------------------------------------------------------------------
+3. PREIS-/LIZENZMODELL
+------------------------------------------------------------------------
+- KEINE öffentlichen Preise! Preis nur auf individuelle Anfrage; richtet sich nach Anzahl der
+  benötigten Lizenzen/Arbeitsplätze und gewünschten Apps (OMR bestätigt: "Der Provider does not
+  communicate any price information"; Softwarefinder listet "Custom Pricing")
+- Zwei Varianten: KAUF-Lizenz oder MIET-Lizenz (also klassischer Einmalkauf UND Abo möglich)
+- Mietmodell "STREIT Complete": alle Programmmodule + alle Schnittstellen enthalten, alle
+  künftigen Entwicklungen/Module automatisch ohne Zusatzkosten ("Zukunftsgarantie")
+- Die Desktop-Lizenz enthält ALLE Module (kein separater Modulkauf nötig); die Apps
+  (Monteur+, Zeit+ etc.) kosten EXTRA und sind nicht in der Desktop-Lizenz enthalten
+- Existenzgründer im Handwerk: Software ein Jahr mietfrei (Starterpaket inkl. Schulung)
+- Fördermittel: Investition in Software/Apps ist förderfähig, Hersteller bietet
+  Fördermittelberatung
+- Keine Free-Version, kein Free Trial (laut OMR); dafür kostenlose Live-Demo/Gratis-Webinar
+- Unsicherheit: Konkrete Euro-Beträge sind nirgends veröffentlicht; OMR-Kritikpunkt einiger
+  Nutzer: "hohe Preise, besonders für Updates"
+
+------------------------------------------------------------------------
+4. KUNDENMEINUNGEN (positiv)
+------------------------------------------------------------------------
+Bewertungsüberblick:
+- OMR Reviews: 4,6/5 Sterne aus 109 Bewertungen (81x 5 Sterne, 27x 4 Sterne, 1x 3 Sterne,
+  keine 1-2-Sterne-Bewertungen); "Leader Handwerk ERP Q3/26", "Top Rated"
+- ProvenExpert (aggregiert): 4,43/5 aus 200 Bewertungen; davon Google Maps 4,40 (55 Bewertungen),
+  Apple App Store 3,80 (28), trusted.de 5,00 (1); Website zeigt Google-Siegel "4,5 Sterne"
+- Kein Profil auf Capterra, G2 oder Trustpilot gefunden (typisch für DE-Marktsoftware)
+
+Konkrete positive Punkte/Zitate (v. a. OMR Reviews):
+- SUPPORT (häufigstes Lob): "der schnell erreichbare und zuverlässige Telefonsupport ...
+  man kann nicht lange auf Lösungen warten" (Inhaber Elektrobetrieb); "Support ist hervorragend:
+  freundlich, kompetent und immer schnell erreichbar"; "Telefonsupport ohne Ticketsystem"
+- DURCHGÄNGIGKEIT: "die nahtlose Verbindung zwischen Angebot, Auftrag, Rechnung und
+  Nachkalkulation – alles läuft reibungslos und spart enorm viel Zeit"
+- ALLES IN EINEM: "Flüssiges Arbeiten aus EINEM Programm und nicht zusammengewürfelter Software";
+  "von der Angebotserstellung, Rechnungsstellung, Lagerführung bis Zeiterfassung"
+- KERNFUNKTIONEN HANDWERK: "Richtig gut ... bei der Kalkulation, dem Verwalten von GAEB-Dateien
+  und Material- und Lohnformeln sowie die Anbindung an Lieferanten"; komplette Prozesskette bis
+  zur XRechnung/E-Rechnung
+- MOBILE APPS: "Mobile Anwendungen sind MEGA und die Monteure haben auch damit Spaß";
+  Rapport digital auf Baustelle, "muss nicht noch einmal abgetippt werden -> enorme Zeitersparnis
+  beim Rechnungsstellen" (Geschäftsführer Wieland Energietechnik)
+- FINANZBUCHHALTUNG INTERN: "Die Buchhaltung kann komplett intern durchgeführt werden, dadurch
+  wesentlich geringere Steuerberatungskosten"
+- ÜBERSICHTLICHKEIT & STABILITÄT: "arbeite mittlerweile über 20 Jahre täglich mit der Software ...
+  Übersichtlichkeit, Stabilität, Geschwindigkeit bei der Suche" (NSC Sicherheitstechnik);
+  "Artikeldatenbanken mit mehr als 5 Mio. Artikel läuft stabil"
+- REPORTS: "freie Möglichkeit der Reportsgestaltung ... Reports automatisiert ausgeben, strukturiert
+  ablegen und User benachrichtigen ... spart uns hunderte von Stunden bei der Wirtschaftsprüfung"
+- ARCHIVIERUNG: papierlose, GoBD-konforme Archivierung wird mehrfach gelobt; PDFs/E-Mails werden
+  direkt am Beleg archiviert
+- Effizienzgewinn laut Referenzkunde Elektro Ehinger: "rund 25 % Arbeitszeitersparnis im Büro"
+
+------------------------------------------------------------------------
+5. KUNDENMEINUNGEN (negativ / Kritik)
+------------------------------------------------------------------------
+Konkrete negative Punkte aus echten Bewertungen (v. a. OMR Reviews, ProvenExpert):
+- EINARBEITUNG/AUFWAND: "braucht eine gewisse Einarbeitungszeit ... Es empfiehlt sich, eine Person
+  im Betrieb zu haben, die alle Schulungen besucht"; "Manche Funktionen sind etwas zu kompliziert
+  aufgebaut, besonders bei den Auswertungen"; "Mobiler Monteur steckt noch in den Kinderschuhen
+  und muss von Nutzer selbst mit KOSTENPFLICHTIGEN Schulungen aufgebaut werden"
+- PERFORMANCE: "Ab und zu längere Ladezeiten, gerade bei sehr großen Projekten oder großen
+  Stücklisten"; "hin und wieder Aussetzer nach Updates (längere Ladezeiten bei älteren Belegen,
+  Druckfehler)"; Extremfall ProvenExpert (1,2/5, 02/2023): "Die Geschwindigkeit des Programmes
+  und der damit verbundene Workflow ist unterirdisch schlecht"
+- PREISE: laut OMR-KI-Zusammenfassung "hohe Preise, besonders für Updates" bemängelt
+- MOBILE APP GRENZEN: "In der Mobil App würde ich gerne neue Kunden anlegen können ...
+  ist eine Katastrophe dass aktuell keine Möglichkeit besteht, vor Ort einen Rapport zu erstellen"
+  (Kundendienst); "Monteure sehen nur die Gesamtmassen, nicht die bereits ausgegebenen Massen";
+  "doppelte Zeiterfassung für Arbeitsnachweis und Zeit+ zeitintensiv und fehleranfällig"
+- MODULVERBINDUNGEN: "teilweise fehlen kleine softwaretechnische Verbindungen zwischen Modulen";
+  "Projekt-Positions-Nr. wird teilweise nicht mitgenommen"; UGL-/ZUGFeRD-Import "mit viel
+  Abstimmung und Problemen bei Lieferanten verbunden"
+- OBERFLÄCHE/MODERNITÄT: "könnte in manchen Bereichen einfacher gestaltet sowie moderner
+  aufgebaut werden"; viele Klicks nötig, jede Dokumentenart hat eigene Benutzeroberfläche
+- FEHLENDE FUNKTIONEN: Belege lassen sich aus dem Archiv nicht löschen; keine digitalen Prozesse
+  wie Online-Angebotsansicht/Widerruf/Auftragsbestätigung per Mausklick für Endkunden; nicht alle
+  Reports zur Abfragegestaltung freigegeben (u. a. unfertige Leistungen); einige Funktionen
+  "intern gesperrt"
+- WICHTIGE EINSCHRÄNKUNG ZUR BEWERTUNGSECHTHEIT: Bei vielen OMR-Bewertungen weist OMR darauf hin,
+  dass der Rezensent vom Anbieter eingeladen wurde und ein Incentive erhielt. Die sehr gute
+  Durchschnittsnote (4,6) ist daher mit Vorsicht zu genießen. Negativstimmen finden sich eher
+  verstreut (Apple App Store 3,8 für die App Zeit+, einzelne ProvenExpert-Einträge).
+
+------------------------------------------------------------------------
+6. ZIELGRUPPE
+------------------------------------------------------------------------
+- Kernzielgruppe: deutsche Handwerksbetriebe ALLER Größenklassen (ausdrücklich Kleinbetrieb,
+  Mittelständler, Großbetrieb) - schwerpunktmäßig Baunebengewerbe:
+  * Elektro (Kernbranche mit eigenem Artikel-/Leistungskatalog), Photovoltaik, Blitzschutz
+  * SHK (Sanitär/Heizung/Klima), Kälte-/Klima-/Lüftungsbau
+  * Bedachung/Dachdecker (eigener Leistungskatalog)
+  * Weitere offiziell genannte Gewerke: Maler/Lackierer, Zimmerei/Schreinerei/Tischlerei,
+    Fliesenleger/Bodenleger, Metallbau/Schlosser, Tore & Türen, Sicherheitstechnik, Brandschutz,
+    Schaltschrank-/Schaltanlagenbau, Anlagen-/Rohrleitungsbau, Fertigung, Haustechnik,
+    Gebäudetechnik, Gebäudeautomation, Dach- & Fassadenbau, Estrichleger, Gipser, Gerüstbauer,
+    Hochbau/Tiefbau/Straßenbau, Trockenbau/Innenausbau, Ofenbau, Fenster/Tore/Türen,
+    Garten- und Landschaftsbau
+- FÜR UNSER MARKT RELEVANT: "Gebäudereinigung", "Hausverwaltung" und "Rohr- und Kanalreinigung"
+  sind im Kontaktformular des Herstellers als Branche wählbar, es gibt aber KEINE eigenen
+  Branchenseiten/Module dafür. STREIT bedient Gebäude-Dienstleister eher am Rand über die
+  generischen Module (Wartung & Service, Objektdaten, mobile Auftragsabwicklung) - hier liegt
+  ggf. eine Differenzierungslücke für ein spezialisiertes Rechnungsprogramm für Gebäudereinigung/
+  Hausverwaltung/FM.
+- Auch geeignet für Existenzgründer (1 Jahr mietfrei) und Handelsunternehmen (Referenzkunden u. a.
+  aus Großhandel wie TIB Lackmann, NSC Sicherheitstechnik)
+- Sprachen: Deutsch und Englisch; Verbreitung im gesamten deutschsprachigen Raum
+
+------------------------------------------------------------------------
+7. QUELLEN (URLs)
+------------------------------------------------------------------------
+- Offizielle Website: https://www.streit-software.de/
+- Handwerkersoftware/Funktionen: https://www.streit-software.de/handwerkersoftware
+- Rechnungsprogramm-Seite: https://www.streit-software.de/rechnungsprogramm-fuer-handwerker
+- Preise (nur Anfrage): https://www.streit-software.de/preise
+- Existenzgründer-Angebot: https://www.streit-software.de/existenzgruender
+- Branchenseite: https://www.streit-software.de/branchen
+- OMR Reviews (109 Bewertungen, 4,6/5): https://omr.com/de/reviews/product/streit
+  bzw. https://omr.com/en/reviews/product/streit
+- ProvenExpert (200 Bewertungen aggregiert): https://www.provenexpert.com/streit-software-gmbh/
+- SBZ Online zur Umbenennung "Streit V.1 wird zu Streit" (13.02.2026):
+  https://www.sbz-online.de/meldungen/software-handwerkersoftware-streit-v1-wird-zu-streit
+- Softwarefinder (Überblick/FAQ): https://softwarefinder.com/construction/streit-v.1
+- Softguide-Eintrag: https://www.softguide.de/programm/streit-professionelle-komplett-software-fuer-ihr-handwerk
+- Gründerküche-Testbericht: https://www.gruenderkueche.de/empfehlungen/handwerker-software-streit-v1-software-fuer-handwerker/
+- trusted.de: https://trusted.de/streit-v-1
+- Apple App Store (App STREIT Zeit): https://apps.apple.com/de/app/streit-zeit/id1451951588
+- Google Maps Bewertungen (via ProvenExpert-Aggregation, cid=1410779131059649247)
+
+------------------------------------------------------------------------
+ANMERKUNGEN ZU UNSICHERHEITEN
+------------------------------------------------------------------------
+- Es existieren mehrere gleichnamige/namensähnliche Anbieter (z. B. "streit.de" = Streit Service &
+  Solution, Bürotechnik; diverse US-Softwareportale mit generischen Beschreibungen). Passender
+  Kandidat für die Konkurrenzanalyse ist eindeutig die STREIT Software GmbH, Haslach (streit-software.de).
+- Konkrete Preise sind nirgends öffentlich verfügbar (nur Kauf- vs. Mietoption bekannt).
+- Capterra/G2/Trustpilot: keine Profile gefunden; die Bewertungsbasis stammt aus OMR Reviews,
+  ProvenExpert, Google Maps und Apple App Store.
+- Ein erheblicher Teil der OMR-Rezensionen wurde vom Hersteller initiiert (Incentive-Hinweis von
+  OMR), was die Aussagekraft der Durchschnittsnote relativiert.
+- Zum tatsächlichen Funktionsumfang speziell für Gebäudereinigung/Hausverwaltung gibt es keine
+  öffentlichen Detailinformationen; dies würde eine Demo-Anfrage beim Hersteller erfordern.

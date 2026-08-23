@@ -114,6 +114,14 @@ test('4. EN 16931-1 XRechnung & ZUGFeRD Generator & B2G Leitweg-ID Check', () =>
     assert.ok(xml.includes('991-12345678-12'));
     assert.ok(xml.includes('urn:xoev-de:kosit:standard:xrechnung_2.3'));
     assert.ok(xml.includes('RE-2026-001'));
+
+    // ZUGFeRD-Profilvarianten: Guideline-URN je Profil
+    const zugferdXmlEN = EInvoiceEngine.generateZUGFeRDXML(invoice, b2gCustomer, seller, { profile: 'EN16931' });
+    assert.ok(zugferdXmlEN.includes('urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:en16931'));
+    assert.ok(!zugferdXmlEN.includes('xoev-de:kosit'));
+
+    const zugferdXmlX = EInvoiceEngine.generateZUGFeRDXML(invoice, b2gCustomer, seller, { profile: 'XRECHNUNG' });
+    assert.ok(zugferdXmlX.includes('urn:xoev-de:kosit:standard:xrechnung_2.3'));
 });
 
 test('5. GAEB X83 Import & X84 Export Engine', () => {

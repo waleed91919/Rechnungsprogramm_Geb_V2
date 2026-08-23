@@ -1,0 +1,96 @@
+================================================================================
+FEATURE-ROADMAP: W-LINK ERP VERBESSERN
+Basis: Wettbewerbsanalyse 6 Konkurrenten (Dateien 1-6 + 0_ZUSAMMENFASSUNG)
++ Ist-Stand eigene App (Datei 7) | Stand: 23.08.2026
+Umsetzung: 3 Subagents in .opencode/agent/
+================================================================================
+
+--------------------------------------------------------------------------------
+DIE 3 SUBAGENTS (in .opencode/agent/)
+--------------------------------------------------------------------------------
+
+1. GEBÄUDE-MODULE        (.opencode/agent/gebaeude-module.md)
+   Baut die Marktlücken-Module: Objektverwaltung, wiederkehrende
+   Rechnungen/Putzplan, Zeiterfassung.
+
+2. COMPLIANCE & E-RECHNUNG (.opencode/agent/compliance-e-rechnung.md)
+   Echter ZUGFeRD PDF/A-3-Export, XRechnung-Schematron-Validierung,
+   Peppol-Vorbereitung, SEPA/Bankimport, GoBD-Auto-Backup.
+
+3. APP-QUALITÄT & UX     (.opencode/agent/app-qualitaet-ux.md)
+   E-Mail-Versand, globale Suche, Dashboard-KPIs, Undo/Polish,
+   Performance, Testabdeckung.
+
+Aufruf: Subagent über opencode ansprechen (Task/Agent-Auswahl) oder
+direkt zuordnen: "@gebaeude-module baue die Objektverwaltung"
+
+--------------------------------------------------------------------------------
+PRIORITÄT 1 - MARKTLÜCKE GEBÄUDE (Subagent: Gebäude-Module)
+Begründung: KEINER der 6 Wettbewerber hat das -> größte Differenzierung
+--------------------------------------------------------------------------------
+F1  Objektverwaltung: Liegenschaft -> Gebäude -> Etage -> Raum/Fläche;
+    abweichender Rechnungsempfänger (Mieter/Eigentümer/Hausverwaltung);
+    Objekt-Historie aller Belege            [PDS einziger Konkurrent hier]
+F2  Wiederkehrende/Dauerrechnungen: monatliche/jährliche Abrechnungspläne
+    je Objekt; Sammelrechnungen             [5 von 6 Wettbewerbern Standard]
+F3  Putzplan + Reinigungs-Leistungsverzeichnis mit Flächenbezug und
+    RTV/BTV-Zuschlägen                      [niemand hat es]
+F4  Zeiterfassung je Mitarbeiter/Objekt/Leistung + Auswertung
+    [alle 6 haben mobile Zeit; wir: nichts]
+
+--------------------------------------------------------------------------------
+PRIORITÄT 2 - COMPLIANCE PARITÄT + VORSPRUNG (Subagent: Compliance & E-Rechnung)
+Begründung: E-Rechnung ist Pflichtthema 2025/27; ZUGFeRD-Button ist heute irreführend
+--------------------------------------------------------------------------------
+F5  ZUGFeRD FIX: echtes PDF/A-3 mit eingebetteter CII-XML statt nur XML
+    [höchste Priorität im Modul - Bug-artiger Stand]
+F6  XRechnung Schematron-Validierung (EN 16931) vor Export mit UI-Fehlern
+F7  Peppol-Versand/-Empfang vorbereiten      [nur PDS kann das = USP-Chance]
+F8  SEPA-Lastschrift (pain.008) + CAMT/Bankimport + OPOS-Abgleich ans Mahnwesen
+F9  GoBD-Härtung: tägliches Auto-Backup + Integritätsprüfung der Hashkette
+
+--------------------------------------------------------------------------------
+PRIORITÄT 3 - BEDIENBARKEIT & QUALITÄT (Subagent: App-Qualität & UX)
+Begründung: Support-/Bedienbarkeit ist Hauptkaufkriterium laut allen Analysen
+--------------------------------------------------------------------------------
+F10 E-Mail-Versand (SMTP) für Rechnungen/Mahnungen/Angebote + Versandhistorie
+    [fehlt komplett heute]
+F11 Globale dokumentübergreifende Suche (Ctrl+K) über Kunden/Belege/Projekte
+    [bei baufaktura ausdrücklich bemängelt]
+F12 Dashboard-KPIs: Umsatz, offene Posten, Mahnstatus, Projekt-Soll-Ist
+F13 UX-Polish: Undo wo erlaubt, keine versteckten Fenster, Ladezustände,
+    Tastaturbedienung                        ["ohne IT-Kenntnisse" = Kaufargument]
+F14 Performance: Startzeit/View-Wechsel optimieren (code.html 276 KB),
+    SQLite-Indizes prüfen
+F15 Testabdeckung erhöhen (14 Dateien vorhanden, js/-Module unterversorgt)
+
+--------------------------------------------------------------------------------
+SPÄTER / OPTIONAL (noch nicht zugewiesen)
+--------------------------------------------------------------------------------
+O1  Mobile Begleitlösung/Cloud-Sync           [Konkurrenz-Apps sind schwach:
+                                               KWP 2,4*, STR App Store 3,8 -> USP]
+O2  Mehrbenutzer/Rollen/Rechte                [aktuell Single-User]
+O3  Mängel-/QS-Begehungsmanagement            [hat KEINER = USP; Basis liegt
+                                               im Bautagebuch bereits]
+O4  Online-Kundenportal: Angebot freigeben/Auftragsbestätigung [hat KEINER]
+O5  CRM: Kalender/Termine/Aufgaben
+O6  Lagerwirtschaft ausbauen (Bewegungen/Inventur/Bestellwesen)
+O7  KI-Funktionen (Belegerkennung Eingangsrechnungen à la pds Invoice Reader)
+O8  Weitere direkte Reinigungs-Wettbewerber analysieren (SAPHIR, Cleazz,
+    CleanManager, fortytools/zvoove, BSS.CLEAN, DIGRAS) - noch nicht erforscht!
+
+--------------------------------------------------------------------------------
+VERKAUFSARGUMENTE AUS DER ANALYSE (parallel zur Entwicklung nutzbar)
+--------------------------------------------------------------------------------
+V1  Einmalkauf mit transparenten Folgekosten (Gegenmodell zu KWP/BF-Kritik)
+V2  Preisanker: klein 300-700 EUR / mittel 900-1.800 EUR / groß 1.400-3.400 EUR
+V3  Früh ProvenExpert/Google-Bewertungen aufbauen (alle 6 Konkurrenten dünn dort)
+V4  Persönlicher Support ohne Ticketsystem kommunizieren
+V5  Kostenlose Testphase anbieten (STR und KWP bieten keine)
+
+================================================================================
+NÄCHSTE SCHRITTE
+1. Subagent "Gebäude-Module": F1 Objektverwaltung starten (größter Hebel)
+2. Subagent "Compliance": F5 ZUGFeRD-PDF/A-3 fixen (Pflicht, kleiner Aufwand)
+3. Subagent "UX": F10 E-Mail-Versand (größter sichtbarer Nutzen für Kunden)
+================================================================================

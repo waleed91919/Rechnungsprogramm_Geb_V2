@@ -1,0 +1,266 @@
+================================================================================
+PROGRAMM: baufaktura
+(Recherche-Stand: 23.08.2026 – Web-Recherche)
+================================================================================
+
+1. ÜBERBLICK / HERSTELLER
+--------------------------------------------------------------------------------
+- baufaktura ist eine Abrechnungs- und Kalkulationssoftware (Büro-/Handwerkersoftware)
+  für kleine und mittlere Bau- und Handwerksbetriebe. Kernstück sind Abrechnung,
+  Kalkulation, Angebote und Rechnungen; ergänzt um Ausschreibungen, Aufmaß,
+  Schriftverkehr, Baustellenrapporte und mobile Zeiterfassung.
+- Hersteller: Huonker Softwaretechnik GmbH & Co. KG, Bubensulz 3, 72358 Dormettingen
+  (Baden-Württemberg). Handelsregister HRA 410915, Amtsgericht Stuttgart.
+- Firmengeschichte: 1987 von Georg Huonker in Leidringen gegründet; das Vorgänger-
+  produkt war "D-Handwerk"/"Delta-Handwerk". 2012 Übernahme durch Andreas Schwenk
+  und André Rawlinson. baufaktura selbst wird seit 2009 laufend weiterentwickelt;
+  das Haus ist seit fast 40 Jahren im Bereich Handwerkersoftware aktiv.
+- WICHTIG: Seit Januar 2025 gehört Huonker Softwaretechnik zur OneQrew-Gruppe
+  (Freiburg i.Br.), ein deutscher Software-Konzern für Handwerk & Bau (17. Akquisition;
+  weitere Marken: TAIFUN, blue:solution, M-SOFT, PraKom, DIGI, Qomet, sykasoft,
+  JUPROWA u.a.). Die bisherigen Gesellschafter bleiben und entwickeln weiter.
+- Verbreitung: laut OneQrew-Pressemeldung über 5.000 gewerbliche Nutzer; die Website
+  baufaktura.app wirbt mit "15 Tausend Kunden" (Zahl nicht offiziell verifiziert).
+- Technik/Hosting: klassische Desktop-Anwendung (Windows), Daten werden lokal,
+  GoBD- und DSGVO-konform gespeichert (10 Jahre revisionssicher gem. §147 AO /
+  §257 HGB). Eine Cloud-Version wird intern diskutiert/befragt, ist aber noch kein
+  Produkt. Keine öffentlich dokumentierte API.
+- Hinweis zu den Websites:
+  * baufaktura.de = offizielle Herstellerseite (Huonker Softwaretechnik)
+  * bau-faktura.de = Website des offiziellen Vertriebspartners MAIER SOFTWARE
+    (Udo Maier), der baufaktura mit "Einmalkauf ohne Abo"-Argumentation vertreibt
+    und sehr persönliches Support-Bewertungsfeedback sammelt (4,7 Sterne via Google).
+
+2. FEATURES (vollständige Liste, nach Modulen gegliedert)
+--------------------------------------------------------------------------------
+A) BASIS-SYSTEM (enthält):
+   - Kundenverwaltung
+   - Auftragsverwaltung
+   - Artikelverwaltung / Leistungsverwaltung (LV-System, eigene LVs in Artikelstamm ladbar)
+   - Ausschreibung
+   - Angebot
+   - Auftragsbestätigung
+   - Lieferschein
+   - Rechnung (inkl. Abschlagsrechnung, Schlussrechnung, Storno, Gutschrift)
+   - Zahlungsüberwachung mit Mahnwesen
+   - Brieftexte / Rundschreiben / Schriftverkehr
+   - Musterdokumente
+   - Datensicherung
+   - Umsatzübersichten
+   - Minibuchhaltung
+   - E-Rechnung rechtssicher: XRechnung + ZUGFeRD 2.2 (GoBD-konform)
+
+B) ZUKAUFBARE MODULE (Auswahl):
+   - Vorkalkulation
+   - Nachkalkulation
+   - Basis-Aufmaß (chronologisch / positionsweise)
+   - Aufmaß-Erweiterung (erweitertes digitales Aufmaß)
+   - Tagesberichte / Rapporte (digitale Baustellenberichte am PC – Bautagebuch-Funktion)
+   - Jahresverträge (z.B. für Rahmen-/Dauerleistungen)
+   - Preisspiegel
+   - Lagerverwaltung
+   - Lieferscheinaufstellung (Materialnachweis, z.B. Tiefbau)
+   - E-Mail-Versand inkl. automatischer PDF-Erstellung
+   - Mandanten-Installation (mehrere Firmen/Datenbanken in einer Installation)
+   - BauZeit Pro (Zeitwirtschaft)
+   - Zusätzliche Arbeitsplätze / Netzwerklizenzen (bis 50) / Terminalserver-Installation
+   - HINWEIS: Ein dediziertes Modul für Gewährleistung/Mängelmanagement wurde NICHT
+     gefunden – Gewährleistung ist nur im Rahmen von Tagesberichten/Rapporten und
+     allgemeiner Dokumentation abgedeckt.
+
+C) BAUFAKTURA APP (mobile Zeiterfassung & Baudokumentation, Android/iOS):
+   - Mobile Mitarbeiter-Zeiterfassung (Projekte, Pausen, Fehlzeiten, Stoppuhr/
+     automatische Erfassung, GPS-Standortermittlung, Sprachnotizen/Diktierfunktion,
+     Kolonnenbuchungen durch Kolonnenführer)
+   - Materialerfassung inkl. Mengen direkt auf der Baustelle
+   - Maschinen- und Geräteezeiten
+   - Bautagebuch-Dokumentation: Fotos, Skizzen/Einzeichnungen auf Fotos, Wetterdaten,
+     Notizen, revisionssicher abrufbar
+   - Offline-Fähigkeit mit automatischer Synchronisation
+   - Soll-Ist-Auswertung pro Mitarbeiter; Zeitberichte nach Projekt/Mitarbeiter/Zeitraum
+   - Automatische Übernahme der Buchungen in Rechnungspositionen, Nachkalkulation
+     und Lohnvorbereitung (medienbruchfrei); Projekte kommen automatisch aus baufaktura
+   - DSGVO-konform, konform mit Arbeitszeitgesetz
+
+D) SCHNITTSTELLEN (zukaufbar):
+   - GAEB Import (DA81-86, DA94), GAEB Export (DA81-86), GAEB DA11-Export
+   - DATANORM Import (Artikel/Preislisten der Lieferanten)
+   - IDS-Connect / SHK-Connect
+   - SIRADOS Live Drag & Drop (Ausschreibungstexte/Preise per Drag&Drop ins Angebot)
+   - CSV Import/Export
+   - DATEV-Schnittstelle (Buchhaltung, CSV)
+   - Externe Zeiterfassung (in Kombination mit Nachkalkulation)
+   - E-Rechnung XRechnung/ZUGFeRD im Basispaket
+
+3. PREIS-/LIZENZMODELL
+--------------------------------------------------------------------------------
+GRUNDPRINZIP: Kaufmodell (Einmallizenz), beworben mit "Einmal zahlen, dauerhaft
+nutzen – ohne Abos, ohne laufende Kosten". Optional jährliche Servicevereinbarung.
+Es gibt laut Portaldarstellungen (softguide.de, the-playbook.de) zusätzlich eine
+Miet-/Abo-Variante ab ca. 13 EUR/Monat; auf der Herstellerseite dominiert aber klar
+der Einmalkauf. Alle Preise zzgl. 19% MwSt. Stand lt. Preisliste baufaktura.de:
+
+GRUNDVERSIONEN (einmalig):
+   - baufaktura ECO:     375,- EUR
+     (identischer Funktionsumfang wie Premium, ABER: max. 100 Positionen je LV,
+      max. 1 zusätzliche Arbeitsplatzlizenz buchbar)
+   - baufaktura PREMIUM: 695,- EUR
+     (ohne Positionslimit, alle Module zukaufbar, mehrere Arbeitsplätze)
+   - Beim Vertriebspartner MAIER SOFTWARE (bau-faktura.de): Basis-System einmalig
+     695,- EUR inkl. kostenlose telefonischer Support/Fernwartung nach Kauf;
+     Updates separat bzw. über Servicevereinbarung.
+
+BEISPIELE ZUSATZMODULE (einmalig; ECO / PREMIUM):
+   - Vorkalkulation:            135,- / 235,- EUR
+   - Nachkalkulation:           135,- / 235,- EUR
+   - Basis-Aufmaß:              135,- / 235,- EUR
+   - Aufmaß-Erweiterung:        nur Premium 495,- EUR
+   - Tagesberichte/Rapporte:    135,- / 235,- EUR
+   - Jahresverträge:            nur Premium 235,- EUR
+   - Preisspiegel:              nur Premium 235,- EUR
+   - Lagerverwaltung:            90,- / 120,- EUR
+   - Lieferscheinaufstellung:   nur Premium 160,- EUR
+   - E-Mail-Versand:            135,- / 235,- EUR
+   - Mandanten-Installation:    135,- / 235,- EUR
+   - BauZeit Pro:               195,- / 195,- EUR
+   - Netzwerklizenz (je):       135,- (max.1) / 235,- EUR
+
+SCHNITTSTELLEN (einmalig; ECO / PREMIUM): ca. 135–195,- / 195–235,- EUR
+   (GAEB Import/Export, DATANORM, IDS/SHK-Connect, CSV, DATEV, SIRADOS Live)
+
+SERVICEVEREINBARUNG (jährlich, läuft immer Kalenderjahr, zum 31.12. endend):
+   - ECO:     210,- EUR/Jahr (ohne Netzwerklizenz) / 276,- EUR (mit Netzwerklizenz)
+   - PREMIUM: 276,- EUR/Jahr (ohne) / 354,- EUR/Jahr (mit Netzwerklizenz)
+   - Enthält: kostenloses Update fürs Kalenderjahr, kostenlose Support-Hotline,
+     technische Unterstützung, Rabatte/Sonderpreise auf Zubehör.
+   -> Ohne Servicevereinbarung kosten Updates separat; Basis-Support (Telefon,
+      Fernwartung, Mail) nach Angaben des Vertriebspartners Maier kostenlos.
+
+BAUFAKTURA APP (ABO – einzige echte Laufzeitkomponente):
+   - ab 7,- EUR pro Monat/Nutzer/Mitarbeiter, monatlich kündbar
+   - 14 Tage kostenlos testbar (bis zu 5 Nutzer)
+
+TEST: 6 Wochen vollumfänglich kostenlos (Herstellerseite; Vertriebspartner nennt
+4 Wochen inkl. Online-Einführung). Zahlung per Überweisung/Vorkasse; Auslieferung
+als Download + USB-Stick.
+
+GESCHÄTZTE GESAMTKOSTEN: Kleiner Betrieb kommt mit ECO (375,-) + 2-3 Modulen +
+Servicevereinbarung typischerweise auf ca. 700-1.200 EUR Erstinvestition plus
+ca. 210-280 EUR/Jahr – deutlich günstiger als abo-basierte Mitbewerber.
+
+4. KUNDENMEINUNGEN (POSITIV)
+--------------------------------------------------------------------------------
+WICHTIGER HINWEIS: baufaktura ist NICHT auf Capterra, G2 oder OMR Reviews gelistet.
+Die belastbarsten echten Bewertungen stammen von ProvenExpert und Google Maps:
+
+PROVENEXPERT (Profil "huonker softwaretechnik"): 4,59 von 5 Sternen aus 714
+Bewertungen (davon 699 auf ProvenExpert + 15 Google-Maps-Bewertungen mit 4,40/5).
+Verteilung: 441x 5 Sterne, 248x 4 Sterne, 10x 3 Sterne, 0x 2 Sterne, 0x 1 Stern
+-> 100% Empfehlungsquote. Teilwerte: Kundenservice 4,70 | Beratung 4,66 |
+Qualität 4,65 | Nutzen 4,61 | Preis/Leistung 4,54 | Umsetzung 4,48.
+Kundentreue-Score: 4,78/5 ("Kunden würden erneut kaufen").
+
+Häufigste positive Punkte (mit Originalzitaten):
+- EINFACHE BEDIENTUNG, AUCH FÜR IT-LAIEN:
+  "...sie selbst für Computerlaien selbsterklärend und hilfreich ist." (25 Jahre Kunde)
+  "Es ist unkompliziert und man kann mit wenig Erfahrung sofort mit arbeiten."
+  "Der Support ... erklärt so, dass ich ohne Vorkenntnisse in kürzester Zeit damit
+  arbeiten konnte."
+- GÜNSTIGER PREIS / PREIS-LEISTUNG:
+  "Sehr übersichtliche Software zum fairen Preis", "Top Preis-Leistungsverhältnis",
+  "günstiger Einstiegspreis" (Branchenportal shk-handwerkersoftware.de)
+- EXZELLENTENDER SUPPORT / PERSÖNLICHE BETREUUNG (dominantes Thema!):
+  "Der Support aus der Technik ist spitzenmäßig! Immer freundlich, hilfsbereit und
+  kompetent!", "sofortige Hilfe auch bei hausgemachten Problemen",
+  "wenn es mal ein Problem gibt wird einem schnell und unproblematisch
+  weitergeholfen", viel Lob für Fernwartung und namentlich für Berater Udo Maier
+  (Vertriebspartner).
+- ENTWICKLUNG REAGIERT AUF NUTZER:
+  "Besonders hervorheben muss man den Dialog zwischen Entwicklern und Nutzern ...
+  man hat das Gefühl, dass wirklich auf die Bedürfnisse der Anwender eingegangen
+  wird."
+- LANGJÄHRIGE TREUE: Mehrere Kunden berichten von 20-25 Jahren Nutzung
+  (Delta-Handwerk → baufaktura), nahtloser Umstieg.
+- APP GUT ANGENOMMEN: App-Store-Werte laut baufaktura.app: 4,5/5 (320 Bewertungen)
+  und 4,9/5 (530 Bewertungen) [Apple App Store / Google Play]; über 3.600 Downloads.
+  "Besonders positiv hervorgehoben wird die mobile App, mit der Arbeitszeiten und
+  Aufträge direkt auf der Baustelle erfasst werden können."
+- PROZESSE: Drag&Drop-Erstellung von Angeboten mit Partnerprogrammen (SIRADOS),
+  LVs in Artikelstamm ladbar ("das Produkt BAUFAKTURA ist perfekt" – Anwendungsentwicklerin
+  eines Elektrounternehmens mit 8 Mitarbeitern).
+
+5. KUNDENMEINUNGEN (NEGATIV / KRITIK)
+--------------------------------------------------------------------------------
+Ehrlicher Befund: Es gibt kaum harte Kritik – keine 1- oder 2-Sterne-Bewertungen auf
+ProvenExpert, lediglich 10x 3 Sterne von 699. Die Kritikpunkte sind eher kleine
+Optimierungswünsche:
+- FENSTER-MANAGEMENT / WINDOWS-INTEGRATION:
+  "Das einzige was nervt, sind die versteckten Fenster von Huonker bei
+  Anwendungswechsel mit anderen Programmen Office oder ähnlich. Dann müssen erst
+  alle geöffneten Fenster minimiert werden, bevor das Huonkerfenster (z.B.
+  Druckmenü) wieder auftaucht." (Ulrich H., 4,60 Sterne)
+- FEHLENDE RÜCKGÄNGIG-FUNKTION (UNDO):
+  "Leider fehlt mir immernoch ein Button auf dem man einen (falschen) Schritt
+  einfach wieder rückgängig machen kann, wie zum Beispiel bei Excel."
+- UMSTÄNDLICHES DOKUMENT-HANDLING & SUCHE:
+  Wunsch, beim Kopieren zwischen Dokumenten nicht jedes Mal Fenster schließen/neu
+  öffnen zu müssen; fehlende dokumentübergreifende Suche nach Positionen/Preisen
+  ("um angesetzte Preise der Vergangenheit zu vergleichen").
+- ALLGEMEINE VERBESSERUNGSWÜNSCHE BEI DER BEDIENTUNG:
+  "Einige kleine Verbesserungen bei der Bedienung wären noch toll..." 
+- STRUKTURELLE KRITIK AUS PORTAL-ANALYSEN (nicht Nutzerstimmen, aber relevant):
+  * handwerker-software.org ("Watchouts"): Cloud-Betrieb bevorzugt? Hosting-/Remote-
+    Optionen genau abklären; individuelle Integrationen ohne klar erkennbare API
+    aufwendig; DATEV-/Buchhaltungsworkflows vorab prüfen; Wartungsprozesse für
+    servicegetriebene Betriebe (FM!) evtl. nicht tief genug abgedeckt.
+  * Modul-/Schnittstellen-Zukauf erhöht die Gesamtkosten (TCO) über die beworbene
+    "Einmalzahlung" hinaus; Servicevereinbarung faktisch nötig für Updates/Support.
+  * Kein dediziertes Gewährleistungs-/Mängelmanagement-Modul auffindbar.
+  * Unabhängige Testberichte fehlen weitgehend: shk-handwerkersoftware.de schreibt
+    "Aktuell fehlt uns noch ein authentischer Erfahrungsbericht aus der Praxis";
+    softwareabc24.de hat noch keinerlei Nutzerbewertungen. Bewertungssituation ist
+    also stark vom Hersteller-/Vertriebspartner-Umfeld geprägt.
+
+6. ZIELGRUPPE
+--------------------------------------------------------------------------------
+- Kleine und mittlere Handwerks- und Baubetriebe (KMU), Schwerpunkt DEUTSCHLAND
+  (Vertrieb auch über Reseller in Österreich, z.B. jaud.biz Wien) => DACH.
+- Typische Gewerke laut Hersteller: Sanitär/SHK, Heizung, Elektro, Maler, Zimmerei/
+  Innenausbau, Pflasterbau/Tiefbau, Hochbau, Ausbaugewerke.
+- Besonders kleinere Betriebe (ab Einzelunternehmen bis ~8-50 MA laut Beispielen),
+  die wenig IT-Affinität haben und ohne Schulungsaufwand sofort starten wollen.
+- Betriebe, die eine klassische Office/Desktop-Lösung mit lokaler Datenspeicherung
+  statt Cloud bevorzugen und ein günstiges Einmallizenz-Modell suchen.
+- NICHT Kernzielgruppe: große Bauunternehmen (Bauleiter-Projektmanagement,
+  Kapazitätsplanung, Multi-Projekt-Steuerung fehlen), reine Gebäude­reiniger/
+  FM-Dienstleister (kein Facility-/Objektmanagement, keine Wartungspläne,
+  kein Mängel-/Gewährleistungsmodul, Jahresverträge-Modul nur rudimentär).
+
+7. QUELLEN (URLs)
+--------------------------------------------------------------------------------
+- Herstellerseite/Preisliste: https://baufaktura.de/preisliste/
+- Funktionen/Module/Schnittstellen: https://baufaktura.de/funktionen/ ;
+  https://baufaktura.de/module/ ; https://baufaktura.de/schnittstellen/
+- FAQ (Kosten/Test/App): https://baufaktura.de/faq/vertrieb/ ;
+  https://baufaktura.de/faq/huonker-zeiterfassung/
+- Impressum (Firmenangaben): https://baufaktura.de/impressum/
+- Über uns: https://baufaktura.de/ueberuns/
+- OneQrew-Übernahme (Pressemitteilung, 16.01.2025): https://oneqrew.com/en/news/huonker-softwaretechnik-joins-oneqrew/
+- Mobile App: https://www.baufaktura.app/ ; https://www.baufaktura.app/news/neue-version-der-baufaktura-app/
+- Vertriebspartner Maier Software (Preise 695,- Einmalkauf, Google-Rezensionen):
+  https://bau-faktura.de/preise ; https://maiersoftware.de
+- ProvenExpert-Bewertungen (4,59/5, 714 Bewertungen):
+  https://www.provenexpert.com/de-de/huonker-softwaretechnik/
+- Branchenportale:
+  https://www.softguide.de/programm/baufaktura-abrechnung-kalkulation-handwerkersoftware
+  https://www.softguide.de/firma/huonker-softwaretechnik-gmbh-cokg
+  https://handwerker-software.org/anbieter/baufaktura
+  https://shk-handwerkersoftware.de/baufaktura/
+  https://www.the-playbook.de/de/produkte/baufaktura/
+  https://www.softwareabc24.de/handwerker-software/baufaktura
+  https://www.dmssoftware.de/blog/was-ist-baufaktura
+  https://www.jaud.biz/index.php/software/baufaktura (Reseller AT)
+
+NICHT GEFUNDEN: Listings/Bewertungen auf Capterra, G2 oder OMR Reviews (Stand
+Recherche). Die o.g. Quellen sind die einzigen verfügbaren echten Bewertungsquellen.
+================================================================================

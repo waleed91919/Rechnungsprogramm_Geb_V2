@@ -40,10 +40,41 @@ class EInvoiceEngine {
         };
     }
 
+    static GUIDELINE_XRECHNUNG_23 = 'urn:cen.eu:en16931:2017#compliant#urn:xoev-de:kosit:standard:xrechnung_2.3';
+    static GUIDELINE_FACTURX_EN16931 = 'urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:en16931';
+
+    /**
+     * Liefert die Profil-Metadaten für den ZUGFeRD/Factur-X-Export:
+     * Guideline-URN der CII-XML, Attachment-Dateiname und fx:ConformanceLevel.
+     */
+    static getZUGFeRDProfileInfo(profile) {
+        switch (String(profile || 'EN16931').toUpperCase()) {
+            case 'XRECHNUNG':
+                return {
+                    profile: 'XRECHNUNG',
+                    guidelineId: this.GUIDELINE_XRECHNUNG_23,
+                    fileName: 'xrechnung.xml',
+                    conformanceLevel: 'XRECHNUNG'
+                };
+            case 'EN16931':
+            default:
+                return {
+                    profile: 'EN16931',
+                    guidelineId: this.GUIDELINE_FACTURX_EN16931,
+                    fileName: 'factur-x.xml',
+                    conformanceLevel: 'EN 16931'
+                };
+        }
+    }
+
     /**
      * Generiert eine XRechnung im CII-Format (Cross Industry Invoice XML nach EN 16931-1).
      */
     static generateXRechnungXML(invoice, customer, seller = {}) {
+        return this.buildCII(invoice, customer, seller, this.GUIDELINE_XRECHNUNG_23);
+    }
+
+    static buildCII(invoice, customer, seller, guidelineId) {
         const leitwegId = (invoice.leitweg_id || (customer && customer.leitweg_id) || '').trim();
         const buyerRef = (invoice.buyer_reference || (customer && customer.buyer_reference) || leitwegId).trim();
         const issueDate = (invoice.datum || new Date().toISOString().split('T')[0]).replace(/-/g, '');
@@ -102,7 +133,7 @@ class EInvoiceEngine {
                           xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100">
   <rsm:ExchangedDocumentContext>
     <ram:GuidelineSpecifiedDocumentContextParameter>
-      <ram:ID>urn:cen.eu:en16931:2017#compliant#urn:xoev-de:kosit:standard:xrechnung_2.3</ram:ID>
+      <ram:ID>${guidelineId}</ram:ID>
     </ram:GuidelineSpecifiedDocumentContextParameter>
   </rsm:ExchangedDocumentContext>
   <rsm:ExchangedDocument>
@@ -150,10 +181,15 @@ class EInvoiceEngine {
     }
 
     /**
-     * Generiert eine Factur-X / ZUGFeRD 2.0.1 XML Struktur (Profil EN 16931).
+     * Generiert eine Factur-X / ZUGFeRD 2.0.1+ XML Struktur (CII).
+     * options.profile: 'EN16931' (default) | 'XRECHNUNG'
      */
-    static generateZUGFeRDXML(invoice, customer, seller = {}) {
-        return this.generateXRechnungXML(invoice, customer, seller);
+    static generateZUGFeRDXML(invoice, customer, seller = {}, options = {}) {
+        const info = this.getZUGFeRDProfileInfo(options.profile);
+        if (info.profile === 'XRECHNUNG') {
+            return this.generateXRechnungXML(invoice, customer, seller);
+        }
+        return this.buildCII(invoice, customer, seller, info.guidelineId);
     }
 
     static escapeXML(str) {

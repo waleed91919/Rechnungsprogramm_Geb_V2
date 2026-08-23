@@ -5,7 +5,9 @@ const SubcontractorController = require('../controllers/SubcontractorController'
 const CumulativeBillingController = require('../controllers/CumulativeBillingController');
 const { DATEVExporter } = require('../js/datev');
 const GoBDAuditEngine = require('../js/gobd');
+const { ZugferdBuilder } = require('../main/zugferd-builder');
 
+async function main() {
 // --- 1. DIRECTORY CREATION ---
 const dirs = [
     path.join(__dirname, '../tests/test_results'),
@@ -128,9 +130,50 @@ console.log(`  Cumulative Billing Calc: NettoNew=${ab2Calculation.currentPeriodN
 const ab1Path = path.join(__dirname, '../output/invoices/b2b_zugferd/RE-2026-B2B-AB1.pdf');
 const ab2Path = path.join(__dirname, '../output/invoices/b2b_zugferd/RE-2026-B2B-AB2.pdf');
 
-// Mock ZUGFeRD / PDF file creation
-fs.writeFileSync(ab1Path, `%PDF-1.7\n% ZUGFeRD 2.0.1+ PDF/A-3 Mock Content for ${ab1Doc.nr}\nZahlbetrag: €4.750,00 (§ 13b UStG)\n`, 'utf-8');
-fs.writeFileSync(ab2Path, `%PDF-1.7\n% ZUGFeRD 2.0.1+ PDF/A-3 Mock Content for RE-2026-B2B-AB2\nZahlbetrag: €6.650,00 (§ 13b UStG)\n`, 'utf-8');
+// ZUGFeRD 2.x PDF/A-3 Hybrid-PDFs via ZugferdBuilder (@cantoo/pdf-lib)
+const profileInfo = EInvoiceEngine.getZUGFeRDProfileInfo('EN16931');
+
+const ab1Xml = EInvoiceEngine.generateZUGFeRDXML(ab1Doc, b2bKundeSub, einstellungen);
+const ab1Buffer = await ZugferdBuilder.build({
+    basePdfBuffer: null,
+    xmlString: ab1Xml,
+    meta: {
+        nr: ab1Doc.nr,
+        datum: ab1Doc.datum,
+        sellerName: einstellungen.firmenname,
+        conformanceLevel: profileInfo.conformanceLevel,
+        fileName: profileInfo.fileName,
+        title: `Rechnung ${ab1Doc.nr}`
+    }
+});
+fs.writeFileSync(ab1Path, ab1Buffer);
+
+const ab2Doc = {
+    id: 302,
+    nr: 'RE-2026-B2B-AB2',
+    datum: '2026-07-20',
+    rechnungsart: 'ABSCHLAG_KUMULIERT',
+    netto: ab2Calculation.currentPeriodNet,
+    steuer: 0,
+    brutto: ab2Calculation.currentPeriodNet,
+    sicherheitseinbehalt: ab2Calculation.securityRetentionAmount,
+    zahlbetrag: ab2Calculation.netPayableAmount,
+    unterliegt_13b: 1
+};
+const ab2Xml = EInvoiceEngine.generateZUGFeRDXML(ab2Doc, b2bKundeSub, einstellungen);
+const ab2Buffer = await ZugferdBuilder.build({
+    basePdfBuffer: null,
+    xmlString: ab2Xml,
+    meta: {
+        nr: ab2Doc.nr,
+        datum: ab2Doc.datum,
+        sellerName: einstellungen.firmenname,
+        conformanceLevel: profileInfo.conformanceLevel,
+        fileName: profileInfo.fileName,
+        title: `Rechnung ${ab2Doc.nr}`
+    }
+});
+fs.writeFileSync(ab2Path, ab2Buffer);
 
 console.log(`  ✔ Generated 1. Abschlagsrechnung PDF: ${ab1Path}`);
 console.log(`  ✔ Generated 2. Abschlagsrechnung PDF: ${ab2Path}`);
@@ -192,3 +235,9 @@ console.log("\n=================================================================
 console.log(` PIPELINE COMPLETE: ${report.testCasesPassed}/${report.testCasesRun} Test Cases Passed!`);
 console.log(` Output Files Created: ${report.generatedFiles.length}`);
 console.log("================================================================================\n");
+}
+
+main().catch(err => {
+    console.error('PIPELINE FAILED:', err);
+    process.exitCode = 1;
+});

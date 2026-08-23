@@ -303,7 +303,7 @@ function createRechnungRow(rech, kundenMap) {
         }
     };
     btnPdf.className = 'text-slate-400 hover:text-indigo-600 p-1 transition-colors flex items-center justify-center';
-    btnPdf.title = 'PDF / ZUGFeRD (PDF/A-3) herunterladen';
+    btnPdf.title = 'PDF herunterladen';
     btnPdf.innerHTML = '<span class="material-symbols-outlined text-[18px]">picture_as_pdf</span>';
     divActions.appendChild(btnPdf);
 
@@ -319,6 +319,19 @@ function createRechnungRow(rech, kundenMap) {
     btnXml.title = 'XRechnung XML (EN 16931) herunterladen';
     btnXml.innerHTML = '<span class="material-symbols-outlined text-[18px]">code</span>';
     divActions.appendChild(btnXml);
+
+    const btnZugferd = document.createElement('button');
+    btnZugferd.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof window.downloadZugferdPdf === 'function') {
+            window.downloadZugferdPdf(rech.id);
+        }
+    };
+    btnZugferd.className = 'text-slate-400 hover:text-violet-600 p-1 transition-colors flex items-center justify-center';
+    btnZugferd.title = 'ZUGFeRD 2.x PDF/A-3 (E-Rechnung) herunterladen';
+    btnZugferd.innerHTML = '<span class="material-symbols-outlined text-[18px]">receipt_long</span>';
+    divActions.appendChild(btnZugferd);
 
     if (rech.status === 'Ausstehend' || rech.status === 'Überfällig') {
         const btnPaid = document.createElement('button');
@@ -820,5 +833,42 @@ window.downloadXRechnungXML = function(invoiceId) {
         showToast(`XRechnung XML für ${rech.nr} heruntergeladen.`, 'success');
     } else {
         showToast('E-Rechnungs-Engine nicht bereit.', 'error');
+    }
+};
+
+window.downloadZugferdPdf = async function(invoiceId) {
+    const idNum = parseInt(invoiceId);
+    const rech = state.rechnungen.find(r => parseInt(r.id) === idNum);
+    if (!rech) {
+        showToast('Rechnung nicht gefunden.', 'error');
+        return;
+    }
+
+    const kundeId = parseInt(rech.kundeId);
+    const kunde = state.kunden.find(k => parseInt(k.id) === kundeId) || { name: 'Empfänger' };
+
+    if (window.api && typeof window.api.exportZugferdPdf === 'function') {
+        try {
+            const res = await window.api.exportZugferdPdf({
+                doc: rech,
+                customer: kunde,
+                profile: 'EN16931',
+                fileNameHint: `ZUGFeRD_${rech.nr}.pdf`
+            });
+            if (res && res.success) {
+                showToast(`ZUGFeRD PDF/A-3 gespeichert: ${res.path}`, 'success');
+            } else if (res && res.cancelled) {
+                showToast('ZUGFeRD-Export abgebrochen.', 'info');
+            } else {
+                showToast('ZUGFeRD-Export fehlgeschlagen: ' + ((res && res.error) || 'Unbekannter Fehler'), 'error');
+            }
+        } catch (err) {
+            showToast('ZUGFeRD-Export fehlgeschlagen: ' + err.message, 'error');
+        }
+    } else if (typeof window.generatePdf === 'function') {
+        await window.generatePdf(rech.id);
+        showToast('ZUGFeRD-Export nicht verfügbar – Standard-PDF wurde erzeugt. Bitte App aktualisieren.', 'info');
+    } else {
+        showToast('ZUGFeRD-Export in dieser App-Version nicht verfügbar.', 'error');
     }
 };

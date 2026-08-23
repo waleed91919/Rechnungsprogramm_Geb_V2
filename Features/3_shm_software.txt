@@ -1,0 +1,296 @@
+========================
+PROGRAMM: SHM Software (SHM Software GmbH)
+========================
+Stand der Recherche: August 2026
+
+WICHTIGER HINWEIS ZU DIESER RECHERCHE:
+Unter dem Namen "SHM Software GmbH" mit den Produkten "SHM-Gebäudereinigung"
+und "SHM.FM" konnte KEIN deutsches Unternehmen verifiziert werden. Umfangreiche
+Web-Recherche (Produktnamen, Domains, Firmenregister-Auskünfte, Branchen-
+verzeichnisse SoftGuide/Softguide-Reinigung, Wayback Machine) ergab keine
+derartige Firma und keine Produkte mit diesen Bezeichnungen.
+Die beiden einzigen real existierenden Anbieter mit dem Namen "SHM (Software)"
+sind unten dokumentiert. Die beste Übereinstimmung ist die "shm software GmbH
+& Co. KG" aus Bad Tölz - diese wird daher ausführlich behandelt. Es ist
+möglich, dass in der Aufgabenstellung eine Verwechslung mit einem anderen
+Anbieter im Markt Gebäudereinigung/FM vorliegt (z.B. SAPHIR Software GmbH,
+Cleazz, BSS.CLEAN, fortytools by zvoove, CleanManager) - diese wären dann
+die eigentlichen Wettbewerber.
+
+------------------------------------------------------------
+1. ÜBERBLICK / HERSTELLER
+------------------------------------------------------------
+
+A) shm software GmbH & Co. KG (Bad Tölz) - wahrscheinlichste Zielfirma
+- Rechtsform: GmbH & Co. KG
+- Sitz: Gaißacher Str. 3, 83646 Bad Tölz (Bayern), Deutschland
+  Tel.: +49 (0)8041-782450, E-Mail: info@shm-software.de
+- Website: https://shm-software.de (alternativ shm-software.com)
+- Geschäftsführender Gesellschafter: Frank Machowski
+- Gegründet: 1997 ("Seit 1997 stellen wir Branchensoftware-Lösungen ... her")
+- Größe: ca. 14 Mitarbeiter (Angabe SoftGuide-Firmenprofil), 2 Standorte;
+  laut wlw.de Größenklasse 10-19 Mitarbeiter -> kleiner, inhabergeführter
+  Softwarehersteller, kein Konzern
+- Kerngeschäft: Entwicklung, Vertrieb und Support von Branchen-/ERP-, Fak-
+  turierungs-, Kalkulations- und Warenwirtschaftssoftware für kleine und
+  mittlere Handwerksbetriebe; seit über 25 Jahren am Markt
+- Verbreitung: Deutschland, Österreich, Italien, Luxemburg; "viele tausend
+  Anwender verschiedener Gewerke" (BVBS)
+- Mitgliedschaft: Bundesverband Software und Digitalisierung im Bauwesen e.V.
+  (BVBS); Schnittstellenpartner u.a. DATANORM, IDS-Connect, Ferd-Net (ZUGFeRD)
+- Positionierung/Slogans: "Made in Germany - Supported in Germany - Hosted in
+  Germany", "Top Preis - Top Leistung", starker Fokus auf persönlichem,
+  telefonisch erreichbarem Support ohne Warteschleifen
+- Achtung für unsere Zielgruppe: Die Firma ist NICHT auf Gebäudereinigung/
+  Hausverwaltung/FM spezialisiert, sondern auf das Bau-/Handwerksgewerbe
+  (inkl. Gebäudetechnik/Aufzugswartung). Sie ist damit nur ein indirekter
+  Wettbewerber.
+
+B) SHM Software / "Smart Hospital Maintenance" (Hamburg) - zweite Namens-
+   übereinstimmung (englischsprachiges Produkt)
+- Betreiber: German Healthcare Engineering GmbH, Billwerder Neuer Deich 12,
+  20539 Hamburg; info@shm.software; https://www.shm.software
+- CMMS/Software für technische Gebäudebewirtschaftung speziell für Kliniken/
+  Gesundheitseinrichtungen (Work Order Management, Planned Preventive Main-
+  tenance, Inspections, QR-Labels, Mobile App mit Offline-Modus etc.)
+- Kein Produkt für Gebäudereinigung/Hausverwaltung -> für unseren Markt kaum
+  relevant; hier nur der Vollständigkeit halber erwähnt.
+
+FAZIT zur Identifikation: Ein Hersteller "SHM Software GmbH" mit FM-/Reini-
+gungsprodukten "SHM-Gebäudereinigung"/"SHM.FM" ist nicht auffindbar. Alle
+weiteren Angaben beziehen sich auf die Firma unter A).
+
+------------------------------------------------------------
+2. PRODUKTE & FEATURES (vollständige Liste, nach Modulen gegliedert)
+------------------------------------------------------------
+Hauptprodukt der shm software GmbH & Co. KG:
+
+** shm profit Handwerk ** (Basisversion / Komplettlösung)
+
+Faktura & Belege:
+- Angebotserstellung (Positionsbearbeitung, Textbausteine, Rabatte)
+- Auftragsbestätigung / Auftrag
+- Rechnungserstellung inkl. Sammel-/Stapeldruck (Belegübersicht als zentrales
+  Filter- und Verarbeitungstool, z.B. Stapeldruck/Verbuchen von Rechnungen)
+- Kumulative Teilrechnungen, Abschlagsrechnungen (pauschal nach Bauvertrag),
+  Schlussrechnungen mit automatischem Ausweis aller erhaltenen Zahlungen
+- Mahnwesen / OP-Verwaltung (Offene Posten, Zahlungseingänge/-ausgänge)
+- E-Rechnung: XRechnung und ZUGFeRD (Erstellen, Versenden, Empfangen,
+  Archivieren; Stapel-E-Mail-Versand via CRM-Modul); GoBD-konforme automa-
+  tische Rechnungsnummernvergabe
+
+Kalkulation & Controlling:
+- Umfangreiche Kalkulation je Position, Titel oder Gesamtauftrag
+  (Gewinn-/Wagniskontrolle)
+- Nachkalkulationsmodul (Soll-Ist-Vergleich: Arbeitszeiten, Material- und
+  Lohnkosten vs. Auftragsdaten)
+
+Objekt-/Projektverwaltung:
+- Projekt- und Baustellenverwaltung: Angebote, Aufträge, Rechnungen, Bestel-
+  lungen, Termine und Dokumente im direkten Zugriff; Kosten-/Ertragsvergleich
+  je Projekt
+
+Stammdaten & Artikel:
+- Kunden-/Lieferantenverwaltung (Adressen, Adressgruppen)
+- Artikel-, Leistungs- und Stücklistenverwaltung
+- Warenwirtschaft: Lagerorte, Warenein-/ausgänge, Bestände, Lagerbewertung,
+  Inventurerfassung mit Scanner-Anbindung
+
+Organisation:
+- Terminplaner (Termine/Aufgaben verknüpft mit Mitarbeitern, Kunden, Belegen;
+  Sync auf mobile Endgeräte)
+- Info-Center (tagesaktuelle Kennzahlen: Termine, offene Angebote/Aufträge,
+  OPs, Verbindlichkeiten)
+- Mandanten-, Lohn- und Textbausteine-Verwaltung
+
+Zusatzmodule:
+- ** shm CRM**: Vorgangsarchivierung je Kunde/Lieferant/Projekt, integrierter
+  E-Mail-Client (E-Mail-Kontakthistorie), GoBD-Archiv mit Verschlüsselung +
+  Zeitstempel, ZUGFeRD-Stapelversand
+- ** shm Wartungsmodul** (Anlagenwartung & Wartungsplanung): automatische
+  Terminierung regelmäßiger Leistungen/Wartungen, automatische Erstellung von
+  Wartungsterminen, Aufträgen und Abrechnungen (Serviceintervalle, Anlagen,
+  Termine) - besonders relevant für Aufzugsbau/Gebäudetechnik
+- ** shm Zeitmanagement**: Kontrolle, Korrektur und Auswertung aller erfassten
+  Arbeitszeiten im Büro (Zielzeiten, Überstunden)
+- ** shm Nachkalkulation**: IST-Daten (Zeiten, Material, Lohnkosten) gegen
+  SOLL-Daten des Auftrags; Wirtschaftlichkeitsprüfung
+
+Mobile Apps (iOS/Android, Entwickler "shm software GmbH & Co. KG"):
+- ** shm Time** (Smartphone-Zeiterfassung): Echtzeitmodus ("Stechuhr") und
+  manueller Modus ("Stundenzettel"), Erfassung von Zeiten, Tätigkeiten,
+  Material (Artikel per Barcode scannen oder suchen), Baustellenfotos;
+  automatische Übertragung ins Zeitmanagement
+- ** shm Mobil** (Tablet-App für Servicetechniker/Außendienst): digitale
+  Auftragsbearbeitung, Termine, Dokumente, Aufmaßerfassung, mobile Signatur,
+  papierlose Abwicklung, automatisches Online-Update
+- ** shm ToGo**: mobiler Zugriff auf Software-Daten von unterwegs
+- ** shm CloudBox**: Dokumente/Bilder zwischen Baustelle und Büro teilen
+
+Cloud & Technik:
+- shm Cloud (IaaS): gehostete Vollversion, ortsunabhängiges/Homeoffice-
+  Arbeiten, Hosting in Deutschland; zusätzlich lokale On-Premise-Installation
+  möglich (Windows/Desktop-Anwendung + Cloud)
+- Sprachversion: Deutsch (Support deutsch)
+- Video-Tutorials, Schulungsräume beim Hersteller, bundesweites Fachhändler-
+  netz, telefonische Hotline + Online-Support (Fernwartung per Online-Sitzung)
+
+Schnittstellen:
+- GAEB, DATANORM/Eldanorm, IDS-Connect (Großhandelsshops), UGS/UGL, sirAdos,
+  DATEV, SEPA (Zahlungsverkehr), Lexware-FiBu-Schnittstelle, ZUGFeRD,
+  XRechnung, ausschreiben.de, GOBD-IDEA, CSV-Datenim-/export, Office-Anbindung
+
+Sekundärprodukt:
+- ** shm profit Handel** (Handels-/Fakturavariante derselben Plattform)
+
+Nicht vorhanden (Differenzierungschancen für unser eigenes Programm):
+- Keine Reinigungsobjekt-Verwaltung nach Flächen/Reinigungsklassen/Räumen
+- Kein RTV/BTV-Zuschlagswesen, keine Leistungsverzeichnisse der Gebäuderei-
+  nigung, keine Intensiv-/Sonderreinigungsabrechnung
+- Kein Qualitätsmanagement/QS-Begehungen, keine Mängelverwaltung
+- Kein Kundenportal, kein Subunternehmer-/Franchise-Management
+- Keine Betriebskostenabrechnung/Hausverwaltungsfunktionen
+- Keine Mehrsprachigkeit; keine moderne Web-Oberfläche
+
+------------------------------------------------------------
+3. PREIS-/LIZENZMODELL
+------------------------------------------------------------
+- Doppeltes Modell: KAUF (Einmalkauf, klassische Lizenz) UND MIETE (Abo-/
+  Mietoption) - laut softwareabc24 werden beide Modelle angeboten (Kauf
+  einmalig; Miete pro Monat/Jahr bzw. nutzerabhängig gestaffelt). Konkrete
+  Staffelpreise werden nicht öffentlich kommuniziert -> Angebot/Anfrage.
+- Referenzpreis (SoftGuide-Eintrag): 1.780 EUR netto für die netzwerkfähige
+  Vollversion von "shm profit Handwerk" (Einmalkauf). Zusatzmodule (CRM,
+  Wartungsmodul, Nachkalkulation, Zeitmanagement, Apps) kosten extra.
+  Updates/Pflege/Support laufen branchenüblich über jährliche Pflegegebühren
+  (konkrete Sätze nicht veröffentlicht).
+- Testphase: kostenlose Vollversion - Website wirbt mit 2 Monaten Testzeitraum
+  inkl. kostenloser Online-Einweisung; softwareabc24 nennt 30 Tage.
+- Cloud-Nutzung (IaaS-Hosting) verursacht zusätzliche laufende Kosten.
+- Einordnung: klassisches Käufermodell mit niedriger Einstiegshürde für KMU -
+  im Gegensatz zu modernen Reinigungs-SaaS-Anbietern (dort typisch ~10-40
+  EUR/Nutzer/Monat). Für unser eigenes Abo-Modell heißt das: Wir können mit
+  transparenten Monatspreisen und geringerer TCO punkten, müssen aber die
+  Vorteile (keine Serverhardware, automatische Updates) klar kommunizieren.
+
+
+------------------------------------------------------------
+4. KUNDENMEINUNGEN (positiv)
+------------------------------------------------------------
+Verfügbare unabhängige Quellen sind begrenzt (kleiner Hersteller; KEINE Präsenz
+auf OMR Reviews, Capterra, G2 oder Trustpilot gefunden). Gefundene echte
+Bewertungen:
+
+softwareabc24.de - Gesamtwertung 8,8/10 aus 3 Bewertungen:
+Teilnoten: Funktionen 10,0 | Nutzerfreundlichkeit 9,7 | Kundensupport 9,3 |
+Weiterempfehlung 9,5 | Installationsaufwand 7,7 | Preis 7,3
+- Anonym, Handwerk, 6-10 MA (Okt. 2023), Note 8,9 "sehr zufrieden":
+  "Sehr gutes und nützliches Wartungsmodul welches uns sehr viel Arbeit
+  erspart. Hilfsbereiter und schneller Support." / Nachteile: "bisher keine"
+- Harald K., Handwerk, 2-5 MA (Juni 2022), Note 9,4 "Super Software fürs
+  Büro und mobil": "Die Software kann alles was ich als kleiner Betrieb
+  brauche. Mache Heizungswartungen und Kundendienst." / "SHM hat einen
+  hilfsbereiten und telefonisch erreichbaren Support. Super!" / Nachteile:
+  "Hab noch keine gefunden..."
+- Johann K., Handwerk, 11-20 MA (Aug. 2019), Note 8,0: "Shm hat viele
+  nützliche Funktionen und man kann viele Dinge mit der Software schnell
+  erledigen. Die Software deckt die meisten Bereiche in einem Betrieb ohne
+  Probleme ab, so dass man ... keine weitere Software benötigt." / "Mir
+  gefällt auch, dass es zusätzliche Apps wie shm mobil gibt."
+
+Kundenstimmen von der Hersteller-Website (5-Sterne, werblich platziert,
+daher mit Vorsicht zu genießen):
+- Ivo Fuhrmann, Malermeister, Sartori & Fuhrmann GmbH: "leicht zu bedienen
+  und schnell zu erlernen."
+- Sidney Schmuck, Installations- und Gebäudetechnik Schmuck GmbH: "...hat
+  sich so viel positiv verändert ... was Ihr Programm alles leistet."
+- Christoph Derwanz, GüDe Aufzugtechnik GmbH: "Das shm Wartungsmodul erstellt
+  monatlich Wartungstermine und Aufträge automatisch. Große Erleichterung!"
+- Tilmann Vorholz, Holzbau Vorholz Hawran GmbH: "...die übersichtliche
+  Projektverwaltung mit Teil- und Schlussrechnungen gefallen!"
+- Stefan Simon, Simon Kältetechnik GmbH: "Unsere Techniker bearbeiten
+  Aufträge digital mit der Tablet-App shm Mobil. Das spart uns Zeit und Geld!"
+
+Weitere Bewertungsplattformen: golocal.de und DasÖrtliche listen die Firma
+(Adresse Bad Tölz), ohne substanzielle Rezensionen. Ein Google-Bewertungs-
+profil existiert (verlinkt auf der Website); der konkrete Notenstand war in
+dieser Recherche nicht verifizierbar.
+
+------------------------------------------------------------
+5. KUNDENMEINUNGEN (negativ/Kritik)
+------------------------------------------------------------
+Aus den echten Bewertungen (softwareabc24, 3 Rezensionen):
+- PREIS (wichtigste Kritik): "Der Preis für shm ist meiner Meinung nach zu
+  hoch. Andere Produkte sind günstiger zu haben." (Johann K., 2019; Teilnote
+  Preis nur 6/10 in dieser Bewertung) sowie "jedoch zahlt man auch ordentli-
+  chen Preis für die Software". Preis ist mit Ø 7,3 die schwächste Kategorie.
+- INSTALLATIONSAUFWAND: Ø 7,7 (einmal nur 6/10) - Hinweise auf nicht ganz
+  trivialen Einstieg/Installation (typisch für On-Premise-Desktopsoftware).
+
+Strukturelle Kritikpunkte aus der Marktanalyse (Einschätzung dieser Recherche,
+keine Nutzerzitate):
+- Veraltete Desktop-/On-Premise-Welt: Windows-Desktopanwendung; "Cloud" nur
+  als IaaS-Hosting des Desktopprogramms, keine echte Web-/Browser-Oberfläche
+  wie bei modernen SaaS-Konkurrenten.
+- Keine Reinigungs-/FM-spezifische Funktionalität (Objektstrukturen, Reinigungs-
+  klassen, RTV-Zuschläge, QS-Wesen fehlen komplett).
+- Nur Deutsch; international kaum skalierbar.
+- Kleines Unternehmen (~14 MA) -> Abhängigkeit von wenigen Personen,
+  begrenzte Entwicklungsressourcen; kein transparentes öffentliches Preismodell.
+- Kaum Sichtbarkeit auf großen Review-Plattformen -> geringe digitale
+  Reichweite (Chance für uns: moderne Positionierung & Content-Marketing).
+
+------------------------------------------------------------
+6. ZIELGRUPPE
+------------------------------------------------------------
+Primärzielgruppe der shm software GmbH & Co. KG:
+- Kleine und mittlere HANDWERKSBETRIEBE (ca. 2-50 Mitarbeiter) des Bauhaupt-
+  und Ausbaugewerbes, insbesondere: SHK/Sanitär-Heizung-Klima, Heizungs- und
+  Kälte-/Klimatechnik, Elektro, Maler und Lackierer, Aufzugsbau und -wartung,
+  Zimmerer/Holzbau/Schreiner, Dachdecker, Fliesenleger, GaLa-Bau, Metallbau,
+  Tür- und Tortechnik, Brandschutz, Bauhauptgewerbe.
+- Besonders Betriebe mit regelmäßigen WARTUNGS-/SERVICELEISTUNGEN (Anlagen-
+  wartung, Kundendienst) -> hier Überschneidung mit Gebäudetechnik-Dienst-
+  leistern, aber NICHT mit Gebäudereinigung/Hausverwaltung.
+- Sekundär: kleine Handelsfirmen (shm profit Handel).
+- Region: DACH (DE/AT/IT-Südtirol/LU), ausschließlich deutschsprachig.
+
+Implikation für unser Rechnungsprogramm: SHM (Bad Tölz) konkurriert nur am
+Rand mit uns. Die echten Wettbewerber für Gebäudereinigung/FM sind z.B.:
+SAPHIR Software GmbH (seit 1973, On-Premise-Marktführer Reinigung), Cleazz,
+CleanManager, fortytools by zvoove, BSS.CLEAN, DIGRAS, Objekt-Plus, Mendato,
+PlanD, Profacilo, A.S.E., BlueTem DS, cleaning pro - diese sollten in den
+nächsten Konkurrenzanalysen priorisiert werden.
+
+------------------------------------------------------------
+7. QUELLEN (URLs)
+------------------------------------------------------------
+Hersteller (Bad Tölz):
+- https://shm-software.de/ (Startseite, Apps, Support, E-Rechnung, Testversion)
+- https://shm-software.de/handwerkersoftware/ (Produkt-/Modulbeschreibung)
+- https://shm-software.de/unternehmen/ (Firmengeschichte, Kontakt)
+- https://shm-software.de/news/ (Produktupdates, E-Rechnung)
+- https://www.shm-software.com/downfree/shm_prospekt.pdf (Imageprospekt PDF)
+
+Firmendaten/Drittquellen:
+- https://www.bvbs.de/shm-software/ (BVBS-Mitgliedsprofil: Gründung 1997,
+  Zielgruppe, Verbreitung)
+- https://www.softguide.de/firma/shm-software (Firmenprofil: ~14 MA, 2 Standorte)
+- https://www.softguide.de/programm/shm-handwerkersoftware (Preis 1.780 EUR
+  netto Vollversion; Funktionsliste)
+- https://www.softwareabc24.de/handwerker-software/shm-handwerkersoftware
+  (Bewertungen 8,8/10 inkl. Zitate, Preis-/Lizenzmodelle Kauf+Miete, Testphase)
+- https://www.wlw.de/de/suche/software-fuer-dachdecker (Größenklasse 10-19 MA)
+
+Bewertungsplattformen (leer/nicht vorhanden):
+- OMR Reviews (omr.com): kein Eintrag zu shm gefunden
+- Capterra / G2 / Trustpilot: keine Profile zu shm software gefunden
+
+Zweite Namensgleichheit:
+- https://www.shm.software/contact-us (Smart Hospital Maintenance,
+  German Healthcare Engineering GmbH, Hamburg)
+
+Marktkontext Gebäudereinigung (für Abgrenzung):
+- https://mendato.com/wissen/gebaeudereiniger-software-vergleich (13 Anbieter)
+- https://saphir-software.de / https://cleanmanager.de / https://profacilo.de
+- http://web.archive.org (Domainhistorie shm.de/cerabo.de zur Ausschlussprüfung)

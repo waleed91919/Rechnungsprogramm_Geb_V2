@@ -1,0 +1,109 @@
+================================================================================
+EIGENES PROGRAMM: W-LINK ERP (Rechnungsprogramm_Geb_V2) - IST-STAND
+Version 1.0.5 | Stand: 23.08.2026
+Zielgruppe: Gebäude-Unternehmen (Gebäudereinigung, Hausverwaltung, FM)
+Quelle: Code-Analyse (controllers/, models/, views/, schema.js, main.js, preload.js)
+================================================================================
+
+--------------------------------------------------------------------------------
+TECH-STACK & ARCHITEKTUR
+--------------------------------------------------------------------------------
+- Electron ^32.3.3 (Windows Desktop), better-sqlite3 ^12.6.2 (lokal), qrcode ^1.5.4
+- Kein Frontend-Framework: Plain-JS-SPA in code.html (~3.490 Zeilen / 276 KB),
+  Tailwind-Utility-Klassen, Material Symbols
+- Eigener Code gesamt ~560 KB JS (db.js 795 Z., schema.js 467 Z., main.js 505 Z.,
+  js/ mit 17 Modulen, editor.js 63 KB, projekte.js 119 KB, einstellungen.js 84 KB)
+- MVC-Ansatz vorhanden: 7 Controller, 2 Models, 2 Views (Refactoring läuft,
+  siehe Architektur/Ist-Analyse + MVC-Plan)
+- Tests: JA - tests/ mit 14 Testdateien (node --test + jsdom), npm test;
+  E2E-Runner in scripts/ (generate_and_test.js, run_full_system_test.js)
+- Doku vorhanden: doc/ (changelog), Architektur/ (Ist-Analyse, Diagramme),
+  plans/ (12 Prompts), Features/ (Wettbewerbsanalyse 6 Konkurrenten)
+
+--------------------------------------------------------------------------------
+VORHANDENE FEATURES (nach Modulen)
+--------------------------------------------------------------------------------
+
+STAMMDATEN
+[+] Kundenverwaltung: CRUD, Bulk-Aktionen, B2C/B2B/B2G, Leitweg-ID,
+    PEPPOL-ID-Feld, §48b-Status
+[+] Artikelverwaltung: CRUD inkl. bestand-Feld (rudimentär)
+
+VERKAUF / BELEGE
+[+] Angebote: eigene View, Umwandlung in Rechnung, GAEB-X84-Export
+[+] Rechnungen: Editor, Globalrabatt, Anzahlung, Netto/Brutto-Modus,
+    Storno (GoBD-konform), 3 PDF-Layouts
+[+] Teil-/Abschlags-/Schlussrechnungen: Typen REGULAER / TEILRECHNUNG /
+    ABSCHLAG_KUMULIERT / SCHLUSSRECHNUNG; Kumulationsformel F_t = L_t - SUM(F_i);
+    5% Sicherheitseinbehalt (VOB/B §17); CumulativeBillingController
+[+] Mahnwesen: 3 Stufen (Erinnerung -> Mahnung -> Inkasso), Mahngebühr,
+    Massen-Mahnlauf, PDF + GiroCode (ohne E-Mail-Versand)
+
+BAU / PROJEKTE (Stärke des Programms)
+[+] Projektverwaltung mit Detail-Tabs: Finanzen, Aufmaß-Center, Nachträge,
+    Bautagebuch/Abnahme, Controlling
+[+] Aufmaß: REB 23.003 / DA11, Formel-Assistent, Aufmaßblätter,
+    Schlussaufmaß-Merge, Übergabe in Belege (AufmassController/Model/View)
+[+] Nachtragswesen nach VOB/B: §2 Abs. 3/5/6, BGB 650b, Workflow,
+    genehmigte Nachträge -> Rechnung (NachtragController)
+[+] Bautagebuch: Wetter/Personal/Geräte/Mängel/Gewährleistung
+[+] Abnahmeprotokolle
+[+] Controlling: Soll-Ist je Projekt, Kostenarten (ControllingController)
+[+] Eingangsrechnungen: Erfassung vorhanden
+[+] Subunternehmerverwaltung (SubcontractorController)
+
+E-RECHNUNG / COMPLIANCE
+[+] XRechnung: CII-XML EN 16931 / XRechnung 2.3, Validierung (Leitweg-ID)
+[+] ZUGFeRD 2.x: echtes PDF/A-3-Hybrid-PDF (@cantoo/pdf-lib): factur-x.xml/
+    xrechnung.xml als Embedded File (AFRelationship /Alternative), fx-XMP-
+    Metadaten + Extension-Schema, sRGB-OutputIntent; Profile EN16931/XRECHNUNG;
+    Restrisiko: manueller VeraPDF-Lauf (3b) noch offen (doc/zugferd-validation.md)
+[+] GoBD: SHA-256-Hashkette (audit_logs), Festschreibung/Sperrung von Belegen
+[+] Steuern Spezial: §13b UStG (Positionsebene), §48b EStG Bauabzugsteuer,
+    §35a EStG-Ausweis (Handwerkerbonus)
+[+] QR-Code: EPC-GiroCode auf Rechnung/Mahnung
+
+SONSTIGES
+[+] DATEV-Export: EXTF-700-CSV, SKR03/SKR04, BU 19/68 (nur Export)
+[+] GAEB: X83-Import (Drag&Drop), X84-Export
+[+] Berichte-View (USt)
+[+] Backup/Restore: manuell als SQLite-Datei (KEIN Auto-Backup)
+[~] 19 Tabellen + ~50 Migrationsspalten; ~40 IPC-Handler
+
+--------------------------------------------------------------------------------
+FEHLENDE FEATURES (Gap vs. Wettbewerber + Zielgruppe)
+--------------------------------------------------------------------------------
+[KRITISCH - Kernzielgruppe Gebäude]
+[-] Objektverwaltung: keine Liegenschaften/Gebäude/Etagen/Räume/Flächen -
+    nur "Projekte"; PDS hat das, sonst keiner -> UNSERE MARKTLÜCKE, aber
+    ohne Objektstamm können wir Gebäudereinigung/Hausverwaltung nicht bedienen
+[-] Wiederkehrende/Dauerrechnungen + Abrechnungspläne (monatliche
+    Objektrechnung, Rhythmen) - bei 5 von 6 Wettbewerbern Standard
+[-] Putzplan / Reinigungs-Leistungsverzeichnis / RTV-BTV-Zuschläge
+[-] Zeiterfassung (nur Stundenzahlen im Bautagebuch; keine Zeit-/Tarif-
+    erfahrung, keine Mobile-Zeiterfassung)
+
+[WICHTIG - Parität mit Wettbewerbern]
+[-] E-Mail-Versand (SMTP) für Rechnungen/Mahnungen - fehlt komplett
+[-] SEPA-Lastschrift / Bankimport / OPOS-Abgleich (SHM hat SEPA)
+[-] Peppol-Versand + Schematron-Validierung (nur PDS = Zusatzchance)
+[-] Lagerwirtschaft: nur bestand-Feld, keine Bewegungen/Bestellung/Inventur
+[-] CRM: Kalender/Termine, Aktivitäten, Aufgaben
+[-] Dashboard-KPIs/BI-Auswertungen (PDS Analytics, KWP bnInfoCenter)
+[-] Mehrbenutzer/Rollen/Rechte - aktuell Single-User lokal
+[-] Cloud-Sync / mobile Begleitlösung
+
+[NICE-TO-HAVE / USPs]
+[-] Mängel-/QS-Begehungsmanagement (hat KEINER der 6 -> USP-Chance)
+[-] Online-Kundenportal (Angebot freigeben, Auftragsbestätigung - hat KEINER)
+[-] Auto-Backup-Zeitplan
+[-] KI-Funktionen (STR V27, PDS Invoice Reader haben angefangen)
+[-] Mehrsprachigkeit
+
+================================================================================
+Bewertung: Sehr ausgereiftes Bauhauptgewerbe-ERP (VOB/B, GAEB, REB, §13b/§35a/
+§48b, XRechnung) mit Tests und Doku. Für die Zielgruppe "Gebäude" fehlen die
+Kernmodule Objektverwaltung, Dauerrechnungen/Putzplan und Zeiterfassung;
+technisch: E-Mail-Versand (ZUGFeRD PDF/A-3-Export seit 23.08.2026 vorhanden,
+VeraPDF-Freigabelauf offen).
+================================================================================

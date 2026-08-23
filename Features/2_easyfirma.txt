@@ -1,0 +1,252 @@
+========================
+PROGRAMM: EasyFirma
+========================
+(Recherche-Stand: August 2026 | Recherche per Web-Suche & Website-Analyse)
+
+WICHTIGER HINWEIS ZUR IDENTITÄT / BEGRiff "EasyFirmashm":
+- Die Vermutung, "easyFirma" stamme von der shm software GmbH & Co. KG (Bad Tölz),
+  hat sich NICHT bestätigt. shm-software.de bietet ein Produkt namens
+  "shm profit Handwerk" – es gibt bei shm KEIN Produkt "easyFirma".
+  (Siehe separate Datei 3_shm_software.txt.)
+- Das relevante Produkt "EasyFirma" (easyfirma.net) gehört zur EasyFirma GmbH & Co KG,
+  Schöpfergasse 6, 1120 Wien (ÖSTERREICH). Geschäftsführung: Ing. Mag. Wolfgang Axamit
+  und Mag. Sally Axamit (Firmenbuch FN 257508p, UID ATU61422829).
+- Historie: Das Programm wurde ursprünglich unter dem Label "WoAx-iT" entwickelt
+  ("Easy Firma 1" -> "Easy Firma 2" -> "Easy Firma 3", heute "EasyFirma 3").
+- Restunsicherheit: Der Suchbegriff "EasyFirmashm" könnte theoretisch auf ein weiteres,
+  sehr kleines/lokales Produkt verweisen; in allen gängigen Suchanfragen dominierend und
+  praktisch ausschließlich easyfirma.net relevant.
+
+
+1. ÜBERBLICK / HERSTELLER
+-------------------------
+- EasyFirma ist eine deutschsprachige Windows-Desktop-Rechnungs-/Bürosoftware für kleine
+  Unternehmen, Selbstständige und Handwerker in Deutschland, Österreich und der Schweiz.
+- Hersteller: EasyFirma GmbH & Co KG, Wien (Österreich), vormals/bislang auch bekannt als
+  WoAx-iT (Produktlinie "Easy Firma 1/2/3").
+- Kernpositionierung: "Rechnungsprogramm ohne Abo" – einmaliger Kauf (Fixpreis), keine
+  laufenden Kosten; bewusster Gegenpol zu Abo-Cloud-Lösungen wie lexware office/sevdesk.
+- Starker Fokus auf E-Rechnung (ZUGFeRD & XRechnung, für Österreich zusätzlich ebInterface)
+  passend zur E-Rechnungspflicht ab 2025 (B2B).
+- Vertrieb: eigener Online-Shop, Download-Version (~120 MB Installer), 30 Tage kostenlose
+  Vollversion zum Testen (ohne Dateneingabe). Verkauf auch über Amazon (laut Drittquellen).
+- Es gibt daneben eine Cloud-/Browser-Variante "EasyFirma Online" (im Shop als "1 Jahr"
+  lizenzierbar) sowie eine PC-Registrierkasse für Österreich als separates Angebot.
+- Auszeichnungen/Siegel lt. Website: Gütezeichen.at Shopzertifikat, Kooperationspartner
+  LSWB Bayern (Steuerberaterkammer), Datenschutz-Badge.
+
+
+2. FEATURES (vollständige Liste, nach Modulen gegliedert)
+---------------------------------------------------------
+Hinweis: Funktionsumfang stark versionsabhängig (Standard/Premium/Ultimate + Zusatzmodule).
+
+A) RECHNUNGEN & FAKTURA
+   - Rechnungen schreiben mit Live-Vorschau (geteilter Bildschirm: links Eingabe,
+     rechts Dokumentvorschau)
+   - E-Rechnungen: Erstellung, Empfang, Validierung, Archivierung (ZUGFeRD & XRechnung;
+     Zusatzmodul 150 €); GoB-konforme Sperre von Belegen möglich
+   - Teilrechnungen, Abschlagsrechnungen, Anzahlungsrechnungen, Schlussrechnungen
+     (automatischer Abzug gezahlter Abschläge), Sammelrechnungen (Ultimate)
+   - Dauerrechnungen / wiederkehrende Rechnungen, Verträge & Abo-Rechnungen (Ultimate)
+   - Gutschriften (Premium), Provisionen (Ultimate)
+   - Mahnwesen: Zahlungserinnerungen & Mahnungen inkl. automatischer Berechnung von
+     Mahngebühren und Verzugszinsen, Prozess automatisierbar (Ultimate)
+   - Offene-Posten-Verwaltung, Zahlungsverfolgung, Zahlungen erfassen (Bank/Kassa)
+   - Skonto, Rabatte auf Positions- und Dokumentebene, Transportkosten
+   - Kleinunternehmermodus §19 UStG (integriert, per Klick), Netto-Rechnungen/
+     USt-Befreiung, bis zu 13 USt-Sätze, Rappenrundung Schweiz
+   - HANDWERKER-SPEZIFISCH: Aufmaßberechnung direkt im Angebot; separater Lohnkosten-
+     ausweis auf Rechnungen (§35a EStG / Handwerkerbonus, Vorlage "Gruppiert-Handwerk",
+     Checkbox "Ist Lohn" beim Artikel)
+   - Rechnungsfreigabe-Workflow, konfigurierbare Betreffe, automatische Textersetzung,
+     freie Felder erweiterbar, Wasserzeichen, mehrzeilige Anschriften, persönliche Anreden
+
+B) ANGEBOTE & VERTRIEBSDOKUMENTE
+   - Angebote kalkulieren (inkl. Aufmaßberechnung: Menge x Einzelpreis = Summe automatisch,
+     übersichtliche Darstellung im Angebot; Kalkulation & Deckungsbeitrag)
+   - Auftragsbestätigungen (Premium)
+   - Lieferscheine & Warenbegleitscheine (Premium)
+   - Durchgängiger Datenfluss: Angebot -> Auftrag -> Lieferschein -> Rechnung
+     (Daten werden übernommen, kein Doppelerfassen)
+
+C) KUNDENVERWALTUNG (CRM-light)
+   - Kundendatenbank mit Kontaktdaten, Historie, offenen Posten je Kunde
+   - Kundenmarketing / Remarketing-Tool (im Plus-Modul)
+   - Serienbriefe & Briefe (Premium), Textvorlagen/Standardtexte
+
+D) ARTIKEL / WARENWIRTSCHAFT
+   - Artikel- & Produktverwaltung (Einkaufspreis, Max./Min.-Preise, Meldeschwelle Lager)
+   - Lagerverwaltung & Warenwirtschaft (Premium): mehrere Lagerorte, Inventur,
+     Mindestbestände, automatische Bestellvorschläge
+   - Bestellwesen & Wareneingang (Ultimate): Anfragen, Bestellungen, Lieferantenverwaltung
+   - Stücklisten & Dateianhänge (Plus-Modul)
+   - Import/Export .csv/.xls (Premium); DATANORM-Schnittstelle (Artikelimport aus dem
+     Handwerkseinkauf, Format von 1994 aber im Handwerk verbreitet)
+
+E) FINANZEN / BUCHHALTUNG
+   - Einnahmen-Ausgaben-Verwaltung (EÜR) nach SKR-Kontenrahmen, kategorisierbar (Ultimate)
+   - Umsatzsteuer-/Vorsteuerermittlung (Ultimate)
+   - Anlagenbuchhaltung (Plus-Modul)
+   - DATEV-Schnittstelle: Buchungsdaten + Belege direkt an Steuerberater/DATEV-Portal
+     oder ZIP-Export (95 €, nur Ultimate)
+   - Mesonic-Schnittstelle (AT-Buchhaltungssystem)
+
+F) ZEITERFAHRUNG
+   - Digitale Zeiterfassung (nur in Version Ultimate enthalten)
+
+G) TECHNIK / SONSTIGES
+   - Windows-Desktop-Anwendung (Windows Vista/7/8/8.1/10/11, benötigt Microsoft .NET)
+   - Netzwerkfähig & mehrplatzfähig, Backup & Restore integriert
+   - Vorlagendesigner für eigene Rechnungsvorlagen (.repx), PDF-Erstellung, Direktdruck,
+     E-Mail-Versand, Zahlscheine/Etiketten/Listendruck
+   - Registrierkasse (POS) für Österreich separat erhältlich/Zusatzbaustein
+   - KEINE mobile App, kein nativer Cloud-Zugriff (nur separate "EasyFirma Online"-Variante),
+     kaum API/Drittanbieter-Integrationen
+
+
+3. PREIS-/LIZENZMODELL
+----------------------
+MODELL: Einmalkauf (Fixpreis), KEIN Abo, keine laufenden Kosten. Lizenz pro Installation;
+Netzwerklizenzen separat erhältlich. 30 Tage kostenlose Testversion. 2 Jahre Garantie.
+
+VERSIONEN (lt. easyfirma.net/versionen, Stand Recherche):
+- EasyFirma 3 Standard:    295,- € netto, einmalig
+  (Angebote, Rechnungen, Artikel, Berichte, Kundenverwaltung, PDF, Backup, Netzwerk)
+- EasyFirma 3 Premium:     395,- € netto, einmalig
+  (+ Auftragsbestätigungen, Gutschriften, Lager/WaWi, Lieferanten, Lieferscheine,
+  Import/Export, Briefe/Serienbriefe)
+- EasyFirma 3 Ultimate:    495,- € netto, einmalig
+  (+ EÜR, Bestellwesen/Wareneingang, Mahnwesen, Provisionen, Sammel-/Teil-/Schluss-
+  rechnungen, USt/Vorsteuer, Verträge/Dauerrechnungen, Zahlungen, Zeiterfassung)
+
+ZUSATZMODULE:
+- Plus-Modul:              150,- € (weitere Rechnungskreise, Stücklisten, Anhänge,
+                           QR-Rechnung Schweiz, Anlagenbuchhaltung, Kundenmarketing)
+- E-Rechnung (ZUGFeRD/XRechnung): 150,- €
+- DATEV-Schnittstelle:     95,- € (nur Ultimate)
+- Bundles (z.B. Version + E-Rechnungsmodul) günstiger als Einzelkauf; laut eigener Seite
+  "ab 295 € inkl. Zusatzmodul E-Rechnung" (Kleinunternehmer-Paket).
+
+UNSICHERHEIT/WIDERSPRUCH BEI UPDATES:
+- Eigene Website (DATANORM-Seite): "Sämtliche Aktualisierungen ohne Zusatzkosten direkt
+  als Online-Update"; Pressemitteilung (baulinks 2024): regelmäßige Updates inklusive.
+- Drittquellen widersprechen: rechnung-handwerk.de: "Keine automatischen Updates – neue
+  Versionen kosten extra"; Blogger-Test (familiezuhaus.de): "bei den höheren Versionen
+  1 Jahr Supportvertrag". Vermutlich: Minor-Updates kostenlos, Major-Upgrades (z.B. v3->v4)
+  und teils Support kostenpflichtig. Im Shop existiert "EasyFirma 3 Upgrades".
+- business.digital listete (Stand 03/2026) ältere Preise 195/295/395 € + Module 150/150/95 €;
+  OMR Reviews (11/2025) listet 295/395/495 € jeweils inkl. E-Rechnungsmodul. Preisstruktur
+  wurde offenbar mehrfach angepasst – aktuelle Preise immer im eigenen Shop prüfen.
+
+
+4. KUNDENMEINUNGEN (POSITIV)
+----------------------------
+Echte Bewertungen sind SPÄRLICH und stammen fast nur von Google Maps/Google-Profil des
+Anbieters sowie von (teils gesponserten) Testblogs. OMR Reviews: 0 Bewertungen.
+Capterra, G2 und Trustpilot: kein Profil bzw. keine nennenswerten Bewertungen gefunden.
+
+Google-Bewertungen (vom Anbieter eingebunden, mit Prüf-Link; Eigenangabe: 4,57–4,9/5
+aus über 500 Bewertungen – NICHT unabhängig verifiziert):
+- Nico Serapins (Google): "Wir arbeiten jetzt schon länger mit EasyFirma und sind sehr
+  zufrieden. Die Vorschau ist sehr hilfreich. Man sieht sofort, wie das Ergebnis aussieht."
+- BFW Büro für Wärmemesstechnik (Google): "Wir arbeiten jetzt seit 2 Jahren mit diesem
+  Programm. Es bietet alles was man als Firma braucht, mit Ausnahme einer Kasse. Das
+  Programm ist sehr einfach zu bedienen, Fragen die man per Mail schickt werden schnell
+  und verständlich beantwortet. Sogar Verbesserungsvorschläge werden angenommen."
+- Marcus F. (Google): positiv zitiert, vollständiger Text nicht sichtbar.
+
+Unabhängigere Testberichte/Blogs:
+- familiezuhaus.de (Test, 2024, Langzeitnutzer seit v1): "Easy Firma nutze ich bereits
+  jahrelang und möchte ich nicht mehr missen." Lobt: einfache/intuitive Bedienung,
+  integrierte Kleinunternehmerregelung ("ein kleiner Klick"), modulare Bausteine,
+  PDF-Umwandlung, 30-Tage-Test.
+- rechnungsprogramme-test.de (2015, zur WoAx-iT-Version): Fazit "Empfehlenswert" –
+  "viele Funktionen zu einem guten Preis", übersichtliche Kachel-Oberfläche, Live-Vorschau,
+  umfangreiche Tutorials/Videos statt Handbuch, schneller E-Mail-Support.
+- netzwelt.de: "Eine enorme Erleichterung für kleine Unternehmen", zentrale Verwaltung von
+  Kunden, Zahlungen, Lager; kritisiert nur den mittleren dreistelligen Preis.
+- baulinks.de (Fachportal, 2024): lobt E-Rechnungs-Funktionalität und intuitive Bedienung
+  auch für Betriebe ohne IT-Kenntnisse.
+
+
+5. KUNDENMEINUNGEN (NEGATIV / KRITIK)
+-------------------------------------
+Es gibt kaum organische negative Bewertungen auf großen Plattformen (kein Trustpilot-/
+Capterra/G2-Profil mit Reviews gefunden). Kritikpunkte stammen aus Vergleichsportalen
+(Vorsicht: teils Affiliate-getrieben!) und Redaktionsbewertungen:
+
+- rechnungssoftware-handwerk.de (Review, Gesamtnote 2,9/5 – Widerspruch: dasselbe Portal
+  empfiehlt EasyFirma zugleich als "beste Kaufversion" für Handwerker, Affiliate-Links!):
+  * "Anpassung von Vorlagen etwas eingeschränkt"
+  * "Erweiterte Auswertungen könnten umfangreicher sein"
+  * "Individuelle Anpassungen teilweise eingeschränkt"
+- business.digital (Redaktion, 03/2026):
+  * "Desktop-Software, keine echte Cloud-Lösung"
+  * "Wenig Drittanbieter-Integrationen, kaum API-Anbindung"
+  * "Für wachsende Unternehmen mit komplexen Anforderungen zu einfach"
+  * "Wer darüber hinaus wächst, braucht früher oder später mehr"
+- rechnung-handwerk.de (Vergleich):
+  * "Kein Cloud-Zugriff – nur lokal auf dem PC"
+  * "Keine automatischen Updates – neue Versionen kosten extra"
+  * "Keine mobile App"
+- In einer Google-Kundenstimme wird eine "negative Bewertung" erwähnt, deren Inhalt
+  nicht einsehbar ist ("Die negative Bewertung können wir nicht nachvollziehen!!!") –
+  deutet darauf hin, dass einzelne Google-Negativbewertungen existieren, Details unbekannt.
+- Strukturelle Kritik (Analyse): Wichtige Funktionen (Zeiterfassung, Mahnwesen,
+  Schlussrechnungen!) sind erst in der teuersten Version Ultimate (495 €) enthalten;
+  E-Rechnung kostet 150 € extra; DATEV nochmal 95 € – realistischer Gesamtpreis für einen
+  Handwerksbetrieb mit Zeiterfassung + Buchhaltungsanbindung liegt bei ~740 € netto.
+
+
+6. ZIELGRUPPE
+-------------
+- Primär: Kleinunternehmen, Selbstständige, Freiberufler, Existenzgründer und
+  Kleinunternehmer (§19 UStG) in DE/AT/CH – "auch Computer-Laien" laut Anbieter.
+- Sekundär: kleine/mittlere Handwerksbetriebe (Aufmaß, Lohnkostenausweis §35a EStG,
+  DATANORM, Abschlags-/Schlussrechnungen) und kleinere Handelsbetriebe (WaWi).
+- NICHT adressiert: größere KMU mit komplexen Prozessen, Teams mit Mobileinsatz
+  (keine App), internationale/mehrsprachige Anforderungen (DACH-fokussiert).
+- BEZUG ZU GEBÄUDEREINIGUNG / HAUSVERWALTUNG / FM:
+  * Keine branchenspezifischen Funktionen für Gebäudereinigung erkennbar (keine Objekt-
+    verwaltung, keine Flächen-/Leistungserfassung pro Objekt, keine Reinigungs-Rhythmen,
+    keine Objekt-Apps, keine Unterauftrags-/Personalabrechnung).
+  * Allenfalls randlich nutzbar über Dauerrechnungen/Verträge (Wartungsverträge),
+    Sammelrechnungen und Zeiterfassung (nur Ultimate).
+  => Für unser Zielmarkt-Segment (Gebäude-Unternehmen) ist EasyFirma eher ein generischer
+     Low-Cost-Konkurrent am unteren Ende (Einmalkauf <500 €) als ein direkter
+     Branchenkonkurrent. Wettbewerbsargument für uns: Branchentiefe, Mobile/Cloud,
+     Objektmanagement – wo EasyFirma bewusst nicht spielt.
+
+
+7. QUELLEN (URLs)
+-----------------
+Hersteller/Produkt:
+- https://easyfirma.net/ (Startseite, Feature-/Preisübersicht, Kundenstimmen)
+- https://easyfirma.net/impressum (Hersteller: EasyFirma GmbH & Co KG, Wien)
+- https://easyfirma.net/versionen (Versionen & Preise, Feature-Matrix)
+- https://easyfirma.net/funktionen (Funktionsliste)
+- https://easyfirma.net/shop und https://easyfirma.net/shop/varianten (Shop, Bundles, Online-Version)
+- https://easyfirma.net/rechnungsprogramm-handwerker (Handwerker-Features, Aufmaß, Lohnkosten)
+- https://easyfirma.net/lohnkosten-ausweisen (§35a-Lohnkostenausweis)
+- https://easyfirma.net/schlussrechnungen (Teil-/Abschlags-/Schlussrechnungen)
+- https://easyfirma.net/buchhaltungssoftware (DATEV, EÜR, GoB-Sperre)
+- https://easyfirma.net/e-rechnung (E-Rechnung, Bewertungsangabe 4,57/5, 500+ Bewertungen)
+- https://easyfirma.net/datanorm-schnittstelle (DATANORM, Update-/Garantieaussagen)
+- https://easyfirma.net/warenwirtschaftssystem (WaWi)
+- https://easyfirma.net/buerosoftware (Modularität/Baukastenprinzip)
+
+Bewertungen/Testberichte:
+- https://omr.com/de/reviews/product/easyfirma (OMR Reviews: 0 Nutzerbewertungen, Preisliste)
+- https://maps.app.goo.gl/ats8cT4KouNBGMKC7 u.a. (Google-Bewertungen, vom Anbieter verlinkt)
+- https://www.familiezuhaus.de/16710/die-rechnungssoftware-ohne-abo-easyfirma-3-von-easyfirma-im-test/
+- https://rechnungsprogramme-test.de/testbericht-easyfirma-rechnungsprogramm-von-woax-it/
+- https://www.rechnungssoftware-handwerk.de/product-review/easyfirma/ (2,9/5, Affiliate-Portal!)
+- https://www.rechnung-handwerk.de/rechnungsprogramm-ohne-abo/ (Vergleich, Kritikpunkte)
+- https://business.digital/tools/easyfirma (Einordnung, Nachteile, ältere Preise)
+- https://www.netzwelt.de/download/16781-easyfirma-kostenlos.html (Redaktionsbericht)
+- https://www.baulinks.de/webplugin/2024/1644.php4 (Pressemitteilung/Fachportal 2024)
+- https://www.softwareworld.co/software/easyfirma-reviews/ (Listen-Eintrag, keine echten Reviews)
+
+Abgrenzung SHM (kein Produkt "easyFirma"):
+- https://shm-software.de/ , https://shm-software.de/produkte/ ,
+  https://shm-software.de/handwerkersoftware/ (Produkt heißt "shm profit Handwerk")

@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld('api', {
     restoreDatabase: () => ipcRenderer.invoke('db:restore'),
 
     savePdf: (buffer, defaultName) => ipcRenderer.invoke('save:pdf', buffer, defaultName),
+    exportZugferdPdf: (payload) => ipcRenderer.invoke('invoice:exportZugferdPdf', payload),
     printDocument: () => ipcRenderer.invoke('app:printDocument'),
 
     generateQrCode: (text) => ipcRenderer.invoke('qr:generate', text),
