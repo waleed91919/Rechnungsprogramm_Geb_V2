@@ -366,11 +366,22 @@ function createRechnungRow(rech, kundenMap) {
             divActions.appendChild(btnStorno);
         }
         const btnLock = document.createElement('button');
-        btnLock.className = 'text-slate-300 p-1 cursor-not-allowed flex items-center justify-center';
-        btnLock.title = 'Rechnung ist gesperrt (GoBD)';
-        btnLock.onclick = (e) => {
+        btnLock.className = 'text-slate-400 hover:text-amber-600 p-1 transition-colors flex items-center justify-center';
+        btnLock.title = 'Rechnung ist gesperrt (GoBD) - Klicken zum Entsperren (wird protokolliert)';
+        btnLock.onclick = async (e) => {
             e.preventDefault();
             e.stopPropagation();
+            if (!(await safeConfirm(`Rechnung ${rech.nr} wirklich entsperren? Die Freigabe wird GoBD-konform protokolliert und danach sind Inhaltsänderungen wieder möglich.`))) return;
+            try {
+                await window.api.unlockDocument(rech.id, 'Manuelle Freigabe über Dashboard');
+                rech.isLocked = false;
+                showToast(`Rechnung ${rech.nr} wurde entsperrt.`, 'success');
+                renderRechnungen();
+                renderDashboard();
+            } catch (err) {
+                console.error('Fehler beim Entsperren:', err);
+                showToast('Fehler beim Entsperren: ' + (err.message || err), 'error');
+            }
         };
         const spanLock = document.createElement('span');
         spanLock.className = 'material-symbols-outlined text-[18px]';
@@ -484,21 +495,21 @@ window.confirmExtendDeadline = async function() {
     const rech = state.rechnungen.find(r => r.id === id);
     if (!rech) return;
 
-    rech.faellig = newDateStr;
-    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const checkDate = new Date(newDateStr);
     checkDate.setHours(0, 0, 0, 0);
 
-    if (checkDate >= today) {
-        rech.status = 'Ausstehend';
-    } else {
-        rech.status = 'Überfällig';
-    }
+    const newStatus = (checkDate >= today) ? 'Ausstehend' : 'Überfällig';
 
     try {
-        await window.api.saveDocument(rech);
+        // GoBD: Gesperrte Belege nur über den schmalen Status-Pfad ändern
+        // (Zahlungsziel/Status sind Buchhaltungsfelder, Audit erfolgt serverseitig).
+        await window.api.updateDocumentStatus(rech.id, { status: newStatus, faellig: newDateStr });
+
+        rech.faellig = newDateStr;
+        rech.status = newStatus;
+
         showToast('Zahlungsziel erfolgreich verlängert.', 'success');
         window.closeExtendModal();
         
@@ -669,9 +680,10 @@ async function bulkAction(action) {
         if (await safeConfirm(`${toUpdate.length} Rechnungen als bezahlt markieren?`)) {
             let successCount = 0;
             for (const rech of toUpdate) {
-                rech.status = 'Bezahlt';
                 try {
-                    await window.api.saveDocument(rech);
+                    // GoBD: Gesperrte Belege nur über den schmalen Status-Pfad ändern
+                    await window.api.updateDocumentStatus(rech.id, { status: 'Bezahlt' });
+                    rech.status = 'Bezahlt';
                     successCount++;
                 } catch (e) {
                     console.error(`Error saving invoice ${rech.nr}:`, e);
@@ -821,6 +833,11 @@ window.downloadXRechnungXML = function(invoiceId) {
     const kunde = state.kunden.find(k => parseInt(k.id) === kundeId) || { name: 'Empfänger' };
 
     if (typeof EInvoiceEngine !== 'undefined') {
+        const validation = EInvoiceEngine.validateForEN16931(rech, kunde, state.einstellungen);
+        if (!validation.isValid) {
+            showToast('XRechnung-Export blockiert - Validierungsfehler: ' + validation.errors.join(' '), 'error');
+            return;
+        }
         const xml = EInvoiceEngine.generateXRechnungXML(rech, kunde, state.einstellungen);
         const blob = new Blob([xml], { type: 'application/xml;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
@@ -847,7 +864,26 @@ window.downloadZugferdPdf = async function(invoiceId) {
     const kundeId = parseInt(rech.kundeId);
     const kunde = state.kunden.find(k => parseInt(k.id) === kundeId) || { name: 'Empfänger' };
 
+    if (typeof EInvoiceEngine !== 'undefined') {
+        const validation = EInvoiceEngine.validateForEN16931(rech, kunde, state.einstellungen);
+        if (!validation.isValid) {
+            showToast('ZUGFeRD-Export blockiert - Validierungsfehler: ' + validation.errors.join(' '), 'error');
+            return;
+        }
+    }
+
     if (window.api && typeof window.api.exportZugferdPdf === 'function') {
+        // Sichtseite aus DEMSELBEN doc-Objekt unsichtbar rendern; der Main-Prozess
+        // erfasst sie per printToPDF (nur #print-template ist im @media print sichtbar).
+        let previousTemplateHtml = null;
+        try {
+            if (typeof window.renderInvoiceForZugferdExport === 'function') {
+                previousTemplateHtml = await window.renderInvoiceForZugferdExport(rech, kunde);
+            }
+        } catch (renderErr) {
+            console.warn('ZUGFeRD-Sichtseite konnte nicht gerendert werden - Export läuft mit Platzhalter-Seite:', renderErr);
+        }
+
         try {
             const res = await window.api.exportZugferdPdf({
                 doc: rech,
@@ -864,6 +900,10 @@ window.downloadZugferdPdf = async function(invoiceId) {
             }
         } catch (err) {
             showToast('ZUGFeRD-Export fehlgeschlagen: ' + err.message, 'error');
+        } finally {
+            if (previousTemplateHtml !== null && typeof window.restorePrintTemplateContent === 'function') {
+                window.restorePrintTemplateContent(previousTemplateHtml);
+            }
         }
     } else if (typeof window.generatePdf === 'function') {
         await window.generatePdf(rech.id);

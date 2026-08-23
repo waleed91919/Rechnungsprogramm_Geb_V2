@@ -1,5 +1,15 @@
 // --- Rechnung Erstellen Logic ---
 
+/**
+ * Extrahiert die laufende Nummer aus einer Belegnummer - robust gegen Präfixe wie
+ * "STORNO - INV-2026-001" oder abweichende Formate. Es wird die LASTE Zifferngruppe
+ * der Nummer verwendet (regex statt blindes parseInt auf split('-').pop()).
+ */
+function extractLaufendeNummer(nr) {
+    const groups = String(nr || '').match(/\d+/g);
+    return (groups && groups.length > 0) ? (parseInt(groups[groups.length - 1], 10) || 0) : 0;
+}
+
 function convertToRechnung(angId) {
     const ang = state.angebote.find(a => a.id === angId);
     if (!ang) return;
@@ -128,7 +138,7 @@ function setupRechnungModalUI() {
     document.getElementById('rechnung-faellig').value = later.toISOString().split('T')[0];
 
     // Generate next NR (dynamically finding the highest to prevent 'undefined')
-    const currentMaxRechnung = state.rechnungen.reduce((max, r) => Math.max(max, parseInt(r.nr.split('-').pop()) || 0), 0);
+    const currentMaxRechnung = state.rechnungen.reduce((max, r) => Math.max(max, extractLaufendeNummer(r.nr)), 0);
     const nextRechnungIdNumber = currentMaxRechnung + 1;
     const nextNr = `INV-${today.getFullYear()}-${String(nextRechnungIdNumber).padStart(3, '0')}`;
     document.getElementById('rechnung-nr').value = nextNr;
@@ -170,6 +180,25 @@ function applyRechnungReadOnlyMode(existing, form, submitBtn) {
     if (addRowBtn) addRowBtn.classList.add('hidden');
 
     submitBtn.classList.add('hidden');
+
+    // GoBD: Expliziter Freigabe-Weg (Entsperren wird serverseitig audit-protokolliert)
+    const unlockBtn = document.createElement('button');
+    unlockBtn.type = 'button';
+    unlockBtn.className = 'ml-auto inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors';
+    unlockBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">lock_open</span> Entsperren';
+    unlockBtn.onclick = async () => {
+        if (!(await safeConfirm(`Rechnung ${existing.nr} wirklich entsperren? Die Freigabe wird GoBD-konform protokolliert und danach sind Inhaltsänderungen wieder möglich.`))) return;
+        try {
+            await window.api.unlockDocument(existing.id, 'Manuelle Freigabe im Rechnungseditor');
+            showToast(`Rechnung ${existing.nr} wurde entsperrt.`, 'success');
+            closeRechnungModal();
+            openRechnungModal(existing.id);
+        } catch (err) {
+            console.error('Fehler beim Entsperren:', err);
+            showToast('Fehler beim Entsperren: ' + (err.message || err), 'error');
+        }
+    };
+    titleEl.parentElement.insertBefore(unlockBtn, titleEl.nextSibling);
 
     // Fill data
     document.getElementById('rechnung-kunde').value = existing.kundeId;
@@ -439,7 +468,7 @@ function applyAngebotNewMode() {
     document.getElementById('rechnung-faellig').value = later.toISOString().split('T')[0];
 
     // Generate next NR dynamically
-    const currentMaxAngebot = state.angebote.reduce((max, a) => Math.max(max, parseInt(a.nr.split('-').pop()) || 0), 0);
+    const currentMaxAngebot = state.angebote.reduce((max, a) => Math.max(max, extractLaufendeNummer(a.nr)), 0);
     const nextAngebotIdNumber = currentMaxAngebot + 1;
     const nextNr = `ANG-${today.getFullYear()}-${String(nextAngebotIdNumber).padStart(3, '0')}`;
     document.getElementById('rechnung-nr').value = nextNr;
@@ -626,7 +655,21 @@ function collectERechnungExportData() {
         netto: state.currentRechnungTotals ? state.currentRechnungTotals.netto : 0,
         steuer: state.currentRechnungTotals ? state.currentRechnungTotals.steuer : 0,
         brutto: state.currentRechnungTotals ? state.currentRechnungTotals.brutto : 0,
-        positionen: [...(state.currentRechnungPositionen || [])]
+        globalRabattAbzug: state.currentRechnungTotals ? state.currentRechnungTotals.rabattAbzug : 0,
+        anzahlung: state.currentRechnungTotals ? state.currentRechnungTotals.anzahlung : 0,
+        sicherheitseinbehalt: state.currentRechnungTotals ? state.currentRechnungTotals.sicherheitseinbehalt : 0,
+        zahlbetrag: state.currentRechnungTotals ? state.currentRechnungTotals.zahlbetrag : 0,
+        verrechnungen: [...(state.currentRechnungVerrechnungen || [])],
+        positionen: [...(state.currentRechnungPositionen || [])],
+        eingabemodus: document.getElementById('rechnung-eingabemodus')?.value || 'netto',
+        leistungszeitraum_von: document.getElementById('rechnung-leistungszeitraum-von')?.value || '',
+        leistungszeitraum_bis: document.getElementById('rechnung-leistungszeitraum-bis')?.value || '',
+        vob_vereinbart: document.getElementById('rechnung-vob-vereinbart')?.checked ? 1 : 0,
+        ist_privatkunde: document.getElementById('rechnung-ist-privatkunde')?.checked ? 1 : 0,
+        unterliegt_bauabzugsteuer: document.getElementById('rechnung-unterliegt-bauabzugsteuer')?.checked ? 1 : 0,
+        vortext: document.getElementById('rechnung-vortext')?.value || '',
+        fusstext: document.getElementById('rechnung-fusstext')?.value || '',
+        kumulierte_leistung_netto: state.currentRechnungTotals ? state.currentRechnungTotals.kumulierte_leistung_netto : 0
     };
 
     return { currentDoc, customer: { ...kunde, leitweg_id, buyer_reference }, nr };
@@ -637,9 +680,11 @@ function validateERechnungForB2G(currentDoc, customer) {
         showToast('E-Rechnungs-Engine nicht verfügbar.', 'error');
         return false;
     }
-    const validation = EInvoiceEngine.validateForEN16931(currentDoc, { ...customer, customer_type: 'B2G', leitweg_id: currentDoc.leitweg_id }, state.einstellungen);
+    // Echtes Gate: Kundentyp bleibt unverändert, B2G-Pflichten greifen nur bei echten B2G-Kunden
+    const validation = EInvoiceEngine.validateForEN16931(currentDoc, customer, state.einstellungen);
     if (!validation.isValid) {
-        showToast('B2G Validierung fehlgeschlagen: ' + validation.errors.join(' '), 'warning');
+        showToast('E-Rechnungs-Export blockiert - Validierungsfehler: ' + validation.errors.join(' '), 'error');
+        return false;
     }
     return true;
 }
@@ -652,6 +697,18 @@ async function exportZugferdPdfFromModal() {
         showToast('ZUGFeRD-PDF/A-3-Export ist in dieser App-Version nicht verfügbar.', 'error');
         return;
     }
+
+    // Sichtseite aus DEMSELBEN doc-Objekt unsichtbar rendern; der Main-Prozess
+    // erfasst sie per printToPDF (nur #print-template ist im @media print sichtbar).
+    let previousTemplateHtml = null;
+    try {
+        if (typeof window.renderInvoiceForZugferdExport === 'function') {
+            previousTemplateHtml = await window.renderInvoiceForZugferdExport(currentDoc, customer);
+        }
+    } catch (renderErr) {
+        console.warn('ZUGFeRD-Sichtseite konnte nicht gerendert werden - Export läuft mit Platzhalter-Seite:', renderErr);
+    }
+
     try {
         const res = await window.api.exportZugferdPdf({
             doc: currentDoc,
@@ -668,6 +725,10 @@ async function exportZugferdPdfFromModal() {
         }
     } catch (err) {
         showToast('ZUGFeRD-Export fehlgeschlagen: ' + err.message, 'error');
+    } finally {
+        if (previousTemplateHtml !== null && typeof window.restorePrintTemplateContent === 'function') {
+            window.restorePrintTemplateContent(previousTemplateHtml);
+        }
     }
 }
 
@@ -1173,6 +1234,14 @@ async function saveRechnung() {
         }
     }
 
+    // Datenintegrität: Belegnummern müssen eindeutig sein (DB hat zusätzlich einen UNIQUE-Index).
+    const sameTypeDocs = state.isAngebotMode ? (state.angebote || []) : (state.rechnungen || []);
+    const nrConflict = sameTypeDocs.find(d => d.nr === nr && d.id !== existingId);
+    if (nrConflict) {
+        showToast(`Die Belegnummer "${nr}" ist bereits vergeben (${nrConflict.datum ? new Date(nrConflict.datum).toLocaleDateString('de-DE') : 'ohne Datum'}). Bitte eine andere Nummer verwenden.`, 'error');
+        return;
+    }
+
     try {
         const model = new window.InvoiceModel(window.api);
         await model.saveDocument(newDoc);
@@ -1286,11 +1355,23 @@ function populateVerrechnungSelect() {
 
     const currentId = document.getElementById('rechnung-id').value;
 
-    const availableRechnungen = state.rechnungen.filter(r => 
-        r.projektId == projektId && 
-        r.status !== 'Entwurf' && 
-        r.isLocked && 
+    // Datenintegrität: Bereits GLOBAL verwendete Vorrechnungen ausschließen -
+    // eine Rechnung darf nur in EINER Schlussrechnung verrechnet sein (DB-Regel:
+    // UNIQUE je Vorrechnung + Doppelverrechnungs-Guard im Backend). Eigene,
+    // noch nicht gespeicherte Verrechnungen des aktuellen Formulars bleiben wählbar.
+    const globalUsedIds = new Set();
+    (state.rechnungen || []).forEach(r => {
+        if (r.id != currentId) {
+            (r.verrechnungen || []).forEach(v => globalUsedIds.add(v.vorherige_rechnung_id));
+        }
+    });
+
+    const availableRechnungen = state.rechnungen.filter(r =>
+        r.projektId == projektId &&
+        r.status !== 'Entwurf' &&
+        r.isLocked &&
         r.id != currentId &&
+        !globalUsedIds.has(r.id) &&
         !state.currentRechnungVerrechnungen.find(v => v.vorherige_rechnung_id == r.id)
     );
 

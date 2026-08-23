@@ -4,7 +4,22 @@
  */
 class InvoiceController {
     /**
+     * Rundet monetäre Werte konsistent auf 2 Dezimalstellen (Cent).
+     * Identische Formel wie EInvoiceEngine.round2 (js/einvoice.js), damit
+     * beide Rechner zu bitidentischen Summen kommen.
+     */
+    static round2(value) {
+        return Math.round((parseFloat(value) + Number.EPSILON) * 100) / 100;
+    }
+
+    /**
      * Berechnet alle Netto-, Brutto-, Steuersummen und Zahlbeträge einer Rechnung.
+     * Alle monetären Zwischen- und Endergebnisse werden auf Cent gerundet:
+     * - Positionssummen je Zeile,
+     * - Steuer je Steuersatzgruppe (Basis proportional gemindert, dann je Gruppe gerundet),
+     * - Globalrabatt, Sicherheitseinbehalt, Verrechnungen, Brutto, Zahlbetrag.
+     * Die Gesamtsteuersumme folgt den gerundeten Gruppenbeträgen, dadurch gehen
+     * Netto + Steuer = Brutto und die Aufschlüsselung immer exakt auf.
      */
     static calculateTotals({
         positionen = [],
@@ -19,7 +34,7 @@ class InvoiceController {
         let positionenBrutto = 0;
         let totals13bNetto = 0;
         let totalsNormalNetto = 0;
-        const taxes = { 19: 0, 7: 0 };
+        const taxBases = { 19: 0, 7: 0 };
 
         // 1. Einzelpositionen durchlaufen
         const processedPositions = positionen.map(pos => {
@@ -34,29 +49,29 @@ class InvoiceController {
             let tax = 0;
 
             if (mode === 'netto') {
-                rowNetto = (menge * preis) * (1 - rabatt / 100);
-                tax = pos13b ? 0 : (rowNetto * (mwstRate / 100));
-                rowBrutto = rowNetto + tax;
+                rowNetto = this.round2((menge * preis) * (1 - rabatt / 100));
+                tax = pos13b ? 0 : this.round2(rowNetto * (mwstRate / 100));
+                rowBrutto = this.round2(rowNetto + tax);
             } else {
-                rowBrutto = (menge * preis) * (1 - rabatt / 100);
+                rowBrutto = this.round2((menge * preis) * (1 - rabatt / 100));
                 if (pos13b) {
                     rowNetto = rowBrutto;
                     tax = 0;
                 } else {
-                    rowNetto = rowBrutto / (1 + mwstRate / 100);
-                    tax = rowBrutto - rowNetto;
+                    rowNetto = this.round2(rowBrutto / (1 + mwstRate / 100));
+                    tax = this.round2(rowBrutto - rowNetto);
                 }
             }
 
-            positionenNetto += rowNetto;
-            positionenBrutto += rowBrutto;
+            positionenNetto = this.round2(positionenNetto + rowNetto);
+            positionenBrutto = this.round2(positionenBrutto + rowBrutto);
 
             if (pos13b) {
-                totals13bNetto += rowNetto;
+                totals13bNetto = this.round2(totals13bNetto + rowNetto);
             } else {
-                totalsNormalNetto += rowNetto;
+                totalsNormalNetto = this.round2(totalsNormalNetto + rowNetto);
                 if (mwstRate > 0) {
-                    taxes[mwstRate] = (taxes[mwstRate] || 0) + tax;
+                    taxBases[mwstRate] = this.round2((taxBases[mwstRate] || 0) + rowNetto);
                 }
             }
 
@@ -67,16 +82,16 @@ class InvoiceController {
         const baseForGlobalRabatt = mode === 'netto' ? positionenNetto : positionenBrutto;
         let abzug = 0;
         if (globalRabatt.value > 0) {
-            abzug = globalRabatt.type === '%' 
-                ? baseForGlobalRabatt * (globalRabatt.value / 100) 
-                : globalRabatt.value;
+            abzug = this.round2(globalRabatt.type === '%'
+                ? baseForGlobalRabatt * (globalRabatt.value / 100)
+                : globalRabatt.value);
         }
 
         // 3. Verrechnungen / Abschlagszahlungen Summe Netto
-        const verrechnungenSummeNetto = verrechnungen.reduce(
-            (sum, v) => sum + (parseFloat(v.abzugsbetrag_netto) || 0), 
+        const verrechnungenSummeNetto = this.round2(verrechnungen.reduce(
+            (sum, v) => sum + (parseFloat(v.abzugsbetrag_netto) || 0),
             0
-        );
+        ));
 
         // 4. Netto / Brutto nach Rabatt & Steuern
         let nettoNachRabatt = 0;
@@ -86,63 +101,77 @@ class InvoiceController {
         let totalTax = 0;
 
         if (mode === 'netto') {
-            nettoNachRabatt = Math.max(0, positionenNetto - abzug);
+            nettoNachRabatt = this.round2(Math.max(0, positionenNetto - abzug));
             const rabattFaktor = positionenNetto > 0 ? (nettoNachRabatt / positionenNetto) : 1;
 
             if (sicherheitseinbehaltProzent > 0) {
-                sicherheitseinbehaltNetto = nettoNachRabatt * (sicherheitseinbehaltProzent / 100);
+                sicherheitseinbehaltNetto = this.round2(nettoNachRabatt * (sicherheitseinbehaltProzent / 100));
             }
 
-            const steuerpflichtigesNetto = Math.max(0, nettoNachRabatt - sicherheitseinbehaltNetto - verrechnungenSummeNetto);
+            const steuerpflichtigesNetto = this.round2(Math.max(
+                0,
+                this.round2(this.round2(nettoNachRabatt - sicherheitseinbehaltNetto) - verrechnungenSummeNetto)
+            ));
             const taxableRatio = nettoNachRabatt > 0 ? (steuerpflichtigesNetto / nettoNachRabatt) : 0;
 
-            Object.keys(taxes).forEach(rate => {
-                const baseTax = taxes[rate] * rabattFaktor;
-                const adjustedTax = baseTax * taxableRatio;
-                totalTax += adjustedTax;
+            Object.keys(taxBases).forEach(rate => {
+                const rateValue = parseFloat(rate);
+                const basisAdj = this.round2(taxBases[rate] * rabattFaktor * taxableRatio);
+                const adjustedTax = rateValue > 0 ? this.round2(basisAdj * rateValue / 100) : 0;
+                totalTax = this.round2(totalTax + adjustedTax);
                 taxBreakdown.push({
-                    rate: parseFloat(rate),
+                    rate: rateValue,
                     amount: adjustedTax,
                     label: `zzgl. ${rate}% MwSt.` + (taxableRatio < 1 ? ` (auf gemindertes Netto)` : ''),
                     isReduced: taxableRatio < 1
                 });
             });
 
-            bruttoNachRabatt = steuerpflichtigesNetto + totalTax;
+            bruttoNachRabatt = this.round2(steuerpflichtigesNetto + totalTax);
         } else {
             // Mode Brutto
-            bruttoNachRabatt = Math.max(0, positionenBrutto - abzug);
+            bruttoNachRabatt = this.round2(Math.max(0, positionenBrutto - abzug));
             const rabattFaktor = positionenBrutto > 0 ? (bruttoNachRabatt / positionenBrutto) : 1;
 
+            // Steuer je Gruppe auf rabattierter Basis, je Gruppe centgenau gerundet
+            const reducedTaxes = {};
             let totalTaxBase = 0;
-            Object.keys(taxes).forEach(rate => {
-                totalTaxBase += (taxes[rate] * rabattFaktor);
+            Object.keys(taxBases).forEach(rate => {
+                const rateValue = parseFloat(rate);
+                const basisAdj = this.round2(taxBases[rate] * rabattFaktor);
+                const taxOnReduced = rateValue > 0 ? this.round2(basisAdj * rateValue / 100) : 0;
+                reducedTaxes[rate] = taxOnReduced;
+                totalTaxBase = this.round2(totalTaxBase + taxOnReduced);
             });
-            nettoNachRabatt = bruttoNachRabatt - totalTaxBase;
+            nettoNachRabatt = this.round2(bruttoNachRabatt - totalTaxBase);
 
             if (sicherheitseinbehaltProzent > 0) {
-                sicherheitseinbehaltNetto = nettoNachRabatt * (sicherheitseinbehaltProzent / 100);
+                sicherheitseinbehaltNetto = this.round2(nettoNachRabatt * (sicherheitseinbehaltProzent / 100));
             }
 
-            const steuerpflichtigesNetto = Math.max(0, nettoNachRabatt - sicherheitseinbehaltNetto - verrechnungenSummeNetto);
+            const steuerpflichtigesNetto = this.round2(Math.max(
+                0,
+                this.round2(this.round2(nettoNachRabatt - sicherheitseinbehaltNetto) - verrechnungenSummeNetto)
+            ));
             const taxableRatio = nettoNachRabatt > 0 ? (steuerpflichtigesNetto / nettoNachRabatt) : 0;
 
-            Object.keys(taxes).forEach(rate => {
-                const baseTax = taxes[rate] * rabattFaktor;
-                const adjustedTax = baseTax * taxableRatio;
-                totalTax += adjustedTax;
+            Object.keys(reducedTaxes).forEach(rate => {
+                const rateValue = parseFloat(rate);
+                const adjustedTax = this.round2(reducedTaxes[rate] * taxableRatio);
+                totalTax = this.round2(totalTax + adjustedTax);
                 taxBreakdown.push({
-                    rate: parseFloat(rate),
+                    rate: rateValue,
                     amount: adjustedTax,
                     label: `darin enthaltene ${rate}% MwSt.` + (taxableRatio < 1 ? ` (angepasst)` : ''),
                     isReduced: taxableRatio < 1
                 });
             });
 
-            bruttoNachRabatt = steuerpflichtigesNetto + totalTax;
+            bruttoNachRabatt = this.round2(steuerpflichtigesNetto + totalTax);
         }
 
-        const zahlbetrag = Math.max(0, bruttoNachRabatt - anzahlung);
+        const anzahlungCent = this.round2(anzahlung);
+        const zahlbetrag = this.round2(Math.max(0, bruttoNachRabatt - anzahlungCent));
 
         return {
             zwischensumme: mode === 'netto' ? positionenNetto : positionenBrutto,
@@ -157,7 +186,7 @@ class InvoiceController {
             verrechnungenSummeNetto,
             taxBreakdown,
             totalTax,
-            anzahlung,
+            anzahlung: anzahlungCent,
             abzug,
             zahlbetrag,
             processedPositions

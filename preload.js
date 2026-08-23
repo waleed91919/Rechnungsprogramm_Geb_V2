@@ -13,6 +13,10 @@ contextBridge.exposeInMainWorld('api', {
         saveDocument: (doc) => ipcRenderer.invoke('db:saveDocument', doc),
     bulkSaveDocuments: (docs) => ipcRenderer.invoke('db:bulkSaveDocuments', docs),
     deleteDocument: (id) => ipcRenderer.invoke('db:deleteDocument', id),
+    updateDocumentStatus: (id, patch) => ipcRenderer.invoke('db:updateDocumentStatus', id, patch),
+    unlockDocument: (id, grund) => ipcRenderer.invoke('db:unlockDocument', id, grund),
+    storniereRechnung: (updatedOriginal, stornoDoc) => ipcRenderer.invoke('db:storniereRechnung', updatedOriginal, stornoDoc),
+    verifyAuditChain: () => ipcRenderer.invoke('audit:verify'),
 
     saveAufmass: (aufmass) => ipcRenderer.invoke('db:saveAufmass', aufmass),
     deleteAufmass: (id) => ipcRenderer.invoke('db:deleteAufmass', id),

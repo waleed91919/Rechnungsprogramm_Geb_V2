@@ -89,9 +89,49 @@ function createWindow() {
     });
 }
 
+// ZUGFeRD-Sichtseite: Der Renderer rendert die Rechnungs-HTML unsichtbar in
+// #print-template (das @media print-CSS blendet alles andere aus, identisch zum
+// bewährten save:pdf-Weg); hier wird genau dieser Zustand per printToPDF erfasst.
+// Entscheidung gegen ein separates Hidden-BrowserWindow: die HTML-Erzeugung liegt
+// komplett im Renderer (state, GiroCode via IPC) - ein Duplikat dort wäre fehleranfällig.
+const ZUGFERD_SICHTSEITE_TIMEOUT_MS = 15000;
+
+function toPdfBuffer(value) {
+    if (!value) return null;
+    try {
+        let buf;
+        if (Buffer.isBuffer(value)) buf = value;
+        else if (value instanceof ArrayBuffer) buf = Buffer.from(value);
+        else if (ArrayBuffer.isView(value)) buf = Buffer.from(value.buffer, value.byteOffset, value.byteLength);
+        else return null;
+        if (buf.length > 5 && buf.subarray(0, 5).toString('latin1') === '%PDF-') return buf;
+    } catch (_e) {
+        return null;
+    }
+    return null;
+}
+
+function printToPdfWithTimeout(contents, timeoutMs = ZUGFERD_SICHTSEITE_TIMEOUT_MS) {
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        const finish = (err, buf) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            if (err) reject(err); else resolve(buf);
+        };
+        const timer = setTimeout(() => finish(new Error(`printToPDF-Timeout nach ${timeoutMs} ms`)), timeoutMs);
+        contents.printToPDF({
+            printBackground: true,
+            pageSize: 'A4',
+            margins: { marginType: 'custom', top: 0, bottom: 0, left: 0, right: 0 }
+        }).then((buf) => finish(null, buf), (err) => finish(err));
+    });
+}
+
 // Set up IPC Handlers
 function setupIpc() {
-    const { db, dbAPI } = require('./db');
+    const { db, dbAPI, appendAuditLog } = require('./db');
 
     // Generic error wrapper for IPC handlers
     const wrapHandler = (fn) => async (event, ...args) => {
@@ -157,6 +197,37 @@ function setupIpc() {
     ipcMain.handle('db:deleteDocument', wrapHandler(async (e, id) => {
         if (typeof id !== 'number') throw new Error('Ungültige Dokumenten-ID');
         return await dbAPI.deleteDocument(id);
+    }));
+
+    // GoBD: Schmaler Status-/Buchhaltungspfad (erlaubt auch an gesperrten Belegen)
+    ipcMain.handle('db:updateDocumentStatus', wrapHandler(async (e, id, patch) => {
+        if (typeof id !== 'number') throw new Error('Ungültige Dokumenten-ID');
+        if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+            throw new Error('Ungültige Status-Daten');
+        }
+        return await dbAPI.updateDocumentStatus(id, patch);
+    }));
+
+    // GoBD: Expliziter Freigabe-Weg für gesperrte Belege (audit-pflichtig)
+    ipcMain.handle('db:unlockDocument', wrapHandler(async (e, id, grund) => {
+        if (typeof id !== 'number') throw new Error('Ungültige Dokumenten-ID');
+        return await dbAPI.entsperreBeleg(id, grund);
+    }));
+
+    // Atomares Storno: Original-Status + Gutschrift in einer Transaktion
+    ipcMain.handle('db:storniereRechnung', wrapHandler(async (e, updatedOriginal, stornoDoc) => {
+        if (!updatedOriginal || typeof updatedOriginal !== 'object' || updatedOriginal.id == null) {
+            throw new Error('Ungültige Storno-Daten (Original-Rechnung fehlt)');
+        }
+        if (!stornoDoc || typeof stornoDoc !== 'object' || !stornoDoc.nr) {
+            throw new Error('Ungültige Storno-Daten (Gutschrift ohne Belegnummer)');
+        }
+        return await dbAPI.storniereRechnung(updatedOriginal, stornoDoc);
+    }));
+
+    // GoBD: Prüfung der Audit-Hashkette
+    ipcMain.handle('audit:verify', wrapHandler(async () => {
+        return await Promise.resolve(dbAPI.verifiziereAuditKette());
     }));
 
     // Aufmaß
@@ -504,13 +575,32 @@ function setupIpc() {
             const seller = (await dbAPI.getFullState()).einstellungen;
             const xmlString = EInvoiceEngine.generateZUGFeRDXML(doc, customer, seller, { profile });
 
+            // Echte menschenlesbare Sichtseite: bevorzugt vom Renderer mitgeliefert,
+            // sonst per printToPDF vom aufrufenden Fenster erfassen; bei jedem Fehler
+            // läuft der Export mit der Platzhalter-Seite des Builders weiter.
+            let basePdfBuffer = toPdfBuffer(payload.basePdfBuffer);
+            if (!basePdfBuffer && payload.sichtseiteErzeugen !== false && event.sender && !event.sender.isDestroyed()) {
+                try {
+                    basePdfBuffer = toPdfBuffer(await printToPdfWithTimeout(event.sender));
+                    if (!basePdfBuffer) {
+                        console.warn('ZUGFeRD-Export: printToPDF lieferte kein gültiges PDF - verwende Platzhalter-Seite.');
+                    }
+                } catch (pdfErr) {
+                    console.warn('ZUGFeRD-Export: Keine echte Sichtseite verfügbar (' + (pdfErr.message || pdfErr) + ') - verwende Platzhalter-Seite.');
+                }
+            }
+
+            const duePayableAmount = EInvoiceEngine.computeTotals(doc).duePayable;
+
             const buffer = await ZugferdBuilder.build({
-                basePdfBuffer: null,
+                basePdfBuffer,
                 xmlString,
                 meta: {
                     nr: doc.nr,
                     datum: doc.datum,
                     sellerName: seller.firmenname || seller.name || '',
+                    empfaengerName: (customer && customer.name) || doc.customerName || '',
+                    duePayableAmount: duePayableAmount.toFixed(2),
                     conformanceLevel: profileInfo.conformanceLevel,
                     fileName: profileInfo.fileName,
                     title: `Rechnung ${doc.nr}`
@@ -534,24 +624,23 @@ function setupIpc() {
                 return { success: false, cancelled: true };
             }
 
-            fs.writeFileSync(filePath, buffer);
+            // GoBD: Audit-Eintrag VOR dem Schreiben der Datei über die zentrale
+            // Hashkette. Schlägt das Protokollieren fehl, wird der Export
+            // abgebrochen - unprotokollierte Belegausgaben sind unzulässig.
+            appendAuditLog({
+                entityType: 'DOCUMENT',
+                entityId: typeof doc.id === 'number' ? doc.id : 0,
+                action: 'ZUGFERD_EXPORT',
+                details: {
+                    nr: doc.nr,
+                    profile,
+                    fileName: path.basename(filePath),
+                    bytes: buffer.length,
+                    sha256: require('crypto').createHash('sha256').update(buffer).digest('hex')
+                }
+            });
 
-            try {
-                const crypto = require('crypto');
-                const lastRow = db.prepare('SELECT current_hash FROM audit_logs ORDER BY id DESC LIMIT 1').get();
-                const currentHash = crypto.createHash('sha256').update(buffer).digest('hex');
-                db.prepare('INSERT INTO audit_logs (entity_type, entity_id, action, previous_hash, current_hash, details) VALUES (?, ?, ?, ?, ?, ?)')
-                    .run(
-                        'DOCUMENT',
-                        typeof doc.id === 'number' ? doc.id : 0,
-                        'ZUGFERD_EXPORT',
-                        (lastRow && lastRow.current_hash) || '',
-                        currentHash,
-                        JSON.stringify({ nr: doc.nr, profile, fileName: path.basename(filePath), bytes: buffer.length })
-                    );
-            } catch (auditErr) {
-                console.error('Audit-Log für den ZUGFeRD-Export fehlgeschlagen:', auditErr);
-            }
+            fs.writeFileSync(filePath, buffer);
 
             focusWin(win);
             return { success: true, path: filePath };

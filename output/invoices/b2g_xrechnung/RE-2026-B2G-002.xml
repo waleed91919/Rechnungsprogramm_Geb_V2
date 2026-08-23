@@ -42,15 +42,27 @@
       </ram:SpecifiedLineTradeSettlement>
     </ram:IncludedSupplyChainTradeLineItem>
     <ram:ApplicableHeaderTradeAgreement>
-      <ram:BuyerReference>REF-8877</ram:BuyerReference>
+      <ram:BuyerReference>992-88776655-11</ram:BuyerReference>
       <ram:SellerTradeParty>
         <ram:Name>Bauunternehmen GmbH</ram:Name>
+        <ram:PostalTradeAddress>
+          <ram:PostcodeCode>60313</ram:PostcodeCode>
+          <ram:LineOne>Baugasse 3</ram:LineOne>
+          <ram:CityName>Frankfurt am Main</ram:CityName>
+          <ram:CountryID>DE</ram:CountryID>
+        </ram:PostalTradeAddress>
         <ram:SpecifiedTaxRegistration>
-          <ram:ID schemeID="VA">DE000000000</ram:ID>
+          <ram:ID schemeID="VA">DE136695976</ram:ID>
         </ram:SpecifiedTaxRegistration>
       </ram:SellerTradeParty>
       <ram:BuyerTradeParty>
         <ram:Name>Stadt Frankfurt</ram:Name>
+        <ram:PostalTradeAddress>
+          <ram:PostcodeCode>60311</ram:PostcodeCode>
+          <ram:LineOne>Römerberg 1</ram:LineOne>
+          <ram:CityName>Frankfurt am Main</ram:CityName>
+          <ram:CountryID>DE</ram:CountryID>
+        </ram:PostalTradeAddress>
       </ram:BuyerTradeParty>
     </ram:ApplicableHeaderTradeAgreement>
     <ram:ApplicableHeaderTradeDelivery/>
@@ -58,18 +70,30 @@
       <ram:InvoiceCurrencyCode>EUR</ram:InvoiceCurrencyCode>
       <ram:SpecifiedTradeSettlementPaymentMeans>
         <ram:TypeCode>58</ram:TypeCode>
+        <ram:Information>Deutsche Bank</ram:Information>
         <ram:PayeePartyCreditorFinancialAccount>
           <ram:IBANID>DE89370400440532013000</ram:IBANID>
         </ram:PayeePartyCreditorFinancialAccount>
-        <ram:PayeeSpecifiedFinancialInstitution>
-          <ram:BICID></ram:BICID>
-        </ram:PayeeSpecifiedFinancialInstitution>
       </ram:SpecifiedTradeSettlementPaymentMeans>
+      <ram:ApplicableTradeTax>
+        <ram:CalculatedAmount>2850.00</ram:CalculatedAmount>
+        <ram:TypeCode>VAT</ram:TypeCode>
+        <ram:BasisAmount>15000.00</ram:BasisAmount>
+        <ram:CategoryCode>S</ram:CategoryCode>
+        <ram:RateApplicablePercent>19.00</ram:RateApplicablePercent>
+      </ram:ApplicableTradeTax>
+      <ram:SpecifiedTradePaymentTerms>
+        <ram:Description>Zahlbar ohne Abzug bis zum 31.08.2026.</ram:Description>
+        <ram:DueDateDateTime>
+          <udt:DateTimeString format="102">20260831</udt:DateTimeString>
+        </ram:DueDateDateTime>
+      </ram:SpecifiedTradePaymentTerms>
       <ram:SpecifiedTradeSettlementHeaderMonetarySummation>
         <ram:LineTotalAmount>15000.00</ram:LineTotalAmount>
         <ram:TaxBasisTotalAmount>15000.00</ram:TaxBasisTotalAmount>
         <ram:TaxTotalAmount currencyID="EUR">2850.00</ram:TaxTotalAmount>
         <ram:GrandTotalAmount>17850.00</ram:GrandTotalAmount>
+        <ram:TotalPrepaidAmount>0.00</ram:TotalPrepaidAmount>
         <ram:DuePayableAmount>17850.00</ram:DuePayableAmount>
       </ram:SpecifiedTradeSettlementHeaderMonetarySummation>
     </ram:ApplicableHeaderTradeSettlement>

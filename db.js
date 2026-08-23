@@ -15,6 +15,10 @@ try {
     // Fallback for testing or scripts outside of Electron
     dbPath = path.join(__dirname, 'database.sqlite');
 }
+// Explicit override (e.g. isolated test databases)
+if (process.env.RECHNUNGSPROGRAMM_DB_PATH) {
+    dbPath = process.env.RECHNUNGSPROGRAMM_DB_PATH;
+}
 
 console.log('Database path:', dbPath);
 const db = new Database(dbPath, { verbose: console.log });
@@ -30,9 +34,186 @@ db.exec(`
 `);
 
 const { createSchema, runMigrations, seedDefaultData } = require('./schema.js');
+const { createAuditLogger, calculateDocumentContentHash } = require('./main/audit.js');
 
 console.log('Connected to the SQLite database using better-sqlite3 (Expert Mode).');
 initDb();
+
+// Zentrale GoBD-Audit-Hashkette (nach Schema-Init, damit audit_logs existiert)
+const auditLogger = createAuditLogger(db);
+const appendAuditLog = auditLogger.appendAuditLog;
+
+// Lädt einen Beleg inkl. Positionen und Verrechnungen (für Schutz-/Hashvergleiche)
+function getDocumentWithChildren(docId) {
+    const doc = db.prepare('SELECT * FROM dokumente WHERE id=?').get(docId);
+    if (doc) {
+        doc.positionen = db.prepare('SELECT * FROM positionen WHERE dokumentId=?').all(docId);
+        doc.verrechnungen = db.prepare('SELECT * FROM rechnung_verrechnungen WHERE aktuelle_rechnung_id=?').all(docId);
+    }
+    return doc;
+}
+
+function isLockedInt(doc) {
+    return doc && doc.isLocked ? 1 : 0;
+}
+
+/**
+ * Kernlogik des Beleg-Schreibens OHNE eigene Transaktion. Wird von saveDocument()
+ * (eigenes Transaction-Wrapper) und vom atomaren Storno (storniereRechnung)
+ * innerhalb einer übergeordneten better-sqlite3-Transaktion aufgerufen -
+ * verschachtelte db.transaction()-Aufrufe sind in better-sqlite3 verboten.
+ */
+function applyDocumentWrite(d, requestedLockedInt) {
+    let docId = d.id;
+    let existing = null;
+    let action = 'ERSTELLT';
+
+    // GoBD: Inhalts-Hash NACH konsistentem Algorithmus berechnen und persistieren
+    d.sha256_hash = calculateDocumentContentHash(d);
+
+    if (docId) {
+        existing = getDocumentWithChildren(docId);
+        if (!existing) {
+            throw new Error(`Dokument mit ID ${docId} wurde nicht gefunden.`);
+        }
+
+        const existingWasLocked = !!existing.isLocked;
+        if (existingWasLocked) {
+            // GoBD-Änderungssperre: Entsperren NUR über entsperreBeleg()
+            if (requestedLockedInt === 0) {
+                throw new Error(`Beleg ${existing.nr} ist gesperrt (GoBD). Eine Freigabe ist nur über die explizite Funktion 'Beleg entsperren' mit Begründung möglich.`);
+            }
+            // GoBD-Änderungssperre: Nur Buchhaltungs-/Statusfelder änderbar
+            const oldContentHash = calculateDocumentContentHash(existing);
+            const newContentHash = calculateDocumentContentHash(d);
+            if (oldContentHash !== newContentHash) {
+                throw new Error(`Beleg ${existing.nr} ist gesperrt (GoBD-Änderungssperre): Inhaltsfelder dürfen nicht mehr geändert werden. Bitte erstellen Sie eine Stornorechnung/Korrekturrechnung.`);
+            }
+        }
+    }
+
+    // Datenintegrität: Belegnummer darf nur an DIESER Beleg selbst vergeben sein
+    // (gilt für Neu-Anlage UND Update; bei gesperrten Belegen greift vorher die
+    // GoBD-Änderungssperre über den Inhalts-Hash). Der UNIQUE-Index auf dokumente(nr)
+    // greift zusätzlich als letzter Riegel; hier mit deutscher Fehlermeldung.
+    const nrConflict = db.prepare('SELECT id FROM dokumente WHERE nr = ? AND id IS NOT ?').get(d.nr, docId == null ? null : docId);
+    if (nrConflict) {
+        throw new Error(`Die Belegnummer "${d.nr}" ist bereits vergeben (Dokument #${nrConflict.id}). Bitte verwenden Sie eine andere Nummer.`);
+    }
+
+    if (docId) {
+
+        const updateStmt = db.prepare('UPDATE dokumente SET type=?, nr=?, datum=?, faellig=?, kundeId=?, projektId=?, status=?, isLocked=?, netto=?, steuer=?, brutto=?, globalRabattAbzug=?, globalRabattType=?, globalRabattValue=?, anzahlung=?, mahnungLevel=?, mahnungDatum=?, mahnungGebuehr=?, eingabemodus=?, vortext=?, fusstext=?, leistungszeitraum_von=?, leistungszeitraum_bis=?, baustellen_adresse=?, vob_vereinbart=?, ist_privatkunde=?, unterliegt_bauabzugsteuer=?, bauabzugsteuer_betrag=?, ausweis_35a_erforderlich=?, summe_lohnkosten_brutto=?, rechnungsart=?, kumulierte_leistung_netto=?, sicherheitseinbehalt=?, unterliegt_13b=?, leitweg_id=?, buyer_reference=?, sha256_hash=? WHERE id=?');
+        updateStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt(d), d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.mahnungLevel || 0, d.mahnungDatum || null, d.mahnungGebuehr || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.sha256_hash || null, docId);
+
+        action = (calculateDocumentContentHash(existing) === calculateDocumentContentHash(d)) ? 'STATUS_GEÄNDERT' : 'GEÄNDERT';
+
+        if (d.type === 'rechnung') {
+            // Restore stock: Group by artikelId in memory to avoid N+1 and slow subqueries
+            const oldPositions = db.prepare('SELECT artikelId, menge FROM positionen WHERE dokumentId=?').all(docId);
+            if (oldPositions.length > 0) {
+                const restoreStockMap = new Map();
+                for (const p of oldPositions) {
+                    if (p.artikelId) {
+                        restoreStockMap.set(p.artikelId, (restoreStockMap.get(p.artikelId) || 0) + p.menge);
+                    }
+                }
+                const restoreStockStmt = db.prepare('UPDATE artikel SET bestand = bestand + ? WHERE id=?');
+                for (const [artId, qty] of restoreStockMap.entries()) {
+                    restoreStockStmt.run(qty, artId);
+                }
+            }
+        }
+
+        const deletePosStmt = db.prepare('DELETE FROM positionen WHERE dokumentId=?');
+        deletePosStmt.run(docId);
+        const deleteVerrechnungStmt = db.prepare('DELETE FROM rechnung_verrechnungen WHERE aktuelle_rechnung_id=?');
+        deleteVerrechnungStmt.run(docId);
+    } else {
+        const insertStmt = db.prepare('INSERT INTO dokumente (type, nr, datum, faellig, kundeId, projektId, status, isLocked, netto, steuer, brutto, globalRabattAbzug, globalRabattType, globalRabattValue, anzahlung, eingabemodus, vortext, fusstext, leistungszeitraum_von, leistungszeitraum_bis, baustellen_adresse, vob_vereinbart, ist_privatkunde, unterliegt_bauabzugsteuer, bauabzugsteuer_betrag, ausweis_35a_erforderlich, summe_lohnkosten_brutto, rechnungsart, kumulierte_leistung_netto, sicherheitseinbehalt, unterliegt_13b, leitweg_id, buyer_reference, sha256_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        const res = insertStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt(d), d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.sha256_hash || null);
+        docId = res.lastInsertRowid;
+    }
+
+    // Insert new positions and deduct stock
+    if (d.positionen && d.positionen.length > 0) {
+        const insertPosStmt = db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        const stockDeductionMap = new Map();
+
+        for (const p of d.positionen) {
+            insertPosStmt.run(docId, p.artikelId || null, p.name || null, p.menge, p.einheit || 'Stk.', p.preis, p.ek || 0, p.mwst, p.rabatt || 0, p.steuer_schluessel || null, p.is13b ? 1 : 0, p.cost_type || 'MATERIAL', p.oz_code || null, p.is_tax_deductible_35a ? 1 : 0);
+
+            if (d.type === 'rechnung' && p.artikelId) {
+                stockDeductionMap.set(p.artikelId, (stockDeductionMap.get(p.artikelId) || 0) + p.menge);
+            }
+        }
+
+        if (stockDeductionMap.size > 0) {
+            // Optimization idea rejected: Dynamic CASE ... WHEN ... THEN SQL string approach is discouraged.
+            // Relying on a Node-level loop executing a prepared statement strictly within a single SQLite
+            // transaction is highly performant in better-sqlite3, much safer, and significantly easier to read.
+            const deductStockStmt = db.prepare('UPDATE artikel SET bestand = bestand - ? WHERE id=?');
+            for (const [artId, qty] of stockDeductionMap.entries()) {
+                deductStockStmt.run(qty, artId);
+            }
+        }
+    }
+
+    insertVerrechnungenGuarded(docId, d.verrechnungen);
+
+    // GoBD: Audit-Eintrag INNERHALB derselben Transaktion - schlägt er
+    // fehl, wird die gesamte Mutation zurückgerollt.
+    appendAuditLog({
+        entityType: 'DOCUMENT',
+        entityId: docId,
+        action,
+        details: {
+            nr: d.nr,
+            type: d.type,
+            status: d.status,
+            vorherigerStatus: existing ? existing.status : null,
+            isLocked: isLockedInt(d) === 1,
+            brutto: d.brutto || 0,
+            sha256_hash: d.sha256_hash
+        }
+    });
+
+    return docId;
+}
+
+/**
+ * Fügt Verrechnungen eines Belegs ein - MIT Doppelverrechnungs-Schutz:
+ * Eine Vorrechnung darf global nur in EINER aktuellen Rechnung verrechnet sein.
+ * Wird innerhalb einer bestehenden Transaktion aufgerufen (kein eigenes Wrapper nötig).
+ */
+function insertVerrechnungenGuarded(docId, verrechnungen) {
+    if (!verrechnungen || verrechnungen.length === 0) return;
+
+    const checkUsedStmt = db.prepare('SELECT aktuelle_rechnung_id FROM rechnung_verrechnungen WHERE vorherige_rechnung_id = ? AND aktuelle_rechnung_id != ?');
+    const seenPairs = new Set();
+    for (const v of verrechnungen) {
+        if (!v || !v.vorherige_rechnung_id) continue;
+        if (v.vorherige_rechnung_id === docId) {
+            throw new Error('Ein Beleg kann nicht mit sich selbst verrechnet werden.');
+        }
+        const pairKey = `${docId}->${v.vorherige_rechnung_id}`;
+        if (seenPairs.has(pairKey)) {
+            throw new Error(`Doppelte Verrechnung: Die Rechnung #${v.vorherige_rechnung_id} kann innerhalb desselben Belegs nur einmal abgezogen werden.`);
+        }
+        seenPairs.add(pairKey);
+
+        const usedBy = checkUsedStmt.get(v.vorherige_rechnung_id, docId);
+        if (usedBy) {
+            throw new Error(`Doppelverrechnung blockiert: Die Rechnung #${v.vorherige_rechnung_id} ist bereits in Rechnung #${usedBy.aktuelle_rechnung_id} verrechnet und kann nicht erneut abgezogen werden.`);
+        }
+    }
+
+    const insertVerrechnungStmt = db.prepare('INSERT INTO rechnung_verrechnungen (aktuelle_rechnung_id, vorherige_rechnung_id, abzugsbetrag_netto) VALUES (?, ?, ?)');
+    for (const v of verrechnungen) {
+        if (!v || !v.vorherige_rechnung_id) continue;
+        insertVerrechnungStmt.run(docId, v.vorherige_rechnung_id, v.abzugsbetrag_netto || 0);
+    }
+}
 
 function initDb() {
     createSchema(db);
@@ -217,10 +398,13 @@ const dbAPI = {
 
     // --- Kunden ---
     async saveKunde(kunde) {
+        // § 48b: sec48b_valid_until ist fachlich die Gültigkeit der Freistellungsbescheinigung;
+        // falls nicht explizit gesetzt, wird sie aus freistellung_gueltig_bis gespiegelt.
+        const sec48bValidUntil = kunde.sec48b_valid_until !== undefined ? kunde.sec48b_valid_until : (kunde.freistellung_gueltig_bis || null);
         if (kunde.id) {
             await dbRun(
-                'UPDATE kunden SET kundennummer=?, name=?, adresse=?, plz=?, ort=?, telefon=?, email=?, ustId=?, ist_bauleistender_13b=?, ust_1_tg_gueltig_bis=?, hat_freistellungsbescheinigung=?, freistellung_gueltig_bis=?, ist_umsatzsteuerfreie_vermietung=?, customer_type=?, leitweg_id=?, peppol_id=?, buyer_reference=?, tax_number=?, sec48b_status=?, sec48b_certificate_path=? WHERE id=?',
-                [kunde.kundennummer, kunde.name, kunde.adresse, kunde.plz, kunde.ort, kunde.telefon, kunde.email, kunde.ustId, kunde.ist_bauleistender_13b || 0, kunde.ust_1_tg_gueltig_bis, kunde.hat_freistellungsbescheinigung || 0, kunde.freistellung_gueltig_bis, kunde.ist_umsatzsteuerfreie_vermietung || 0, kunde.customer_type || 'B2C', kunde.leitweg_id || null, kunde.peppol_id || null, kunde.buyer_reference || null, kunde.tax_number || null, kunde.sec48b_status || 'NONE', kunde.sec48b_certificate_path || null, kunde.id]
+                'UPDATE kunden SET kundennummer=?, name=?, adresse=?, plz=?, ort=?, telefon=?, email=?, ustId=?, ist_bauleistender_13b=?, ust_1_tg_gueltig_bis=?, hat_freistellungsbescheinigung=?, freistellung_gueltig_bis=?, ist_umsatzsteuerfreie_vermietung=?, customer_type=?, leitweg_id=?, peppol_id=?, buyer_reference=?, tax_number=?, sec48b_status=?, sec48b_certificate_path=?, is_subcontractor=?, sec48b_valid_until=? WHERE id=?',
+                [kunde.kundennummer, kunde.name, kunde.adresse, kunde.plz, kunde.ort, kunde.telefon, kunde.email, kunde.ustId, kunde.ist_bauleistender_13b || 0, kunde.ust_1_tg_gueltig_bis, kunde.hat_freistellungsbescheinigung || 0, kunde.freistellung_gueltig_bis, kunde.ist_umsatzsteuerfreie_vermietung || 0, kunde.customer_type || 'B2C', kunde.leitweg_id || null, kunde.peppol_id || null, kunde.buyer_reference || null, kunde.tax_number || null, kunde.sec48b_status || 'NONE', kunde.sec48b_certificate_path || null, kunde.is_subcontractor ? 1 : 0, sec48bValidUntil, kunde.id]
             );
             return kunde.id;
         } else {
@@ -233,8 +417,8 @@ const dbAPI = {
             }
 
             const res = await dbRun(
-                'INSERT INTO kunden (kundennummer, name, adresse, plz, ort, telefon, email, ustId, ist_bauleistender_13b, ust_1_tg_gueltig_bis, hat_freistellungsbescheinigung, freistellung_gueltig_bis, ist_umsatzsteuerfreie_vermietung, customer_type, leitweg_id, peppol_id, buyer_reference, tax_number, sec48b_status, sec48b_certificate_path, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
-                [knr, kunde.name, kunde.adresse, kunde.plz, kunde.ort, kunde.telefon, kunde.email, kunde.ustId, kunde.ist_bauleistender_13b || 0, kunde.ust_1_tg_gueltig_bis, kunde.hat_freistellungsbescheinigung || 0, kunde.freistellung_gueltig_bis, kunde.ist_umsatzsteuerfreie_vermietung || 0, kunde.customer_type || 'B2C', kunde.leitweg_id || null, kunde.peppol_id || null, kunde.buyer_reference || null, kunde.tax_number || null, kunde.sec48b_status || 'NONE', kunde.sec48b_certificate_path || null]
+                'INSERT INTO kunden (kundennummer, name, adresse, plz, ort, telefon, email, ustId, ist_bauleistender_13b, ust_1_tg_gueltig_bis, hat_freistellungsbescheinigung, freistellung_gueltig_bis, ist_umsatzsteuerfreie_vermietung, customer_type, leitweg_id, peppol_id, buyer_reference, tax_number, sec48b_status, sec48b_certificate_path, is_subcontractor, sec48b_valid_until, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+                [knr, kunde.name, kunde.adresse, kunde.plz, kunde.ort, kunde.telefon, kunde.email, kunde.ustId, kunde.ist_bauleistender_13b || 0, kunde.ust_1_tg_gueltig_bis, kunde.hat_freistellungsbescheinigung || 0, kunde.freistellung_gueltig_bis, kunde.ist_umsatzsteuerfreie_vermietung || 0, kunde.customer_type || 'B2C', kunde.leitweg_id || null, kunde.peppol_id || null, kunde.buyer_reference || null, kunde.tax_number || null, kunde.sec48b_status || 'NONE', kunde.sec48b_certificate_path || null, kunde.is_subcontractor ? 1 : 0, sec48bValidUntil]
             );
             return res.id;
         }
@@ -248,13 +432,14 @@ const dbAPI = {
         if (!kunden || !Array.isArray(kunden) || kunden.length === 0) return [];
 
         const bulkTransaction = db.transaction((kundenList) => {
-            const updateStmt = db.prepare('UPDATE kunden SET kundennummer=?, name=?, adresse=?, plz=?, ort=?, telefon=?, email=?, ustId=?, ist_bauleistender_13b=?, ust_1_tg_gueltig_bis=?, hat_freistellungsbescheinigung=?, freistellung_gueltig_bis=?, ist_umsatzsteuerfreie_vermietung=?, customer_type=?, leitweg_id=?, peppol_id=?, buyer_reference=?, tax_number=?, sec48b_status=?, sec48b_certificate_path=? WHERE id=?');
-            const insertStmt = db.prepare('INSERT INTO kunden (kundennummer, name, adresse, plz, ort, telefon, email, ustId, ist_bauleistender_13b, ust_1_tg_gueltig_bis, hat_freistellungsbescheinigung, freistellung_gueltig_bis, ist_umsatzsteuerfreie_vermietung, customer_type, leitweg_id, peppol_id, buyer_reference, tax_number, sec48b_status, sec48b_certificate_path, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)');
-            
+            const updateStmt = db.prepare('UPDATE kunden SET kundennummer=?, name=?, adresse=?, plz=?, ort=?, telefon=?, email=?, ustId=?, ist_bauleistender_13b=?, ust_1_tg_gueltig_bis=?, hat_freistellungsbescheinigung=?, freistellung_gueltig_bis=?, ist_umsatzsteuerfreie_vermietung=?, customer_type=?, leitweg_id=?, peppol_id=?, buyer_reference=?, tax_number=?, sec48b_status=?, sec48b_certificate_path=?, is_subcontractor=?, sec48b_valid_until=? WHERE id=?');
+            const insertStmt = db.prepare('INSERT INTO kunden (kundennummer, name, adresse, plz, ort, telefon, email, ustId, ist_bauleistender_13b, ust_1_tg_gueltig_bis, hat_freistellungsbescheinigung, freistellung_gueltig_bis, ist_umsatzsteuerfreie_vermietung, customer_type, leitweg_id, peppol_id, buyer_reference, tax_number, sec48b_status, sec48b_certificate_path, is_subcontractor, sec48b_valid_until, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)');
+
             const ids = [];
             for (const k of kundenList) {
+                const sec48bValidUntil = k.sec48b_valid_until !== undefined ? k.sec48b_valid_until : (k.freistellung_gueltig_bis || null);
                 if (k.id) {
-                    updateStmt.run(k.kundennummer, k.name, k.adresse, k.plz, k.ort, k.telefon, k.email, k.ustId, k.ist_bauleistender_13b || 0, k.ust_1_tg_gueltig_bis, k.hat_freistellungsbescheinigung || 0, k.freistellung_gueltig_bis, k.ist_umsatzsteuerfreie_vermietung || 0, k.customer_type || 'B2C', k.leitweg_id || null, k.peppol_id || null, k.buyer_reference || null, k.tax_number || null, k.sec48b_status || 'NONE', k.sec48b_certificate_path || null, k.id);
+                    updateStmt.run(k.kundennummer, k.name, k.adresse, k.plz, k.ort, k.telefon, k.email, k.ustId, k.ist_bauleistender_13b || 0, k.ust_1_tg_gueltig_bis, k.hat_freistellungsbescheinigung || 0, k.freistellung_gueltig_bis, k.ist_umsatzsteuerfreie_vermietung || 0, k.customer_type || 'B2C', k.leitweg_id || null, k.peppol_id || null, k.buyer_reference || null, k.tax_number || null, k.sec48b_status || 'NONE', k.sec48b_certificate_path || null, k.is_subcontractor ? 1 : 0, sec48bValidUntil, k.id);
                     ids.push(k.id);
                 } else {
                     let knr = k.kundennummer;
@@ -263,7 +448,7 @@ const dbAPI = {
                         const nextId = (row && row.mx) ? row.mx + 1 : 1;
                         knr = `KD-${1000 + nextId}`;
                     }
-                    const res = insertStmt.run(knr, k.name, k.adresse, k.plz, k.ort, k.telefon, k.email, k.ustId, k.ist_bauleistender_13b || 0, k.ust_1_tg_gueltig_bis, k.hat_freistellungsbescheinigung || 0, k.freistellung_gueltig_bis, k.ist_umsatzsteuerfreie_vermietung || 0, k.customer_type || 'B2C', k.leitweg_id || null, k.peppol_id || null, k.buyer_reference || null, k.tax_number || null, k.sec48b_status || 'NONE', k.sec48b_certificate_path || null);
+                    const res = insertStmt.run(knr, k.name, k.adresse, k.plz, k.ort, k.telefon, k.email, k.ustId, k.ist_bauleistender_13b || 0, k.ust_1_tg_gueltig_bis, k.hat_freistellungsbescheinigung || 0, k.freistellung_gueltig_bis, k.ist_umsatzsteuerfreie_vermietung || 0, k.customer_type || 'B2C', k.leitweg_id || null, k.peppol_id || null, k.buyer_reference || null, k.tax_number || null, k.sec48b_status || 'NONE', k.sec48b_certificate_path || null, k.is_subcontractor ? 1 : 0, sec48bValidUntil);
                     ids.push(res.lastInsertRowid);
                 }
             }
@@ -275,76 +460,10 @@ const dbAPI = {
 
     // --- Dokumente (Rechnungen/Angebote) ---
     async saveDocument(doc) {
-        const isLockedInt = doc.isLocked ? 1 : 0;
+        const requestedLockedInt = doc.isLocked ? 1 : 0;
 
         // Wrap the document and position saving in a transaction for data integrity
-        const saveTransaction = db.transaction((d) => {
-            let docId = d.id;
-
-            if (docId) {
-                const updateStmt = db.prepare('UPDATE dokumente SET type=?, nr=?, datum=?, faellig=?, kundeId=?, projektId=?, status=?, isLocked=?, netto=?, steuer=?, brutto=?, globalRabattAbzug=?, globalRabattType=?, globalRabattValue=?, anzahlung=?, mahnungLevel=?, mahnungDatum=?, mahnungGebuehr=?, eingabemodus=?, vortext=?, fusstext=?, leistungszeitraum_von=?, leistungszeitraum_bis=?, baustellen_adresse=?, vob_vereinbart=?, ist_privatkunde=?, unterliegt_bauabzugsteuer=?, bauabzugsteuer_betrag=?, ausweis_35a_erforderlich=?, summe_lohnkosten_brutto=?, rechnungsart=?, kumulierte_leistung_netto=?, sicherheitseinbehalt=?, unterliegt_13b=?, leitweg_id=?, buyer_reference=?, sha256_hash=? WHERE id=?');
-                updateStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt, d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.mahnungLevel || 0, d.mahnungDatum || null, d.mahnungGebuehr || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.sha256_hash || null, docId);
-
-                if (d.type === 'rechnung') {
-                    // Restore stock: Group by artikelId in memory to avoid N+1 and slow subqueries
-                    const oldPositions = db.prepare('SELECT artikelId, menge FROM positionen WHERE dokumentId=?').all(docId);
-                    if (oldPositions.length > 0) {
-                        const restoreStockMap = new Map();
-                        for (const p of oldPositions) {
-                            if (p.artikelId) {
-                                restoreStockMap.set(p.artikelId, (restoreStockMap.get(p.artikelId) || 0) + p.menge);
-                            }
-                        }
-                        const restoreStockStmt = db.prepare('UPDATE artikel SET bestand = bestand + ? WHERE id=?');
-                        for (const [artId, qty] of restoreStockMap.entries()) {
-                            restoreStockStmt.run(qty, artId);
-                        }
-                    }
-                }
-
-                const deletePosStmt = db.prepare('DELETE FROM positionen WHERE dokumentId=?');
-                deletePosStmt.run(docId);
-                const deleteVerrechnungStmt = db.prepare('DELETE FROM rechnung_verrechnungen WHERE aktuelle_rechnung_id=?');
-                deleteVerrechnungStmt.run(docId);
-            } else {
-                const insertStmt = db.prepare('INSERT INTO dokumente (type, nr, datum, faellig, kundeId, projektId, status, isLocked, netto, steuer, brutto, globalRabattAbzug, globalRabattType, globalRabattValue, anzahlung, eingabemodus, vortext, fusstext, leistungszeitraum_von, leistungszeitraum_bis, baustellen_adresse, vob_vereinbart, ist_privatkunde, unterliegt_bauabzugsteuer, bauabzugsteuer_betrag, ausweis_35a_erforderlich, summe_lohnkosten_brutto, rechnungsart, kumulierte_leistung_netto, sicherheitseinbehalt, unterliegt_13b, leitweg_id, buyer_reference, sha256_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-                const res = insertStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt, d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.sha256_hash || null);
-                docId = res.lastInsertRowid;
-            }
-
-            // Insert new positions and deduct stock
-            if (d.positionen && d.positionen.length > 0) {
-                const insertPosStmt = db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-                const stockDeductionMap = new Map();
-
-                for (const p of d.positionen) {
-                    insertPosStmt.run(docId, p.artikelId || null, p.name || null, p.menge, p.einheit || 'Stk.', p.preis, p.ek || 0, p.mwst, p.rabatt || 0, p.steuer_schluessel || null, p.is13b ? 1 : 0, p.cost_type || 'MATERIAL', p.oz_code || null, p.is_tax_deductible_35a ? 1 : 0);
-
-                    if (d.type === 'rechnung' && p.artikelId) {
-                        stockDeductionMap.set(p.artikelId, (stockDeductionMap.get(p.artikelId) || 0) + p.menge);
-                    }
-                }
-
-                if (stockDeductionMap.size > 0) {
-                    // Optimization idea rejected: Dynamic CASE ... WHEN ... THEN SQL string approach is discouraged.
-                    // Relying on a Node-level loop executing a prepared statement strictly within a single SQLite
-                    // transaction is highly performant in better-sqlite3, much safer, and significantly easier to read.
-                    const deductStockStmt = db.prepare('UPDATE artikel SET bestand = bestand - ? WHERE id=?');
-                    for (const [artId, qty] of stockDeductionMap.entries()) {
-                        deductStockStmt.run(qty, artId);
-                    }
-                }
-            }
-
-            if (d.verrechnungen && d.verrechnungen.length > 0) {
-                const insertVerrechnungStmt = db.prepare('INSERT INTO rechnung_verrechnungen (aktuelle_rechnung_id, vorherige_rechnung_id, abzugsbetrag_netto) VALUES (?, ?, ?)');
-                for (const v of d.verrechnungen) {
-                    insertVerrechnungStmt.run(docId, v.vorherige_rechnung_id, v.abzugsbetrag_netto || 0);
-                }
-            }
-
-            return docId;
-        });
+        const saveTransaction = db.transaction((d) => applyDocumentWrite(d, requestedLockedInt));
 
         return saveTransaction(doc);
     },
@@ -360,7 +479,6 @@ const dbAPI = {
             const deletePosStmt = db.prepare('DELETE FROM positionen WHERE dokumentId=?');
             const deleteVerrechnungStmt = db.prepare('DELETE FROM rechnung_verrechnungen WHERE aktuelle_rechnung_id=?');
             const insertPosStmt = db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-            const insertVerrechnungStmt = db.prepare('INSERT INTO rechnung_verrechnungen (aktuelle_rechnung_id, vorherige_rechnung_id, abzugsbetrag_netto) VALUES (?, ?, ?)');
             const restoreStockStmt = db.prepare('UPDATE artikel SET bestand = bestand + ? WHERE id=?');
             const deductStockStmt = db.prepare('UPDATE artikel SET bestand = bestand - ? WHERE id=?');
 
@@ -368,10 +486,34 @@ const dbAPI = {
 
             for (const d of docsList) {
                 let docId = d.id;
-                const isLockedInt = d.isLocked ? 1 : 0;
+                let existing = null;
+                let action = 'ERSTELLT';
+
+                // GoBD: Inhalts-Hash konsistent berechnen und persistieren
+                d.sha256_hash = calculateDocumentContentHash(d);
 
                 if (docId) {
-                    updateStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt, d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.mahnungLevel || 0, d.mahnungDatum || null, d.mahnungGebuehr || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.sha256_hash || null, docId);
+                    existing = getDocumentWithChildren(docId);
+                    if (!existing) {
+                        throw new Error(`Dokument mit ID ${docId} wurde nicht gefunden.`);
+                    }
+
+                    if (existing.isLocked) {
+                        // GoBD-Änderungssperre: Entsperren NUR über entsperreBeleg()
+                        if (!d.isLocked) {
+                            throw new Error(`Beleg ${existing.nr} ist gesperrt (GoBD). Eine Freigabe ist nur über die explizite Funktion 'Beleg entsperren' mit Begründung möglich.`);
+                        }
+                        // GoBD-Änderungssperre: Nur Buchhaltungs-/Statusfelder änderbar
+                        const oldContentHash = calculateDocumentContentHash(existing);
+                        const newContentHash = calculateDocumentContentHash(d);
+                        if (oldContentHash !== newContentHash) {
+                            throw new Error(`Beleg ${existing.nr} ist gesperrt (GoBD-Änderungssperre): Inhaltsfelder dürfen nicht mehr geändert werden. Bitte erstellen Sie eine Stornorechnung/Korrekturrechnung.`);
+                        }
+                    }
+
+                    updateStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt(d), d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.mahnungLevel || 0, d.mahnungDatum || null, d.mahnungGebuehr || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.sha256_hash || null, docId);
+
+                    action = (calculateDocumentContentHash(existing) === calculateDocumentContentHash(d)) ? 'STATUS_GEÄNDERT' : 'GEÄNDERT';
 
                     if (d.type === 'rechnung') {
                         // Restore stock
@@ -392,7 +534,7 @@ const dbAPI = {
                     deletePosStmt.run(docId);
                     deleteVerrechnungStmt.run(docId);
                 } else {
-                    const res = insertDocStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt, d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.sha256_hash || null);
+                    const res = insertDocStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt(d), d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.sha256_hash || null);
                     docId = res.lastInsertRowid;
                 }
 
@@ -414,11 +556,24 @@ const dbAPI = {
                     }
                 }
                 
-                if (d.verrechnungen && d.verrechnungen.length > 0) {
-                    for (const v of d.verrechnungen) {
-                        insertVerrechnungStmt.run(docId, v.vorherige_rechnung_id, v.abzugsbetrag_netto || 0);
+                insertVerrechnungenGuarded(docId, d.verrechnungen);
+
+                // GoBD: Audit-Eintrag INNERHALB derselben Transaktion
+                appendAuditLog({
+                    entityType: 'DOCUMENT',
+                    entityId: docId,
+                    action,
+                    details: {
+                        nr: d.nr,
+                        type: d.type,
+                        status: d.status,
+                        vorherigerStatus: existing ? existing.status : null,
+                        isLocked: isLockedInt(d) === 1,
+                        brutto: d.brutto || 0,
+                        sha256_hash: d.sha256_hash
                     }
-                }
+                });
+
                 docIds.push(docId);
             }
             return docIds;
@@ -430,8 +585,15 @@ const dbAPI = {
     async deleteDocument(id) {
         const delTransaction = db.transaction((docId) => {
             // SELECT fetches only strictly necessary columns.
-            const doc = db.prepare('SELECT type FROM dokumente WHERE id=?').get(docId);
-            if (doc && doc.type === 'rechnung') {
+            const doc = db.prepare('SELECT type, nr, status, isLocked FROM dokumente WHERE id=?').get(docId);
+            if (!doc) return 0;
+
+            // GoBD-Löschsperre: Gesperrte Belege dürfen nicht gelöscht werden
+            if (doc.isLocked) {
+                throw new Error(`Beleg ${doc.nr} ist gesperrt (GoBD-Löschsperre) und kann nicht gelöscht werden. Bitte verwenden Sie eine Stornorechnung.`);
+            }
+
+            if (doc.type === 'rechnung') {
                 // Restore stock: Group by artikelId in memory to avoid N+1 and slow subqueries.
                 // Node-level loop is executed within a transaction, making it safe and highly optimized.
                 const positions = db.prepare('SELECT artikelId, menge FROM positionen WHERE dokumentId=?').all(docId);
@@ -455,8 +617,123 @@ const dbAPI = {
             db.prepare('DELETE FROM positionen WHERE dokumentId=?').run(docId);
             db.prepare('DELETE FROM rechnung_verrechnungen WHERE aktuelle_rechnung_id=?').run(docId);
             db.prepare('DELETE FROM dokumente WHERE id=?').run(docId);
+
+            // GoBD: Audit-Eintrag INNERHALB derselben Transaktion
+            appendAuditLog({
+                entityType: 'DOCUMENT',
+                entityId: docId,
+                action: 'GELÖSCHT',
+                details: { nr: doc.nr, type: doc.type, status: doc.status }
+            });
         });
         return delTransaction(id);
+    },
+
+    // --- GoBD: Schmaler Status-/Buchhaltungspfad (auch für gesperrte Belege) ---
+    async updateDocumentStatus(id, patch = {}) {
+        if (typeof id !== 'number') throw new Error('Ungültige Dokumenten-ID');
+        const allowedKeys = ['status', 'faellig'];
+        const keys = Object.keys(patch).filter(k => allowedKeys.includes(k) && patch[k] !== undefined);
+        if (keys.length === 0) {
+            throw new Error('updateDocumentStatus: Keine gültigen Felder übergeben (erlaubt: status, faellig).');
+        }
+
+        const tx = db.transaction((docId, changes) => {
+            const doc = db.prepare('SELECT id, nr, status, faellig FROM dokumente WHERE id=?').get(docId);
+            if (!doc) throw new Error(`Dokument mit ID ${docId} wurde nicht gefunden.`);
+
+            const setClauses = keys.map(k => `${k}=?`);
+            const values = keys.map(k => changes[k]);
+            values.push(docId);
+            db.prepare(`UPDATE dokumente SET ${setClauses.join(', ')} WHERE id=?`).run(...values);
+
+            // GoBD: Status-/Fälligkeitsänderungen sind an gesperrten Belegen erlaubt,
+            // werden aber lückenlos protokolliert.
+            appendAuditLog({
+                entityType: 'DOCUMENT',
+                entityId: docId,
+                action: 'STATUS_GEÄNDERT',
+                details: {
+                    nr: doc.nr,
+                    vorherigerStatus: doc.status,
+                    neuerStatus: changes.status !== undefined ? changes.status : doc.status,
+                    altesZahlungsziel: doc.faellig || null,
+                    neuesZahlungsziel: changes.faellig !== undefined ? changes.faellig : (doc.faellig || null)
+                }
+            });
+            return { success: true, id: docId };
+        });
+        return tx(id, patch);
+    },
+
+    // --- GoBD: Expliziter Freigabe-Weg (isLocked true -> false), audit-pflichtig ---
+    async entsperreBeleg(id, grund) {
+        if (typeof id !== 'number') throw new Error('Ungültige Dokumenten-ID');
+        if (!grund || typeof grund !== 'string' || !grund.trim()) {
+            throw new Error('Entsperren ohne Begründung ist nicht erlaubt (GoBD-Auditpflicht).');
+        }
+
+        const tx = db.transaction((docId, begruendung) => {
+            const doc = db.prepare('SELECT id, nr, status FROM dokumente WHERE id=?').get(docId);
+            if (!doc) throw new Error(`Dokument mit ID ${docId} wurde nicht gefunden.`);
+
+            const info = db.prepare('UPDATE dokumente SET isLocked=0 WHERE id=? AND isLocked=1').run(docId);
+            if (info.changes === 0) {
+                return { success: true, id: docId, alreadyUnlocked: true };
+            }
+
+            appendAuditLog({
+                entityType: 'DOCUMENT',
+                entityId: docId,
+                action: 'ENTSPERRT',
+                details: { nr: doc.nr, status: doc.status, grund: begruendung }
+            });
+            return { success: true, id: docId, alreadyUnlocked: false };
+        });
+        return tx(id, grund.trim());
+    },
+
+    // --- Atomares Storno: Original-Status + Gutschrift in EINER Transaktion ---
+    // Schlägt ein Schritt fehl, wird BEIDES zurückgerollt (kein halber Zustand
+    // "Original storniert, aber ohne Gutschrift").
+    async storniereRechnung(updatedOriginal, stornoDoc) {
+        if (!updatedOriginal || updatedOriginal.id == null) {
+            throw new Error('Storno: Original-Rechnung bzw. ID fehlt.');
+        }
+        if (!stornoDoc || !stornoDoc.nr) {
+            throw new Error('Storno: Die Gutschrift benötigt eine gültige Belegnummer.');
+        }
+
+        const tx = db.transaction((origPatch, storno) => {
+            const orig = db.prepare('SELECT id, nr, status FROM dokumente WHERE id = ?').get(origPatch.id);
+            if (!orig) throw new Error(`Dokument mit ID ${origPatch.id} wurde nicht gefunden.`);
+
+            // 1. Original über den schmalen Status-Pfad setzen (audit-protokolliert,
+            //    auch an gesperrten Belegen erlaubt - GoBD).
+            const neuerStatus = origPatch.status || 'Storniert';
+            db.prepare('UPDATE dokumente SET status = ? WHERE id = ?').run(neuerStatus, orig.id);
+            appendAuditLog({
+                entityType: 'DOCUMENT',
+                entityId: orig.id,
+                action: 'STATUS_GEÄNDERT',
+                details: {
+                    nr: orig.nr,
+                    vorherigerStatus: orig.status,
+                    neuerStatus
+                }
+            });
+
+            // 2. Gutschrift in derselben Transaktion anlegen (inkl. Audit).
+            return applyDocumentWrite(storno, storno.isLocked ? 1 : 0);
+        });
+
+        const stornoId = tx(updatedOriginal, stornoDoc);
+        return { success: true, originalId: updatedOriginal.id, stornoId };
+    },
+
+    // --- GoBD: Prüfung der Audit-Hashkette ---
+    verifiziereAuditKette() {
+        return auditLogger.verifiziereAuditKette();
     },
 
     // --- Aufmaßcenter (REB 23.003 & DA11) ---
@@ -896,4 +1173,10 @@ const dbAPI = {
     }
 };
 
-module.exports = { db, dbAPI };
+module.exports = {
+    db,
+    dbAPI,
+    appendAuditLog: auditLogger.appendAuditLog,
+    verifiziereAuditKette: auditLogger.verifiziereAuditKette,
+    calculateDocumentContentHash
+};

@@ -125,6 +125,7 @@ function openKundeModal(id = null) {
         document.getElementById('kunde-ust-1-tg-gueltig-bis').value = item.ust_1_tg_gueltig_bis || '';
         document.getElementById('kunde-hat-freistellungsbescheinigung').checked = !!item.hat_freistellungsbescheinigung;
         document.getElementById('kunde-freistellung-gueltig-bis').value = item.freistellung_gueltig_bis || '';
+        document.getElementById('kunde-ist-subunternehmer').checked = !!item.is_subcontractor;
         document.getElementById('kunde-ist-umsatzsteuerfreie-vermietung').checked = !!item.ist_umsatzsteuerfreie_vermietung;
     } else {
         document.getElementById('kunde-modal-title').innerText = 'Neuer Kunde';
@@ -139,6 +140,7 @@ function openKundeModal(id = null) {
         document.getElementById('kunde-ust-1-tg-gueltig-bis').value = '';
         document.getElementById('kunde-hat-freistellungsbescheinigung').checked = false;
         document.getElementById('kunde-freistellung-gueltig-bis').value = '';
+        document.getElementById('kunde-ist-subunternehmer').checked = false;
         document.getElementById('kunde-ist-umsatzsteuerfreie-vermietung').checked = false;
 
         const qpContainer = document.getElementById('quick-paste-container');
@@ -190,6 +192,7 @@ async function saveKunde() {
     const ust_1_tg_gueltig_bis = document.getElementById('kunde-ust-1-tg-gueltig-bis').value;
     const hat_freistellungsbescheinigung = document.getElementById('kunde-hat-freistellungsbescheinigung').checked ? 1 : 0;
     const freistellung_gueltig_bis = document.getElementById('kunde-freistellung-gueltig-bis').value;
+    const is_subcontractor = document.getElementById('kunde-ist-subunternehmer').checked ? 1 : 0;
     const ist_umsatzsteuerfreie_vermietung = document.getElementById('kunde-ist-umsatzsteuerfreie-vermietung').checked ? 1 : 0;
 
     if (!name || !adresse || !plz || !ort) {
@@ -197,7 +200,7 @@ async function saveKunde() {
         return;
     }
 
-    const kundeData = { kundennummer, name, adresse, plz, ort, telefon, email, ustId, customer_type, leitweg_id, buyer_reference, peppol_id, ist_bauleistender_13b, ust_1_tg_gueltig_bis, hat_freistellungsbescheinigung, freistellung_gueltig_bis, ist_umsatzsteuerfreie_vermietung };
+    const kundeData = { kundennummer, name, adresse, plz, ort, telefon, email, ustId, customer_type, leitweg_id, buyer_reference, peppol_id, ist_bauleistender_13b, ust_1_tg_gueltig_bis, hat_freistellungsbescheinigung, freistellung_gueltig_bis, is_subcontractor, sec48b_valid_until: freistellung_gueltig_bis || null, ist_umsatzsteuerfreie_vermietung };
 
     if (id) {
         kundeData.id = parseInt(id);

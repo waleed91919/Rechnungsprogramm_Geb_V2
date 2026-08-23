@@ -231,7 +231,12 @@ async function checkOverdueInvoices() {
 
     if (toUpdate.length > 0) {
         try {
-            await window.api.bulkSaveDocuments(toUpdate);
+            // GoBD: Statuswechsel 'Überfällig' auch an gesperrten Belegen -
+            // nur über den schmalen Status-Pfad statt komplettem saveDocument.
+            for (const rech of toUpdate) {
+                await window.api.updateDocumentStatus(rech.id, { status: 'Überfällig' });
+                rech.status = 'Überfällig';
+            }
             return true;
         } catch (e) {
             console.error('Failed to perform bulk update for overdue invoices:', e);

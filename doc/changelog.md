@@ -1,5 +1,13 @@
 # Changelog / Fortschritt
 
+## 23.08.2026 (Audit & Reparatur)
+- **Voll-Audit des Rechnungssystems + ZUGFeRD PDF/A-3 (3 Prüf-Subagenten):** PDF/A-3-Container korrekt; CII/XML verstieß gegen EN 16931 (BG-23, Leitweg-ID, Adressen, §13b, Einheitscodes); GoBD-Schutz nur im Renderer; Sichtseite im ZUGFeRD-PDF war Platzhalter. Details: [`doc/session_summary_2026-08-23.md`](session_summary_2026-08-23.md).
+- **Fix ① – CII/XML + Validierungs-Gate:** [`js/einvoice.js`](../js/einvoice.js): BG-23 USt-Aufschlüsselung, BG-5/BG-8-Adressen mit CountryID, Leitweg-ID-Vorrang in BT-10, UN/ECE-Rec-20-Einheitscode-Mapping (m²→MTK, Std→HUR …), §13b mit ExemptionReason/VTEX, BT-9 Fälligkeit, Fake-USt-ID entfernt, rabatt- und zahlungskonsistente Summen (BR-CO-10/13/14/16). `validateForEN16931` als echtes Gate – Editor bricht bei Fehlern ab, Dashboard validiert jetzt mit.
+- **Fix ② – Echte Sichtseite:** [`main.js`](../main.js) übergibt beim ZUGFeRD-Export das echte Rechnungs-PDF (unsichtbares Rendern + `printToPDF` mit 15 s-Timeout) als `basePdfBuffer`; Platzhalter nur noch als Fehler-Fallback; Sichtseite & XML aus denselben Daten.
+- **Fix ③ – GoBD:** Sperr-Guard in [`db.js`](../db.js) (gesperrte Belege inhaltlich unänderbar/löschbar), `entsperreBeleg()` mit Begründungspflicht, zentrale Audit-Hashkette [`main/audit.js`](../main/audit.js) bei jeder Belegmutation in derselben Transaktion, `verifiziereAuditKette()` + IPC `audit:verify`, Export bricht bei Audit-Fehler ab.
+- **Fix ④ – Datenintegrität:** UNIQUE-Indizes (Rechnungsnummer, Verrechnungs-Paare, Einbehalt) mit Dedup-Migration in [`schema.js`](../schema.js), atomares Storno in einer Transaktion, durchgehendes Cent-Rounding in [`controllers/InvoiceController.js`](../controllers/InvoiceController.js) (bitidentisch zur E-Rechnungs-Engine), Doppelverrechnung blockiert, Schema-Bugs `sec48b_valid_until`/`is_subcontractor` gefixt (+ §48b-Checkbox im Kundenformular).
+- **Tests:** Suite von 96 auf **105/105** erweitert (Z6–Z12, GoBD-Schutz, Datenintegrität); Pipeline 4/4; B2G-Artefakte validieren sauber.
+
 ## 23.08.2026
 - **Feature F5 – Echter ZUGFeRD 2.x PDF/A-3-Export (Hybrid-Rechnung):**
   - Neues Modul [`main/zugferd-builder.js`](../main/zugferd-builder.js): erzeugt aus optionalem Sichtseiten-PDF (sonst Ersatzseite mit eingebettetem System-TTF) + CII-Rechnungs-XML ein echtes PDF/A-3-Hybrid (`@cantoo/pdf-lib`, MIT, electron-frei): Katalog-`/AF`, `/Names /EmbeddedFiles`, `/AFRelationship /Alternative`, fx-XMP inkl. `pdfaExtension:schemas`, OutputIntent mit sRGB-ICC.

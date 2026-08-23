@@ -75,6 +75,7 @@ const b2gInvoice = {
 
 const validationB2G = EInvoiceEngine.validateForEN16931(b2gInvoice, b2gKunde, einstellungen);
 console.log(`  Validation Result: Valid=${validationB2G.isValid}, Errors=${validationB2G.errors.length}`);
+validationB2G.errors.forEach(err => console.log(`    ✖ ${err}`));
 
 const xmlContent = EInvoiceEngine.generateXRechnungXML(b2gInvoice, b2gKunde, einstellungen);
 const xmlFilePath = path.join(__dirname, '../output/invoices/b2g_xrechnung/RE-2026-B2G-001.xml');
@@ -113,7 +114,10 @@ const ab1Doc = {
     brutto: 5000.00,
     sicherheitseinbehalt: 250.00,
     zahlbetrag: 4750.00,
-    unterliegt_13b: 1
+    unterliegt_13b: 1,
+    positionen: [
+        { name: 'Abschlagszahlung 1 gemäß VOB/B (§ 13b UStG)', menge: 1, einheit: 'Pausch', preis: 5000.00, mwst: 0 }
+    ]
 };
 
 // 2. Kumulierte Abschlagsrechnung (Gesamt 12.000 € - bisher 5.000 €)
@@ -158,7 +162,10 @@ const ab2Doc = {
     brutto: ab2Calculation.currentPeriodNet,
     sicherheitseinbehalt: ab2Calculation.securityRetentionAmount,
     zahlbetrag: ab2Calculation.netPayableAmount,
-    unterliegt_13b: 1
+    unterliegt_13b: 1,
+    positionen: [
+        { name: 'Abschlagszahlung 2 (kumuliert, § 13b UStG)', menge: 1, einheit: 'Pausch', preis: ab2Calculation.currentPeriodNet, mwst: 0 }
+    ]
 };
 const ab2Xml = EInvoiceEngine.generateZUGFeRDXML(ab2Doc, b2bKundeSub, einstellungen);
 const ab2Buffer = await ZugferdBuilder.build({

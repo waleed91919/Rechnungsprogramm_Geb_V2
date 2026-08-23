@@ -198,32 +198,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // PDF Generation
-window.generatePdf = async function(id, isAngebot = false) {
-    const idNum = parseInt(id);
-    const rech = isAngebot ? state.angebote.find(r => parseInt(r.id) === idNum) : state.rechnungen.find(r => parseInt(r.id) === idNum);
-    if (!rech) return;
-
-    // GoBD Compliance Lock (Invoices only)
-    if (!isAngebot && rech.status !== 'Entwurf' && !rech.isLocked) {
-        if (!(await safeConfirm(`Durch das Generieren des PDFs wird die Rechnung ${rech.nr} finalisiert und für nachträgliche Änderungen gesperrt (GoBD-konform). Möchten Sie fortfahren?`))) {
-            return;
-        }
-        rech.isLocked = true;
-        // Save to database
-        await window.api.saveDocument(rech);
-        
-        // Re-render dashboard behind modal
-        if (document.getElementById('view-dashboard') && !document.getElementById('view-dashboard').classList.contains('hidden')) {
-            renderDashboard();
-        } else if (document.getElementById('view-rechnungen') && !document.getElementById('view-rechnungen').classList.contains('hidden')) {
-            renderRechnungen();
-        }
-    }
-
-    const kundeId = parseInt(rech.kundeId);
-    const kunde = state.kunden.find(k => parseInt(k.id) === kundeId) || {};
-    const template = document.getElementById('print-template');
-
+// Baut die vollständige Sichtseiten-HTML (alle Vorlagen) aus einem explizit übergebenen
+// Dokumentobjekt. Bewusst von window.generatePdf entkoppelt, damit der ZUGFeRD-Export
+// Sichtseite und CII-XML aus DEMSELBEN doc-Objekt erzeugen kann.
+async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
     const logoHtml = state.einstellungen.logo ? `<img src="${state.einstellungen.logo}" class="h-16 object-contain">` : '';
     const datumStr = new Date(rech.datum).toLocaleDateString('de-DE');
     const faelligStr = new Date(rech.faellig).toLocaleDateString('de-DE');
@@ -908,13 +886,63 @@ window.generatePdf = async function(id, isAngebot = false) {
         `;
     }
 
+    return templateHtml;
+}
+
+window.generatePdf = async function(id, isAngebot = false) {
+    const idNum = parseInt(id);
+    const rech = isAngebot ? state.angebote.find(r => parseInt(r.id) === idNum) : state.rechnungen.find(r => parseInt(r.id) === idNum);
+    if (!rech) return;
+
+    // GoBD Compliance Lock (Invoices only)
+    if (!isAngebot && rech.status !== 'Entwurf' && !rech.isLocked) {
+        if (!(await safeConfirm(`Durch das Generieren des PDFs wird die Rechnung ${rech.nr} finalisiert und für nachträgliche Änderungen gesperrt (GoBD-konform). Möchten Sie fortfahren?`))) {
+            return;
+        }
+        rech.isLocked = true;
+        // Save to database
+        await window.api.saveDocument(rech);
+        
+        // Re-render dashboard behind modal
+        if (document.getElementById('view-dashboard') && !document.getElementById('view-dashboard').classList.contains('hidden')) {
+            renderDashboard();
+        } else if (document.getElementById('view-rechnungen') && !document.getElementById('view-rechnungen').classList.contains('hidden')) {
+            renderRechnungen();
+        }
+    }
+
+    const kundeId = parseInt(rech.kundeId);
+    const kunde = state.kunden.find(k => parseInt(k.id) === kundeId) || {};
+    const templateHtml = await buildInvoiceDocumentHtml(rech, kunde, isAngebot);
+    const template = document.getElementById('print-template');
     template.innerHTML = templateHtml;
 
     const pdfFilename = `${isAngebot ? 'Angebot' : 'Rechnung'}_${rech.nr || 'Dokument'}.pdf`;
     setTimeout(() => {
         openPdfPreview(template.innerHTML, pdfFilename);
     }, 50);
-}
+};
+
+// Rendert die Sichtseite für den ZUGFeRD-Export unsichtbar in #print-template
+// (das @media print-CSS blendet alles andere aus) und gibt den vorherigen
+// Inhalt zur Wiederherstellung zurück. Wirft bei Fehlern, bevor der Container
+// verändert wird - der Export läuft dann mit der Platzhalter-Seite weiter.
+window.renderInvoiceForZugferdExport = async function(rech, kunde) {
+    const template = document.getElementById('print-template');
+    if (!template) throw new Error('Druckvorlage (#print-template) nicht gefunden.');
+    const previousHtml = template.innerHTML;
+    const templateHtml = await buildInvoiceDocumentHtml(rech, kunde || {}, false);
+    template.innerHTML = templateHtml;
+    await new Promise(resolve => setTimeout(resolve, 150));
+    return previousHtml;
+};
+
+window.restorePrintTemplateContent = function(previousHtml) {
+    const template = document.getElementById('print-template');
+    if (template && typeof previousHtml === 'string') {
+        template.innerHTML = previousHtml;
+    }
+};
 
 // Generate Mahnung (Dunning) PDF
 window.generateMahnungPdf = async function(id) {

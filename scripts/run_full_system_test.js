@@ -67,9 +67,9 @@ try {
 // --- MODULE 2: INVOICES & Compliance Automation ---
 console.log("\n▶ Testing Module 2: Invoices & Compliance Automation...");
 try {
-    const b2gKunde = { name: 'Stadt Frankfurt', customer_type: 'B2G', leitweg_id: '992-88776655-11', buyer_reference: 'REF-8877' };
-    const b2gInvoice = { id: 10, nr: 'RE-2026-B2G-002', datum: '2026-08-01', me: 1, netto: 15000, steuer: 2850, brutto: 17850, positionen: [{ name: 'Kanalbau', menge: 100, preis: 150, mwst: 19 }] };
-    const mockSeller = { firmenname: 'Bauunternehmen GmbH', iban: 'DE89370400440532013000', bankname: 'Deutsche Bank' };
+    const b2gKunde = { name: 'Stadt Frankfurt', customer_type: 'B2G', adresse: 'Römerberg 1', plz: '60311', ort: 'Frankfurt am Main', leitweg_id: '992-88776655-11', buyer_reference: 'REF-8877' };
+    const b2gInvoice = { id: 10, nr: 'RE-2026-B2G-002', datum: '2026-08-01', faellig: '2026-08-31', me: 1, netto: 15000, steuer: 2850, brutto: 17850, positionen: [{ name: 'Kanalbau', menge: 100, preis: 150, mwst: 19 }] };
+    const mockSeller = { firmenname: 'Bauunternehmen GmbH', adresse: 'Baugasse 3, 60313 Frankfurt am Main', iban: 'DE89370400440532013000', bankname: 'Deutsche Bank', ustId: 'DE136695976' };
 
     const validation = EInvoiceEngine.validateForEN16931(b2gInvoice, b2gKunde, mockSeller);
     recordTest("Invoices", "B2G EN 16931 Validation", validation.isValid);

@@ -50,7 +50,9 @@ function createSchema(db) {
         mahnungLevel INTEGER DEFAULT 0,
         mahnungDatum TEXT,
         mahnungGebuehr REAL DEFAULT 0,
-        eingabemodus TEXT DEFAULT 'netto'
+        eingabemodus TEXT DEFAULT 'netto',
+        FOREIGN KEY(kundeId) REFERENCES kunden(id),
+        FOREIGN KEY(projektId) REFERENCES projekte(id)
     )`);
 
     db.exec(`CREATE TABLE IF NOT EXISTS positionen (
@@ -64,7 +66,8 @@ function createSchema(db) {
         ek REAL DEFAULT 0, -- Purchase price snapshot
         mwst INTEGER DEFAULT 19,
         rabatt REAL DEFAULT 0,
-        FOREIGN KEY(dokumentId) REFERENCES dokumente(id)
+        FOREIGN KEY(dokumentId) REFERENCES dokumente(id),
+        FOREIGN KEY(artikelId) REFERENCES artikel(id)
     )`);
 
     db.exec(`CREATE TABLE IF NOT EXISTS aufmass (
@@ -432,6 +435,118 @@ function runMigrations(db) {
     try { db.exec(`ALTER TABLE projekte ADD COLUMN sicherheitseinbehalt_prozent REAL DEFAULT 0`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
     try { db.exec(`ALTER TABLE projekte ADD COLUMN gaeb_phase TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
     try { db.exec(`ALTER TABLE projekte ADD COLUMN hoai_vob_flag TEXT DEFAULT 'VOB'`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+
+    // --- Datenintegrität: §48b / Subunternehmer-Felder auf kunden ---
+    // Bug A: kunden.sec48b_valid_until wird von getEingangsrechnungen()/saveEingangsrechnung()
+    // gelesen, existierte aber nie -> 'no such column' auf frischen DBs.
+    try { db.exec(`ALTER TABLE kunden ADD COLUMN sec48b_valid_until TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    // Bug B: lieferant.is_subcontractor steuert den 15%-Bauabzugseinbehalt (§ 48b EStG).
+    try { db.exec(`ALTER TABLE kunden ADD COLUMN is_subcontractor INTEGER DEFAULT 0`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+
+    // --- Datenintegrität: Duplikate bereinigen + UNIQUE-Indizes ---
+    ensureUniqueConstraints(db);
+}
+
+/**
+ * Dedupliziert doppelte Belegnummern deterministisch: Der älteste Beleg (MIN id)
+ * behält die Nummer, alle weiteren erhalten Suffixe "-2", "-3" ... die noch frei sind.
+ */
+function dedupeDuplicateDocumentNumbers(db) {
+    const dupes = db.prepare(`
+        SELECT nr, COUNT(*) AS cnt, MIN(id) AS keepId
+        FROM dokumente
+        GROUP BY nr
+        HAVING COUNT(*) > 1
+    `).all();
+    if (dupes.length === 0) return [];
+
+    const allNrs = new Set(db.prepare('SELECT nr FROM dokumente').all().map(r => r.nr));
+    const updateStmt = db.prepare('UPDATE dokumente SET nr = ? WHERE id = ?');
+    const renamed = [];
+
+    const tx = db.transaction(() => {
+        for (const dupe of dupes) {
+            const others = db.prepare('SELECT id FROM dokumente WHERE nr = ? AND id != ? ORDER BY id ASC').all(dupe.nr, dupe.keepId);
+            for (const row of others) {
+                let i = 2;
+                let candidate = `${dupe.nr}-${i}`;
+                while (allNrs.has(candidate)) {
+                    i++;
+                    candidate = `${dupe.nr}-${i}`;
+                }
+                updateStmt.run(candidate, row.id);
+                allNrs.add(candidate);
+                renamed.push({ id: row.id, alt: dupe.nr, neu: candidate });
+            }
+        }
+    });
+    tx();
+
+    renamed.forEach(r => console.warn(`[DB Migration] Doppelte Belegnummer "${r.alt}" gefunden: Dokument #${r.id} wurde deterministisch zu "${r.neu}" umbenannt.`));
+    return renamed;
+}
+
+/**
+ * Dedupliziert Verrechnungspaare: pro (aktuelle_rechnung_id, vorherige_rechnung_id)
+ * bleibt der neueste Eintrag (MAX id), Rest wird gelöscht.
+ */
+function dedupeDuplicateVerrechnungen(db) {
+    const info = db.prepare(`
+        DELETE FROM rechnung_verrechnungen
+        WHERE id NOT IN (
+            SELECT MAX(id) FROM rechnung_verrechnungen
+            GROUP BY aktuelle_rechnung_id, vorherige_rechnung_id
+        )
+    `).run();
+    if (info.changes > 0) {
+        console.warn(`[DB Migration] ${info.changes} doppelte Verrechnungseinträge entfernt (neuester Eintrag je Paar behalten).`);
+    }
+    return info.changes;
+}
+
+/**
+ * Dedupliziert Sicherheitseinbehalte: pro invoice_id bleibt der neueste Eintrag.
+ * Fachlich ist ein Einbehalt pro Rechnung vorgesehen (invoice_id als Anker).
+ */
+function dedupeDuplicateRetentions(db) {
+    const info = db.prepare(`
+        DELETE FROM security_retentions
+        WHERE id NOT IN (
+            SELECT MAX(id) FROM security_retentions GROUP BY invoice_id
+        )
+    `).run();
+    if (info.changes > 0) {
+        console.warn(`[DB Migration] ${info.changes} doppelte Sicherheitseinbehalt-Einträge entfernt (neuester je Rechnung behalten).`);
+    }
+    return info.changes;
+}
+
+/**
+ * Legt UNIQUE-Indizes an. Bestandsduplikate werden VORHER deterministisch entfernt,
+ * damit der Index die App niemals beim Start crashen kann. Schlägt ein Index fehl,
+ * wird nur geloggt (App läuft ohne Index weiter).
+ */
+function ensureUniqueConstraints(db) {
+    try {
+        dedupeDuplicateDocumentNumbers(db);
+        db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_dokumente_nr_unique ON dokumente(nr)`);
+    } catch (e) {
+        console.error('[DB Migration] UNIQUE-Index auf dokumente(nr) konnte nicht erstellt werden:', e.message);
+    }
+
+    try {
+        dedupeDuplicateVerrechnungen(db);
+        db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_verrechnungen_paar_unique ON rechnung_verrechnungen(aktuelle_rechnung_id, vorherige_rechnung_id)`);
+    } catch (e) {
+        console.error('[DB Migration] UNIQUE-Index auf rechnung_verrechnungen konnte nicht erstellt werden:', e.message);
+    }
+
+    try {
+        dedupeDuplicateRetentions(db);
+        db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_security_retentions_invoice_unique ON security_retentions(invoice_id)`);
+    } catch (e) {
+        console.error('[DB Migration] UNIQUE-Index auf security_retentions(invoice_id) konnte nicht erstellt werden:', e.message);
+    }
 }
 
 function seedDefaultData(db) {
@@ -463,5 +578,9 @@ function seedDefaultData(db) {
 module.exports = {
     createSchema,
     runMigrations,
-    seedDefaultData
+    seedDefaultData,
+    ensureUniqueConstraints,
+    dedupeDuplicateDocumentNumbers,
+    dedupeDuplicateVerrechnungen,
+    dedupeDuplicateRetentions
 };

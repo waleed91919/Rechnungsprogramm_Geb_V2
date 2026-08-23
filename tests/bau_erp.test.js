@@ -85,6 +85,9 @@ test('4. EN 16931-1 XRechnung & ZUGFeRD Generator & B2G Leitweg-ID Check', () =>
     const b2gCustomer = {
         name: 'Bezirksamt Mitte',
         customer_type: 'B2G',
+        adresse: 'Müllerstraße 147',
+        plz: '13349',
+        ort: 'Berlin',
         leitweg_id: '991-12345678-12'
     };
 
@@ -102,6 +105,7 @@ test('4. EN 16931-1 XRechnung & ZUGFeRD Generator & B2G Leitweg-ID Check', () =>
 
     const seller = {
         firmenname: 'W-Link Bau GmbH',
+        adresse: 'Bauweg 12, 10115 Berlin',
         iban: 'DE89370400440532013000',
         bic: 'COBADEFFXXX',
         ustId: 'DE123456789'
@@ -112,6 +116,14 @@ test('4. EN 16931-1 XRechnung & ZUGFeRD Generator & B2G Leitweg-ID Check', () =>
 
     const xml = EInvoiceEngine.generateXRechnungXML(invoice, b2gCustomer, seller);
     assert.ok(xml.includes('991-12345678-12'));
+    assert.ok(xml.includes('<ram:BuyerReference>991-12345678-12</ram:BuyerReference>'), 'BT-10 muss die Leitweg-ID tragen');
+    assert.ok(!xml.includes('DE000000000'), 'Keine Fake-USt-IdNr mehr erlaubt');
+    assert.ok(xml.includes('<ram:CalculatedAmount>190.00</ram:CalculatedAmount>'), 'BG-23 Steuerbetrag fehlt');
+    assert.ok(xml.includes('<ram:BasisAmount>1000.00</ram:BasisAmount>'), 'BG-23 BasisAmount fehlt');
+    const countryCount = (xml.match(/<ram:CountryID>DE<\/ram:CountryID>/g) || []).length;
+    assert.ok(countryCount >= 2, `Seller+Buyer CountryID DE erwartet, gefunden: ${countryCount}`);
+    assert.ok(/<ram:DueDateDateTime>\s*<udt:DateTimeString format="102">20260913<\/udt:DateTimeString>/s.test(xml), 'DueDate (BT-9) fehlt');
+    assert.ok(xml.includes('<ram:DuePayableAmount>1190.00</ram:DuePayableAmount>'));
     assert.ok(xml.includes('urn:xoev-de:kosit:standard:xrechnung_2.3'));
     assert.ok(xml.includes('RE-2026-001'));
 

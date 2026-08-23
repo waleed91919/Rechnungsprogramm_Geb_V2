@@ -43,6 +43,8 @@ class ZugferdBuilder {
      * @param {string} [params.meta.nr] Rechnungsnummer (für Titel/Ersatzseite).
      * @param {string} [params.meta.datum] Rechnungsdatum.
      * @param {string} [params.meta.sellerName] Verkäufername (Ersatzseite).
+     * @param {string} [params.meta.empfaengerName] Empfängername (Ersatzseite).
+     * @param {string|number} [params.meta.duePayableAmount] Fälliger Gesamtbetrag in EUR (Ersatzseite).
      * @param {string} [params.meta.conformanceLevel='EN 16931'] fx:ConformanceLevel ('EN 16931' | 'XRECHNUNG').
      * @param {string} [params.meta.fileName='factur-x.xml'] Attachment-Dateiname ('xrechnung.xml' beim XRECHNUNG-Profil).
      * @param {string} [params.meta.title] PDF-Dokumenttitel.
@@ -73,7 +75,8 @@ class ZugferdBuilder {
                 pdfDoc = await this._createFallbackDocument(meta);
             }
         } catch (err) {
-            throw new Error(`ZUGFeRD-Export fehlgeschlagen: Das Sichtseiten-PDF konnte nicht geladen werden (${err.message}).`);
+            console.warn('ZUGFeRD: Sichtseiten-PDF unbrauchbar (' + err.message + ') - Export läuft mit Platzhalter-Seite weiter.');
+            pdfDoc = await this._createFallbackDocument(meta);
         }
 
         pdfDoc.setTitle(title);
@@ -115,6 +118,8 @@ class ZugferdBuilder {
         const nr = String(meta.nr || '').replace(/[^\x20-\x7EÄÖÜäöüß]/g, '');
         const datum = String(meta.datum || '');
         const sellerName = String(meta.sellerName || '').replace(/[^\x20-\x7EÄÖÜäöüß]/g, '');
+        const empfaengerName = String(meta.empfaengerName || '').replace(/[^\x20-\x7EÄÖÜäöüß]/g, '');
+        const betrag = String(meta.duePayableAmount || '').replace(/[^\x20-\x7E.,]/g, '');
 
         for (const fontBytes of loadEmbeddedFontCandidates()) {
             try {
@@ -122,8 +127,14 @@ class ZugferdBuilder {
                 const font = await pdfDoc.embedFont(fontBytes, { subset: true });
                 page.drawText(sellerName ? sellerName : 'W-Link ERP', { x: 50, y: 780, size: 12, font, color: rgb(0.1, 0.1, 0.1) });
                 page.drawText(`Rechnung ${nr}${datum ? ' vom ' + datum : ''}`, { x: 50, y: 760, size: 11, font, color: rgb(0.1, 0.1, 0.1) });
+                if (empfaengerName) {
+                    page.drawText(`Rechnungsempfänger: ${empfaengerName}`, { x: 50, y: 742, size: 11, font, color: rgb(0.1, 0.1, 0.1) });
+                }
+                if (betrag) {
+                    page.drawText(`Fälliger Gesamtbetrag: ${betrag} EUR`, { x: 50, y: 724, size: 11, font, color: rgb(0.1, 0.1, 0.1) });
+                }
                 page.drawText('Elektronische Rechnung (ZUGFeRD 2.x): Die maschinenlesbaren Rechnungsdaten sind als Dateianhang eingebettet.', {
-                    x: 50, y: 740, size: 9, font, color: rgb(0.25, 0.25, 0.25)
+                    x: 50, y: 706, size: 9, font, color: rgb(0.25, 0.25, 0.25)
                 });
                 break;
             } catch (_e) {

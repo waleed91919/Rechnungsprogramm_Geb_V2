@@ -421,6 +421,9 @@ function closeSteuerberichtModal() {
 }
 
 function calculateSteuerberichtData(bezahlteRechnungen) {
+    // Cent-Rundung identisch zu InvoiceController.round2 / EInvoiceEngine.round2,
+    // damit Steuerbericht, Rechenkern und E-Rechnung zu gleichen Summen kommen.
+    const round2 = (v) => Math.round((parseFloat(v) + Number.EPSILON) * 100) / 100;
     let totalNetto = 0;
     let tax19 = 0;
     let tax7 = 0;
@@ -430,28 +433,29 @@ function calculateSteuerberichtData(bezahlteRechnungen) {
     const kundenMap = new Map(state.kunden.map(k => [k.id, k]));
 
     bezahlteRechnungen.forEach(r => {
-        totalNetto += r.netto;
-        totalBrutto += r.brutto;
-        
+        totalNetto = round2(totalNetto + r.netto);
+        totalBrutto = round2(totalBrutto + r.brutto);
+
         if (r.positionen) {
             let positionenNettoRaw = 0;
-            let taxesRaw = { 19: 0, 7: 0 };
-            
+            const taxBases = { 19: 0, 7: 0 };
+
             r.positionen.forEach(p => {
                 const rabatt = parseFloat(p.rabatt) || 0;
-                const rowNetto = (p.menge * p.preis) * (1 - rabatt / 100);
-                positionenNettoRaw += rowNetto;
+                const rowNetto = round2((p.menge * p.preis) * (1 - rabatt / 100));
+                positionenNettoRaw = round2(positionenNettoRaw + rowNetto);
                 const mwst = parseFloat(p.mwst);
                 if (mwst > 0) {
-                    taxesRaw[mwst] = (taxesRaw[mwst] || 0) + (rowNetto * (mwst / 100));
+                    taxBases[mwst] = round2((taxBases[mwst] || 0) + rowNetto);
                 }
             });
 
-            const globalAbzug = parseFloat(r.globalRabattAbzug) || 0;
-            const rabattFaktor = positionenNettoRaw > 0 ? ((positionenNettoRaw - globalAbzug) / positionenNettoRaw) : 1;
+            const globalAbzug = round2(parseFloat(r.globalRabattAbzug) || 0);
+            const nettoNachRabatt = round2(Math.max(0, positionenNettoRaw - globalAbzug));
+            const rabattFaktor = positionenNettoRaw > 0 ? (nettoNachRabatt / positionenNettoRaw) : 1;
 
-            if (taxesRaw[19]) tax19 += taxesRaw[19] * rabattFaktor;
-            if (taxesRaw[7]) tax7 += taxesRaw[7] * rabattFaktor;
+            if (taxBases[19]) tax19 = round2(tax19 + round2(round2(taxBases[19] * rabattFaktor) * 19 / 100));
+            if (taxBases[7]) tax7 = round2(tax7 + round2(round2(taxBases[7] * rabattFaktor) * 7 / 100));
         }
 
         const dateStr = r.zahlungsdatum ? new Date(r.zahlungsdatum).toLocaleDateString("de-DE") : new Date(r.datum).toLocaleDateString("de-DE");
