@@ -168,6 +168,24 @@
                 <span class="text-sm font-medium">Projekte</span>
             </a>
             <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
+                id="nav-objekte" onclick="switchView('objekte')">
+                <span
+                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">apartment</span>
+                <span class="text-sm font-medium">Objekte</span>
+            </a>
+            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
+                id="nav-dauerrechnungen" onclick="switchView('dauerrechnungen')">
+                <span
+                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">event_repeat</span>
+                <span class="text-sm font-medium">Dauerrechnungen</span>
+            </a>
+            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
+                id="nav-putzplan" onclick="switchView('putzplan')">
+                <span
+                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">cleaning_services</span>
+                <span class="text-sm font-medium">Putzplan &amp; LV</span>
+            </a>
+            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
                 id="nav-berichte" onclick="switchView('berichte')">
                 <span
                     class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">analytics</span>
@@ -1107,6 +1125,525 @@
                 <!-- Replace with list or card layout dependent on rentabilität -->
                 <div id="projekte-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     <!-- JS populated -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Objekte View (F1 Objektverwaltung) -->
+        <div id="view-objekte" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+
+                <!-- KPI Cards Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Liegenschaften</p>
+                                <h3 id="kpi-anzahl-liegenschaften" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">apartment</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gebäude</p>
+                                <h3 id="kpi-anzahl-gebaeude" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">domain</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fläche gesamt (m²)</p>
+                                <h3 id="kpi-flaeche-gesamt" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">square_foot</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Toolbar -->
+                <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                    <div class="flex items-center gap-2">
+                        <div class="relative">
+                            <span
+                                class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                            <input id="search-objekte"
+                                class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-64 placeholder:text-slate-400"
+                                placeholder="Name, Nr. oder Ort suchen..." type="text">
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="openObjektModal('LIEGENSCHAFT')"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">add</span>
+                            Neue Liegenschaft
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Data Grid -->
+                <div class="border border-slate-300 rounded-md bg-white shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm dense-table">
+                            <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
+                                <tr>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Objekt-Nr.</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Name</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Typ</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Ort</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Rechnungsempfänger</th>
+                                    <th class="px-4 font-semibold text-right whitespace-nowrap">Fläche Σ</th>
+                                    <th class="px-4 font-semibold text-center whitespace-nowrap">Status</th>
+                                    <th class="px-4 font-semibold text-right w-56 whitespace-nowrap">Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="objekte-table-body" class="divide-y divide-slate-200 text-slate-700 bg-white">
+                                <!-- JS populated -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Objekt Details View (F1) -->
+        <div id="view-objekt-details" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1200px] mx-auto flex flex-col gap-6">
+
+                <!-- Header Card -->
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+                    <div class="relative z-10 flex items-start gap-4">
+                        <button onclick="closeObjektDetails()"
+                            class="mt-1 p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"
+                            title="Zurück zur Übersicht">
+                            <span class="material-symbols-outlined">arrow_back</span>
+                        </button>
+                        <div>
+                            <div class="flex items-center gap-3 mb-1">
+                                <h2 id="od-name" class="text-2xl font-bold text-slate-800 tracking-tight">Objekt</h2>
+                                <span id="od-typ"
+                                    class="inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-slate-100 text-slate-800 border border-slate-200">Typ</span>
+                            </div>
+                            <p id="od-pfad" class="text-sm text-slate-500 font-medium"></p>
+                            <p id="od-empfaenger" class="text-sm text-slate-600 font-medium flex items-center gap-1.5 mt-1"></p>
+                        </div>
+                    </div>
+                    <div class="relative z-10 flex gap-2">
+                        <button id="od-edit-btn"
+                            class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-slate-200">
+                            <span class="material-symbols-outlined text-[18px]">edit</span>
+                            Bearbeiten
+                        </button>
+                        <button id="od-neu-btn"
+                            class="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-primary/20">
+                            <span class="material-symbols-outlined text-[18px]">add</span>
+                            Neu anlegen
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tab Navigation -->
+                <div class="flex items-center gap-2 border-b border-slate-200 bg-white px-4 pt-3 rounded-xl shadow-sm overflow-x-auto">
+                    <button type="button" onclick="switchObjektTab('stammdaten')" id="od-tab-btn-stammdaten"
+                        class="od-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 border-primary text-primary transition-all">
+                        <span class="material-symbols-outlined text-[18px]">info</span>
+                        Stammdaten
+                    </button>
+                    <button type="button" onclick="switchObjektTab('struktur')" id="od-tab-btn-struktur"
+                        class="od-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">account_tree</span>
+                        Struktur
+                    </button>
+                    <button type="button" onclick="switchObjektTab('historie')" id="od-tab-btn-historie"
+                        class="od-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">history</span>
+                        Historie
+                    </button>
+                    <button type="button" onclick="switchObjektTab('abrechnungsplaene')" id="od-tab-btn-abrechnungsplaene"
+                        class="od-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">event_repeat</span>
+                        Abrechnungspläne
+                    </button>
+                </div>
+
+                <!-- TAB 1: STAMMDATEN -->
+                <div id="od-panel-stammdaten" class="od-tab-panel flex flex-col gap-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[16px]">info</span>
+                                Stammdaten
+                            </h3>
+                            <dl id="od-stammdaten" class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm"></dl>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
+                            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[16px]">analytics</span>
+                                Kennzahlen
+                            </h3>
+                            <div id="od-kennzahlen" class="grid grid-cols-2 gap-4"></div>
+                            <div id="od-notizen" class="mt-4 text-sm text-slate-600 whitespace-pre-wrap leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100 italic hidden"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: STRUKTUR -->
+                <div id="od-panel-struktur" class="od-tab-panel hidden flex-col gap-4">
+                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px] text-primary">account_tree</span>
+                                Unterobjekte
+                            </h3>
+                            <button type="button" onclick="odEbeneHinzufuegen()"
+                                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary bg-primary/10 rounded-md hover:bg-primary/20 transition-colors">
+                                <span class="material-symbols-outlined text-[16px]">add</span>
+                                Ebene hinzufügen
+                            </button>
+                        </div>
+                        <ul id="od-struktur-baum" class="text-sm space-y-1"></ul>
+                        <div id="od-struktur-leer" class="hidden p-8 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
+                            <span class="material-symbols-outlined text-4xl text-slate-200">account_tree</span>
+                            Keine Unterobjekte vorhanden.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: HISTORIE -->
+                <div id="od-panel-historie" class="od-tab-panel hidden flex-col gap-4">
+                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+                        <div class="p-4 border-b border-slate-200 bg-slate-50 flex flex-wrap justify-between items-center gap-2">
+                            <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px] text-primary">history</span>
+                                Beleg-Historie (inkl. Unterobjekte)
+                            </h3>
+                            <div class="flex items-center gap-1" id="od-hist-filter">
+                                <button type="button" data-filter="alle" onclick="setObjektHistorieFilter('alle')"
+                                    class="od-hist-chip px-3 py-1 text-xs font-semibold rounded-full bg-primary text-white">Alle</button>
+                                <button type="button" data-filter="RE" onclick="setObjektHistorieFilter('RE')"
+                                    class="od-hist-chip px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">Nur Rechnungen</button>
+                                <button type="button" data-filter="AN" onclick="setObjektHistorieFilter('AN')"
+                                    class="od-hist-chip px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">Nur Angebote</button>
+                                <button type="button" data-filter="DAUERRECHNUNG" onclick="setObjektHistorieFilter('DAUERRECHNUNG')"
+                                    class="od-hist-chip px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">Dauerrechnungs-Läufe</button>
+                            </div>
+                        </div>
+                        <div class="overflow-auto max-h-[480px]">
+                            <table class="w-full text-left text-sm dense-table">
+                                <thead class="bg-slate-100 text-slate-600 border-b border-slate-300 sticky top-0">
+                                    <tr>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Nr.</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Typ</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Datum</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Fällig</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Status</th>
+                                        <th class="px-4 font-semibold text-right whitespace-nowrap">Netto</th>
+                                        <th class="px-4 font-semibold text-right whitespace-nowrap">Brutto</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Kunde</th>
+                                        <th class="px-4 font-semibold text-right w-20 whitespace-nowrap">Aktion</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="od-historie-body" class="divide-y divide-slate-200 text-slate-700 bg-white"></tbody>
+                                <tfoot id="od-historie-summen" class="bg-slate-50 border-t border-slate-300 text-xs font-semibold text-slate-600"></tfoot>
+                            </table>
+                        </div>
+                        <div id="od-historie-leer" class="hidden p-10 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
+                            <span class="material-symbols-outlined text-4xl text-slate-200">history</span>
+                            Keine Belege vorhanden.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: ABRECHNUNGSPLÄNE (Container, wird von F2 befüllt) -->
+                <div id="od-panel-abrechnungsplaene" class="od-tab-panel hidden flex-col gap-4">
+                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+                        <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                            <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px] text-primary">event_repeat</span>
+                                Abrechnungspläne für dieses Objekt
+                            </h3>
+                            <button type="button" onclick="odOpenPlanModal()"
+                                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary bg-primary/10 rounded-md hover:bg-primary/20 transition-colors">
+                                <span class="material-symbols-outlined text-[16px]">add</span>
+                                Plan anlegen
+                            </button>
+                        </div>
+                        <div id="od-plaene-inhalt" class="p-6"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dauerrechnungen View (F2) -->
+        <div id="view-dauerrechnungen" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+
+                <!-- KPI Cards Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Aktive Pläne</p>
+                                <h3 id="kpi-plaene-aktiv" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">event_repeat</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fällige Läufe (diesen Monat)</p>
+                                <h3 id="kpi-faellig-monat" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">schedule_send</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Dauerrechnungs-Umsatz (Monat netto)</p>
+                                <h3 id="kpi-umsatz-dauerrechnungen" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">euro</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Toolbar -->
+                <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                    <div class="flex items-center gap-2">
+                        <div class="relative">
+                            <span
+                                class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                            <input id="search-plaene"
+                                class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-56 placeholder:text-slate-400"
+                                placeholder="Plan suchen..." type="text">
+                        </div>
+                        <select id="filter-plaene-status"
+                            class="px-3 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary">
+                            <option value="alle">Alle</option>
+                            <option value="aktiv">Aktiv</option>
+                            <option value="inaktiv">Inaktiv</option>
+                            <option value="faellig">Fällig</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <label class="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer px-2">
+                            <input type="checkbox" id="dr-auto-erstellen" onchange="toggleDauerrechnungenAuto(this.checked)"
+                                class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                            Auto-Erstellung beim Start
+                        </label>
+                        <button onclick="openSammelModal()"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">receipt_long</span>
+                            Sammelrechnung erstellen
+                        </button>
+                        <button onclick="openGenerierungModal()"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+                            Fällige generieren
+                        </button>
+                        <button onclick="openPlanModal()"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">add</span>
+                            Neuer Plan
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Pläne-Tabelle -->
+                <div class="border border-slate-300 rounded-md bg-white shadow-sm overflow-hidden flex flex-col min-h-[300px]">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm dense-table">
+                            <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
+                                <tr>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Name</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Objekt</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Empfänger</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Rhythmus</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Zeitraum</th>
+                                    <th class="px-4 font-semibold text-right whitespace-nowrap">Netto</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Nächster Lauf</th>
+                                    <th class="px-4 font-semibold text-center whitespace-nowrap">Status</th>
+                                    <th class="px-4 font-semibold text-right w-64 whitespace-nowrap">Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="plaene-table-body" class="divide-y divide-slate-200 text-slate-700 bg-white"></tbody>
+                        </table>
+                    </div>
+                    <div id="plaene-leer" class="hidden p-10 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
+                        <span class="material-symbols-outlined text-4xl text-slate-200">event_repeat</span>
+                        Noch keine Abrechnungspläne angelegt.
+                    </div>
+                </div>
+
+                <!-- Läufe-Panel -->
+                <div id="laeufe-panel" class="hidden bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+                    <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                        <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[18px] text-primary">history</span>
+                            Läufe: <span id="laeufe-plan-name" class="font-bold"></span>
+                        </h3>
+                        <button onclick="closeLaeufePanel()" class="text-slate-400 hover:text-slate-600">
+                            <span class="material-symbols-outlined text-[20px]">close</span>
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm dense-table">
+                            <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
+                                <tr>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Periode</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Rechnungs-Nr.</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Datum</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Fällig</th>
+                                    <th class="px-4 font-semibold text-right whitespace-nowrap">Brutto</th>
+                                    <th class="px-4 font-semibold text-center whitespace-nowrap">Status</th>
+                                    <th class="px-4 font-semibold text-right w-28 whitespace-nowrap">Aktion</th>
+                                </tr>
+                            </thead>
+                            <tbody id="laeufe-table-body" class="divide-y divide-slate-200 text-slate-700 bg-white"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Putzplan & Leistungsverzeichnis View (F3) -->
+        <div id="view-putzplan" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Jahresstunden</p>
+                                <h3 id="kpi-lv-stunden" class="text-2xl font-bold text-slate-800 mt-1">0 h</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">schedule</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Netto / Jahr (inkl. Zuschläge)</p>
+                                <h3 id="kpi-lv-netto-jahr" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">payments</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Netto / Monat</p>
+                                <h3 id="kpi-lv-netto-monat" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">calendar_month</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Zuschläge / Jahr</p>
+                                <h3 id="kpi-lv-zuschlaege" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">trending_up</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <select id="putzplan-objekt-select"
+                            class="px-3 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary min-w-[280px]"
+                            onchange="onPutzplanSelectChange(this.value)"></select>
+                        <div class="relative">
+                            <span
+                                class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                            <input id="search-lv"
+                                class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-56 placeholder:text-slate-400"
+                                placeholder="LV suchen..." type="text" oninput="renderLvBereiche()">
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <button onclick="openZuschlagsprofilModal()"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">percent</span>
+                            Zuschlagsprofil
+                        </button>
+                        <button onclick="openLvBereichModal()"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">add</span>
+                            Bereich
+                        </button>
+                        <button id="btn-lv-uebernehmen" onclick="uebernehmeLvInPlan()"
+                            disabled
+                            class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+                            ➜ Abrechnungsplan erstellen/aktualisieren
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-1 bg-white border border-slate-200 rounded-md shadow-sm overflow-hidden self-start">
+                        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                            <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px] text-primary">account_tree</span>
+                                Objektbaum
+                            </h3>
+                        </div>
+                        <div id="putzplan-baum" class="p-2 max-h-[520px] overflow-y-auto"></div>
+                    </div>
+                    <div class="lg:col-span-2 flex flex-col gap-4">
+                        <div id="lv-bereiche-liste" class="flex flex-col gap-4"></div>
+                        <div id="lv-leer" class="hidden p-10 text-center text-slate-400 text-sm flex flex-col items-center gap-2 bg-white border border-dashed border-slate-300 rounded-md">
+                            <span class="material-symbols-outlined text-4xl text-slate-200">cleaning_services</span>
+                            Kein Leistungsverzeichnis an diesem Objekt. Legen Sie einen Leistungsbereich an.
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2561,6 +3098,73 @@
                     </div>
                 </div>
 
+                <!-- E-Mail-Versand (SMTP) Section (F10) -->
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 bg-emerald-50/50 flex items-center justify-between gap-3">
+                        <h3 class="text-base font-semibold text-emerald-800 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[20px] text-emerald-600">mail</span>
+                            E-Mail-Versand (SMTP)
+                        </h3>
+                        <button type="button" onclick="openSmtpKontoModal()"
+                            class="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded shadow-sm transition-colors">
+                            <span class="material-symbols-outlined text-[16px]">add</span>
+                            Konto hinzufügen
+                        </button>
+                    </div>
+                    <div class="p-6">
+                        <div id="smtp-konten-liste" class="flex flex-col gap-3"></div>
+                        <div id="smtp-konten-leer" class="p-4 text-center text-slate-400 text-xs">
+                            Noch kein SMTP-Konto eingerichtet – Rechnungen können noch nicht per E-Mail versendet werden.
+                        </div>
+                        <div class="mt-4 rounded-md bg-blue-50 border border-blue-200 px-4 py-3 text-xs text-blue-800 leading-relaxed">
+                            Gmail/Google Workspace: App-Passwort erforderlich (Konto mit 2-Faktor). Port 465 = SSL (implizit), Port 587 = STARTTLS.
+                            Passwörter werden verschlüsselt im Betriebssystem-Schlüsselspeicher abgelegt und niemals im Klartext angezeigt.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- E-Mail-Texte Section (F10) -->
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 bg-slate-50">
+                        <h3 class="text-base font-semibold text-slate-800 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[20px] text-primary">drafts</span>
+                            E-Mail-Texte &amp; Signatur
+                        </h3>
+                    </div>
+                    <div class="p-6 flex flex-col gap-5">
+                        <p class="text-xs text-slate-500 -mt-2">
+                            Verfügbare Platzhalter: <code class="bg-slate-100 px-1 rounded">{{kunde_name}}</code>
+                            <code class="bg-slate-100 px-1 rounded">{{nummer}}</code> <code class="bg-slate-100 px-1 rounded">{{datum}}</code>
+                            <code class="bg-slate-100 px-1 rounded">{{faelligkeit}}</code> <code class="bg-slate-100 px-1 rounded">{{betrag_brutto}}</code>
+                            <code class="bg-slate-100 px-1 rounded">{{firmenname}}</code> – leer gelassene Felder verwenden Standardtexte.
+                        </p>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Text für Rechnungen</label>
+                            <textarea id="setting-email-text-rechnung" rows="5"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-y"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Text für Mahnungen</label>
+                            <textarea id="setting-email-text-mahnung" rows="5"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-y"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Text für Angebote</label>
+                            <textarea id="setting-email-text-angebot" rows="5"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-y"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Signatur</label>
+                            <textarea id="setting-email-signatur" rows="3" placeholder="Mit freundlichen Grüßen&#10;Ihr W-LINK Team"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-y"></textarea>
+                        </div>
+                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer w-fit">
+                            <input type="checkbox" id="setting-email-pdf-kopie" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                            <span>Gesendete PDFs zusätzlich lokal im Postausgangs-Ordner speichern</span>
+                        </label>
+                    </div>
+                </div>
+
                 <!-- Save Action -->
                 <div class="flex justify-end gap-3 mt-4 mb-12">
                     <button type="button" onclick="loadEinstellungenToForm()"
@@ -2731,6 +3335,953 @@
             </div>
         </div>
 
+        <!-- Objekt Modal Overlay (F1: ein Modal für alle 4 Ebenen) -->
+        <div id="objekt-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+            <div
+                class="bg-white rounded-lg shadow-xl w-full max-w-lg border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 id="objekt-modal-title" class="text-lg font-semibold text-slate-800">Objekt anlegen</h3>
+                    <button onclick="closeObjektModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto">
+                    <form id="objekt-form" class="flex flex-col gap-4">
+                        <input type="hidden" id="objekt-modal-id">
+                        <input type="hidden" id="objekt-modal-ebene">
+
+                        <div id="objekt-modal-eltern-wrap">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Übergeordnetes Objekt <span class="text-red-500">*</span></label>
+                            <select id="objekt-modal-eltern" required
+                                class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm"></select>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div data-ebene="LIEGENSCHAFT RAUM">
+                                <label class="block text-sm font-medium text-slate-700 mb-1"><span id="objekt-modal-nr-label">Liegenschafts-Nr.</span> <span class="text-slate-400 font-normal">(Optional)</span></label>
+                                <input type="text" id="objekt-modal-nr"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm font-mono"
+                                    placeholder="z.B. L-001">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Name <span class="text-red-500">*</span></label>
+                                <input type="text" id="objekt-modal-name" required autofocus
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+
+                        <div id="objekt-modal-adresse" class="grid grid-cols-3 gap-4">
+                            <div class="col-span-3">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Straße</label>
+                                <input type="text" id="objekt-modal-strasse"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div class="col-span-1">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">PLZ</label>
+                                <input type="text" id="objekt-modal-plz"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Ort</label>
+                                <input type="text" id="objekt-modal-ort"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+
+                        <div id="objekt-modal-gebaeude-felder" class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Baujahr</label>
+                                <input type="number" id="objekt-modal-baujahr" min="1600" max="2200"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Geschosse</label>
+                                <input type="number" id="objekt-modal-geschosse" min="0"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+
+                        <div data-ebene="ETAGE">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Ebenen-Nr. <span class="text-slate-400 font-normal">(EG = 0)</span></label>
+                            <input type="number" id="objekt-modal-ebene-nummer" step="1"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                        </div>
+
+                        <div id="objekt-modal-raum-felder" class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Fläche</label>
+                                <input type="number" id="objekt-modal-flaeche" min="0" step="0.01" value="0"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Einheit</label>
+                                <select id="objekt-modal-einheit"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                    <option value="m²">m²</option>
+                                    <option value="Stk.">Stk.</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Raumtyp <span class="text-slate-400 font-normal">(frei)</span></label>
+                                <input type="text" id="objekt-modal-raumtyp"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm"
+                                    placeholder="BUERO, TREPPE, ...">
+                            </div>
+                        </div>
+
+                        <!-- Abweichender Rechnungsempfänger -->
+                        <fieldset class="border border-slate-200 rounded-md p-3">
+                            <legend class="px-1 text-xs font-bold text-slate-500 uppercase tracking-wider">Abweichender Rechnungsempfänger</legend>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="col-span-2">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Kunde</label>
+                                    <select id="objekt-modal-empfaenger-kunde" onchange="toggleEmpfaengerArt()"
+                                        class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                        <option value="">— wie übergeordnetes Objekt —</option>
+                                    </select>
+                                </div>
+                                <div class="col-span-2">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Art</label>
+                                    <select id="objekt-modal-empfaenger-art" disabled
+                                        class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm disabled:bg-slate-100 disabled:text-slate-400">
+                                        <option value="">— nicht spezifiziert —</option>
+                                        <option value="EIGENTUEMER">Eigentümer</option>
+                                        <option value="MIETER">Mieter</option>
+                                        <option value="HAUSVERWALTUNG">Hausverwaltung</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </fieldset>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Notizen</label>
+                            <textarea id="objekt-modal-notizen" rows="2"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-none"></textarea>
+                        </div>
+
+                        <div id="objekt-modal-aktiv-wrap" class="hidden">
+                            <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                <input type="checkbox" id="objekt-modal-aktiv" checked class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                <span>Aktiv</span>
+                            </label>
+                        </div>
+                    </form>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="closeObjektModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                    <button onclick="saveObjektFromModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark shadow-sm">Speichern</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- LV-Bereich Modal (F3) -->
+        <div id="lv-bereich-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-md border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 id="lv-bereich-modal-title" class="text-lg font-semibold text-slate-800">Leistungsbereich anlegen</h3>
+                    <button onclick="closeLvBereichModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto">
+                    <form id="lv-bereich-form" class="flex flex-col gap-4">
+                        <input type="hidden" id="lv-bereich-modal-id">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Name <span class="text-red-500">*</span></label>
+                            <input type="text" id="lv-bereich-modal-name" required autofocus placeholder="z.B. Unterhaltsreinigung"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Positionsnummern-Präfix</label>
+                                <input type="text" id="lv-bereich-modal-prefix" placeholder="z.B. 01."
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm font-mono">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Sortierung</label>
+                                <input type="number" id="lv-bereich-modal-sortier" value="0"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Notizen / Qualitätsstandards</label>
+                            <textarea id="lv-bereich-modal-notizen" rows="2"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-none"></textarea>
+                        </div>
+                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                            <input type="checkbox" id="lv-bereich-modal-aktiv" checked class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                            <span>Aktiv</span>
+                        </label>
+                    </form>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="closeLvBereichModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                    <button onclick="saveLvBereichFromModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark shadow-sm">Speichern</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- LV-Position Modal (F3) -->
+        <div id="lv-position-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 id="lv-position-modal-title" class="text-lg font-semibold text-slate-800">LV-Position bearbeiten</h3>
+                    <button onclick="closeLvPositionModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto">
+                    <form id="lv-position-form" class="flex flex-col gap-4">
+                        <input type="hidden" id="lv-position-modal-id">
+                        <input type="hidden" id="lv-position-modal-bereich">
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Bezeichnung <span class="text-red-500">*</span></label>
+                                <input type="text" id="lv-position-modal-bezeichnung" required placeholder="z.B. Boden feucht wischen"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Pos.-Nr.</label>
+                                <input type="text" id="lv-position-modal-nr" placeholder="01.03"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm font-mono">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Beschreibung / Tätigkeitsdetail</label>
+                            <textarea id="lv-position-modal-beschreibung" rows="2"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-none"></textarea>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Direktmenge</label>
+                                <input type="number" id="lv-position-modal-menge" min="0" step="0.01" value="0"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                <p class="mt-1 text-[11px] text-slate-400">Wird ignoriert, wenn Raum-Einträge zugewiesen sind (Fläche kommt dann aus dem Objektstamm).</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Mengeneinheit</label>
+                                <select id="lv-position-modal-einheit"
+                                    class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                    <option value="m²">m²</option>
+                                    <option value="Stk.">Stk.</option>
+                                    <option value="Raum">Raum</option>
+                                    <option value="m">m</option>
+                                    <option value="pauschal">pauschal</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Zeitbedarf (min/Einheit)</label>
+                                <input type="number" id="lv-position-modal-zeitbedarf" min="0" step="0.01" value="0"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                <p class="mt-1 text-[11px] text-slate-400">1,0 min/m² entspricht 60 m²/h.</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-4 items-end">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Turnus</label>
+                                <select id="lv-position-modal-turnus-typ" onchange="updateTurnusWertLabel()"
+                                    class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                    <option value="X_PRO_WOCHE">× pro Woche</option>
+                                    <option value="ALLE_X_TAGE">alle … Tage</option>
+                                    <option value="X_PRO_MONAT">× pro Monat</option>
+                                    <option value="JAEHRLICH">× pro Jahr</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1"><span id="lv-position-modal-turnus-label">Wert</span></label>
+                                <input type="number" id="lv-position-modal-turnus-wert" min="0.5" step="0.5" value="1"
+                                    oninput="updateLvPositionVorschau()"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Stundensatz €/h netto</label>
+                                <input type="number" id="lv-position-modal-stundensatz" min="0" step="0.05"
+                                    oninput="updateLvPositionVorschau()"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                <p class="mt-1 text-[11px] text-slate-400">0 = Profil-Standard verwenden.</p>
+                            </div>
+                        </div>
+                        <fieldset class="border border-slate-200 rounded-md p-3">
+                            <legend class="px-1 text-xs font-bold text-slate-500 uppercase tracking-wider">Zeitfenster-Zuschläge (Anteil der Jahreszeit)</legend>
+                            <div class="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">Nacht (22–5 Uhr) in %</label>
+                                    <input type="number" id="lv-position-modal-zs-nacht" min="0" max="100" step="1" value="0"
+                                        oninput="updateLvPositionVorschau()"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">Sonn-/Feiertag in %</label>
+                                    <input type="number" id="lv-position-modal-zs-sofei" min="0" max="100" step="1" value="0"
+                                        oninput="updateLvPositionVorschau()"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">Hoher Feiertag in %</label>
+                                    <input type="number" id="lv-position-modal-zs-hoher" min="0" max="100" step="1" value="0"
+                                        oninput="updateLvPositionVorschau()"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                            </div>
+                        </fieldset>
+                        <div class="grid grid-cols-2 gap-4 items-end">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">MwSt</label>
+                                <select id="lv-position-modal-mwst"
+                                    class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                    <option value="19">19 %</option>
+                                    <option value="7">7 %</option>
+                                    <option value="0">0 %</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Notizen</label>
+                                <input type="text" id="lv-position-modal-notizen"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+                        <div id="lv-position-modal-vorschau" class="rounded-md border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-slate-700 font-medium">
+                            Jahr: – · Monat: –
+                        </div>
+                        <fieldset class="border border-slate-200 rounded-md p-3">
+                            <legend class="px-1 text-xs font-bold text-slate-500 uppercase tracking-wider">Raum-/Objekt-Zuweisungen (Putzplan)</legend>
+                            <div id="lv-position-modal-eintraege-liste" class="flex flex-col gap-1"></div>
+                            <button type="button" onclick="openLvEintragModal(null, null)"
+                                class="mt-2 inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-primary bg-white border border-primary/40 rounded hover:bg-primary/5 transition-colors">
+                                <span class="material-symbols-outlined text-[14px]">add</span> Raum/Etage zuweisen
+                            </button>
+                        </fieldset>
+                    </form>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="closeLvPositionModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                    <button onclick="saveLvPositionFromModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark shadow-sm">Speichern</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- LV-Eintrag Modal (F3): Position ↔ Objekt zuweisen -->
+        <div id="lv-eintrag-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-md border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 id="lv-eintrag-modal-title" class="text-lg font-semibold text-slate-800">Objekt zuweisen</h3>
+                    <button onclick="closeLvEintragModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto">
+                    <form id="lv-eintrag-form" class="flex flex-col gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Liegenschaft / Gebäude / Etage / Raum <span class="text-red-500">*</span></label>
+                            <select id="lv-eintrag-modal-objekt"
+                                class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm"></select>
+                        </div>
+                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                            <input type="checkbox" id="lv-eintrag-modal-auto" checked onchange="toggleEintragOverride()"
+                                class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                            <span>Fläche/Menge automatisch aus Objektstamm übernehmen</span>
+                        </label>
+                        <div id="lv-eintrag-modal-override-wrap" class="hidden">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Menge überschreiben</label>
+                            <input type="number" id="lv-eintrag-modal-menge" min="0" step="0.01" value="0"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Turnus</label>
+                                <select id="lv-eintrag-modal-turnus-typ"
+                                    class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                    <option value="X_PRO_WOCHE">× pro Woche</option>
+                                    <option value="ALLE_X_TAGE">alle … Tage</option>
+                                    <option value="X_PRO_MONAT">× pro Monat</option>
+                                    <option value="JAEHRLICH">× pro Jahr</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Turnus-Wert</label>
+                                <input type="number" id="lv-eintrag-modal-turnus-wert" min="0.5" step="0.5" value="1"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Notizen</label>
+                            <input type="text" id="lv-eintrag-modal-notizen"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                        </div>
+                    </form>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="closeLvEintragModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                    <button onclick="saveLvEintragFromModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark shadow-sm">Übernehmen</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Zuschlagsprofil Modal (F3) -->
+        <div id="zuschlagsprofil-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 class="text-lg font-semibold text-slate-800">Zuschlagsprofil &amp; Kalkulationssätze</h3>
+                    <button onclick="closeZuschlagsprofilModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto">
+                    <form id="zuschlagsprofil-form" class="flex flex-col gap-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Profilname <span class="text-red-500">*</span></label>
+                                <input type="text" id="zp-profil-name" required
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Gültig ab</label>
+                                <input type="date" id="zp-gueltig-ab"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Standard-Stundensatz €/h (LG1 Unterhalt.)</label>
+                                <input type="number" id="zp-stundensatz" min="0" step="0.05"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Stundensatz Glas-/Fassadenreinigung (LG6)</label>
+                                <input type="number" id="zp-stundensatz-glas" min="0" step="0.05"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+                        <fieldset class="border border-slate-200 rounded-md p-3">
+                            <legend class="px-1 text-xs font-bold text-slate-500 uppercase tracking-wider">Zuschlagssätze (RTV/BTV)</legend>
+                            <div class="grid grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">Nacht 22–5 Uhr (%)</label>
+                                    <input type="number" id="zp-zs-nacht" min="0" max="400" step="1"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">Sonn-/Feiertag (%)</label>
+                                    <input type="number" id="zp-zs-sofei" min="0" max="400" step="1"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">Hoher Feiertag (%)</label>
+                                    <input type="number" id="zp-zs-hoher" min="0" max="400" step="1"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                            </div>
+                        </fieldset>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Wochen pro Jahr</label>
+                                <input type="number" id="zp-wochen" min="1" max="60" step="1" value="52"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Tage pro Jahr</label>
+                                <input type="number" id="zp-tage" min="1" max="380" step="1" value="365"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+                        <div class="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-800">
+                            Quellen: BIV Vergabe-Empfehlungen 01/2026, Tarifbroschüre Berlin 01/2025 – Sätze bei Tarifrunde anpassen.
+                        </div>
+                    </form>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="closeZuschlagsprofilModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                    <button onclick="saveZuschlagsprofilFromModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark shadow-sm">Speichern</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SMTP-Konto Modal (F10) -->
+        <div id="smtp-konto-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-lg border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 id="smtp-konto-modal-title" class="text-lg font-semibold text-slate-800">SMTP-Konto anlegen</h3>
+                    <button onclick="closeSmtpKontoModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto">
+                    <form id="smtp-konto-form" class="flex flex-col gap-4">
+                        <input type="hidden" id="smtp-modal-id">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Kontoname <span class="text-red-500">*</span></label>
+                                <input type="text" id="smtp-modal-name" required placeholder="z.B. Büro-Postfach" autofocus
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Server (Host) <span class="text-red-500">*</span></label>
+                                <input type="text" id="smtp-modal-host" required placeholder="smtp.example.de"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm font-mono">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 items-end">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Port</label>
+                                <select id="smtp-modal-port" onchange="onSmtpPortChange()"
+                                    class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm cursor-pointer">
+                                    <option value="587">587 (STARTTLS)</option>
+                                    <option value="465">465 (SSL/TLS)</option>
+                                    <option value="25">25 (nur intern)</option>
+                                </select>
+                            </div>
+                            <fieldset class="border border-slate-200 rounded-md p-2.5">
+                                <legend class="px-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Verbindungssicherheit</legend>
+                                <div class="flex flex-col gap-1 text-xs">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="smtp-modal-secure" id="smtp-modal-secure-off" checked class="text-primary focus:ring-primary h-3.5 w-3.5">
+                                        <span>STARTTLS (Aufrüstung)</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="smtp-modal-secure" id="smtp-modal-secure-on" class="text-primary focus:ring-primary h-3.5 w-3.5">
+                                        <span>SSL/TLS (implizit)</span>
+                                    </label>
+                                </div>
+                            </fieldset>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Benutzername <span class="text-red-500">*</span></label>
+                                <input type="text" id="smtp-modal-user" placeholder="login@mailbox.de"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Passwort</label>
+                                <input type="password" id="smtp-modal-passwort" placeholder="(unverändert – gespeichert)"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Absender-Name <span class="text-red-500">*</span></label>
+                                <input type="text" id="smtp-modal-absender-name" placeholder="Musterfirma Buchhaltung"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Absender-E-Mail <span class="text-red-500">*</span></label>
+                                <input type="email" id="smtp-modal-absender-email" placeholder="rechnungen@firma.de"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer w-fit">
+                            <input type="checkbox" id="smtp-modal-standard" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                            <span>Als Standardkonto verwenden</span>
+                        </label>
+                        <label id="smtp-modal-klartext-wrap" class="hidden items-center gap-2 text-xs text-amber-700 cursor-pointer w-fit">
+                            <input type="checkbox" id="smtp-modal-klartext" class="rounded border-amber-400 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5">
+                            <span>Unverschlüsselt speichern – NICHT empfohlen</span>
+                        </label>
+                        <div id="smtp-modal-test-ergebnis" class="hidden rounded-md px-4 py-3 text-sm"></div>
+                    </form>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-between gap-3 shrink-0">
+                    <button onclick="testSmtpConnectionFromModal()" type="button" id="smtp-modal-test-btn"
+                        class="px-4 py-2 text-sm font-semibold text-emerald-700 bg-white border border-emerald-300 rounded-md hover:bg-emerald-50 transition-colors flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[18px]">power</span>
+                        Verbindung testen
+                    </button>
+                    <div class="flex justify-end gap-3">
+                        <button onclick="closeSmtpKontoModal()" type="button"
+                            class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                        <button onclick="saveSmtpKontoFromModal()" type="button"
+                            class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark shadow-sm">Speichern</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- E-Mail-Dialog am Beleg (F10) -->
+        <div id="email-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[210] hidden flex items-center justify-center">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 class="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                        <span id="email-modal-chip" class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold uppercase bg-primary/10 text-primary border border-primary/30">Rechnung</span>
+                        <span id="email-modal-nr" class="font-mono"></span>
+                    </h3>
+                    <button onclick="closeEmailModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto flex flex-col gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Empfänger <span class="text-red-500">*</span></label>
+                        <input type="email" id="email-modal-empfaenger" placeholder="name@kunde.de"
+                            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                        <div id="email-modal-empfaenger-warnung" class="hidden mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-100 text-amber-800 border border-amber-300">Kunde hat keine E-Mail-Adresse</div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">CC</label>
+                            <input type="text" id="email-modal-cc" placeholder="cc@firma.de, cc2@firma.de"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">BCC</label>
+                            <input type="text" id="email-modal-bcc" placeholder=""
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">SMTP-Konto</label>
+                        <div class="flex items-center gap-2">
+                            <select id="email-modal-konto"
+                                class="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm"></select>
+                            <button type="button" onclick="openSmtpSetupHinweis()" id="email-modal-konto-hinweis" class="hidden shrink-0 inline-flex items-center gap-1 px-2 py-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-300 rounded hover:bg-amber-100 transition-colors">
+                                <span class="material-symbols-outlined text-[16px]">settings</span> SMTP einrichten
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Betreff <span class="text-red-500">*</span></label>
+                        <input type="text" id="email-modal-betreff"
+                            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Nachricht</label>
+                        <textarea id="email-modal-text" rows="6"
+                            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-y"></textarea>
+                    </div>
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-slate-100 border border-slate-200 text-xs text-slate-600 font-medium">
+                            <span class="material-symbols-outlined text-[16px] text-red-500">picture_as_pdf</span>
+                            <span id="email-modal-anhang">Anhang.pdf</span>
+                        </span>
+                        <label class="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-pointer">
+                            <input type="checkbox" id="email-modal-pdf-kopie" onchange="toggleEmailPdfKopie(this.checked)" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                            <span>PDF-Kopie lokal speichern</span>
+                        </label>
+                    </div>
+                    <div id="email-modal-fehler" class="hidden rounded-md bg-red-50 border border-red-300 px-4 py-3 text-sm text-red-800"></div>
+
+                    <div class="border-t border-slate-200 pt-3">
+                        <button type="button" onclick="toggleEmailHistorie()" class="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors">
+                            <span class="material-symbols-outlined text-[16px]">history</span>
+                            Versandhistorie (<span id="email-historie-anzahl">0</span>)
+                            <span id="email-historie-chevron" class="material-symbols-outlined text-[16px] transition-transform">expand_more</span>
+                        </button>
+                        <div id="email-historie-panel" class="hidden mt-2">
+                            <table class="w-full text-left text-xs dense-table border border-slate-200 rounded overflow-hidden">
+                                <thead class="bg-slate-100 text-slate-600 border-b border-slate-200">
+                                    <tr>
+                                        <th class="px-2 py-1.5 font-semibold">Datum</th>
+                                        <th class="px-2 py-1.5 font-semibold">Status</th>
+                                        <th class="px-2 py-1.5 font-semibold">Empfänger</th>
+                                        <th class="px-2 py-1.5 font-semibold">Versuche</th>
+                                        <th class="px-2 py-1.5 font-semibold">Aktion</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="email-historie-body" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="closeEmailModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                    <button onclick="sendeBelegEmailFromModal()" type="button" id="email-modal-send-btn"
+                        class="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md shadow-sm transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                        <span class="material-symbols-outlined text-[18px]">send</span>
+                        Senden
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Abrechnungsplan Modal Overlay (F2) -->
+        <div id="plan-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+            <div
+                class="bg-white rounded-lg shadow-xl w-full max-w-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 id="plan-modal-title" class="text-lg font-semibold text-slate-800">Abrechnungsplan anlegen</h3>
+                    <button onclick="closePlanModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto">
+                    <form id="plan-form" class="flex flex-col gap-4">
+                        <input type="hidden" id="plan-modal-id">
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Planname <span class="text-red-500">*</span></label>
+                            <input type="text" id="plan-modal-name" required autofocus
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm"
+                                placeholder="z.B. Unterhaltsreinigung Bürohaus">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Objekt <span class="text-red-500">*</span></label>
+                            <select id="plan-modal-objekt" onchange="updatePlanEmpfaengerPreview()"
+                                class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                <option value="">Bitte wählen...</option>
+                            </select>
+                            <p id="plan-modal-empfaenger-preview" class="text-xs mt-1.5 text-slate-500"></p>
+                        </div>
+
+                        <fieldset class="border border-slate-200 rounded-md p-3">
+                            <legend class="px-1 text-xs font-bold text-slate-500 uppercase tracking-wider">Rhythmus</legend>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Intervall</label>
+                                    <select id="plan-modal-rhythmus" onchange="togglePlanRhythmusFelder()"
+                                        class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                        <option value="MONATLICH">Monatlich</option>
+                                        <option value="QUARTALSWEISE">Quartalsweise</option>
+                                        <option value="JAEHRLICH">Jährlich</option>
+                                        <option value="WOCHEN_INTERVALL">Wochenintervall</option>
+                                    </select>
+                                </div>
+                                <div id="plan-modal-tag-wrap">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Abrechnungstag (1–31)</label>
+                                    <input type="number" id="plan-modal-abrechnungstag" min="1" max="31" value="1"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                    <p class="text-[11px] text-slate-400 mt-1">31. wird auf Monatsende gekürzt.</p>
+                                </div>
+                                <div id="plan-modal-monat-wrap" class="hidden">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Abrechnungsmonat</label>
+                                    <select id="plan-modal-abrechnungsmonat"
+                                        class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm"></select>
+                                </div>
+                                <div id="plan-modal-wochen-wrap" class="hidden">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Intervall (Wochen)</label>
+                                    <input type="number" id="plan-modal-intervall-wochen" min="1" value="2"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                            </div>
+                            <div class="mt-3 flex items-center gap-4">
+                                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="radio" name="plan-modus" value="NACHTRAEGLICH" checked class="text-primary focus:ring-primary">
+                                    nachträglich
+                                </label>
+                                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="radio" name="plan-modus" value="VORAUS" class="text-primary focus:ring-primary">
+                                    im Voraus
+                                </label>
+                            </div>
+                        </fieldset>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Startdatum <span class="text-red-500">*</span></label>
+                                <input type="date" id="plan-modal-start" required
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Enddatum <span class="text-slate-400 font-normal">(leer = unbefristet)</span></label>
+                                <input type="date" id="plan-modal-ende"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+
+                        <fieldset class="border border-slate-200 rounded-md p-3">
+                            <legend class="px-1 text-xs font-bold text-slate-500 uppercase tracking-wider">Preis</legend>
+                            <div class="flex items-center gap-4 mb-3">
+                                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="radio" name="plan-preis-modus" value="PAUSCHALE" checked onchange="togglePlanPreisModus()" class="text-primary focus:ring-primary">
+                                    Pauschale
+                                </label>
+                                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="radio" name="plan-preis-modus" value="POSITIONEN" onchange="togglePlanPreisModus()" class="text-primary focus:ring-primary">
+                                    Positionen
+                                </label>
+                            </div>
+                            <div id="plan-modal-pauschale-wrap" class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Pauschale netto (€)</label>
+                                    <input type="number" id="plan-modal-pauschale-netto" min="0" step="0.01"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">MwSt.-Satz</label>
+                                    <select id="plan-modal-mwst"
+                                        class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                        <option value="19">19 %</option>
+                                        <option value="7">7 %</option>
+                                        <option value="0">0 %</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="plan-modal-positionen-wrap" class="hidden">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-50 text-slate-500">
+                                        <tr>
+                                            <th class="px-2 py-1.5 font-semibold">Artikel / Bezeichnung</th>
+                                            <th class="px-2 py-1.5 font-semibold w-16">Menge</th>
+                                            <th class="px-2 py-1.5 font-semibold w-20">Einheit</th>
+                                            <th class="px-2 py-1.5 font-semibold w-20">Preis</th>
+                                            <th class="px-2 py-1.5 font-semibold w-16">MwSt</th>
+                                            <th class="w-8"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="plan-modal-positionen-body"></tbody>
+                                </table>
+                                <button type="button" onclick="addPlanPosition()"
+                                    class="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors">
+                                    <span class="material-symbols-outlined text-[16px]">add</span>
+                                    Position
+                                </button>
+                            </div>
+                            <div id="plan-modal-preise-live-wrap" class="hidden mt-3">
+                                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="checkbox" id="plan-modal-preise-live" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                    Preise live vom Artikelkatalog übernehmen
+                                </label>
+                                <p class="text-xs text-slate-500 mt-1 ml-6">An: Positionen mit Artikellink nutzen den <strong>aktuellen</strong> Verkaufspreis bei jeder Rechnungsgenerierung. Aus (Standard): Preise werden beim Speichern eingefroren; Preisänderung über Plan bearbeiten.</p>
+                            </div>
+                        </fieldset>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Zahlungsziel (Tage)</label>
+                                <input type="number" id="plan-modal-zahlungsziel" min="0" value="14"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div class="flex items-end pb-2">
+                                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="checkbox" id="plan-modal-als-entwurf" checked class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                    Als Entwurf erstellen (vor Buchung prüfen)
+                                </label>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Bemerkung</label>
+                            <textarea id="plan-modal-bemerkung" rows="2"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-none"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="closePlanModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                    <button onclick="savePlanFromModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark shadow-sm">Speichern</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Generierung Vorschau Modal (F2) -->
+        <div id="generierung-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+            <div
+                class="bg-white rounded-lg shadow-xl w-full max-w-3xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 class="text-lg font-semibold text-slate-800">Fällige Dauerrechnungen</h3>
+                    <button onclick="closeGenerierungModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto flex-1">
+                    <div id="generierung-liste" class="flex flex-col gap-2"></div>
+                    <div id="generierung-leer" class="hidden p-8 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
+                        <span class="material-symbols-outlined text-4xl text-slate-200">task_alt</span>
+                        Keine fälligen Läufe.
+                    </div>
+                    <div class="mt-4 flex items-center gap-4">
+                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                            <input type="radio" name="generierung-art" value="einzeln" checked class="text-primary focus:ring-primary">
+                            Einzeln je Objekt
+                        </label>
+                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                            <input type="radio" name="generierung-art" value="sammel" class="text-primary focus:ring-primary">
+                            Sammelrechnung je Eigentümer (nur Gruppen mit ≥ 2 Läufen)
+                        </label>
+                    </div>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3 shrink-0">
+                    <div class="text-sm font-semibold text-slate-600">Σ ausgewählt: <span id="generierung-summe" class="font-bold text-slate-800">€0,00</span></div>
+                    <div class="flex gap-3">
+                        <button onclick="closeGenerierungModal()" type="button"
+                            class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                        <button onclick="fuehreGenerierungAus()" type="button"
+                            class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark shadow-sm">Rechnungen jetzt erstellen</button>
+                    </div>
+                </div>
+                <div id="generierung-ergebnis" class="hidden px-6 py-4 border-t border-slate-200 bg-green-50 text-sm max-h-40 overflow-y-auto"></div>
+            </div>
+        </div>
+
+        <!-- Sammelrechnung Modal (F2) -->
+        <div id="sammel-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+            <div
+                class="bg-white rounded-lg shadow-xl w-full max-w-xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 class="text-lg font-semibold text-slate-800">Sammelrechnung erstellen</h3>
+                    <button onclick="closeSammelModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto flex-1 space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Rechnungsempfänger (mit ≥ 2 offenen Läufen)</label>
+                        <select id="sammel-modal-empfaenger" onchange="renderSammelLaeufe()"
+                            class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            <option value="">Bitte wählen...</option>
+                        </select>
+                    </div>
+                    <div id="sammel-laeufe-liste" class="flex flex-col gap-1.5"></div>
+                    <p id="sammel-hinweis" class="text-xs text-slate-400"></p>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="closeSammelModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                    <button onclick="fuehreSammelrechnungAus()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark shadow-sm">Sammelrechnung erstellen</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lauf-Storno Modal (F2) -->
+        <div id="storno-lauf-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] hidden flex items-center justify-center">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-md border border-slate-200 overflow-hidden flex flex-col">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 class="text-lg font-semibold text-slate-800">Lauf stornieren</h3>
+                    <button onclick="closeStornoLaufModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 space-y-4">
+                    <p class="text-sm text-slate-600">Der Lauf wird GoBD-konform als STORNIERT protokolliert. Eine Begründung ist Pflicht.</p>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Begründung <span class="text-red-500">*</span></label>
+                        <textarea id="storno-lauf-grund" rows="3"
+                            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-none"
+                            placeholder="Grund für das Storno ..."></textarea>
+                    </div>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="closeStornoLaufModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                    <button onclick="bestaetigeStornoLauf()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm">Stornieren</button>
+                </div>
+            </div>
+        </div>
+
 
 
         <!-- Rechnung Erstellen Modal -->
@@ -2801,6 +4352,16 @@
                                         <select id="rechnung-projekt"
                                             class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
                                             <option value="">Kein Projekt</option>
+                                            <!-- JS populated -->
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Objekt
+                                            zuordnen
+                                            (Optional)</label>
+                                        <select id="rechnung-objekt"
+                                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                            <option value="">Kein Objekt</option>
                                             <!-- JS populated -->
                                         </select>
                                     </div>
@@ -3322,6 +4883,11 @@
                     <span class="material-symbols-outlined text-[18px]">print</span>
                     Drucken
                 </button>
+                <button id="pdf-preview-email-btn"
+                    class="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm shadow-lg shadow-emerald-900/30">
+                    <span class="material-symbols-outlined text-[18px]">mail</span>
+                    Per E-Mail senden
+                </button>
                 <button id="pdf-preview-save-btn" onclick="executePrint('save')"
                     class="flex items-center gap-2 bg-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-medium transition-colors text-sm shadow-lg shadow-primary/30">
                     <span class="material-symbols-outlined text-[18px]">save</span>
@@ -3660,11 +5226,17 @@
     <script src="controllers/NachtragController.js"></script>
     <script src="controllers/BautagebuchController.js"></script>
     <script src="controllers/ControllingController.js"></script>
+    <script src="controllers/ObjektController.js"></script>
     <script src="js/navigation.js"></script>
     <script src="js/kunden.js"></script>
     <script src="js/artikel.js"></script>
     <script src="js/dashboard.js"></script>
     <script src="js/projekte.js"></script>
+    <script src="js/objekte.js"></script>
+    <script src="controllers/DauerrechnungController.js"></script>
+    <script src="js/dauerrechnungen.js"></script>
+    <script src="controllers/ReinigungController.js"></script>
+    <script src="js/putzplan.js"></script>
     <script src="js/editor.js"></script>
     <script src="js/einstellungen.js"></script>
     <script src="js/berichte.js"></script>

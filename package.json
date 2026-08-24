@@ -68,6 +68,7 @@
     "@cantoo/pdf-lib": "^2.9.1",
     "better-sqlite3": "^12.6.2",
     "fontkit": "^2.0.4",
+    "nodemailer": "^9.0.5",
     "qrcode": "^1.5.4"
   }
 }

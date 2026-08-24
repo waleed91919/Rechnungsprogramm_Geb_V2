@@ -9,6 +9,9 @@ async function init() {
             state.rechnungen = dbState.rechnungen || [];
             state.angebote = dbState.angebote || [];
             state.projekte = dbState.projekte || [];
+            state.objekte = dbState.objekte || { liegenschaften: [], gebaeude: [], etagen: [], raeume: [] };
+            state.abrechnungsplaene = dbState.abrechnungsplaene || [];
+            state.dauerrechnungLaeufe = dbState.dauerrechnungLaeufe || [];
 
             // Merge settings
             if (dbState.einstellungen) {
@@ -20,6 +23,18 @@ async function init() {
 
             // Auto-update overdue invoices
             await checkOverdueInvoices();
+
+            // Dauerrechnungen F2: fällige Entwürfe beim App-Start nachziehen (max. 1×/Tag)
+            try {
+                if (window.api.dauerrechnungenAutoRun && state.einstellungen.dauerrechnungen_auto_erstellen !== 'false') {
+                    const autoRes = await window.api.dauerrechnungenAutoRun();
+                    if (autoRes && autoRes.ausgefuehrt && autoRes.erstellteAnzahl > 0) {
+                        showToast(`${autoRes.erstellteAnzahl} Dauerrechnungs-Entwürfe erstellt`, 'success');
+                    }
+                }
+            } catch (e) {
+                console.warn('Dauerrechnungen Auto-Run:', e);
+            }
         }
     } catch (e) {
         console.error("Failed to load state from DB:", e);

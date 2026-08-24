@@ -6,6 +6,12 @@ const state = {
     rechnungen: [],
     angebote: [],
     projekte: [],
+    objekte: {
+        liegenschaften: [],
+        gebaeude: [],
+        etagen: [],
+        raeume: []
+    },
     einstellungen: {
         firmenname: 'W-LINK ERP',
         adresse: 'Musterstraße 1\n12345 Musterstadt',

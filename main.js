@@ -133,6 +133,24 @@ function printToPdfWithTimeout(contents, timeoutMs = ZUGFERD_SICHTSEITE_TIMEOUT_
 function setupIpc() {
     const { db, dbAPI, appendAuditLog } = require('./db');
 
+    // --- E-Mail-Versand (F10): Service mit injizierten Abhängigkeiten ---
+    const emailService = (() => {
+        const { createEmailService } = require('./main/email');
+        return createEmailService({
+            db,
+            appendAuditLog,
+            getEinstellung: (key) => {
+                const row = db.prepare('SELECT value FROM einstellungen WHERE key=?').get(key);
+                return row ? row.value : null;
+            },
+            saveEinstellung: (key, value) => {
+                db.prepare('INSERT OR REPLACE INTO einstellungen (key, value) VALUES (?, ?)').run(key, value);
+                return { success: true };
+            },
+            outboxDir: path.join(app.getPath('userData'), 'email-outbox')
+        });
+    })();
+
     // Generic error wrapper for IPC handlers
     const wrapHandler = (fn) => async (event, ...args) => {
         try {
@@ -371,6 +389,234 @@ function setupIpc() {
         }
         return await dbAPI.saveProjekt(projekt);
     }));
+
+    // --- Objektverwaltung (F1) ---
+    const OBJEKT_TYPEN = ['LIEGENSCHAFT', 'GEBAEUDE', 'ETAGE', 'RAUM'];
+
+    ipcMain.handle('db:getObjektBaum', wrapHandler(async () => {
+        return await dbAPI.getObjektBaum();
+    }));
+
+    ipcMain.handle('db:saveLiegenschaft', wrapHandler(async (e, data) => {
+        if (!data || typeof data !== 'object' || !data.name || !String(data.name).trim()) {
+            throw new Error('Ungültige Liegenschafts-Daten');
+        }
+        return await dbAPI.saveLiegenschaft(data);
+    }));
+
+    ipcMain.handle('db:deleteLiegenschaft', wrapHandler(async (e, id) => {
+        if (typeof id !== 'number') throw new Error('Ungültige Liegenschaft-ID');
+        return await dbAPI.deleteLiegenschaft(id);
+    }));
+
+    ipcMain.handle('db:saveGebaeude', wrapHandler(async (e, data) => {
+        if (!data || typeof data !== 'object' || !data.name || !String(data.name).trim()) {
+            throw new Error('Ungültige Gebäude-Daten');
+        }
+        if (typeof data.liegenschaft_id !== 'number') throw new Error('Ungültige Gebäude-Daten');
+        return await dbAPI.saveGebaeude(data);
+    }));
+
+    ipcMain.handle('db:deleteGebaeude', wrapHandler(async (e, id) => {
+        if (typeof id !== 'number') throw new Error('Ungültige Gebäude-ID');
+        return await dbAPI.deleteGebaeude(id);
+    }));
+
+    ipcMain.handle('db:saveEtage', wrapHandler(async (e, data) => {
+        if (!data || typeof data !== 'object' || !data.name || !String(data.name).trim()) {
+            throw new Error('Ungültige Etagen-Daten');
+        }
+        if (typeof data.gebaeude_id !== 'number') throw new Error('Ungültige Etagen-Daten');
+        return await dbAPI.saveEtage(data);
+    }));
+
+    ipcMain.handle('db:deleteEtage', wrapHandler(async (e, id) => {
+        if (typeof id !== 'number') throw new Error('Ungültige Etage-ID');
+        return await dbAPI.deleteEtage(id);
+    }));
+
+    ipcMain.handle('db:saveRaum', wrapHandler(async (e, data) => {
+        if (!data || typeof data !== 'object' || !data.name || !String(data.name).trim()) {
+            throw new Error('Ungültige Raum-Daten');
+        }
+        if (typeof data.etage_id !== 'number') throw new Error('Ungültige Raum-Daten');
+        if (data.flaeche != null && data.flaeche !== '' && (isNaN(parseFloat(data.flaeche)) || parseFloat(data.flaeche) < 0)) {
+            throw new Error('Ungültige Fläche');
+        }
+        return await dbAPI.saveRaum(data);
+    }));
+
+    ipcMain.handle('db:deleteRaum', wrapHandler(async (e, id) => {
+        if (typeof id !== 'number') throw new Error('Ungültige Raum-ID');
+        return await dbAPI.deleteRaum(id);
+    }));
+
+    ipcMain.handle('db:getObjektDetails', wrapHandler(async (e, objektTyp, objektId) => {
+        if (!OBJEKT_TYPEN.includes(objektTyp)) throw new Error('Ungültiger Objekttyp');
+        if (typeof objektId !== 'number') throw new Error('Ungültige Objekt-ID');
+        return await dbAPI.getObjektDetails(objektTyp, objektId);
+    }));
+
+    ipcMain.handle('db:getObjektHistorie', wrapHandler(async (e, objektTyp, objektId, optionen = {}) => {
+        if (!OBJEKT_TYPEN.includes(objektTyp)) throw new Error('Ungültiger Objekttyp');
+        if (typeof objektId !== 'number') throw new Error('Ungültige Objekt-ID');
+        return await dbAPI.getObjektHistorie(objektTyp, objektId, optionen.includeKinder !== false);
+    }));
+
+    // --- Dauerrechnungen (F2) ---
+    ipcMain.handle('db:getAbrechnungsplaene', wrapHandler(async (e, filter = {}) => {
+        return await dbAPI.getAbrechnungsplaene(filter || {});
+    }));
+
+    ipcMain.handle('db:saveAbrechnungsplan', wrapHandler(async (e, plan, positionen = []) => {
+        if (!plan || typeof plan !== 'object') {
+            throw new Error('Ungültige Plan-Daten');
+        }
+        if (!Array.isArray(positionen)) {
+            throw new Error('Ungültige Plan-Positionen');
+        }
+        return await dbAPI.saveAbrechnungsplan(plan, positionen);
+    }));
+
+    ipcMain.handle('db:deleteAbrechnungsplan', wrapHandler(async (e, id) => {
+        if (typeof id !== 'number') throw new Error('Ungültige Plan-ID');
+        return await dbAPI.deleteAbrechnungsplan(id);
+    }));
+
+    ipcMain.handle('db:updateAbrechnungsplanStatus', wrapHandler(async (e, id, aktiv) => {
+        if (typeof id !== 'number') throw new Error('Ungültige Plan-ID');
+        return await dbAPI.updateAbrechnungsplanStatus(id, aktiv);
+    }));
+
+    ipcMain.handle('db:getPlanLaeufe', wrapHandler(async (e, planId) => {
+        if (typeof planId !== 'number') throw new Error('Ungültige Plan-ID');
+        return await dbAPI.getPlanLaeufe(planId);
+    }));
+
+    ipcMain.handle('db:dauerrechnungenVorschau', wrapHandler(async (e, stichdatum = null) => {
+        return await dbAPI.dauerrechnungenVorschau(stichdatum);
+    }));
+
+    ipcMain.handle('db:generiereFaelligeRechnungen', wrapHandler(async (e, optionen = {}) => {
+        if (!optionen || typeof optionen !== 'object') {
+            throw new Error('Ungültige Generierungs-Optionen');
+        }
+        return await dbAPI.generiereFaelligeRechnungen(optionen);
+    }));
+
+    ipcMain.handle('db:generiereSammelrechnung', wrapHandler(async (e, payload = {}) => {
+        if (!payload || typeof payload.kundeId !== 'number' || !Array.isArray(payload.laufIds)) {
+            throw new Error('Ungültige Sammelrechnung-Daten');
+        }
+        const laeufe = payload.laufIds.length > 0 && typeof payload.laufIds[0] === 'object'
+            ? payload.laufIds
+            : payload.laufIds.map(id => ({ laufId: id }));
+        return await dbAPI.erzeugeSammelrechnung(payload.kundeId, laeufe);
+    }));
+
+    ipcMain.handle('db:storniereLauf', wrapHandler(async (e, laufId, grund) => {
+        if (typeof laufId !== 'number') throw new Error('Ungültige Lauf-ID');
+        return await dbAPI.storniereLauf(laufId, grund);
+    }));
+
+    ipcMain.handle('db:autoRunDauerrechnungen', wrapHandler(async () => {
+        return await dbAPI.autoRunDauerrechnungen();
+    }));
+
+    // --- Putzplan/Reinigungs-LV (F3) ---
+    ipcMain.handle('db:getPutzplan', wrapHandler(async (e, objektTyp, objektId) => {
+        if (!OBJEKT_TYPEN.includes(objektTyp)) throw new Error('Ungültiger Objekttyp');
+        if (typeof objektId !== 'number') throw new Error('Ungültige Objekt-ID');
+        return await dbAPI.getPutzplan(objektTyp, objektId);
+    }));
+
+    ipcMain.handle('db:saveLvBereich', wrapHandler(async (e, data) => {
+        if (!data || typeof data !== 'object' || !data.name || !String(data.name).trim()) {
+            throw new Error('Ungültige Bereichs-Daten');
+        }
+        return await dbAPI.saveLvBereich(data);
+    }));
+
+    ipcMain.handle('db:deleteLvBereich', wrapHandler(async (e, id) => {
+        if (typeof id !== 'number') throw new Error('Ungültige Bereichs-ID');
+        return await dbAPI.deleteLvBereich(id);
+    }));
+
+    ipcMain.handle('db:saveLvPosition', wrapHandler(async (e, data, eintraege = []) => {
+        if (!data || typeof data !== 'object') throw new Error('Ungültige Positions-Daten');
+        if (!Array.isArray(eintraege)) throw new Error('Ungültige Eintragsliste');
+        return await dbAPI.saveLvPosition(data, eintraege);
+    }));
+
+    ipcMain.handle('db:deleteLvPosition', wrapHandler(async (e, id) => {
+        if (typeof id !== 'number') throw new Error('Ungültige Positions-ID');
+        return await dbAPI.deleteLvPosition(id);
+    }));
+
+    ipcMain.handle('db:getZuschlagsProfil', wrapHandler(async () => {
+        return await dbAPI.getZuschlagsProfil();
+    }));
+
+    ipcMain.handle('db:saveZuschlagsProfil', wrapHandler(async (e, profil) => {
+        if (!profil || typeof profil !== 'object') throw new Error('Ungültige Profildaten');
+        return await dbAPI.saveZuschlagsProfil(profil);
+    }));
+
+    ipcMain.handle('db:uebernehmeLvInAbrechnungsplan', wrapHandler(async (e, payload = {}) => {
+        if (!payload || typeof payload !== 'object') throw new Error('Ungültige Übernahme-Daten');
+        return await dbAPI.uebernehmeLvInAbrechnungsplan(payload);
+    }));
+
+    // --- E-Mail-Versand (F10) ---
+    ipcMain.handle('smtp:getKonten', wrapHandler(async () => {
+        return emailService.ladeKonten();
+    }));
+
+    ipcMain.handle('smtp:saveKonto', wrapHandler(async (e, konto) => {
+        if (!konto || typeof konto !== 'object') throw new Error('Ungültige Konto-Daten');
+        return await emailService.speichereKonto(konto);
+    }));
+
+    ipcMain.handle('smtp:deleteKonto', wrapHandler(async (e, id) => {
+        if (typeof id !== 'string' || !id.trim()) throw new Error('Ungültige Konto-ID');
+        return emailService.loescheKonto(id);
+    }));
+
+    ipcMain.handle('smtp:testConnection', wrapHandler(async (e, konto) => {
+        if (!konto || typeof konto !== 'object') throw new Error('Ungültige Konto-Daten');
+        return await emailService.testeVerbindung(konto);
+    }));
+
+    ipcMain.handle('smtp:sendBeleg', wrapHandler(async (event, payload = {}) => {
+        if (!payload || typeof payload !== 'object') throw new Error('Ungültige Versand-Daten');
+        let pdfBuffer = toPdfBuffer(payload.basePdfBuffer);
+        if (!pdfBuffer && event.sender && !event.sender.isDestroyed()) {
+            try {
+                pdfBuffer = toPdfBuffer(await printToPdfWithTimeout(event.sender));
+            } catch (_err) {
+                pdfBuffer = null;
+            }
+        }
+        return await emailService.sendeBeleg(payload, pdfBuffer);
+    }));
+
+    ipcMain.handle('smtp:wiederholeVersand', wrapHandler(async (event, historieId, basePdfBuffer = null) => {
+        if (typeof historieId !== 'number') throw new Error('Ungültige Historie-ID');
+        let pdfBuffer = toPdfBuffer(basePdfBuffer);
+        if (!pdfBuffer && event.sender && !event.sender.isDestroyed()) {
+            try {
+                pdfBuffer = toPdfBuffer(await printToPdfWithTimeout(event.sender));
+            } catch (_err) {
+                pdfBuffer = null;
+            }
+        }
+        return await emailService.wiederhole(historieId, pdfBuffer);
+    }));
+
+    ipcMain.handle('smtp:getVersandhistorie', wrapHandler(async (e, belegTyp = null, belegId = null) => {
+        return emailService.getVersandhistorie(belegTyp || null, belegId != null ? Number(belegId) : null);
+    }));
+
 
     // Einstellungen
     ipcMain.handle('db:saveEinstellung', wrapHandler(async (e, key, val) => {

@@ -68,6 +68,8 @@ function calculateDocumentContentHash(doc) {
         unterliegt_13b: normBool(doc.unterliegt_13b),
         leitweg_id: normText(doc.leitweg_id),
         buyer_reference: normText(doc.buyer_reference),
+        objekt_typ: normText(doc.objekt_typ),
+        objekt_id: doc.objekt_id || null,
         positionen: (doc.positionen || []).map(p => ({
             name: normText(p.name),
             artikelId: p.artikelId || null,

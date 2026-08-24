@@ -234,6 +234,33 @@ function applyRechnungReadOnlyMode(existing, form, submitBtn) {
     delBtns.forEach(b => b.classList.add('hidden'));
 }
 
+function setzeRechnungObjektSelect(existing) {
+    const objektSel = document.getElementById('rechnung-objekt');
+    if (!objektSel) return;
+    if (existing && existing.objekt_typ && existing.objekt_id) {
+        const wert = `${existing.objekt_typ}:${existing.objekt_id}`;
+        objektSel.value = objektSel.querySelector(`option[value="${wert}"]`) ? wert : '';
+    } else {
+        objektSel.value = '';
+    }
+}
+
+function fuegeDauerrechnungsChipHinzu(existing) {
+    if (!existing || typeof existing !== 'object') return;
+    const istSammel = existing.rechnungsart === 'SAMMELRECHNUNG';
+    const planName = !istSammel && existing.vortext && existing.vortext.includes('Abrechnungsplan')
+        ? (String(existing.vortext).split('"')[1] || null)
+        : null;
+    if (!istSammel && !planName) return;
+
+    const titleEl = document.getElementById('rechnung-modal-title');
+    if (!titleEl) return;
+    const chip = document.createElement('span');
+    chip.className = 'bg-purple-100 text-purple-800 text-xs font-bold px-2 py-1 rounded ml-2 align-middle inline-flex items-center gap-1';
+    chip.innerHTML = `<span class="material-symbols-outlined text-[14px]">event_repeat</span>${istSammel ? 'SAMMELRECHNUNG' : `Aus Abrechnungsplan "${planName}"`}`;
+    titleEl.appendChild(chip);
+}
+
 function applyRechnungEditMode(existing, form, submitBtn) {
     document.getElementById('rechnung-modal-title').innerText = 'Rechnung Bearbeiten';
 
@@ -248,11 +275,12 @@ function applyRechnungEditMode(existing, form, submitBtn) {
     document.getElementById('rechnung-id').value = existing.id;
     document.getElementById('rechnung-kunde').value = existing.kundeId;
     document.getElementById('rechnung-projekt').value = existing.projektId || '';
+    setzeRechnungObjektSelect(existing);
     document.getElementById('rechnung-nr').value = existing.nr;
     document.getElementById('rechnung-datum').value = existing.datum;
     document.getElementById('rechnung-faellig').value = existing.faellig;
     document.getElementById('rechnung-status').value = existing.status;
-    
+
     document.getElementById('rechnung-art').value = existing.rechnungsart || 'REGULAER';
     document.getElementById('rechnung-leistungszeitraum-von').value = existing.leistungszeitraum_von || '';
     document.getElementById('rechnung-leistungszeitraum-bis').value = existing.leistungszeitraum_bis || '';
@@ -373,6 +401,7 @@ function openRechnungModal() {
         } else if (existing) {
             applyRechnungEditMode(existing, form, submitBtn);
         }
+        fuegeDauerrechnungsChipHinzu(existing);
     } else {
         applyRechnungNewMode(form, submitBtn);
     }
@@ -439,6 +468,7 @@ function applyAngebotEditMode(existing, form, submitBtn) {
     document.getElementById('rechnung-id').value = existing.id;
     document.getElementById('rechnung-kunde').value = existing.kundeId;
     document.getElementById('rechnung-projekt').value = existing.projektId || '';
+    setzeRechnungObjektSelect(existing);
     document.getElementById('rechnung-nr').value = existing.nr;
     document.getElementById('rechnung-datum').value = existing.datum;
     document.getElementById('rechnung-faellig').value = existing.faellig;
@@ -507,6 +537,7 @@ function populateSelects() {
     const kSelect = document.getElementById('rechnung-kunde');
     const pKundeSelect = document.getElementById('projekt-kunde');
     const rProjSelect = document.getElementById('rechnung-projekt');
+    const rObjektSelect = document.getElementById('rechnung-objekt');
 
     kSelect.innerHTML = '';
     const optDefaultK = document.createElement('option');
@@ -549,6 +580,32 @@ function populateSelects() {
             opt.textContent = p.name;
             rProjSelect.appendChild(opt);
         });
+    }
+
+    if (rObjektSelect) {
+        rObjektSelect.innerHTML = '';
+        const optDefaultO = document.createElement('option');
+        optDefaultO.value = '';
+        optDefaultO.textContent = 'Kein Objekt';
+        rObjektSelect.appendChild(optDefaultO);
+
+        const OC = window.ObjektController;
+        if (OC && state.objekte) {
+            const eintraege = [
+                { typ: 'LIEGENSCHAFT', liste: state.objekte.liegenschaften || [] },
+                { typ: 'GEBAEUDE', liste: state.objekte.gebaeude || [] },
+                { typ: 'ETAGE', liste: state.objekte.etagen || [] },
+                { typ: 'RAUM', liste: state.objekte.raeume || [] }
+            ];
+            eintraege.forEach(({ typ, liste }) => {
+                liste.forEach(knoten => {
+                    const opt = document.createElement('option');
+                    opt.value = `${typ}:${knoten.id}`;
+                    opt.textContent = OC.buildPfad(typ, knoten.id, state.objekte);
+                    rObjektSelect.appendChild(opt);
+                });
+            });
+        }
     }
 
     // Populate datalist for article autocomplete
@@ -1148,6 +1205,8 @@ function calculateRechnungTotals() {
 async function saveRechnung() {
     const kundeId = document.getElementById('rechnung-kunde').value;
     const projektId = document.getElementById('rechnung-projekt').value;
+    const objektWert = document.getElementById('rechnung-objekt') ? document.getElementById('rechnung-objekt').value : '';
+    const [objektTyp, objektIdStr] = objektWert ? objektWert.split(':') : [null, null];
     const datum = document.getElementById('rechnung-datum').value;
     const faellig = document.getElementById('rechnung-faellig').value;
     const status = document.getElementById('rechnung-status').value || 'Ausstehend';
@@ -1164,6 +1223,8 @@ async function saveRechnung() {
         faellig,
         kundeId: kundeId ? parseInt(kundeId) : null,
         projektId: projektId ? parseInt(projektId) : null,
+        objekt_typ: objektTyp || null,
+        objekt_id: objektIdStr ? parseInt(objektIdStr) : null,
         positionen: [...(state.currentRechnungPositionen || [])],
         netto: state.currentRechnungTotals ? state.currentRechnungTotals.netto : 0,
         steuer: state.currentRechnungTotals ? state.currentRechnungTotals.steuer : 0,
@@ -1540,3 +1601,283 @@ async function openAufmassModalForPosition(posId) {
     }, einheit);
 }
 
+
+// --- E-Mail-Versand (F10): Beleg per SMTP senden ---
+const EMAIL_STANDARD_TEXTE = {
+    RECHNUNG: 'Guten Tag {{kunde_name}},\n\nanbei erhalten Sie die Rechnung {{nummer}} vom {{datum}} über {{betrag_brutto}}.\nDie Zahlung wird fällig am {{faelligkeit}}.\n\nMit freundlichen Grüßen\n{{firmenname}}',
+    MAHNUNG: 'Guten Tag {{kunde_name}},\n\ntrotz Fälligkeit ist die Rechnung {{nummer}} über {{betrag_brutto}} (fällig am {{faelligkeit}}) noch offen.\nWir bitten um Begleichung bzw. Rückmeldung.\n\nMit freundlichen Grüßen\n{{firmenname}}',
+    ANGEBOT: 'Guten Tag {{kunde_name}},\n\nanbei erhalten Sie unser Angebot {{nummer}} vom {{datum}} über {{betrag_brutto}}.\nFür Rückfragen stehen wir gerne zur Verfügung.\n\nMit freundlichen Grüßen\n{{firmenname}}'
+};
+
+function fuelleEmailTemplate(typ, kontext) {
+    const templateKey = typ === 'MAHNUNG' ? 'email_text_mahnung' : (typ === 'ANGEBOT' ? 'email_text_angebot' : 'email_text_rechnung');
+    const basis = (state.einstellungen && state.einstellungen[templateKey]) || EMAIL_STANDARD_TEXTE[typ] || '';
+    return basis.replace(/\{\{\s*([a-zA-Z_]+)\s*\}\}/g, (voll, schluessel) => {
+        if (!(schluessel in kontext)) return '';
+        const wert = kontext[schluessel];
+        if (schluessel === 'betrag_brutto') {
+            return typeof wert === 'number' ? wert.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €' : String(wert == null ? '' : wert);
+        }
+        return wert == null ? '' : String(wert);
+    });
+}
+
+function collectBelegEmailContext() {
+    if (state.belegEmailKontext && state.belegEmailKontext.beleg_typ === 'MAHNUNG') {
+        const template = document.getElementById('print-template');
+        if (template && template.innerHTML.includes('Mahnung')) {
+            const k = state.belegEmailKontext;
+            const kundeMahn = state.kunden.find(ku => parseInt(ku.id) === parseInt(k.kundeId)) || {};
+            return { ...k, kunde: kundeMahn };
+        }
+        state.belegEmailKontext = null;
+    }
+
+    const { currentDoc, customer } = collectERechnungExportData();
+    const existingIdVal = document.getElementById('rechnung-id') ? document.getElementById('rechnung-id').value : '';
+    const belegId = existingIdVal ? parseInt(existingIdVal) : null;
+    if (!belegId) {
+        return { fehler: 'Bitte speichern Sie den Beleg zuerst, bevor Sie ihn per E-Mail versenden.' };
+    }
+    return {
+        beleg_typ: state.isAngebotMode ? 'ANGEBOT' : 'RECHNUNG',
+        beleg_id: belegId,
+        nr: currentDoc.nr,
+        brutto: currentDoc.brutto,
+        datum: currentDoc.datum,
+        faelligkeit: currentDoc.faellig,
+        kunde: customer,
+        currentDoc
+    };
+}
+
+async function openBelegEmailModal() {
+    const kontext = collectBelegEmailContext();
+    if (kontext.fehler) {
+        showToast(kontext.fehler, 'error');
+        return;
+    }
+
+    const chipEl = document.getElementById('email-modal-chip');
+    chipEl.textContent = kontext.beleg_typ === 'MAHNUNG' ? `Mahnung Stufe ${kontext.mahnstufe || 1}` : (kontext.beleg_typ === 'ANGEBOT' ? 'Angebot' : 'Rechnung');
+    document.getElementById('email-modal-nr').textContent = kontext.nr || '';
+
+    const empfaengerEl = document.getElementById('email-modal-empfaenger');
+    empfaengerEl.value = kontext.kunde.email || '';
+    document.getElementById('email-modal-empfaenger-warnung').classList.toggle('hidden', !!kontext.kunde.email);
+
+    document.getElementById('email-modal-cc').value = '';
+    document.getElementById('email-modal-bcc').value = '';
+
+    const firmenname = state.einstellungen.firmenname || '';
+    let betreffVorschlag;
+    if (kontext.beleg_typ === 'MAHNUNG') betreffVorschlag = `${kontext.mahnstufe || 1}. Mahnung zu Rechnung ${kontext.nr}`;
+    else if (kontext.beleg_typ === 'ANGEBOT') betreffVorschlag = `Angebot ${kontext.nr} – ${firmenname}`;
+    else betreffVorschlag = `Rechnung ${kontext.nr} – ${firmenname}`;
+    document.getElementById('email-modal-betreff').value = betreffVorschlag;
+
+    const signatur = state.einstellungen.email_signatur || '';
+    const textVorschlag = fuelleEmailTemplate(kontext.beleg_typ, {
+        kunde_name: kontext.kunde.name || '',
+        nummer: kontext.nr || '',
+        datum: kontext.datum || '',
+        faelligkeit: kontext.faelligkeit || '',
+        betrag_brutto: typeof kontext.brutto === 'number' ? kontext.brutto : parseFloat(kontext.brutto) || 0,
+        firmenname
+    });
+    document.getElementById('email-modal-text').value = signatur ? `${textVorschlag}\n\n${signatur}` : textVorschlag;
+
+    document.getElementById('email-modal-anhang').textContent =
+        `${kontext.beleg_typ === 'MAHNUNG' ? 'Mahnung' : (kontext.beleg_typ === 'ANGEBOT' ? 'Angebot' : 'Rechnung')}_${String(kontext.nr).replace(/[\\/:*?"<>|]/g, '_')}.pdf`;
+
+    document.getElementById('email-modal-pdf-kopie').checked = state.einstellungen.email_pdf_kopie_speichern === 'true';
+
+    const fehlerEl = document.getElementById('email-modal-fehler');
+    fehlerEl.classList.add('hidden');
+
+    await ladeEmailKontoSelect();
+
+    const m = document.getElementById('email-modal');
+    m.dataset.belegTyp = kontext.beleg_typ;
+    m.dataset.belegId = kontext.beleg_id;
+    m.dataset.mahnstufe = kontext.mahnstufe || '';
+    m.classList.remove('hidden');
+    m.classList.add('flex');
+
+    await ladeEmailHistorie(kontext.beleg_typ, kontext.beleg_id);
+}
+
+async function ladeEmailKontoSelect() {
+    const sel = document.getElementById('email-modal-konto');
+    const hinweisBtn = document.getElementById('email-modal-konto-hinweis');
+    sel.innerHTML = '<option value="">– kein Konto vorhanden –</option>';
+    let konten = [];
+    try {
+        konten = await window.api.getSmtpKonten();
+    } catch (_e) { /* ignore */ }
+
+    if (konten.length === 0) {
+        hinweisBtn.classList.remove('hidden');
+        return;
+    }
+    hinweisBtn.classList.add('hidden');
+
+    sel.innerHTML = '';
+    konten.forEach(konto => {
+        const opt = document.createElement('option');
+        opt.value = konto.id;
+        opt.textContent = `${konto.name} (${konto.absender_email})`;
+        if (konto.ist_standard) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
+function openSmtpSetupHinweis() {
+    closeEmailModal();
+    closePdfPreview();
+    switchView('einstellungen');
+    setTimeout(() => openSmtpKontoModal(), 300);
+}
+
+function closeEmailModal() {
+    const m = document.getElementById('email-modal');
+    m.classList.add('hidden');
+    m.classList.remove('flex');
+}
+
+async function sendeBelegEmailFromModal() {
+    const m = document.getElementById('email-modal');
+    const fehlerEl = document.getElementById('email-modal-fehler');
+    const empfaenger = document.getElementById('email-modal-empfaenger').value.trim();
+    const betreff = document.getElementById('email-modal-betreff').value.trim();
+    fehlerEl.classList.add('hidden');
+
+    if (!empfaenger || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(empfaenger)) {
+        fehlerEl.textContent = 'Bitte eine gültige Empfänger-E-Mail-Adresse eingeben.';
+        fehlerEl.classList.remove('hidden');
+        return;
+    }
+    if (!betreff) {
+        fehlerEl.textContent = 'Bitte einen Betreff eingeben.';
+        fehlerEl.classList.remove('hidden');
+        return;
+    }
+
+    const payload = {
+        beleg_typ: m.dataset.belegTyp,
+        beleg_id: parseInt(m.dataset.belegId),
+        mahnstufe: m.dataset.mahnstufe ? parseInt(m.dataset.mahnstufe) : undefined,
+        empfaenger,
+        cc: document.getElementById('email-modal-cc').value.trim() || undefined,
+        bcc: document.getElementById('email-modal-bcc').value.trim() || undefined,
+        betreff,
+        text: document.getElementById('email-modal-text').value,
+        konto_id: document.getElementById('email-modal-konto').value || undefined
+    };
+
+    const sendBtn = document.getElementById('email-modal-send-btn');
+    sendBtn.disabled = true;
+    try {
+        let vorherigesTemplateHtml = null;
+        if (payload.beleg_typ !== 'MAHNUNG' && typeof window.renderInvoiceForZugferdExport === 'function') {
+            const { currentDoc, customer } = collectERechnungExportData();
+            try {
+                vorherigesTemplateHtml = await window.renderInvoiceForZugferdExport(currentDoc, customer);
+            } catch (renderErr) {
+                console.warn('E-Mail-Sichtseite konnte nicht gerendert werden:', renderErr);
+            }
+        }
+
+        let res;
+        try {
+            res = await window.api.sendBelegEmail(payload);
+        } finally {
+            if (vorherigesTemplateHtml !== null && typeof window.restorePrintTemplateContent === 'function') {
+                window.restorePrintTemplateContent(vorherigesTemplateHtml);
+            }
+        }
+
+        if (res && res.success) {
+            showToast(`E-Mail erfolgreich versendet an ${empfaenger}.`, 'success');
+            closeEmailModal();
+        } else {
+            fehlerEl.textContent = (res && res.fehlermeldung) || 'Unbekannter Fehler beim Versand.';
+            fehlerEl.classList.remove('hidden');
+            showToast(`E-Mail-Versand fehlgeschlagen: ${(res && res.fehlermeldung) || ''}`, 'error');
+        }
+        await ladeEmailHistorie(payload.beleg_typ, payload.beleg_id);
+    } catch (e) {
+        fehlerEl.textContent = e.message || String(e);
+        fehlerEl.classList.remove('hidden');
+    } finally {
+        sendBtn.disabled = false;
+    }
+}
+
+function toggleEmailPdfKopie(checked) {
+    state.einstellungen.email_pdf_kopie_speichern = checked ? 'true' : 'false';
+    window.api.saveEinstellung('email_pdf_kopie_speichern', checked ? 'true' : 'false')
+        .catch(e => console.warn('PDF-Kopie-Einstellung nicht gespeichert:', e));
+}
+
+async function ladeEmailHistorie(belegTyp, belegId) {
+    const anzahlEl = document.getElementById('email-historie-anzahl');
+    const body = document.getElementById('email-historie-body');
+    body.innerHTML = '';
+    let zeilen = [];
+    try {
+        zeilen = await window.api.getVersandhistorie(belegTyp, belegId);
+    } catch (_e) { /* ignore */ }
+    anzahlEl.textContent = String(zeilen.length);
+
+    if (zeilen.length === 0) {
+        body.innerHTML = '<tr><td colspan="5" class="px-2 py-3 text-center text-slate-400 italic">Noch keine E-Mails zu diesem Beleg versendet.</td></tr>';
+        return;
+    }
+
+    zeilen.forEach(zeile => {
+        const tr = document.createElement('tr');
+        const statusBadge = zeile.status === 'VERSANDT'
+            ? '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-green-100 text-green-800">Versandt</span>'
+            : '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-red-100 text-red-700" title="' + sanitize(zeile.fehlermeldung || '') + '">Fehler</span>';
+        const datumAnzeige = zeile.gesendet_am ? new Date(zeile.gesendet_am).toLocaleString('de-DE') : '-';
+        tr.innerHTML = `
+            <td class="px-2 py-1.5 whitespace-nowrap">${datumAnzeige}</td>
+            <td class="px-2 py-1.5">${statusBadge}</td>
+            <td class="px-2 py-1.5 truncate max-w-[160px]" title="${sanitize(zeile.empfaenger)}">${sanitize(zeile.empfaenger)}</td>
+            <td class="px-2 py-1.5 text-center">${Number(zeile.versuche || 1)}</td>
+            <td class="px-2 py-1.5 text-right"></td>`;
+        const aktionTd = tr.lastElementChild;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.title = 'Versand wiederholen';
+        btn.className = 'text-slate-400 hover:text-primary p-0.5 transition-colors';
+        btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">replay</span>';
+        btn.onclick = () => wiederholeEmailVersandAusHistorie(Number(zeile.id), zeile.beleg_typ, Number(zeile.beleg_id));
+        aktionTd.appendChild(btn);
+        body.appendChild(tr);
+    });
+}
+
+function toggleEmailHistorie() {
+    const panel = document.getElementById('email-historie-panel');
+    const chevron = document.getElementById('email-historie-chevron');
+    panel.classList.toggle('hidden');
+    chevron.style.transform = panel.classList.contains('hidden') ? '' : 'rotate(180deg)';
+}
+
+async function wiederholeEmailVersandAusHistorie(historieId, belegTyp, belegId) {
+    try {
+        const res = await window.api.wiederholeEmailVersand(historieId, null);
+        if (res && res.success) {
+            showToast('E-Mail erneut versendet.', 'success');
+        } else {
+            showToast(`Erneuter Versand fehlgeschlagen: ${(res && res.fehlermeldung) || ''}`, 'error');
+        }
+    } catch (e) {
+        showToast(e.message || 'Wiederholen fehlgeschlagen.', 'error');
+    }
+    await ladeEmailHistorie(belegTyp, belegId);
+}
+
+window.openBelegEmailModal = openBelegEmailModal;

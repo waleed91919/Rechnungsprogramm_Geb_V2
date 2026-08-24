@@ -31,6 +31,26 @@ const viewConfig = {
         subtitle: 'Rentabilitätsübersicht',
         action: (query) => { if (typeof renderProjekte === 'function') renderProjekte(query); }
     },
+    objekte: {
+        title: 'Objektverwaltung',
+        subtitle: 'Liegenschaften & Gebäude',
+        action: () => { if (typeof renderObjekte === 'function') renderObjekte(); }
+    },
+    dauerrechnungen: {
+        title: 'Dauerrechnungen',
+        subtitle: 'Abrechnungspläne & Läufe',
+        action: () => { if (typeof renderDauerrechnungen === 'function') renderDauerrechnungen(); }
+    },
+    putzplan: {
+        title: 'Putzplan & Leistungsverzeichnis',
+        subtitle: 'Flächen, Turni, Zuschläge',
+        action: () => { if (typeof renderPutzplan === 'function') renderPutzplan(); }
+    },
+    'objekt-details': {
+        title: 'Objekt-Detail',
+        subtitle: 'Struktur & Historie',
+        action: () => { if (typeof refreshObjektDetails === 'function') refreshObjektDetails(); }
+    },
     berichte: {
         title: 'Umsatzsteuerberechnung',
         subtitle: 'Berichte',
@@ -45,7 +65,7 @@ const viewConfig = {
 
 const views = [
     'dashboard', 'rechnungen', 'artikel', 'kunden', 'angebote',
-    'projekte', 'projekt-details', 'berichte', 'einstellungen'
+    'projekte', 'projekt-details', 'objekte', 'objekt-details', 'dauerrechnungen', 'putzplan', 'berichte', 'einstellungen'
 ];
 
 function switchView(viewName) {

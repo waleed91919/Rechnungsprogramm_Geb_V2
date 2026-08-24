@@ -62,6 +62,18 @@ window.InvoiceView = class InvoiceView {
             };
         }
 
+        // 3b. Per E-Mail senden Button (F10)
+        const emailBtn = document.getElementById('pdf-preview-email-btn');
+        if (emailBtn) {
+            emailBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (typeof window.openBelegEmailModal === 'function') {
+                    window.openBelegEmailModal();
+                }
+            };
+        }
+
         // 4. Backdrop-Klick außerhalb des Rechnungs-Papiers schließt Modal
         const scrollWrapper = document.getElementById('pdf-preview-scroll-wrapper');
         if (scrollWrapper) {
