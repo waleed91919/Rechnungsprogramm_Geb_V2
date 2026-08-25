@@ -1,0 +1,551 @@
+================================================================================
+RECHERCHE & VALIDIERUNG: 3 WEB-RECHERCHE-SUBAGENTS (Stand: 25.08.2026)
+Basis: Session Summaries 23./24./25.08.2026 + Datei 7 (IST-Stand) + Datei 8 (Roadmap)
+Zweck: Prüfen (a) ob die umgesetzten Module technisch/fachlich RICHTIG sind,
+       (b) ob Bau-/Gebäudeunternehmen genau das brauchen oder etwas anderes.
+Methode: 3 parallele Recherche-Subagents, nur Internet-Quellen (2025/2026),
+         KEIN Code geändert. Alle Quellen-URLs am Ende der jeweiligen Sektion.
+================================================================================
+
+================================================================================
+TEIL A - E-RECHNUNG / ZUGFeRD / GoBD (Agent 1)
+================================================================================
+
+A.1 PDF/A-3-Container (EmbeddedFile, AF, XMP, OutputIntent)
+VERDICT: RICHTIG MIT EINSCHRÄNKUNG
+[+] /AFRelationship /Alternative ist für Profile >= BASIC verpflichtend
+    ("Data" nur bei MINIMUM/BASIC-WL; "Source" führt zu Ablehnung) - korrekt.
+[+] Eintragung in /Names/EmbeddedFiles UND /AF im Catalog - korrekt.
+[-] KRITISCH ZU PRÜFEN: XMP-Namespace! Seit ZUGFeRD 2.1 muss der
+    Factur-X-Namespace verwendet werden:
+      urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#  (Präfix fx)
+    mit Properties DocumentType=INVOICE, DocumentFileName, Version,
+    ConformanceLevel + PDF/A-Extension-Schema (pdfaExtension:schemas).
+    Falls stattdessen urn:zugferd:...2p0# geschrieben wird -> moderne
+    Validatoren/Mustang/Eingangssysteme lehnen ab.
+[-] Dateiname heute: factur-x.xml (XRechnung-Profil alternativ xrechnung.xml);
+    zugferd-invoice.xml gilt als Legacy.
+[-] XMP-ConformanceLevel und Profil-URN im XML
+    (GuidelineSpecifiedDocumentContextParameter) MÜSSEN übereinstimmen -
+    häufigste Fehlerquelle.
+[-] Typische veraPDF/PDF-A-3b-Bemängelungen: falscher OutputIntent (sRGB
+    IEC61966-2.1 nötig), nicht eingebettete/subsettierte Fonts, falsche
+    XMP-Namespace-Deklaration (xmlns:about statt rdf:about), Dateien nicht
+    im /AF-Array, Verschlüsselung/JavaScript.
+[-] Versionsdrift beachten: ZUGFeRD 2.3.3 (05/2025) -> Factur-X 1.08/ZUGFeRD
+    2.4 gültig ab 15.01.2026 -> aktuell Factur-X 1.09.2/ZUGFeRD 2.5.2 (08/2026).
+
+A.2 EN 16931 CII: BG-23 USt-Aufschlüsselung & Leitweg-ID (BT-10)
+VERDICT: RICHTIG MIT EINSCHRÄNKUNG
+[+] ApplicableTradeTax unter ApplicableHeaderTradeSettlement mit
+    CalculatedAmount(BT-117)/BasisAmount(BT-116)/CategoryCode(BT-118)/
+    RateApplicablePercent(BT-119) + TypeCode=VAT = exaktes BG-23-Mapping.
+[!] Formulierung präzisieren: Es gibt kein separates Feld "buyer_reference"
+    NEBEN der Leitweg-ID. BT-10 IST die BuyerReference; die Leitweg-ID wird
+    IN BT-10 eingetragen. XRechnung: BT-10 Pflicht (BR-DE-15a/b).
+    Leitweg-FORMAT nur bei B2G-Empfängern; B2B = freie Käuferreferenz.
+    Unser "Vorrang leitweg_id > buyer_reference" ist praktisch richtig,
+    semantisch unscharf formuliert.
+
+A.3 §13b UStG in E-Rechnungen (Kategorie AE)
+VERDICT: FALSCH - HÖCHSTE PRIORITÄT ZU FIXEN (P0)
+[X] ExemptionReasonCode heißt VATEX-EU-AE (Codeliste "VATEX"), NICHT "VTEX".
+    Genau für Kategorie AE vorgesehen, erfüllt BR-AE-10. Kategorie AE mit
+    0% und Steuerbetrag 0 ist richtig (BR-AE-9 verlangt BT-117=0).
+[X] GESETZLICHER PFlichttext fehlt: § 14a Abs. 5 S. 1 UStG verlangt zwingend
+    den Hinweis "Steuerschuldnerschaft des Leistungsempfängers".
+    KoSIT/FeRD ordnen diesen Wortlaut explizit BT-120 (ExemptionReasonText) zu.
+    Unser Text "Steuer nicht erhoben gemäß § 13b UStG" allein erfüllt die
+    Pflichtangabe möglicherweise NICHT -> formell fehlerhafte Rechnung,
+    Vorsteuerabzug beim Empfänger gefährdet.
+FIX: BT-120 = "Steuerschuldnerschaft des Leistungsempfängers"
+     (+ ergänzend §13b-Verweis möglich), BT-121 = VATEX-EU-AE.
+[!] Konsistenz: Auch alle betroffenen Positionen müssen Kategorie AE tragen
+    (BR-AE-1 ff.), vollständige BG-23-Zeile (BT-116..119) nicht vergessen.
+
+A.4 Einheitscodes UN/ECE Rec 20
+VERDICT: RICHTIG
+[+] m²->MTK, m³->MTQ, Std->HUR, Tag->DAY, Stk->H87, Pausch->C62 - alle korrekt;
+    genau diese Codes sind auch Standard bei Peppol/XRechnung.
+
+A.5 Sicherheitseinbehalt (VOB/B 5%) als TotalPrepaidAmount (BT-113)
+VERDICT: RICHTIG MIT EINSCHRÄNKUNG (technisch valide, semantisch zweitbeste)
+[+] EN 16931 hat KEIN eigenes Feld für Einbehalte. BT-113 mindert BT-115
+    korrekt (BR-CO-16), lässt Netto/USt unverändert -> steuerlich sauber.
+[X] FALSCH wäre negative BG-20-Allowance: würde Bemessungsgrundlage und USt
+    mindern - Einbehalt ist aber rechtlich vollwertiges Entgelt (Haufe).
+    Diese Variante ist steuerlich riskant - wir haben sie (richtig) vermieden.
+EMPFEHLUNG (Best Practice): BT-113 beibehalten, ABER ergänzen:
+    - BT-20 Zahlungsbedingungen mit Textkonvention analog KoSIT/FeRD-
+      Skonto-Muster, z.B. #EINBEHALT#PROZENT=5.00#GRUND=VOB/B§17#
+    - BT-22 Invoice-Note mit Basis/Prozent/Laufzeit/Ablösehinweis
+    Sonst bucht der Empfänger den Betrag fälschlich als "schon bezahlt".
+[HINWEIS] BMF hat bauspezifische Erleichterungen angekündigt: Leistungs-
+    beschreibung als menschenlesbare Anlage bis 30.06.2030 zulässig;
+    GAEB-Anlage optional strukturiert beilegen. KoSIT/FeRD mappen
+    "vereinnahmte Teilentgelte der Endrechnung" ebenfalls auf BT-113/BT-115.
+
+A.6 Keine Fake-USt-ID: schemeID VA / FC
+VERDICT: RICHTIG
+[+] CII: schemeID VA = VAT registration number (BT-31/BT-48 USt-IdNr.),
+    FC = Fiscal number (BT-32 Steuernummer). VA nur bei echter USt-IdNr.,
+    FC für Steuernummer = exakt korrekt. Erfundener VA-Wert wäre Inhaltsfehler
+    mit Vorsteuerabzug-Risiko beim Empfänger.
+
+A.7 GoBD: Hash-Kette, Festschreibung, Sperrlogik
+VERDICT: RICHTIG MIT EINSCHRÄNKUNG (Ansatz gut; klassische GoBD-Pflichtteile
+liegen außerhalb der DB)
+[+] Hash-Kette in derselben Transaktion = starker Beitrag zur Unveränderbarkeit
+    (GoBD Rz. 58-59, 108 ff.). GoBD fordert Hash-Ketten NICHT - freiwilliges Mehr.
+[-] FEHLEND für volle GoBD-Konformität:
+    1. Benutzerkennung/Mandantenkennung in audit_logs (wer/wann/was)
+    2. Verfahrensdokumentation als Dokument, versioniert, identisch zur
+       eingesetzten Programmversion (Rz. 106 ff., 151 ff.) - reine Technik
+       ersetzt sie nicht; Fehlen = "formeller Mangel mit sachlichem Gewicht"
+    3. Aufbewahrungsfristen: seit BEG IV (01.01.2025) 8 Jahre Buchungsbelege/
+       Rechnungen (§147 AO, §14b UStG), 10 Jahre Bücher/Abschlüsse/
+       Verfahrensdoku - Fristenmanagement fehlt
+    4. Datenzugriffsschnittstelle Z1-Z3 (seit GoBD-Änderung 14.07.2025
+       verschärftes Z2: maschinell auswertbar herausgeben); XML-Teil von
+       ZUGFeRD-Rechnungen archivieren
+    5. Backup/Wiederherstellungskonzept + Zugriffsschutz (Grundanforderung)
+[+] Entsperren mit Pflichtbegründung + Protokollierung passt zum
+    Kenntlichmachungsgrundsatz; zusätzlich Zeitstempel + Nutzer erfassen.
+
+A.8 Gesetzliche Pflicht & Timeline (B2B) - Stand August 2026
+VERDICT: RICHTIG (bestätigt)
+- Seit 01.01.2025: Empfangspflicht (auch Kleinunternehmer); Ausstellung freiwillig.
+- Bis 31.12.2026: "Sonstige Rechnung" (Papier immer; PDF per Mail mit Zustimmung).
+- Ab 01.01.2027: Ausstellungspflicht bei Vorjahresumsatz > 800.000 EUR.
+- Ab 01.01.2028: Ausstellungspflicht für alle übrigen; Kleinunternehmer dauerhaft
+  von Ausstellungspflicht ausgenommen (§34a UStDV), aber empfangspflichtig.
+KONSEQUENZ: Bis mindestens Ende 2026 (je Größe bis Ende 2027) müssen Papier/PDF
+weiter erzeugbar bleiben, parallel E-Rechnung. Dual-Versand konfigurierbar halten.
+Bau-Spezial: BMF-Erleichterungen bis 30.06.2030 (LV als menschenlesbare Anlage).
+
+A.9 Peppol-Relevanz
+VERDICT: RICHTIG (optional, kein Zwang) -> ROADMAP-PRIORITÄT SENKEN
+- Peppol = Transportnetz, kein Format. Deutscher B2B-Versand per E-Mail mit
+  ZUGFeRD/XRechnung-Anhang genügt ausdrücklich (BMF).
+- Relevant erst bei: Behörden (auch dort gehen ZRE/OZG-RE/Webportal/E-Mail),
+  Konzernkunden mit angebundenem Rechnungseingang, internationale Partner.
+- Eigenen Access Point betreiben lohnt nie im Mittelstand -> falls später,
+  über Dienstleister/API anbinden. XRechnung 3.0 und Peppol BIS >= 3.0.18 sind
+  über das German National Ruleset weitgehend angleichiert - späterer Kanal
+  kostet dann wenig Mehraufwand.
+
+A.10 Priorisierte Empfehlungen aus Teil A
+P0: BT-120 auf "Steuerschuldnerschaft des Leistungsempfängers" normieren +
+    BT-121=VATEX-EU-AE (ersetzt "VTEX"); XMP-Namespace gegen
+    urn:factur-x:...1p0#/factur-x.xml verifizieren.
+P0: Integrierte Validierung vor Versand (Schematron/KoSIT-Validator oder
+    Online-Validator-Anbindung, Bericht archivieren - BMF empfiehlt
+    Validierungsnachweis ausdrücklich).
+P1: Einbehalt: BT-20/BT-22-Erklärtext (Basis, %, §17 VOB/B, Sperrkonto-Hinweis).
+P1: GoBD: Benutzerkennung ins audit_logs, Verfahrensdokumentation generieren,
+    Export für Betriebsprüfung (Z2), Aufbewahrungsfristen 8/10 Jahre steuern.
+P2: Dual-Versand (PDF + ZUGFeRD) bis Ende 2027 konfigurierbar; Leitweg-Format-
+    Regex-Validierung nur für echte B2G-Fälle.
+P3: Optionale Peppol-Anbindung über Partner-API statt Eigenbau.
+
+QUELLEN TEIL A:
+- https://gpdf.com/blog/validating-zugferd-with-mustang
+- https://gpdf.com/blog/pdfa-3-explained-and-how-to-verify
+- https://github.com/phax/kaltblut (README)
+- https://itextpdf.com/blog/technical-notes/creating-zugferd-itext
+- https://fnfe-mpe.org/factur-x/factur-x_en/
+- https://www.invoice-converter.com/en/resources/xrechnung/bt-10-buyer-reference-leitweg-id
+- https://e-rechnung-bund.de/faq/was-regelt-der-standard-xrechnung/
+- https://xeinkauf.de/xrechnung/ustg/
+- https://verax-check.de/de/lexikon/bt/bt-121-befreiungscode-code
+- https://docs.peppol.eu/poacc/billing/3.0/codelist/vatex/
+- https://www.gesetze-im-internet.de/ustg_1980/__13b.html
+- https://service.unece.org/trade/uncefact/vocabulary/rec20/
+- https://docs.peppol.eu/poacc/billing/3.0/codelist/UNECERec20/
+- https://github.com/OpenPEPPOL/peppol-bis-invoice-3 (uom.adoc)
+- https://xeinkauf.de/app/uploads/2025/07/Empfehlungen_Pflichtangaben_E-Rechnung_gem_UStG_20250725.pdf
+- https://finisma.de/blog/skonto-e-rechnung
+- https://www.haufe.de/id/beitrag/4-sicherheiten-am-bau-1-sicherheit-durch-einbehalt-HI16113689.html
+- https://kostenlose-erechnung.de/ratgeber/sicherheitseinbehalt-bauvertrag-rechnung/
+- https://github.com/ConnectingEurope/eInvoicing-EN16931/issues/419
+- https://erechnung.berlin/cii/
+- https://www.bundesfinanzministerium.de/Content/DE/Downloads/BMF_Schreiben/Weitere_Steuerthemen/Abgabenordnung/2025-07-14-GoBD-2-aenderung.pdf
+- https://www.bundesfinanzministerium.de/Content/DE/FAQ/e-rechnung.html
+- https://www.kmlz.de/de/gobd-2025-was-ist-neu-verfahrensdokumentation-rueckt-staerker-den-fokus-der-finanzverwaltung
+- https://www.grantthornton.de/themen/2026/e-rechnungspflicht-2027-die-wichtigsten-fragen-und-antworten-zur-e-rechnung/
+- https://norman.finance/de/blog/peppol-e-rechnung
+- https://xeinkauf.de/app/uploads/2022/11/CIUSse_im_Peppol_Kontext.pdf
+
+================================================================================
+TEIL B - PUTZPLAN / REINIGUNGS-LV / RTV-TARIFDATEN (Agent 2)
+================================================================================
+
+B.1 RTV Gebäudereinigung - Zuschläge (RTV gefasst 31.10.2019)
+VERDICT: STIMMT TEILWEISE - EIN SATZ IST FALSCH
+[+] Nachtarbeit (22-5 Uhr) +30% - KORREKT (§3 Ziff. 4.7 lit. a)
+[+] Sonn-/Feiertagsarbeit +80% - KORREKT (lit. b)
+[X] Hohe Feiertage +200% - Satz korrekt, ABER Kreis hat sich geändert:
+    Nur noch Neujahr, 1. Mai, 1.+2. Weihnachtsfeiertag!
+    Ostersonntag/Pfingstsonntag fallen seit RTV 2019 unter Sonn-/Feiertag (+80%)
+    (im alten RTV 2011 waren sie noch bei 200%). Feiertagskalender je
+    Bundesland + Sonntag-Logik einbauen.
+[X] "Mehrarbeit +25%" - EXISTIERT SO IM RTV 2019 NICHT MEHR!
+    Ersetzt durch Belastungszuschlag: +25% für Arbeitszeit über 8 h/Tag
+    ODER alternativ über die 40. Wochenstunde (§10 Ziff. 3 RTV).
+    Pauschales "Überstunden +25%" kann zu falscher Lohnauszahlung führen.
+[+] Ergänzend existent: Erschwerniszuschläge §10 (0,50-3,00 EUR/h bzw. %-Zuschläge
+    für Schutzausrüstung), Höchstarbeitszeit 39 h/Woche.
+[+] Allgemeinverbindlichkeit: Ja, RTV 31.10.2019 allgemeinverbindlich ab
+    01.01.2020 (BMAS-Bekanntmachung 05.04.2020).
+[+] Tarifrunden 2024-2026: Nur Lohntarifvertrag neu (15.11.2024, Laufzeit
+    01.01.2025-31.12.2026, zweistufige Erhöhung). Zuschlagssätze unverändert.
+    Tarifwerk läuft 31.12.2026 aus - neue Runde 2027 steht an.
+
+B.2 Branchenmindestlohn ab 01.01.2026
+VERDICT: STIMMT TEILWEISE (Sätze korrekt, Lohngruppen-Anzahl falsch)
+[+] LG 1 = 15,00 EUR/h, LG 6 = 18,40 EUR/h ab 01.01.2026 - exakt korrekt
+    (2. Stufe TV v. 15.11.2024; 10. GebäudeArbbV, BGBl. 28.01.2025,
+    in Kraft 01.02.2025 bis 31.12.2026).
+[X] Es gibt NEUN Lohngruppen (LG 1 - LG 9), nicht sechs!
+    Nur LG 1 und LG 6 sind als Branchenmindestlöhne allgemeinverbindlich
+    (Zoll-Kontrolle); übrige Gruppen binden nur tarifgebundene Betriebe.
+    Beispielwerte 2026: LG2 15,46 / LG3 15,95 / LG4 16,66 / LG7 19,39 /
+    LG8 20,42 / LG9 21,64 EUR. Bei LG5 widersprechen sich Quellen -
+    Datenmodell flexibel pflegbar halten.
+[!] Ab 01.01.2027: KEINE Sätze festgelegt. Branchentarif läuft 31.12.2026 aus.
+    Druck hoch, da gesetzlicher Mindestlohn auf 14,60 EUR steigt
+    (Abstand schrumpft auf 0,40 EUR) -> starke Preiserhöhungs-/PAK-Dynamik
+    2027 = Chance für Preisanpassungs-Assistent in der Software.
+
+B.3 "BTV"
+VERDICT: UNKLAR - unsere Lösung ist trotzdem vertretbar
+- Mehrere gezielte Suchen ("BTV-Satzwerk", "BTV Glasreinigung Kalkulation")
+  liefern KEINERLEI Treffer zu einem tariflichen/brancheneigenen Satzwerk.
+- Neben RTV + Lohntarifvertrag + GebäudeArbbV existiert öffentlich kein
+  "BTV-Dienstleistungs-Satzwerk". "Satzwerk" ist primär Software-Terminologie
+  (z.B. BSS.CLEAN Tarifgrundmodul/Bruttobewertung), kein Rechtsbegriff.
+- Möglicherweise interner Modulname einer Altsoftware oder Verwechslung.
+FAZIT: Umsetzung als frei benennbares Zuschlagsprofil ist korrekt - solange
+die UI nicht suggeriert, es handle sich um einen tariflichen Standard.
+EMPFEHLUNG: Preset neutral benennen (z.B. "Eigenes Zuschlagsprofil"),
+RTV-Preset mit korrigierten Sätzen aus B.1 anbieten, in Hilfe klarstellen,
+dass kein tarifliches BTV-Werk existiert.
+
+B.4 Putzplan-Praxis
+VERDICT: STIMMT (Modellierung branchengerecht)
+- Branche arbeitet real mit RAUMBUCH (Räume/Raumgruppen mit Flächen,
+  Bodenbelägen, Nutzungsart) plus Flächenaufstellungen - Standard bei
+  Ausschreibungen.
+- Darauf basiert das LV: Bereiche -> Leistungen mit Fläche/Menge,
+  Intervall/Turnus (täglich..jährlich), Zeitbedarf (Leistungswert).
+  Übliche Leistungswerte: Büro ca. 150-200 m²/h, Sanitär 50-70 m²/h,
+  Glas 80-120 m²/h; RAL/GGGR-Richtwerte und DIN 77400 als Referenzrahmen.
+- Putzplan = operative Ausführungsebene (Wochentag x Bereich x Leistung),
+  oft Aushang/PDF für die Reinigungskraft, zunehmend mehrsprachig + Symbole.
+-> Unsere Hierarchie lv_bereiche -> lv_positionen (Menge/Einheit, Zeitbedarf,
+   Preisbasis, Zuschlagsanteile) -> putzplan_eintraege je Liegenschaft/
+   Gebäude/Etage/Raum deckt genau das ab. ERGÄNZENSWERT: Raumgruppen/
+   Nutzungsarten als Wiederverwendungsebene, Sollzustand/Ergebnisqualität
+   je Position.
+In der Branche ZUSÄTZLICH erwartet (Marktstandard):
+- QS: digitale Objektbegehungen, Sichtkontrollen, Checklisten je Bereich
+- Fotodokumentation (vorher/nachher, Mängel)
+- Digitale Arbeitsscheine mit Kundenunterschrift / Leistungsnachweise
+- Kundenportal, Reklamations-/Ticketsystem
+- Material-/Verbrauchsverwaltung, Soll-Ist-Vergleich Plan-Minuten vs. Ist-Zeiten
+
+B.5 Abrechnungspraxis
+VERDICT: STIMMT
+- Monatliche Objekt-/Pauschal-/Dauerrechnungen = Branchenstandard;
+  Sammelrechnung je Auftraggeber mit mehreren Objekten üblich.
+- Preisanpassungsklauseln (gekoppelt an Branchentariflohn, gesetzl. Mindestlohn
+  oder VPI) verbreitet und zulässig; Anforderungen: objektives Anpassungs-
+  kriterium, Ankündigungsfrist (4-6 Wochen), i.d.R. Sonderkündigungsrecht.
+  Gerade 2026/27 (Tarifauslauf + Mindestlohn 14,60 EUR) Kernthema -
+  dokumentierte "stillen Margenkiller".
+- Snapshot vs. Live-Preise: beide legitim; WICHTIG ist Versionierung -
+  Rechnungen müssen Preisstand referenzieren können (Nachvollziehbarkeit,
+  GoBD), Live-Preise ermöglichen automatische Anpassung. Unsere Lösung
+  (Standard Snapshot, optional Live) entspricht dem Markt.
+
+B.6 Wettbewerber Reinigungssoftware (Kurzcheck)
+| Anbieter        | Putzplan/LV | Zeiterfassung | QM | Anmerkung |
+|---|---|---|---|---|
+| SAPHIR          | nein (Fokus Personal/Lohn) | ja (App/Dienstplan) | nein | On-Premise, FiBu/Lohn stark |
+| Cleazz          | ja (LV/Floorplan) | ja | ja (Objektkontrollen) | proprietär/exklusiv |
+| CleanManager    | ja (Pläne, Vorlagen, mehrsprachig, PDF) | ja (inkl. Fahrzeit) | ja (Qualitätskontrollen) | Kundenportal, SMS; Benchmark bei Plänen |
+| fortytools/zvoove | teilw. (Einsatzplanung) | ja | ja (QM+Tickets) | DATEV, ZUGFeRD/XRechnung |
+| BSS.CLEAN       | ja (Zyklusverwaltung) | ja + Bruttobewertung inkl. gesetzl. Zuschläge, Belastungszuschlag, Tarifverwaltungsmodul | ja | ERP-tief, teuer |
+| DIGRAS          | ja (Objektkontrolle/Kalkulation) | ja | ja | modular |
+| pds             | nein | ja (Service-App) | nein | Bauhandwerk-Fokus (GAEB) |
+| shm software    | nein | ja (shm Time) | - | Handwerkersoftware allgemein |
+| KWP/bnInfoCenter| nein | ja (mobiler Monteur) | Checklisten | allgemeines Handwerk |
+
+MARKTLÜCKE BESTÄTIGT: Tiefe LV-Kalkulation mit Leistungswerten (min/m²) und
+Zuschlagsanteilen sowie tarifliche Bruttobewertung gibt es außerhalb großer
+ERP-Lösungen kaum -> unsere Chance. Marktstandard fast aller Wettbewerber:
+mobile Zeiterfassung, Einsatzdisposition mit Wiederholungsterminen, QM mit
+Fotos/Checklisten, Angebot->Auftrag->Rechnung, DATEV, Kundenportal.
+
+B.7 Top-5-Features, die Gebäudereiniger wirklich erwarten
+1. Mobile Zeiterfassung (GPS/QR) mit TARIFKORREKTER Bewertung
+   (Nacht/So-Fe/Belastungszuschlag >8 h/Tag bzw. >40 h/Woche)
+2. Putzplan je Objekt als PDF/Aushang - mehrsprachig, Symbole, je Raum/Bereich
+   mit Turnus (CleanManager = Benchmark)
+3. QM: digitale Objektbegehungen, Checklisten, Beweisfotos,
+   Reklamationstickets mit Nachbesserungsverfolgung
+4. Durchgängige Kette Kalkulation/LV -> Angebot -> Auftrag ->
+   Dauerrechnung/Sammelrechnung inkl. XRechnung/ZUGFeRD + DATEV
+5. Kundenportal (Leistungsnachweise, Fotos, Echtzeitstatus) +
+   Preisanpassungs-Assistent bei Mindestlohnsprüngen
+
+B.8 Konkrete Verbesserungen fürs Putzplan/LV-Modul
+1. RTV-Preset KORRIGIEREN: Nacht 30%, So/Fe 80%, hohe Feiertage (NUR Neujahr,
+   1.5., 25./26.12.) 200%, Belastungszuschlag 25% ab 9. Tagesstunde bzw.
+   >40. Wochenstunde - NICHT "Mehrarbeit 25%" pauschal. Bundesland-Feiertagskalender.
+2. Lohngruppen LG1-LG9 pflegbar machen (Gültigkeiten 2025/2026, leerer
+   2027-Jahrgang), LG1+LG6 als allgemeinverbindliche Untergrenze markieren;
+   Warnung wenn Kalkulationsstundensatz < Branchenmindestlohn + PNK.
+3. Raumgruppen-/Nutzungsart-Bibliothek mit Standard-Leistungswerten (min/m²
+   bzw. m²/h) als Kalkulationsvorlagen, objektweise überschreibbar; Turnuslogik
+   direkt in putzplan_eintraege.
+4. LV-Versionierung/Snapshot je Vertrag mit Gültigkeitszeitraum +
+   Preisanpassungsfunktion (prozentual/indexbasiert, historisierte Preisstände).
+5. QS-Anbindung: aus lv_positionen automatisch Prüfpunkte für Objektbegehungen
+   ableiten, Fotofunktion je Position, Soll-Ist Plan-Minuten vs. Ist-Zeiten.
+6. PDF-Aushang-Generator für den Putzplan (mehrsprachig, Symbole, gruppiert
+   nach Etage/Raum) - das Dokument, das vor Ort tatsächlich hängt.
+7. Begriff "BTV" nur als frei benennbares Profil; Preset neutral benennen.
+
+QUELLEN TEIL B:
+- https://www.zoll.de/SharedDocs/Downloads/DE/Vorschriften/Arbeit/Mindestarbeitsbedingungen/tarifv_gebaeudereinigung_rtv.pdf (offizieller AVE-Text §3 Ziff. 4.7, §10 Ziff. 3)
+- https://www.die-gebaeudedienstleister.de/wp-content/uploads/2024/04/Rahmentarifvertrag_2019_website_geschuetzt-2.pdf
+- https://www.deutsche-handwerks-zeitung.de/gebaeudereiniger-handwerk-bekommt-hoehere-lohnzuschlaege-und-mehr-urlaub-94391
+- https://www.mendato.com/wissen/tarifvertrag-gebaeudereinigung
+- https://www.hwk-dresden.de/detail/mindestlohn-in-der-gebaeudereinigung.html (10. GebäudeArbbV)
+- https://www.die-gebaeudedienstleister.de/pressemitteilungen/tarifloehne-im-gebaeudereiniger-handwerk-steigen-zum-jahreswechsel-2026/
+- https://www.reinigungsmarketing.com/ratgeber/tariflohn-gebaeudereinigung-2026
+- https://buricic-dl.de/leistungsverzeichnis-gebaudereinigung
+- https://www.stewe.de/magazin/gebaeudereinigung/ausschreibungen-gebaeudereinigung-richtig-planen
+- https://www.cleancalc.de/ (Leistungswerte, RAL GGGR)
+- https://cleanmanager.de/basismodul/reinigungspl%C3%A4ne
+- https://certiscan.de/en/blog/ausschreibung-gebaeudereinigung-leistungsverzeichnis (DIN 77400)
+- https://out-smart.com/de/branchen/gebaeudereinigung
+- https://www.reinigungsmarketing.com/ratgeber/preiserhoehung-reinigung
+- https://taskara.de/
+- https://saphir5.de/ · https://cleanmanager.de/ · https://www.fortytools.com/home-gebaeudereinigung-software
+- https://bss-it.de/bss/de/solutions/software-gebaeudereinigung/ · https://www.digras.de/
+- https://pds.de/ · https://shm-software.de/ · https://www.kwpsoftware.de/
+- https://gebaeudereiniger-software.com/ · https://www.mendato.com/wissen/gebaeudereiniger-software-vergleich
+
+================================================================================
+TEIL C - MARKTFIT BAU-/GEBÄUDEUNTERNEHMEN & ROADMAP-CHECK (Agent 3)
+================================================================================
+
+C.1 Was kaufen kleine Bau-/Gebäudeunternehmen 2025/2026?
+- Buchhaltungs-Layer dominieren den Kleinbetrieb: Lexware Office (400.000+
+  Kunden, ab 7,90 EUR/M) und sevdesk (Free-Tarif, ab ca. 12 EUR/M): E-Rechnung,
+  DATEV, Mahnwesen, Banking. Schwächen laut Bewertungen: lexoffice hat KEIN
+  automatisches Mahnwesen (häufigster Kritikpunkt!), keine Projekt-/Objektlogik;
+  sevdesk keine Zeiterfassung, kein Aufmaß.
+- Generische Tools decken Objektgeschäft NICHT ab (keine Objektlogik, keine
+  Dauerrechnungen mit Objektbezug) - genau hier positionieren sich Branchentools.
+- Handwerksprozesse: HERO (49-69 EUR/M/User), plancraft (ab 39 EUR/M), pds
+  (52.000 Anwender, Kauf ODER SaaS), baufaktura (Eco gratis, Vollversion ab
+  499 EUR Kauf + Abo, GAEB/XRechnung/DATEV), KWP (bnApp/bnZeit/bnInfoCenter),
+  STREIT, Sage 50 Handwerk, WinWorker, Das Programm (ab 29 EUR/M).
+- Gebäudereinigung (>=13 Anbieter): CleanManager (~33-79 EUR/M; stark Pläne/LV/QM,
+  schwach Faktura - übergibt an Lexware/sevdesk), SAPHIR (On-Premise 5.000-20.000
+  EUR einmalig + Wartung; FiBu/Lohn/Zeiterfassung, wenig mobil), Mendato
+  (99-499 EUR/M; integriert Buchhaltung + GPS-Zeiterfassung + RTV-Zuschläge +
+  Controlling je Objekt + Kundenportal), fortytools, PlanD, SoftClean, GEK.
+- Häufigste Forderungen/Monierungen: automatisches Mahnwesen, Echtzeit-
+  Bankabgleich, mobile Mitarbeiter-App, Objekt-/Auftragslogik, Wartungsvertrags-
+  verwaltung, persönlicher deutscher Support (CleanManager-Kunden loben Support
+  als Hauptgrund).
+
+C.2 Desktop-Einmalkauf vs. Cloud-Abo 2026
+- Gesamtmarkt klar cloud-dominiert; selbst Traditionshersteller bieten Cloud.
+  "Einmallizenzen gelten als Auslaufmodell" (HV-Branche).
+- ABER On-Premise lebt in Nischen weiter: SAPHIR/SoftClean/GEK (5.000-20.000 EUR),
+  WISO Hausverwalter (80-120 EUR einmalig), vermieter1.de Lifetime 449 EUR,
+  Invozilla Solo 64,99 EUR. Suchvolumen "Rechnungsprogramm ohne Abo" relevant -
+  Anbieter werben aktiv damit (Abo-Müdigkeit, Preiserhöhungen bei sevdesk).
+- Mobiles Arbeiten für Außendienst-Branchen NICHT optional:
+  "Mobile Komponente einer FM-Software ist nicht optional, sondern geschäftskritisch."
+- Zeiterfassung ist RECHTLICHE PFLICHT: BAG-Beschluss 13.09.2022
+  (Az. 1 ABR 22/21) - gesamte Arbeitszeit aller Arbeitnehmer erfassen,
+  keine Kleinbetriebsausnahme. Geplante elektronische Aufzeichnungspflicht mit
+  gestaffelten Übergangsfristen (<10 MA: händisch; <50 MA: 5 Jahre Übergang).
+  Form frei, aber System muss objektiv, verlässlich, zugänglich sein.
+- Single-User-Desktop ohne Cloud/Mobile = schrumpfende, aber reale Nische
+  (Solo-/2-3-Mann-Betriebe, Datenschutzaffinität). Multi-User ab ~2+ Bürokräften
+  relevant (= dokumentierte Grenze lokaler Software).
+
+C.3 Hausverwaltungs-Spezialitäten - PASST UNSER PRODUKT DAFÜR?
+- Professionelle Hausverwaltung != Objektstamm + Dauerrechnung. Kernanforderungen:
+  WEG-Jahresabrechnung BGH-konform (Hausgeld, Vermögensbericht, Rücklagen),
+  Wirtschaftsplan, Beschlusssammlung/Umlaufbeschlüsse (WEG-Reform §23),
+  Eigentümerversammlung, Betriebskostenabrechnung nach BetrKV mit Umlageschlüsseln,
+  Sollstellungen, EBICS/FinTS-Bankanbindung mit automatischem Zahlungsabgleich,
+  Mandantenfähigkeit, Eigentümer-/Mieterportal, Messdienstleister-Schnittstellen.
+  Das ist eine eigene Softwareklasse (Immoware24, Domus 4000, PowerHaus,
+  Win-CASA, INtex, iX-Haus).
+- FIT-URTEIL:
+  [X] Kaufmännische WEG-/Mietverwaltung: PASST NICHT (nicht antreten!)
+  [+] Objekt-/Hausmeisterei-/Hausbetreuung-Seite (Hausmeisterbetriebe,
+      Objektbetreuer, die an HV/Eigentümer fakturieren): PASST SEHR GUT.
+      Reale Ausschreibung einer süddeutschen Hausmeisterei (90 Objekte,
+      1.700 WE) fordert exakt: Kundenstamm(=HV), Objektverwaltung,
+      Mitarbeiterzuweisung, Intervallarbeiten, Angebote, Rechnungen,
+      mobile Endgeräte, Windows.
+  [+] Abweichender Rechnungsempfänger (Eigentümer/Mieter/Hausverwaltung):
+      validiertes echtes Feature dieser Zielgruppe.
+POSITIONIERUNG: Zielgruppe kommunizieren als "Objekt-Dienstleister, deren
+Auftraggeber Hausverwaltungen/Eigentümer sind" - NICHT als WEG-Verwaltungssoftware.
+
+C.4 Prioritäts-Check offener Roadmap-Punkte (nach Kaufwirkung)
+Rang 1: Bankimport (CAMT/FinTS) + OPOS + SEPA-Lastschrift ......... PFLICHT
+        Automatischer Zahlungsabgleich ist Standard bei allen Cloud-Tools;
+        Mahnwesen OHNE Zahlungsabgleich funktioniert nicht ("Bezahlte
+        Rechnungen verlassen den Mahnlauf automatisch"). Lastschrift üblich
+        bei Dauerobjekten. => HÖCHSTE dokumentierte Kaufwirkung.
+Rang 2: Mobile Zeiterfassung (+RTV-Zuschläge) ..................... PFLICHT
+        BAG-Pflicht seit 2022 + Standarderwartung der Branche. Beachte:
+        zieht faktisch Cloud-Sync/companion App nach sich -> Roadmap-Reihenfolge
+        entsprechend planen.
+Rang 3: Auto-Backup ............................................... PFLICHT (sofort, billig)
+        GoBD/DSGVO-Erwartung; "genau daran scheitern kleine Betriebe" bei
+        On-Premise; stärkstes Gegenargument zur Desktop-Schwäche.
+Rang 4: Mehrbenutzer/Rollen ....................................... HOCH (ab 2. Büro-PC)
+Rang 5: Dashboard-KPIs ............................................ MITTEL-HOCH
+        KWP bnInfoCenter, Mendato Controlling je Objekt, pds BI zeigen Nachfrage.
+Rang 6: Peppol .................................................... NIEDRIG
+        Gesetzlich NICHT erforderlich (E-Mail genügt, BMF); später via
+        Partnerdienstleister erschließen.
+Rang 7: Cloud-Sync/mobile Begleitlösung ........................... STRATEGISCH (wird durch Rang 2 erzwungen)
+Rang 8: Globale Suche Ctrl+K ...................................... NICE-TO-HAVE (kein Kaufkriterium in Quellen)
+Rang 9: CRM ....................................................... NICE-TO-HAVE
+Rang 10: Online-Kundenportal ...................................... NICE-TO-HAVE (außer HV/QM-Reports mittelfristig)
+--: Lagerwirtschaft, KI ........................................... ZURÜCKSTELLEN
+        Keine Quelle nennt Lager/KI als KMU-Kaufgrund.
+
+C.5 Preisgestaltung: Einmalkauf 300-3400 EUR
+- Abo-Referenzen: lexoffice 7,90-32,90 EUR/M · sevdesk 8,90-34,90 EUR/M ·
+  plancraft ab 39 EUR/M · HERO 49-69 EUR/M/User · CleanManager ~33-79 EUR/M ·
+  Mendato 99-499 EUR/M · Branchen-On-Premise 5.000-20.000 EUR einmalig ·
+  baufaktura Vollversion ab 499 EUR Kauf.
+- 300-3400 EUR Einmalkauf liegt PLAUSIBEL zwischen Consumer-Kaufsoftware (<500 EUR)
+  und Branchen-ERP (>5.000 EUR). Dokumentierte Nachfrage vorhanden ("ohne Abo",
+  Lifetime-Deals werden aktiv angeboten).
+- Zahlungsbereitschaft begrenzt: Bitkom-Studie 2025 - 69% nennen hohe
+  Investitionskosten als Hemmnis; 59% halten Digitalisierung nur bei größeren
+  Betrieben für wirtschaftlich; 96% Sorge IT-/Datenschutz
+  -> "Daten bleiben bei mir" = ECHTES Verkaufsargument für lokal!
+  85% bieten bereits digitale Services, digitaler Rechnungsversand 62%.
+- BEDINGUNG: Einmalkauf funktioniert nur MIT optionalem Wartungsvertrag
+  (Gesetzesänderungen E-Rechnung 2027/2028, GoBD, ArbZG!). Marktübliche
+  Wartungskalkulation: 15-20% des Kaufpreises/Jahr.
+- Vertriebsargumente bestätigt (Datei 8 V1/V4/V5): Einmalkauf + transparente
+  Folgekosten, persönlicher Support, Testphase - alles quellenkonform.
+
+C.6 Feature-Ranking der Zielgruppe (Nennungshäufigkeit in Quellen)
+1.  E-Rechnung XRechnung/ZUGFeRD ............... überall (gesetzlich) - UMGESETZT ✓
+2.  DATEV-Export ............................... fast überall ............ UMGESETZT ✓
+3.  Mobile Zeiterfassung (+Zuschläge) .......... sehr oft ................ OFFEN (Priorität!)
+4.  Bankanbindung/OPOS/SEPA .................... oft ................... OFFEN (Priorität!)
+5.  Automatisches Mahnwesen .................... oft ................... UMGESETZT ✓
+6.  Objektlogik + Dauer-/Sammelrechnungen ...... oft ................... UMGESETZT ✓ (USP!)
+7.  Angebot->Auftrag->Abrechnung, LV/GAEB ...... oft ................... GRÖSSTENTEILS ✓
+8.  Mehrbenutzer/App für Außendienst ........... mittel ................. OFFEN
+9.  Controlling/Dashboard je Objekt ............ mittel ................. OFFEN
+10. Persönlicher deutscher Support ............. überall (Softfakt)
+
+C.7 KLARE ANTWORT DES AGENTS: Passt die Roadmap?
+JA - für die Kernzielgruppe "Objekt-basierte Gebäudedienstleister"
+(Gebäudereinigung, Hausmeisterservice, Facility-/Objektbetreuung, kleine Bau-/
+Ausbau-Betriebe mit Dauerobjekten) passt die Umsetzungsliste gut.
+Objektverwaltung + Dauerrechnungen + Putzplan/LV mit RTV + E-Rechnung/GAEB/
+DATEV + SMTP/Mahnwesen trifft genau die Lücke zwischen Lexware/sevdesk
+(keine Objektlogik, kein automatisches Mahnwesen) und teurer Branchensoftware
+(SAPHIR ab 5.000 EUR, Mendato 99-499 EUR/M Abo).
+
+UMSTELLEN/ERGÄNZEN:
+1. Positionierung "Hausverwaltung" präzisieren (siehe C.3) - WEG-Verwaltung
+   nicht bedienen, stattdessen Objekt-Dienstleister ansprechen.
+2. NEUE PRIORITÄT 1: Bankimport (CAMT/FinTS) + OPOS + SEPA-Lastschrift.
+3. NEUE PRIORITÄT 2: mobile Zeiterfassung (BAG-Pflicht!) - plant Cloud-Sync
+   gleich mit.
+4. Auto-Backup SOFORT umsetzen (geringe Kosten, größtes Vertrauensrisiko weg).
+5. Peppol zurückstellen.
+6. Zurückstellen: Kundenportal, CRM, Lagerwirtschaft, KI.
+
+QUELLEN TEIL C:
+- https://www.rechnung-handwerk.de/sevdesk-vs-lexware-office-handwerker/
+- https://www.rechnung-handwerk.de/branchenloesung-handwerker/
+- https://www.experte.de/buchhaltung/lexoffice (kein automatisches Mahnwesen)
+- https://buchhaltung-test.com/ratgeber/lexoffice-erfahrungen-2025-nutzerberichte/
+- https://www.the-playbook.de/de/vergleich/handwerkersoftware-vergleich/
+- https://bau-faktura.de/ · https://www.mendato.com/wissen/gebaeudereiniger-software-vergleich
+- https://www.dynvon.com/blog/reinigungssoftware-vergleich · https://cleanmanager.de/referenzen
+- https://hausverwalter-vz.de/wissen/property-management-software-die-richtige-verwaltungssoftware-waehlen
+- https://www.hausverwaltungschecker.de/hausverwaltungssoftware-vergleich/
+- https://dienstleister-software.de/blog/facility-management-software-2025/
+- https://www.bmas.de/DE/Arbeit/Arbeitsrecht/Arbeitnehmerrechte/Regelungen-zur-Arbeitszeit/Fragen-und-Antworten/faq-arbeitszeiterfassung.html
+- https://www.ihk.de/karlsruhe/fachthemen/recht/arbeitsrecht/aktuelle-rechtsprechung/arbeitszeiterfassung-5661646
+- https://handwerker-software.org/article/10-preis-lizenzmodelle
+- https://www.invozilla.de/rechnungssoftware-ohne-abo/
+- https://www.scalara.de/scalara-blog/moderne-erp-systeme-fur-hausverwaltungen
+- https://heidisystems.com/blog/software-weg-hausverwaltung
+- https://www.softguide.de/ausschreibungen/hausmeisterei-sucht-cafm-software
+- https://www.bitkom.org/sites/main/files/2026-01/bitkom-studienbericht-handwerk.pdf
+- https://www.xrechnungs.de/kosten-rechnungsprogramm-handwerker
+- https://pida-faktura.de/rechnungsprogramm-ohne-abo/
+- https://www.clean-invoice.com/lexikon/handwerkersoftware
+
+================================================================================
+GESAMT-FAZIT & AKTIONSLISTE (kompakt)
+================================================================================
+DIE ROADMAP/TRIFFT DIE ZIELGRUPPE. Die gebauten Module (Objektverwaltung,
+Dauerrechnungen, Putzplan/LV, SMTP, E-Rechnung) sind marktkonform und treffen
+die dokumentierte Marktlücke. Gefundene Fachfehler betreffen DETAILS, nicht
+das Gesamtkonzept.
+
+SOFOFT-FIXES (Fachfehler, P0/P1):
+[F1] P0 §13b: BT-120-Text normieren auf "Steuerschuldnerschaft des
+     Leistungsempfängers"; Code VTEX -> VATEX-EU-AE  (js/einvoice.js)
+[F2] P0 XMP-Namespace verifizieren: urn:factur-x:pdfa:CrossIndustryDocument:
+     invoice:1p0# (nicht urn:zugferd:...) + ConformanceLevel konsistent
+     (main/zugferd-builder.js) - ggf. VeraPDF-Lauf als Nachweis
+[F3] P1 RTV-Profil: "Mehrarbeit +25%" -> Belastungszuschlag 25% (>8 h/Tag
+     bzw. >40 h/Woche, §10 Ziff. 3 RTV); hohe Feiertage auf Neujahr, 1.5.,
+     25./26.12. begrenzen (Default-Profil + Feiertagskalender je Bundesland)
+[F4] P1 Lohngruppen LG1-LG9 (nicht LG1-LG6); LG1/LG6 als allgemeinverbindliche
+     Untergrenzen markieren; Warnung bei Satz < Mindestlohn + PNK;
+     2027-Jahrgang offen lassen
+[F5] P1 Einbehalt: erklärenden Text in BT-20/BT-22 (#EINBEHALT#-Konvention)
+
+STRATEGISCHE UMSORTIERUNG DER OFFENEN ROADMAP:
+[N1] Neu Priorität 1: Bankimport CAMT/FinTS + OPOS + SEPA-Lastschrift
+     (höchste Kaufwirkung; Mahnwesen ohne Zahlungsabgleich halbwertig)
+[N2] Neu Priorität 2: Mobile Zeiterfassung (BAG-Pflicht seit 2022);
+     Cloud-Sync/companion dabei mitdenken
+[N3] Auto-Backup sofort (billig, beseitigt Desktop-Vertrauensrisiko)
+[N4] GoBD-Härtung erweitern: Benutzerkennung im Audit-Log, Verfahrens-
+     dokumentation, Z1-Z3-Export, Aufbewahrungsfristen 8/10 Jahre
+[N5] Positionierung schärfen: "Objekt-Dienstleister (Auftraggeber:
+     Hausverwaltung/Eigentümer)" - KEINE WEG-/Mietverwaltung bedienen
+[N6] Zurückstellen: Peppol, CRM, Kundenportal, Lager, KI
+[N7] Putzplan-Modul ausbauen (hohe Sichtbarkeit beim Kunden): PDF-Aushang
+     mehrsprachig mit Symbolen, QS-Begehungen aus lv_positionen, Soll-Ist-Zeiten
+[N8] Wartungsvertrag (15-20%/Jahr) als Geschäftsmodell etablieren -
+     Einmalkauf ohne Updates ist wegen E-Rechnung-Stufen 2027/2028 riskant
+
+Offene Punkte aus den Sessions (unverändert relevant):
+- VeraPDF/KoSIT-Validierung automatisieren (doc/zugferd-validation.md)
+- Manueller SMTP-End-to-End-Smoke gegen echten Provider
+- Commits: Änderungen liegen weiterhin unversioniert!
+
+================================================================================
+Ende des Dokuments | Erstellt: 25.08.2026 | Quelle: 3 Web-Recherche-Subagents
+================================================================================
