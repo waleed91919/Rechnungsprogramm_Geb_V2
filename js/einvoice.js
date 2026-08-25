@@ -5,7 +5,7 @@ class EInvoiceEngine {
     static GUIDELINE_XRECHNUNG_23 = 'urn:cen.eu:en16931:2017#compliant#urn:xoev-de:kosit:standard:xrechnung_2.3';
     static GUIDELINE_FACTURX_EN16931 = 'urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:en16931';
 
-    static EXEMPTION_REASON_13B = 'Steuer nicht erhoben gemäß § 13b UStG';
+    static EXEMPTION_REASON_13B = 'Steuerschuldnerschaft des Leistungsempfängers';
 
     static UNIT_CODES = {
         'm²': 'MTK', 'm2': 'MTK', 'qm': 'MTK', 'quadratmeter': 'MTK',
@@ -395,7 +395,7 @@ class EInvoiceEngine {
         <ram:TypeCode>VAT</ram:TypeCode>` +
             (g.category === 'AE' ? `
         <ram:ExemptionReason>${this.EXEMPTION_REASON_13B}</ram:ExemptionReason>
-        <ram:ExemptionReasonCode>VTEX</ram:ExemptionReasonCode>` : '') + `
+        <ram:ExemptionReasonCode>VATEX-EU-AE</ram:ExemptionReasonCode>` : '') + `
         <ram:BasisAmount>${g.basis.toFixed(2)}</ram:BasisAmount>
         <ram:CategoryCode>${g.category}</ram:CategoryCode>
         <ram:RateApplicablePercent>${g.rate.toFixed(2)}</ram:RateApplicablePercent>
@@ -424,9 +424,14 @@ class EInvoiceEngine {
         }
 
         const faelligTeile = dueDateIso.split('-');
+        let paymentTermsDescription = `Zahlbar ohne Abzug bis zum ${faelligTeile[2]}.${faelligTeile[1]}.${faelligTeile[0]}.`;
+        if (t.einbehalt > 0) {
+            const prozentVal = invoice.sicherheitseinbehalt_prozent ? parseFloat(invoice.sicherheitseinbehalt_prozent).toFixed(2) : ((t.einbehalt / (t.grandTotal || 1)) * 100).toFixed(2);
+            paymentTermsDescription += ` #EINBEHALT#PROZENT=${prozentVal}#BETRAG=${t.einbehalt.toFixed(2)}#GRUND=VOB/B § 17#ABLOESBAR=Buergschaft#`;
+        }
         const paymentTermsXML = `
       <ram:SpecifiedTradePaymentTerms>
-        <ram:Description>Zahlbar ohne Abzug bis zum ${faelligTeile[2]}.${faelligTeile[1]}.${faelligTeile[0]}.</ram:Description>
+        <ram:Description>${this.escapeXML(paymentTermsDescription)}</ram:Description>
         <ram:DueDateDateTime>
           <udt:DateTimeString format="102">${dueDate}</udt:DateTimeString>
         </ram:DueDateDateTime>
@@ -458,7 +463,11 @@ class EInvoiceEngine {
     <ram:TypeCode>380</ram:TypeCode>
     <ram:IssueDateTime>
       <udt:DateTimeString format="102">${issueDate}</udt:DateTimeString>
-    </ram:IssueDateTime>
+    </ram:IssueDateTime>${t.einbehalt > 0 ? `
+    <ram:IncludedNote>
+      <ram:Content>Sicherheitseinbehalt ${invoice.sicherheitseinbehalt_prozent ? Number(invoice.sicherheitseinbehalt_prozent).toFixed(2) : ((t.einbehalt / (t.grandTotal || 1)) * 100).toFixed(2)} % (${t.einbehalt.toFixed(2)} EUR) gemäß § 17 VOB/B für Gewährleistung. Ablösbar durch Bankbürgschaft.</ram:Content>
+      <ram:SubjectCode>PMT</ram:SubjectCode>
+    </ram:IncludedNote>` : ''}
   </rsm:ExchangedDocument>
   <rsm:SupplyChainTradeTransaction>${lineItemsXML}
     <ram:ApplicableHeaderTradeAgreement>

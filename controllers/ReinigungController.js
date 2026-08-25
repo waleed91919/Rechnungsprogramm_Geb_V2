@@ -5,9 +5,10 @@
 const TURNUS_TYPEN = ['X_PRO_WOCHE', 'ALLE_X_TAGE', 'X_PRO_MONAT', 'JAEHRLICH'];
 
 const ZUSCHLAG_LABELS = {
-    nacht: 'Nacht',
+    nacht: 'Nacht (22–05 Uhr)',
     sonntag_feiertag: 'Sonn-/Feiertag',
-    hoher_feiertag: 'Hoher Feiertag'
+    hoher_feiertag: 'Hoher Feiertag (Neujahr, 1. Mai, 25./26. Dez)',
+    belastung: 'Belastungszuschlag (>8h/Tag bzw. >40h/Woche)'
 };
 
 const DEFAULT_ZUSCHLAGSPROFIL = {
@@ -18,11 +19,37 @@ const DEFAULT_ZUSCHLAGSPROFIL = {
     zuschlaege: {
         nacht: { prozent: 30 },
         sonntag_feiertag: { prozent: 80 },
-        hoher_feiertag: { prozent: 200 }
+        hoher_feiertag: { prozent: 200 },
+        belastung: { prozent: 25 }
     },
     kalender: { wochen_pro_jahr: 52, tage_pro_jahr: 365 },
-    quellen: ['BIV Vergabe-Empfehlungen 01/2026', 'Tarifbroschüre Berlin 01/2025']
+    quellen: ['RTV Gebäudereinigung v. 31.10.2019 (§ 3 Ziff. 4.7, § 10 Ziff. 3)', 'BIV Vergabe-Empfehlungen 01/2026', '10. GebäudeArbbV']
 };
+
+const LOHNGRUPPEN_GEBAEUDEREINIGUNG_2026 = [
+    { id: 'LG1', bezeichnung: 'LG 1: Innen- und Unterhaltsreinigung', lohn: 15.00, mindestlohn: true },
+    { id: 'LG2', bezeichnung: 'LG 2: Qualifizierte Innenreinigung', lohn: 15.46, mindestlohn: false },
+    { id: 'LG3', bezeichnung: 'LG 3: Innenreinigung mit Zusatzqualifikation', lohn: 15.95, mindestlohn: false },
+    { id: 'LG4', bezeichnung: 'LG 4: Bauschluss- / Vorarbeitende Innenreinigung', lohn: 16.66, mindestlohn: false },
+    { id: 'LG5', bezeichnung: 'LG 5: (entfallen seit 2011)', lohn: null, mindestlohn: false, entfallen: true },
+    { id: 'LG6', bezeichnung: 'LG 6: Glas- und Fassadenreinigung', lohn: 18.40, mindestlohn: true },
+    { id: 'LG7', bezeichnung: 'LG 7: Gesellen (mind. 3-jährige Ausbildung)', lohn: 19.39, mindestlohn: false },
+    { id: 'LG8', bezeichnung: 'LG 8: Gesellen mit Ausbildereignung', lohn: 20.42, mindestlohn: false },
+    { id: 'LG9', bezeichnung: 'LG 9: Fachvorarbeitende Außen / Bereichsleitung', lohn: 21.64, mindestlohn: false }
+];
+
+function pruefeMindestlohn(stundensatz, lohngruppeId = 'LG1') {
+    const satz = zahl(stundensatz, 0);
+    const lg = LOHNGRUPPEN_GEBAEUDEREINIGUNG_2026.find(g => g.id === lohngruppeId) || LOHNGRUPPEN_GEBAEUDEREINIGUNG_2026[0];
+    const minSatz = lg.lohn || 15.00;
+    if (satz < minSatz) {
+        return {
+            warnung: true,
+            meldung: `Der Stundensatz von ${satz.toFixed(2)} €/h unterschreitet den tariflichen Satz für ${lg.bezeichnung} (${minSatz.toFixed(2)} €/h ab 01.01.2026).`
+        };
+    }
+    return { warnung: false, meldung: '' };
+}
 
 function rundeCent(x) {
     return Math.round((Number(x) || 0) * 100) / 100;
@@ -273,6 +300,8 @@ const ReinigungController = {
     TURNUS_TYPEN,
     ZUSCHLAG_LABELS,
     DEFAULT_ZUSCHLAGSPROFIL,
+    LOHNGRUPPEN_GEBAEUDEREINIGUNG_2026,
+    pruefeMindestlohn,
     einsaetzeProJahr,
     minutenJeEinsatz,
     jahresMinuten,

@@ -98,6 +98,24 @@ contextBridge.exposeInMainWorld('api', {
     wiederholeEmailVersand: (historieId, basePdfBuffer = null) => ipcRenderer.invoke('smtp:wiederholeVersand', historieId, basePdfBuffer),
     getVersandhistorie: (belegTyp = null, belegId = null) => ipcRenderer.invoke('smtp:getVersandhistorie', belegTyp, belegId),
 
+    // --- Banking, OPOS & SEPA (F11) ---
+    getBankKonten: () => ipcRenderer.invoke('db:getBankKonten'),
+    saveBankKonto: (konto) => ipcRenderer.invoke('db:saveBankKonto', konto),
+    deleteBankKonto: (id) => ipcRenderer.invoke('db:deleteBankKonto', id),
+    importBankTransactions: (kontoId, transactions, meta) => ipcRenderer.invoke('db:importBankTransactions', kontoId, transactions, meta),
+    getBankTransaktionen: (filter) => ipcRenderer.invoke('db:getBankTransaktionen', filter),
+    runOposMatching: (kontoId) => ipcRenderer.invoke('db:runOposMatching', kontoId),
+    applyPaymentMatching: (matches, options) => ipcRenderer.invoke('db:applyPaymentMatching', matches, options),
+    unmatchTransaction: (zuordnungId, grund) => ipcRenderer.invoke('db:unmatchTransaction', zuordnungId, grund),
+    getKundenMandate: (kundeId) => ipcRenderer.invoke('db:getKundenMandate', kundeId),
+    saveSepaMandat: (mandat) => ipcRenderer.invoke('db:saveSepaMandat', mandat),
+    deleteSepaMandat: (id) => ipcRenderer.invoke('db:deleteSepaMandat', id),
+    getOffeneRechnungenFuerSepa: () => ipcRenderer.invoke('db:getOffeneRechnungenFuerSepa'),
+    createSepaRun: (payload) => ipcRenderer.invoke('db:createSepaRun', payload),
+    getSepaLaeufe: () => ipcRenderer.invoke('db:getSepaLaeufe'),
+    getSepaLaufDetails: (laufId) => ipcRenderer.invoke('db:getSepaLaufDetails', laufId),
+    exportSepaRunXml: (laufId) => ipcRenderer.invoke('db:exportSepaRunXml', laufId),
+
     saveEinstellung: (key, value) => ipcRenderer.invoke('db:saveEinstellung', key, value),
 
     backupDatabase: () => ipcRenderer.invoke('db:backup'),

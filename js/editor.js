@@ -128,6 +128,8 @@ function setupRechnungModalUI() {
     document.getElementById('rechnung-global-rabatt').value = '';
     setRabattType('%');
     document.getElementById('rechnung-anzahlung').value = '';
+    if (document.getElementById('rechnung-skonto-tage')) document.getElementById('rechnung-skonto-tage').value = '';
+    if (document.getElementById('rechnung-skonto-prozent')) document.getElementById('rechnung-skonto-prozent').value = '';
 
     // Defaults
     const today = new Date();
@@ -206,6 +208,8 @@ function applyRechnungReadOnlyMode(existing, form, submitBtn) {
     document.getElementById('rechnung-datum').value = existing.datum;
     document.getElementById('rechnung-faellig').value = existing.faellig;
     document.getElementById('rechnung-status').value = existing.status;
+    if (document.getElementById('rechnung-skonto-tage')) document.getElementById('rechnung-skonto-tage').value = existing.skonto_tage || '';
+    if (document.getElementById('rechnung-skonto-prozent')) document.getElementById('rechnung-skonto-prozent').value = existing.skonto_prozent || '';
 
     document.getElementById('rechnung-art').value = existing.rechnungsart || 'REGULAER';
     document.getElementById('rechnung-leistungszeitraum-von').value = existing.leistungszeitraum_von || '';
@@ -280,6 +284,8 @@ function applyRechnungEditMode(existing, form, submitBtn) {
     document.getElementById('rechnung-datum').value = existing.datum;
     document.getElementById('rechnung-faellig').value = existing.faellig;
     document.getElementById('rechnung-status').value = existing.status;
+    if (document.getElementById('rechnung-skonto-tage')) document.getElementById('rechnung-skonto-tage').value = existing.skonto_tage || '';
+    if (document.getElementById('rechnung-skonto-prozent')) document.getElementById('rechnung-skonto-prozent').value = existing.skonto_prozent || '';
 
     document.getElementById('rechnung-art').value = existing.rechnungsart || 'REGULAER';
     document.getElementById('rechnung-leistungszeitraum-von').value = existing.leistungszeitraum_von || '';
@@ -1250,6 +1256,8 @@ async function saveRechnung() {
         fusstext: document.getElementById('rechnung-fusstext') ? document.getElementById('rechnung-fusstext').value : '',
         sicherheitseinbehalt: state.currentRechnungTotals ? state.currentRechnungTotals.sicherheitseinbehalt : 0,
         kumulierte_leistung_netto: state.currentRechnungTotals ? state.currentRechnungTotals.kumulierte_leistung_netto : 0,
+        skonto_tage: document.getElementById('rechnung-skonto-tage')?.value ? parseInt(document.getElementById('rechnung-skonto-tage').value, 10) : null,
+        skonto_prozent: document.getElementById('rechnung-skonto-prozent')?.value ? parseFloat(document.getElementById('rechnung-skonto-prozent').value) : null,
         verrechnungen: [...(state.currentRechnungVerrechnungen || [])],
         isLocked: existing ? (existing.isLocked || false) : false
     };

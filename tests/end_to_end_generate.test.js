@@ -148,7 +148,7 @@ test('End-to-End Pipeline & Invoice Document Generation', async () => {
         const embeddedXml = Buffer.from(attachment.data).toString('utf-8');
         assertXmlWellFormed(embeddedXml, `${label} (embedded factur-x.xml)`);
         assert.ok(embeddedXml.includes('<ram:CategoryCode>AE</ram:CategoryCode>'), `${label}: AE-Kategorie für § 13b fehlt`);
-        assert.ok(embeddedXml.includes('<ram:ExemptionReasonCode>VTEX</ram:ExemptionReasonCode>'), `${label}: VTEX fehlt`);
+        assert.ok(embeddedXml.includes('<ram:ExemptionReasonCode>VATEX-EU-AE</ram:ExemptionReasonCode>'), `${label}: VATEX-EU-AE fehlt`);
         assert.ok(embeddedXml.includes('<ram:TotalPrepaidAmount>'), `${label}: TotalPrepaidAmount fehlt`);
     }
 });

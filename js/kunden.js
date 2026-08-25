@@ -127,6 +127,10 @@ function openKundeModal(id = null) {
         document.getElementById('kunde-freistellung-gueltig-bis').value = item.freistellung_gueltig_bis || '';
         document.getElementById('kunde-ist-subunternehmer').checked = !!item.is_subcontractor;
         document.getElementById('kunde-ist-umsatzsteuerfreie-vermietung').checked = !!item.ist_umsatzsteuerfreie_vermietung;
+        document.getElementById('kunde-iban').value = item.iban || '';
+        document.getElementById('kunde-bic').value = item.bic || '';
+        document.getElementById('kunde-bank-name').value = item.bank_name || '';
+        document.getElementById('kunde-kontoinhaber').value = item.kontoinhaber || '';
     } else {
         document.getElementById('kunde-modal-title').innerText = 'Neuer Kunde';
         document.getElementById('kunde-form').reset();
@@ -142,6 +146,10 @@ function openKundeModal(id = null) {
         document.getElementById('kunde-freistellung-gueltig-bis').value = '';
         document.getElementById('kunde-ist-subunternehmer').checked = false;
         document.getElementById('kunde-ist-umsatzsteuerfreie-vermietung').checked = false;
+        document.getElementById('kunde-iban').value = '';
+        document.getElementById('kunde-bic').value = '';
+        document.getElementById('kunde-bank-name').value = '';
+        document.getElementById('kunde-kontoinhaber').value = '';
 
         const qpContainer = document.getElementById('quick-paste-container');
         if (qpContainer) qpContainer.classList.add('hidden');
@@ -194,13 +202,17 @@ async function saveKunde() {
     const freistellung_gueltig_bis = document.getElementById('kunde-freistellung-gueltig-bis').value;
     const is_subcontractor = document.getElementById('kunde-ist-subunternehmer').checked ? 1 : 0;
     const ist_umsatzsteuerfreie_vermietung = document.getElementById('kunde-ist-umsatzsteuerfreie-vermietung').checked ? 1 : 0;
+    const iban = document.getElementById('kunde-iban').value.trim();
+    const bic = document.getElementById('kunde-bic').value.trim();
+    const bank_name = document.getElementById('kunde-bank-name').value.trim();
+    const kontoinhaber = document.getElementById('kunde-kontoinhaber').value.trim();
 
     if (!name || !adresse || !plz || !ort) {
         showToast('Bitte füllen Sie alle erforderlichen Felder aus.', 'error');
         return;
     }
 
-    const kundeData = { kundennummer, name, adresse, plz, ort, telefon, email, ustId, customer_type, leitweg_id, buyer_reference, peppol_id, ist_bauleistender_13b, ust_1_tg_gueltig_bis, hat_freistellungsbescheinigung, freistellung_gueltig_bis, is_subcontractor, sec48b_valid_until: freistellung_gueltig_bis || null, ist_umsatzsteuerfreie_vermietung };
+    const kundeData = { kundennummer, name, adresse, plz, ort, telefon, email, ustId, customer_type, leitweg_id, buyer_reference, peppol_id, ist_bauleistender_13b, ust_1_tg_gueltig_bis, hat_freistellungsbescheinigung, freistellung_gueltig_bis, is_subcontractor, sec48b_valid_until: freistellung_gueltig_bis || null, ist_umsatzsteuerfreie_vermietung, iban, bic, bank_name, kontoinhaber };
 
     if (id) {
         kundeData.id = parseInt(id);

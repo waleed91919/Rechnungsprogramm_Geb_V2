@@ -1,5 +1,21 @@
 # Changelog / Fortschritt
 
+## 26.08.2026 (Recherche-Validierungs-Fixes [F1]–[F5] + Kernmodul F11 Banking / OPOS / SEPA)
+- **Umsetzung per Multi-Subagent-Kette:** Detaillierte Web-Recherche von Gesetzen und ISO 20022/EPC-Standards (`plan_creator`) -> Vollständige Implementierung aller Schichten (`plan_executor`) -> Verifikation. Details: [`doc/session_summary_2026-08-26.md`](session_summary_2026-08-26.md).
+- **Recherche-Validierungs-Fixes ([F1] bis [F5]):**
+  - **[F1] § 13b UStG Normierung:** `EXEMPTION_REASON_13B` = `'Steuerschuldnerschaft des Leistungsempfängers'` gem. § 14a Abs. 5 Satz 1 UStG in BT-120; Peppol/EN 16931 Codelistenwert `VATEX-EU-AE` in BT-121 (in [`js/einvoice.js`](../js/einvoice.js)).
+  - **[F2] Factur-X / ZUGFeRD XMP:** Standard-XMP-Namespace `urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#` mit Präfix `fx` verifiziert.
+  - **[F3] RTV Gebäudereinigung Tarifprofil:** Belastungszuschlag **25 %** gem. § 10 Ziff. 3 RTV für Arbeitszeit > 8 h/Tag bzw. > 40 h/Woche integriert; Hohe Feiertage (+200 %) auf Neujahr, 1. Mai, 1.+2. Weihnachtsfeiertag tarifkonform normiert (in [`controllers/ReinigungController.js`](../controllers/ReinigungController.js), [`js/putzplan.js`](../js/putzplan.js), [`code.html`](../code.html)).
+  - **[F4] Lohngruppen 2026 & Mindestlohn:** Vollständiger 9-stufiger Katalog `LOHNGRUPPEN_GEBAEUDEREINIGUNG_2026` (LG 1 bis LG 9) und Mindestlohn-Prüffunktion `pruefeMindestlohn()` (LG 1 = 15,00 €/h, LG 6 = 18,40 €/h) implementiert.
+  - **[F5] Sicherheitseinbehalte (VOB/B § 17):** Strukturierte `#EINBEHALT#`-Syntax in BT-20 (`SpecifiedTradePaymentTerms`) und nachrichtliche `IncludedNote` mit `SubjectCode=PMT` in BT-22 generiert.
+- **F11 Banking, OPOS-Zahlungsabgleich & SEPA-Lastschriften:**
+  - **Bankimport:** [`controllers/BankingController.js`](../controllers/BankingController.js) für CAMT.053/CAMT.052 XML (`camt.053.001.02`–`08`) und universelle deutsche CSV-Kontoauszüge (Sparkasse, Volksbank FIDUCIA, Deutsche Bank, Commerzbank) mit SHA-256 Deduplizierungs-Hashing (`calculateTransactionHash`).
+  - **Intelligenter 4-Stufen OPOS-Zahlungsabgleich:** 4-Pass Matching Engine (Pass 1: Exakt via Rechnungs-Nr., Pass 2: Skonto gem. § 14 Abs. 4 UStG mit Fristprüfung, Pass 3: Teilzahlung, Pass 4: Kunden-IBAN/Name + Betrag) inkl. automatischem Mahnstopp und GoBD-Festschreibung (`isLocked = 1`).
+  - **SEPA-Lastschriften (`pain.008`):** [`controllers/SepaController.js`](../controllers/SepaController.js) für ISO 7064 Modulo 97 IBAN-Prüfung, TARGET2-Bankarbeitstage, Pre-Notification-Generator und ISO 20022 `pain.008.001.08` / `pain.008.001.02` XML-Generierung.
+  - **Schema & DB:** 6 neue Tabellen (`bank_konten`, `bank_transaktionen`, `zahlung_zuordnungen`, `kunden_sepa_mandate`, `sepa_lastschrift_laeufe`, `sepa_lastschrift_positionen`), 16 IPC-Handler, GoBD-Audit-Trail-Verkettung.
+  - **UI & Navigation:** Neue Ansicht `Banking & OPOS` ([`js/banking.js`](../js/banking.js), [`code.html`](../code.html)) mit 4 Tabs (*Kontoauszug & Import*, *OPOS-Abgleich*, *SEPA-Lastschriften*, *Konten & Mandate*).
+- **Tests:** Suite von 146 auf **167/167** Tests erweitert (6 Testsuiten inkl. neuer `banking_parser`, `opos_matching`, `sepa_pain008`, Testfälle Z13, R10, R11). Alle 167 Tests 100 % bestanden.
+
 ## 25.08.2026 (Gebäude-Module F3 Putzplan/Reinigungs-LV + F10 SMTP-E-Mail-Versand)
 - **Umsetzung per 3-Subagent-Kette:** Planung (Detailpläne inkl. Web-Recherche zu RTV/BTV-Zuschlägen und SMTP-Best-Practices) -> Code (`gebaeude-code`, 30 Schritte) -> Prüfung (QA mit Fix-Auftrag). Details: [`doc/session_summary_2026-08-25.md`](session_summary_2026-08-25.md).
 - **F3 Putzplan + Reinigungs-LV:** Tabellen `lv_bereiche`/`lv_positionen`/`putzplan_eintraege` (Flächen-/Mengenbezug je Liegenschaft/Gebäude/Etage/Raum), Kalkulationskern in [`controllers/ReinigungController.js`](../controllers/ReinigungController.js) (Jahresleistung = Menge x Einsätze/Jahr x Zeitbedarf; Zuschläge anteilig; Referenzfall exakt getestet), View `putzplan` mit Objektbaum + Live-Vorschau ([`js/putzplan.js`](../js/putzplan.js)), Übernahme des LV in Abrechnungspläne/Dauerrechnungen über neue Spalte `abrechnungsplan_positionen.lv_position_id` (Live-Preise), LV-Audit + Objekt-Löschschutz.

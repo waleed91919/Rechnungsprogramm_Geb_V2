@@ -254,7 +254,7 @@ test('Z7: BT-10 BuyerReference - Leitweg-ID hat Vorrang vor buyer_reference', ()
     assert.ok(xmlFallback.includes('<ram:BuyerReference>AB-45002</ram:BuyerReference>'));
 });
 
-test('Z8: § 13b (AE) erzeugt ExemptionReason/VTEX und DuePayableAmount zieht Anzahlungen ab', () => {
+test('Z8: § 13b (AE) erzeugt ExemptionReason/VATEX-EU-AE und DuePayableAmount zieht Anzahlungen ab', () => {
     const inv13b = {
         nr: 'RE-13B-TEST',
         datum: '2026-08-01',
@@ -275,7 +275,7 @@ test('Z8: § 13b (AE) erzeugt ExemptionReason/VTEX und DuePayableAmount zieht An
         xml13b.includes(`<ram:ExemptionReason>${EInvoiceEngine.EXEMPTION_REASON_13B}</ram:ExemptionReason>`),
         'ExemptionReason (BT-120) für § 13b fehlt'
     );
-    assert.ok(xml13b.includes('<ram:ExemptionReasonCode>VTEX</ram:ExemptionReasonCode>'), 'VTEX-Code fehlt');
+    assert.ok(xml13b.includes('<ram:ExemptionReasonCode>VATEX-EU-AE</ram:ExemptionReasonCode>'), 'VATEX-EU-AE Code fehlt');
     assert.ok(xml13b.includes('<ram:RateApplicablePercent>0.00</ram:RateApplicablePercent>'), 'AE muss 0.00 % ausweisen');
     assert.ok(xml13b.includes('unitCode="HUR"'), 'Std muss auf HUR gemappt werden');
     assert.ok(xml13b.includes('<ram:CalculatedAmount>0.00</ram:CalculatedAmount>'), 'Bei AE keine berechnete Steuer');
@@ -432,4 +432,32 @@ test('Z12: Ungültiger basePdfBuffer wirft nicht, sondern fällt auf die Platzha
         0,
         'Auch im Fallback-Fall muss die eingebettete XML byte-identisch sein'
     );
+});
+
+test('Z13: Sicherheitseinbehalt erzeugt BT-20- und BT-22-Notizen sowie korrekte Summation', () => {
+    const invEinbehalt = {
+        nr: 'RE-EINBEHALT-TEST',
+        datum: '2026-08-01',
+        faellig: '2026-08-31',
+        netto: 10000,
+        steuer: 1900,
+        brutto: 11900,
+        sicherheitseinbehalt: 595.00,
+        sicherheitseinbehalt_prozent: 5.0,
+        positionen: [
+            { name: 'Rohbauarbeiten Bauabschnitt 1', menge: 1, einheit: 'Pausch', preis: 10000, mwst: 19 }
+        ]
+    };
+    const xml = EInvoiceEngine.generateZUGFeRDXML(invEinbehalt, customer, seller);
+
+    assert.ok(xml.includes('<ram:IncludedNote>'), 'BT-22 IncludedNote fehlt');
+    assert.ok(xml.includes('<ram:SubjectCode>PMT</ram:SubjectCode>'), 'BT-22 SubjectCode PMT fehlt');
+    assert.ok(xml.includes('Sicherheitseinbehalt 5.00 % (595.00 EUR) gemäß § 17 VOB/B'), 'BT-22 Hinweistext fehlt');
+
+    assert.ok(xml.includes('<ram:SpecifiedTradePaymentTerms>'), 'PaymentTerms fehlen');
+    assert.ok(xml.includes('#EINBEHALT#PROZENT=5.00#BETRAG=595.00#GRUND=VOB/B § 17#ABLOESBAR=Buergschaft#'), 'BT-20 Notizkonvention fehlt');
+
+    assert.ok(xml.includes('<ram:GrandTotalAmount>11900.00</ram:GrandTotalAmount>'), 'GrandTotalAmount falsch');
+    assert.ok(xml.includes('<ram:TotalPrepaidAmount>595.00</ram:TotalPrepaidAmount>'), 'TotalPrepaidAmount muss Einbehalt enthalten');
+    assert.ok(xml.includes('<ram:DuePayableAmount>11305.00</ram:DuePayableAmount>'), 'DuePayableAmount muss GrandTotal - Einbehalt sein');
 });

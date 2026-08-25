@@ -186,6 +186,12 @@
                 <span class="text-sm font-medium">Putzplan &amp; LV</span>
             </a>
             <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
+                id="nav-banking" onclick="switchView('banking')">
+                <span
+                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">account_balance</span>
+                <span class="text-sm font-medium">Banking &amp; OPOS</span>
+            </a>
+            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
                 id="nav-berichte" onclick="switchView('berichte')">
                 <span
                     class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">analytics</span>
@@ -1644,6 +1650,360 @@
                             Kein Leistungsverzeichnis an diesem Objekt. Legen Sie einen Leistungsbereich an.
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Banking & OPOS View -->
+        <div id="view-banking" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1400px] mx-auto flex flex-col gap-6">
+
+                <!-- Header Bar with Account Selection & Quick Actions -->
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2.5 bg-primary/10 rounded-lg text-primary">
+                            <span class="material-symbols-outlined text-2xl">account_balance</span>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-800">Banking &amp; OPOS-Zahlungsabgleich</h2>
+                            <p class="text-xs text-slate-500">Elektronische Kontoauszüge, automatischer Rechnungsabgleich &amp; SEPA-Lastschriften</p>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                        <div class="flex items-center gap-2">
+                            <label for="banking-konto-select" class="text-xs font-semibold text-slate-600">Konto:</label>
+                            <select id="banking-konto-select" onchange="onBankingKontoChange(this.value)"
+                                class="text-xs border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3 bg-slate-50 font-medium text-slate-800">
+                            </select>
+                        </div>
+                        <label class="cursor-pointer px-3.5 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 shadow-sm">
+                            <span class="material-symbols-outlined text-sm">upload_file</span>
+                            <span>Kontoauszug importieren</span>
+                            <input type="file" id="banking-file-input" accept=".xml,.camt,.csv,.txt" class="hidden" onchange="handleBankFileUpload(this.files[0])">
+                        </label>
+                        <button onclick="oeffneBankKontoModal()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5">
+                            <span class="material-symbols-outlined text-sm">add_circle</span>
+                            <span>Konto anlegen</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Navigation Tabs -->
+                <div class="border-b border-slate-200 bg-white px-4 rounded-t-xl">
+                    <nav id="banking-tab-nav" class="flex gap-2 -mb-px overflow-x-auto"></nav>
+                </div>
+
+                <!-- Tab 1: Kontoauszug & Import -->
+                <div id="banking-panel-kontoauszug" class="flex flex-col gap-4">
+                    <!-- Dropzone & Filters -->
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+                        <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                            <div class="relative w-64">
+                                <span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-400 text-sm">search</span>
+                                <input type="text" id="banking-search-input" placeholder="Suchen nach Partner, VWZ, IBAN..."
+                                    oninput="bankingState.filterSearch = this.value; ladeTransaktionen()"
+                                    class="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary">
+                            </div>
+                            <select id="banking-status-filter" onchange="bankingState.filterStatus = this.value; ladeTransaktionen()"
+                                class="text-xs border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-1.5 px-3">
+                                <option value="">Alle Status</option>
+                                <option value="OFFEN">Nur Offene</option>
+                                <option value="ZUGEORDNET">Zugeordnet</option>
+                                <option value="TEILWEISE_ZUGEORDNET">Teilweise zugeordnet</option>
+                                <option value="IGNORIERT">Ignoriert</option>
+                            </select>
+                        </div>
+                        <div class="text-xs text-slate-500 flex items-center gap-2">
+                            <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+                            Unterstützte Formate: CAMT.053 XML (ISO 20022), Sparkasse, Volksbanken FIDUCIA, Deutsche Bank, Commerzbank CSV
+                        </div>
+                    </div>
+
+                    <!-- Transactions Table -->
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs font-semibold">
+                                        <th class="px-4 py-3">Buchungstag</th>
+                                        <th class="px-4 py-3">Zahlungspartner</th>
+                                        <th class="px-4 py-3">Verwendungszweck</th>
+                                        <th class="px-4 py-3">Partner-IBAN</th>
+                                        <th class="px-4 py-3 text-right">Betrag</th>
+                                        <th class="px-4 py-3 text-center">Status</th>
+                                        <th class="px-4 py-3 text-center">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="banking-transaktionen-tbody" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: OPOS-Zahlungsabgleich -->
+                <div id="banking-panel-opos" class="hidden flex flex-col gap-4">
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+                        <div class="flex items-center gap-3">
+                            <button onclick="starteOposAbgleich()"
+                                class="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
+                                <span class="material-symbols-outlined text-sm">sync</span>
+                                <span>Abgleich jetzt starten</span>
+                            </button>
+                            <button id="banking-opos-auto-btn" onclick="uebernehmeAlleAusgewaehltenMatches()"
+                                class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
+                                <span class="material-symbols-outlined text-sm">done_all</span>
+                                <span>Ausgewählte Matches übernehmen</span>
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span id="banking-opos-badge-count" class="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-semibold">0 Vorschläge</span>
+                            <span class="text-xs text-slate-500">Auto-Skonto nach § 14 Abs. 4 UStG aktiv (Toleranz: 2 Tage)</span>
+                        </div>
+                    </div>
+
+                    <!-- Matches Table -->
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs font-semibold">
+                                        <th class="px-4 py-3 w-10 text-center">
+                                            <input type="checkbox" onchange="document.querySelectorAll('.opos-match-checkbox').forEach(cb => cb.checked = this.checked)" checked>
+                                        </th>
+                                        <th class="px-4 py-3 text-center">Score</th>
+                                        <th class="px-4 py-3">Banktransaktion</th>
+                                        <th class="px-4 py-3">Zugeordneter Beleg</th>
+                                        <th class="px-4 py-3 text-right">Zahlbetrag</th>
+                                        <th class="px-4 py-3 text-center">Skonto-Abzug</th>
+                                        <th class="px-4 py-3 text-center">Aktion</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="banking-opos-tbody" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 3: SEPA-Lastschriften -->
+                <div id="banking-panel-sepa" class="hidden flex flex-col gap-6">
+                    <!-- Config & Actions Card -->
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-4">
+                        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-800">SEPA-Lastschriftlauf konfigurieren</h3>
+                                <p class="text-xs text-slate-500">Wählen Sie die fälligen Ausgangsrechnungen aus, um eine Sammellastschrift (pain.008 XML) zu erstellen.</p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="text-right">
+                                    <div class="text-xs text-slate-500">Ausgewählte Summe:</div>
+                                    <div id="sepa-auswahl-summe" class="text-base font-bold text-primary">0,00 €</div>
+                                </div>
+                                <button onclick="erstelleSepaLastschriftlauf()"
+                                    class="px-4 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 shadow-sm">
+                                    <span class="material-symbols-outlined text-sm">download_for_offline</span>
+                                    <span>Lastschriftlauf erstellen &amp; XML generieren</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Ausführungstermin (TARGET2):</label>
+                                <input type="date" id="sepa-ausfuehrungs-datum"
+                                    class="w-full text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">XML-Formatstandard:</label>
+                                <select id="sepa-format-select"
+                                    class="w-full text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                                    <option value="pain.008.001.08" selected>pain.008.001.08 (Aktueller Standard)</option>
+                                    <option value="pain.008.001.02">pain.008.001.02 (Kompatibilitätsmodus)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Verfahren:</label>
+                                <select id="sepa-type-select"
+                                    class="w-full text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                                    <option value="CORE" selected>CORE (Basislastschrift - 8 Wochen Rückgabe)</option>
+                                    <option value="B2B">B2B (Firmenlastschrift - Kein Rückgaberecht)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Invoices with Mandate Table -->
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                            <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Fällige Rechnungen mit Mandat</h4>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50/50 border-b border-slate-200 text-slate-600 text-xs font-semibold">
+                                        <th class="px-4 py-3 w-10 text-center">
+                                            <input type="checkbox" onchange="document.querySelectorAll('.sepa-doc-checkbox').forEach(cb => cb.checked = this.checked); updateSepaAuswahlSumme();" checked>
+                                        </th>
+                                        <th class="px-4 py-3">Rechnung</th>
+                                        <th class="px-4 py-3">Kunde</th>
+                                        <th class="px-4 py-3">Mandatsreferenz</th>
+                                        <th class="px-4 py-3">Debitor-IBAN</th>
+                                        <th class="px-4 py-3 text-right">Offener Betrag</th>
+                                        <th class="px-4 py-3 text-center">Pre-Notification</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sepa-offene-rechnungen-tbody" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Previous SEPA Runs History -->
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                            <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Bisherige Lastschriftläufe</h4>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50/50 border-b border-slate-200 text-slate-600 text-xs font-semibold">
+                                        <th class="px-4 py-3">Lauf-Nummer</th>
+                                        <th class="px-4 py-3">Bankkonto</th>
+                                        <th class="px-4 py-3 text-center">Fälligkeit</th>
+                                        <th class="px-4 py-3 text-center">Anzahl Posten</th>
+                                        <th class="px-4 py-3 text-right">Gesamtsumme</th>
+                                        <th class="px-4 py-3 text-center">Status</th>
+                                        <th class="px-4 py-3 text-center">Aktion</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sepa-laeufe-tbody" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 4: Konten & Mandate -->
+                <div id="banking-panel-mandate" class="hidden flex flex-col gap-6">
+                    <!-- Own Bank Accounts -->
+                    <div class="flex flex-col gap-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-slate-800 uppercase tracking-wider">Eigene Bankverbindungen</h3>
+                            <button onclick="oeffneBankKontoModal()"
+                                class="px-3 py-1.5 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1">
+                                <span class="material-symbols-outlined text-sm">add</span>
+                                <span>Konto hinzufügen</span>
+                            </button>
+                        </div>
+                        <div id="banking-konten-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                    </div>
+
+                    <!-- Customer SEPA Mandates -->
+                    <div class="flex flex-col gap-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-slate-800 uppercase tracking-wider">SEPA-Mandate der Kunden</h3>
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs font-semibold">
+                                            <th class="px-4 py-3">Kunde</th>
+                                            <th class="px-4 py-3">Mandatsreferenz</th>
+                                            <th class="px-4 py-3 text-center">Typ</th>
+                                            <th class="px-4 py-3">IBAN</th>
+                                            <th class="px-4 py-3 text-center">Unterschrift</th>
+                                            <th class="px-4 py-3 text-center">Status</th>
+                                            <th class="px-4 py-3 text-center">Aktion</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="banking-mandate-tbody" class="divide-y divide-slate-100"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Bank Account Modal -->
+        <div id="bank-konto-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-100">
+                <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                    <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">account_balance</span>
+                        Bankkonto bearbeiten
+                    </h3>
+                    <button onclick="schliesseBankKontoModal()" class="text-slate-400 hover:text-slate-600">✕</button>
+                </div>
+                <div class="p-6 flex flex-col gap-4">
+                    <input type="hidden" id="bank-konto-id">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Kontobezeichnung *</label>
+                        <input type="text" id="bank-konto-name" placeholder="z. B. Geschäftskonto Haupt"
+                            class="w-full text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Bankname</label>
+                            <input type="text" id="bank-konto-bankname" placeholder="z. B. Sparkasse KölnBonn"
+                                class="w-full text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Kontoinhaber *</label>
+                            <input type="text" id="bank-konto-inhaber" placeholder="Firma Mustermann GmbH"
+                                class="w-full text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">IBAN *</label>
+                            <input type="text" id="bank-konto-iban" placeholder="DE89 3704 0044 0532 0130 00"
+                                class="w-full text-xs font-mono border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">BIC</label>
+                            <input type="text" id="bank-konto-bic" placeholder="COBADEFFXXX"
+                                class="w-full text-xs font-mono border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Gläubiger-Identifikationsnummer (CI für SEPA)</label>
+                        <input type="text" id="bank-konto-glaeubiger" placeholder="DE98ZZZ09999999999"
+                            class="w-full text-xs font-mono border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                    </div>
+                    <div class="flex items-center gap-2 pt-2">
+                        <input type="checkbox" id="bank-konto-standard" class="rounded border-slate-300 text-primary focus:ring-primary">
+                        <label for="bank-konto-standard" class="text-xs text-slate-700 font-medium">Als Standard-Bankkonto verwenden</label>
+                    </div>
+                </div>
+                <div class="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+                    <button onclick="schliesseBankKontoModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-medium">Abbrechen</button>
+                    <button onclick="speichereBankKontoForm()" class="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-medium">Speichern</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pre-Notification Modal -->
+        <div id="sepa-prenot-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-100">
+                <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                    <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">mail</span>
+                        SEPA Pre-Notification (Vorabinformation)
+                    </h3>
+                    <button onclick="schliessePreNotificationModal()" class="text-slate-400 hover:text-slate-600">✕</button>
+                </div>
+                <div class="p-6 flex flex-col gap-3">
+                    <p class="text-xs text-slate-600">Dieser Text erfüllt die gesetzlichen Anforderungen nach Art. 5.6 SEPA Rulebook und kann per E-Mail oder Post versendet werden:</p>
+                    <textarea id="sepa-prenot-text" rows="10" readonly
+                        class="w-full text-xs font-mono bg-slate-50 border border-slate-200 rounded-lg p-3 text-slate-800"></textarea>
+                </div>
+                <div class="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+                    <button onclick="navigator.clipboard.writeText(document.getElementById('sepa-prenot-text').value); if(typeof showToast==='function') showToast('Text in die Zwischenablage kopiert!', 'success');"
+                        class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium flex items-center gap-1.5">
+                        <span class="material-symbols-outlined text-sm">content_copy</span>
+                        <span>Kopieren</span>
+                    </button>
+                    <button onclick="schliessePreNotificationModal()" class="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-medium">Schließen</button>
                 </div>
             </div>
         </div>
@@ -3308,6 +3668,38 @@
                             </label>
                         </div>
 
+                        <!-- SEPA & Bankverbindung -->
+                        <div class="border-t border-slate-100 pt-3 mt-1 space-y-3">
+                            <p class="text-xs font-bold text-slate-700 flex items-center gap-1 uppercase tracking-wider">
+                                <span class="material-symbols-outlined text-[16px] text-primary">account_balance</span>
+                                Bankverbindung &amp; SEPA-Lastschrift
+                            </p>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">IBAN</label>
+                                    <input type="text" id="kunde-iban" placeholder="DE89 3704 0044 0532 0130 00"
+                                        class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm font-mono">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">BIC</label>
+                                    <input type="text" id="kunde-bic" placeholder="COBADEFFXXX"
+                                        class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm font-mono">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Bankname</label>
+                                    <input type="text" id="kunde-bank-name" placeholder="z. B. Sparkasse"
+                                        class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Kontoinhaber</label>
+                                    <input type="text" id="kunde-kontoinhaber" placeholder="Falls abweichend"
+                                        class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm">
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Quick Paste Section -->
                         <div class="mt-2 pt-4 border-t border-slate-100">
                             <button type="button" onclick="toggleQuickPaste()"
@@ -3609,10 +4001,10 @@
                             </div>
                         </div>
                         <fieldset class="border border-slate-200 rounded-md p-3">
-                            <legend class="px-1 text-xs font-bold text-slate-500 uppercase tracking-wider">Zeitfenster-Zuschläge (Anteil der Jahreszeit)</legend>
-                            <div class="grid grid-cols-3 gap-4">
+                            <legend class="px-1 text-xs font-bold text-slate-500 uppercase tracking-wider">Zuschlags-Anteile (Anteil der Jahreszeit)</legend>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 <div>
-                                    <label class="block text-xs font-medium text-slate-600 mb-1">Nacht (22–5 Uhr) in %</label>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">Nacht 22–5 Uhr in %</label>
                                     <input type="number" id="lv-position-modal-zs-nacht" min="0" max="100" step="1" value="0"
                                         oninput="updateLvPositionVorschau()"
                                         class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
@@ -3626,6 +4018,12 @@
                                 <div>
                                     <label class="block text-xs font-medium text-slate-600 mb-1">Hoher Feiertag in %</label>
                                     <input type="number" id="lv-position-modal-zs-hoher" min="0" max="100" step="1" value="0"
+                                        oninput="updateLvPositionVorschau()"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">Belastung in %</label>
+                                    <input type="number" id="lv-position-modal-zs-belastung" min="0" max="100" step="1" value="0"
                                         oninput="updateLvPositionVorschau()"
                                         class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
                                 </div>
@@ -3766,8 +4164,8 @@
                             </div>
                         </div>
                         <fieldset class="border border-slate-200 rounded-md p-3">
-                            <legend class="px-1 text-xs font-bold text-slate-500 uppercase tracking-wider">Zuschlagssätze (RTV/BTV)</legend>
-                            <div class="grid grid-cols-3 gap-4">
+                            <legend class="px-1 text-xs font-bold text-slate-500 uppercase tracking-wider">Zuschlagssätze (RTV Gebäudereinigung / Eigenprofil)</legend>
+                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                                 <div>
                                     <label class="block text-xs font-medium text-slate-600 mb-1">Nacht 22–5 Uhr (%)</label>
                                     <input type="number" id="zp-zs-nacht" min="0" max="400" step="1"
@@ -3781,6 +4179,11 @@
                                 <div>
                                     <label class="block text-xs font-medium text-slate-600 mb-1">Hoher Feiertag (%)</label>
                                     <input type="number" id="zp-zs-hoher" min="0" max="400" step="1"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">Belastungszuschlag (%)</label>
+                                    <input type="number" id="zp-zs-belastung" min="0" max="400" step="1"
                                         class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
                                 </div>
                             </div>
@@ -3797,8 +4200,9 @@
                                     class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
                             </div>
                         </div>
-                        <div class="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-800">
-                            Quellen: BIV Vergabe-Empfehlungen 01/2026, Tarifbroschüre Berlin 01/2025 – Sätze bei Tarifrunde anpassen.
+                        <div class="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-xs text-amber-800 space-y-1">
+                            <div><strong>RTV / 10. GebäudeArbbV (ab 01.01.2026):</strong> Allgemeinverbindliche Mindestlöhne: LG 1 (Unterhaltsreinigung) = 15,00 €/h, LG 6 (Glas/Fassade) = 18,40 €/h.</div>
+                            <div>Hohe Feiertage (+200 %): Neujahr, 1. Mai, 1. und 2. Weihnachtsfeiertag (§ 3 Ziff. 4.7 RTV). Belastungszuschlag (+25 %): Arbeitszeit &gt;8 h/Tag oder &gt;40 h/Woche (§ 10 Ziff. 3 RTV).</div>
                         </div>
                     </form>
                 </div>
@@ -4445,6 +4849,18 @@
                                             <option value="Überfällig">Überfällig</option>
                                             <option value="Entwurf">Entwurf</option>
                                         </select>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Skonto-Frist (Tage)</label>
+                                            <input type="number" id="rechnung-skonto-tage" min="0" max="90" placeholder="z. B. 14"
+                                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Skonto-Satz (%)</label>
+                                            <input type="number" id="rechnung-skonto-prozent" min="0" max="100" step="0.1" placeholder="z. B. 2.0"
+                                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -5237,6 +5653,9 @@
     <script src="js/dauerrechnungen.js"></script>
     <script src="controllers/ReinigungController.js"></script>
     <script src="js/putzplan.js"></script>
+    <script src="controllers/BankingController.js"></script>
+    <script src="controllers/SepaController.js"></script>
+    <script src="js/banking.js"></script>
     <script src="js/editor.js"></script>
     <script src="js/einstellungen.js"></script>
     <script src="js/berichte.js"></script>

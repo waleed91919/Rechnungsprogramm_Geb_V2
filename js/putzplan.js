@@ -445,6 +445,8 @@ function openLvPositionModal(pos = null, bereichId = null) {
     document.getElementById('lv-position-modal-zs-nacht').value = zs.nacht || 0;
     document.getElementById('lv-position-modal-zs-sofei').value = zs.sonntag_feiertag || 0;
     document.getElementById('lv-position-modal-zs-hoher').value = zs.hoher_feiertag || 0;
+    const belastungInput = document.getElementById('lv-position-modal-zs-belastung');
+    if (belastungInput) belastungInput.value = zs.belastung || 0;
 
     if (pos && pos.kalkulation && pos.kalkulation.eintraege) {
         lvEintraegeDraft = pos.kalkulation.eintraege.map(e => ({
@@ -496,9 +498,11 @@ function bauePositionsDraftAusFormular() {
     const nacht = parseFloat(document.getElementById('lv-position-modal-zs-nacht').value) || 0;
     const sofei = parseFloat(document.getElementById('lv-position-modal-zs-sofei').value) || 0;
     const hoher = parseFloat(document.getElementById('lv-position-modal-zs-hoher').value) || 0;
+    const belastung = parseFloat(document.getElementById('lv-position-modal-zs-belastung') ? document.getElementById('lv-position-modal-zs-belastung').value : 0) || 0;
     if (nacht > 0) zsJsonTeile.nacht = nacht;
     if (sofei > 0) zsJsonTeile.sonntag_feiertag = sofei;
     if (hoher > 0) zsJsonTeile.hoher_feiertag = hoher;
+    if (belastung > 0) zsJsonTeile.belastung = belastung;
 
     return {
         id: document.getElementById('lv-position-modal-id').value ? Number(document.getElementById('lv-position-modal-id').value) : null,
@@ -666,6 +670,7 @@ async function openZuschlagsprofilModal() {
     document.getElementById('zp-zs-nacht').value = (p.zuschlaege && p.zuschlaege.nacht && p.zuschlaege.nacht.prozent) || 30;
     document.getElementById('zp-zs-sofei').value = (p.zuschlaege && p.zuschlaege.sonntag_feiertag && p.zuschlaege.sonntag_feiertag.prozent) || 80;
     document.getElementById('zp-zs-hoher').value = (p.zuschlaege && p.zuschlaege.hoher_feiertag && p.zuschlaege.hoher_feiertag.prozent) || 200;
+    document.getElementById('zp-zs-belastung').value = (p.zuschlaege && p.zuschlaege.belastung && p.zuschlaege.belastung.prozent) || 25;
     document.getElementById('zp-wochen').value = (p.kalender && p.kalender.wochen_pro_jahr) || 52;
     document.getElementById('zp-tage').value = (p.kalender && p.kalender.tage_pro_jahr) || 365;
     document.getElementById('zuschlagsprofil-modal').classList.remove('hidden');
@@ -688,13 +693,14 @@ async function saveZuschlagsprofilFromModal() {
         zuschlaege: {
             nacht: { prozent: parseFloat(document.getElementById('zp-zs-nacht').value) || 0 },
             sonntag_feiertag: { prozent: parseFloat(document.getElementById('zp-zs-sofei').value) || 0 },
-            hoher_feiertag: { prozent: parseFloat(document.getElementById('zp-zs-hoher').value) || 0 }
+            hoher_feiertag: { prozent: parseFloat(document.getElementById('zp-zs-hoher').value) || 0 },
+            belastung: { prozent: parseFloat(document.getElementById('zp-zs-belastung').value) || 0 }
         },
         kalender: {
             wochen_pro_jahr: parseInt(document.getElementById('zp-wochen').value, 10) || 52,
             tage_pro_jahr: parseInt(document.getElementById('zp-tage').value, 10) || 365
         },
-        quellen: ['BIV Vergabe-Empfehlungen 01/2026', 'Tarifbroschüre Berlin 01/2025']
+        quellen: ['RTV Gebäudereinigung v. 31.10.2019 (§ 3 Ziff. 4.7, § 10 Ziff. 3)', 'BIV Vergabe-Empfehlungen 01/2026', '10. GebäudeArbbV']
     };
     const pruefung = RC.validateProfil(profil);
     if (!pruefung.valid) { showToast(pruefung.message, 'error'); return; }

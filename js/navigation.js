@@ -46,6 +46,11 @@ const viewConfig = {
         subtitle: 'Flächen, Turni, Zuschläge',
         action: () => { if (typeof renderPutzplan === 'function') renderPutzplan(); }
     },
+    banking: {
+        title: 'Banking & OPOS-Abgleich',
+        subtitle: 'Kontoauszug, Zahlungsabgleich & SEPA-Lastschriften',
+        action: () => { if (typeof renderBanking === 'function') renderBanking(); }
+    },
     'objekt-details': {
         title: 'Objekt-Detail',
         subtitle: 'Struktur & Historie',
@@ -65,7 +70,7 @@ const viewConfig = {
 
 const views = [
     'dashboard', 'rechnungen', 'artikel', 'kunden', 'angebote',
-    'projekte', 'projekt-details', 'objekte', 'objekt-details', 'dauerrechnungen', 'putzplan', 'berichte', 'einstellungen'
+    'projekte', 'projekt-details', 'objekte', 'objekt-details', 'dauerrechnungen', 'putzplan', 'banking', 'berichte', 'einstellungen'
 ];
 
 function switchView(viewName) {

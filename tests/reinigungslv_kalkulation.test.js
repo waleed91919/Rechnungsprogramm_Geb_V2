@@ -45,21 +45,22 @@ test('Referenzfall: 500 m², 5x/Woche, 1 min/m², 15 EUR/h, 10% Nacht-Anteil (ex
     assert.ok(Math.abs(k.jahresStunden - 2166.6667) < 0.0001, `jahresStunden=${k.jahresStunden}`);
     assert.equal(Math.round(k.jahresStunden * 100) / 100, 2166.67);
     assert.equal(k.nettoJahr, 32500.00);
-    assert.deepEqual(k.zuschlaege, [{ key: 'nacht', label: 'Nacht', anteilProzent: 10, satzProzent: 30, betrag: 975.00 }]);
+    assert.deepEqual(k.zuschlaege, [{ key: 'nacht', label: 'Nacht (22–05 Uhr)', anteilProzent: 10, satzProzent: 30, betrag: 975.00 }]);
     assert.equal(k.nettoJahrInklZuschlaege, 33475.00);
     assert.equal(k.nettoMonat, 2789.58);
     assert.equal(k.direkteMenge, 500);
 });
 
 test('Zuschlags-Breakdown: mehrere Fenster gleichzeitig; Anteil 0 erzeugt keinen Posten', () => {
-    const zs = RC.berechneZuschlaege(100, 20, JSON.stringify({ nacht: 50, sonntag_feiertag: 10, hoher_feiertag: 2 }), PROFIL);
+    const zs = RC.berechneZuschlaege(100, 20, JSON.stringify({ nacht: 50, sonntag_feiertag: 10, hoher_feiertag: 2, belastung: 15 }), PROFIL);
     assert.deepEqual(zs.map(z => [z.key, z.betrag]), [
         ['nacht', 100 * 0.5 * 0.3 * 20],
         ['sonntag_feiertag', 100 * 0.1 * 0.8 * 20],
-        ['hoher_feiertag', 100 * 0.02 * 2.0 * 20]
+        ['hoher_feiertag', 100 * 0.02 * 2.0 * 20],
+        ['belastung', 100 * 0.15 * 0.25 * 20]
     ]);
 
-    const nurNacht = RC.berechneZuschlaege(100, 20, JSON.stringify({ nacht: 25, sonntag_feiertag: 0, hoher_feiertag: 0 }), PROFIL);
+    const nurNacht = RC.berechneZuschlaege(100, 20, JSON.stringify({ nacht: 25, sonntag_feiertag: 0, hoher_feiertag: 0, belastung: 0 }), PROFIL);
     assert.equal(nurNacht.length, 1);
     assert.equal(nurNacht[0].key, 'nacht');
 
@@ -188,4 +189,43 @@ test('validateProfil: Fehlerfälle mit Feldnamen und gültiges Profil', () => {
         RC.validateProfil({ ...PROFIL, kalender: { wochen_pro_jahr: 0, tage_pro_jahr: 365 } }).message,
         /wochen_pro_jahr/
     );
+});
+
+test('R10: Belastungszuschlag 25 % Kalkulation (§ 10 Ziff. 3 RTV)', () => {
+    const zs = RC.berechneZuschlaege(100, 15.00, JSON.stringify({ belastung: 20 }), PROFIL);
+    assert.equal(zs.length, 1);
+    assert.equal(zs[0].key, 'belastung');
+    assert.equal(zs[0].label, 'Belastungszuschlag (>8h/Tag bzw. >40h/Woche)');
+    assert.equal(zs[0].anteilProzent, 20);
+    assert.equal(zs[0].satzProzent, 25);
+    assert.equal(zs[0].betrag, 75.00);
+});
+
+test('R11: Lohngruppenkatalog LG 1 bis LG 9 (2026) und Mindestlohnprüfung', () => {
+    assert.ok(Array.isArray(RC.LOHNGRUPPEN_GEBAEUDEREINIGUNG_2026));
+    assert.equal(RC.LOHNGRUPPEN_GEBAEUDEREINIGUNG_2026.length, 9);
+    const lg1 = RC.LOHNGRUPPEN_GEBAEUDEREINIGUNG_2026.find(g => g.id === 'LG1');
+    const lg6 = RC.LOHNGRUPPEN_GEBAEUDEREINIGUNG_2026.find(g => g.id === 'LG6');
+    const lg5 = RC.LOHNGRUPPEN_GEBAEUDEREINIGUNG_2026.find(g => g.id === 'LG5');
+    assert.equal(lg1.lohn, 15.00);
+    assert.equal(lg1.mindestlohn, true);
+    assert.equal(lg6.lohn, 18.40);
+    assert.equal(lg6.mindestlohn, true);
+    assert.equal(lg5.entfallen, true);
+
+    const r1 = RC.pruefeMindestlohn(14.50, 'LG1');
+    assert.equal(r1.warnung, true);
+    assert.ok(r1.meldung.includes('15.00'));
+
+    const r2 = RC.pruefeMindestlohn(15.00, 'LG1');
+    assert.equal(r2.warnung, false);
+    assert.equal(r2.meldung, '');
+
+    const r3 = RC.pruefeMindestlohn(17.50, 'LG6');
+    assert.equal(r3.warnung, true);
+    assert.ok(r3.meldung.includes('18.40'));
+
+    const r4 = RC.pruefeMindestlohn(18.40, 'LG6');
+    assert.equal(r4.warnung, false);
+    assert.equal(r4.meldung, '');
 });
