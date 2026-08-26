@@ -135,6 +135,12 @@ test('S5: pain.008.001.08 XML Generierung enthält alle SEPA Rulebook Pflichtfel
     assert.ok(xml.includes('<MndtId>MND-2026-001</MndtId>'));
     assert.ok(xml.includes('<IBAN>DE44500105175407324931</IBAN>'));
     assert.ok(xml.includes('<Ustrd>Rechnung INV-2026-101 Unterhaltsreinigung</Ustrd>'));
+
+    assert.ok(xml.includes('<BtchBookg>true</BtchBookg>'), 'BtchBookg muss korrekt geschrieben sein');
+    assert.ok(!xml.includes('<BchBookg>'), 'Falsches Element BchBookg darf nicht vorkommen');
+    assert.ok(xml.includes('<BICFI>COBADEFFXXX</BICFI>'), 'pain.008.001.08 verlangt BICFI');
+    assert.ok(!xml.includes('<BIC>'), 'Im .001.08-Schema darf das Legacy-Element BIC nicht auftreten');
+    assert.ok(xml.includes('<ChrgBr>SLEV</ChrgBr>'), 'ChrgBr=SLEV ist Pflichtangabe');
 });
 
 test('S6: pain.008.001.02 XML Kompatibilitätsmodus erzeugt valides Altschema', () => {
@@ -165,29 +171,267 @@ test('S6: pain.008.001.02 XML Kompatibilitätsmodus erzeugt valides Altschema', 
     assert.ok(xml.includes('urn:iso:std:iso:20022:tech:xsd:pain.008.001.02'));
     assert.ok(xml.includes('<SeqTp>RCUR</SeqTp>'));
     assert.ok(xml.includes('<InstdAmt Ccy="EUR">500.00</InstdAmt>'));
+    assert.ok(xml.includes('<BIC>COBADEFFXXX</BIC>'), 'pain.008.001.02-Fallback behält das Legacy-Element BIC');
+    assert.ok(!xml.includes('<BICFI>'), 'Im .001.02-Schema darf BICFI nicht auftreten');
+    assert.ok(xml.includes('<BtchBookg>true</BtchBookg>'), 'BtchBookg muss korrekt geschrieben sein');
+    assert.ok(xml.includes('<ChrgBr>SLEV</ChrgBr>'), 'ChrgBr=SLEV ist Pflichtangabe');
+});
+
+const BASIS_GENERATOR_OPTS = {
+    messageId: 'MSG-T-R-BASIS',
+    initiatingPartyName: 'W-Link Gebäudereinigung GmbH',
+    executionDate: '2026-09-01',
+    creditorName: 'W-Link Gebäudereinigung GmbH',
+    creditorIban: 'DE89370400440532013000',
+    creditorBic: 'COBADEFFXXX',
+    creditorId: 'DE98ZZZ09999999999',
+    localInstrument: 'CORE'
+};
+
+function basisTransaktion(overrides = {}) {
+    return {
+        endToEndId: 'E2E-TR-1',
+        amount: 1000.00,
+        mandateId: 'MND-TR-001',
+        mandateDateOfSignature: '2026-01-15',
+        debtorName: 'Alpha Facility GmbH',
+        debtorIban: 'DE44500105175407324931',
+        debtorBic: 'COBADEFFXXX',
+        remittanceInfo: 'Rechnung TR-1',
+        ...overrides
+    };
+}
+
+test('T-R1: pain.008.001.08 enthält BtchBookg und niemals das ungültige Element BchBookg', () => {
+    const xml = SepaController.generatePain00800108({ ...BASIS_GENERATOR_OPTS, sequenceType: 'RCUR', transactions: [basisTransaktion()] });
+    assert.ok(xml.includes('<BtchBookg>true</BtchBookg>'));
+    assert.equal(xml.includes('<BchBookg>'), false);
+});
+
+test('T-R2: BICFI in .001.08 (Debtor + Creditor), BIC im .001.02-Fallback', () => {
+    const xml08 = SepaController.generatePain00800108({ ...BASIS_GENERATOR_OPTS, sequenceType: 'FRST', transactions: [basisTransaktion()] });
+    assert.ok(xml08.includes('<DbtrAgt><FinInstnId><BICFI>COBADEFFXXX</BICFI></FinInstnId></DbtrAgt>'));
+    assert.ok(/<CdtrAgt>\s*<FinInstnId>\s*<BICFI>COBADEFFXXX<\/BICFI>\s*<\/FinInstnId>\s*<\/CdtrAgt>/.test(xml08));
+    assert.equal(xml08.includes('<BIC>'), false);
+
+    const xml02 = SepaController.generatePain00800102({ ...BASIS_GENERATOR_OPTS, sequenceType: 'FRST', transactions: [basisTransaktion()] });
+    assert.equal(xml02.includes('<BICFI>'), false);
+    assert.ok(xml02.includes('<DbtrAgt><FinInstnId><BIC>COBADEFFXXX</BIC></FinInstnId></DbtrAgt>'));
+    assert.ok(/<CdtrAgt>\s*<FinInstnId>\s*<BIC>COBADEFFXXX<\/BIC>\s*<\/FinInstnId>\s*<\/CdtrAgt>/.test(xml02));
+});
+
+test('T-R3: ChrgBr=SLEV vorhanden und XSD-Sequenz CdtrAgt < ChrgBr < CdtrSchmeId < DrctDbtTxInf', () => {
+    const xml = SepaController.generatePain00800108({ ...BASIS_GENERATOR_OPTS, sequenceType: 'RCUR', transactions: [basisTransaktion()] });
+    assert.ok(xml.includes('<ChrgBr>SLEV</ChrgBr>'));
+
+    const idxCdtrAgt = xml.indexOf('<CdtrAgt>');
+    const idxChrgBr = xml.indexOf('<ChrgBr>');
+    const idxSchmeId = xml.indexOf('<CdtrSchmeId>');
+    const idxDrctDbt = xml.indexOf('<DrctDbtTxInf>');
+    const idxGrpHdr = xml.indexOf('<GrpHdr>');
+    const idxPmtInf = xml.indexOf('<PmtInf>');
+
+    assert.ok(idxCdtrAgt !== -1 && idxChrgBr > idxCdtrAgt, 'ChrgBr muss nach CdtrAgt folgen');
+    assert.ok(idxSchmeId > idxChrgBr, 'CdtrSchmeId muss nach ChrgBr folgen');
+    assert.ok(idxDrctDbt > idxSchmeId, 'DrctDbtTxInf muss nach CdtrSchmeId folgen');
+    assert.ok(idxGrpHdr !== -1 && idxPmtInf > idxGrpHdr, 'GrpHdr muss vor PmtInf stehen');
+});
+
+test('T-R4: CdtrSchmeId nutzt den Pfad Id/PrvtId/Othr/Id mit SchmeNm/Prtry=SEPA', () => {
+    const xml = SepaController.generatePain00800108({ ...BASIS_GENERATOR_OPTS, sequenceType: 'RCUR', transactions: [basisTransaktion()] });
+    assert.match(xml, /<CdtrSchmeId>\s*<Id>\s*<PrvtId>\s*<Othr>\s*<Id>DE98ZZZ09999999999<\/Id>/);
+    assert.match(xml, /<Othr>\s*<Id>DE98ZZZ09999999999<\/Id>\s*<SchmeNm>\s*<Prtry>SEPA<\/Prtry>/);
+    assert.equal(xml.includes('OrgId'), false);
+});
+
+test('T-R5: Gläubiger-ID-Validator (ISO 7064 Mod 97-10 ohne CBC)', () => {
+    assert.equal(SepaController.validateGlaeubigerId('DE98ZZZ09999999999'), true);
+    assert.equal(SepaController.validateGlaeubigerId('DE75ZZZ09999999999'), false);
+    assert.equal(SepaController.validateGlaeubigerId('de98 zzz09999999999'), true);
+    assert.equal(SepaController.validateGlaeubigerId(''), false);
+    assert.equal(SepaController.validateGlaeubigerId(null), false);
+    assert.equal(SepaController.validateGlaeubigerId(undefined), false);
+    assert.equal(SepaController.validateGlaeubigerId('DE98ZZZ'), false);
+    assert.equal(SepaController.validateGlaeubigerId('98ZZZ09999999999'), false);
+    assert.equal(SepaController.validateGlaeubigerId('DE98ZZZ09999999990'), false);
+});
+
+test('T-R7: Fehlendes oder ungültiges Unterschriftsdatum wirft Validierungsfehler statt Ausführungsdatum-Fallback', () => {
+    assert.throws(
+        () => SepaController.generatePain00800108({ ...BASIS_GENERATOR_OPTS, sequenceType: 'RCUR', transactions: [basisTransaktion({ mandateDateOfSignature: undefined })] }),
+        /Unterschriftsdatum/
+    );
+    assert.throws(
+        () => SepaController.generatePain00800108({ ...BASIS_GENERATOR_OPTS, sequenceType: 'RCUR', transactions: [basisTransaktion({ mandateDateOfSignature: '15.01.2026' })] }),
+        /rechtlich unzulässig/
+    );
+
+    const xmlOk = SepaController.generatePain00800108({ ...BASIS_GENERATOR_OPTS, sequenceType: 'RCUR', transactions: [basisTransaktion({ mandateDateOfSignature: '2025-06-01' })] });
+    assert.ok(xmlOk.includes('<DtOfSgntr>2025-06-01</DtOfSgntr>'));
+    assert.ok(!xmlOk.includes(`<DtOfSgntr>${BASIS_GENERATOR_OPTS.executionDate}</DtOfSgntr>`));
+});
+
+test('T-R8: Sequenztyp MIXED wird am Generator abgewiesen und erscheint nie im XML', () => {
+    assert.throws(
+        () => SepaController.generatePain00800108({ ...BASIS_GENERATOR_OPTS, sequenceType: 'MIXED', transactions: [basisTransaktion()] }),
+        /Sequenztyp/
+    );
+    assert.throws(
+        () => SepaController.generatePain00800108({ ...BASIS_GENERATOR_OPTS, sequenceType: 'RCUR', transactions: [basisTransaktion({ seqTp: 'MIXED' })] }),
+        /Sequenztyp/
+    );
+    const xml = SepaController.generatePain00800108({ ...BASIS_GENERATOR_OPTS, sequenceType: 'RCUR', transactions: [basisTransaktion()] });
+    assert.equal(xml.includes('>MIXED<'), false);
+});
+
+test('T-R9: Gemischte FRST/RCUR-Positionen erzeugen zwei PmtInf-Blöcke mit korrekten Block- und GrpHdr-Summen', () => {
+    const xml = SepaController.generatePain008Xml({
+        ...BASIS_GENERATOR_OPTS,
+        msgId: 'MSG-MULTI-TR9',
+        sequenceType: 'RCUR',
+        schemaVersion: 'pain.008.001.08',
+        transactions: [
+            basisTransaktion({ seqTp: 'FRST', amount: 100.00, mandateId: 'MND-FRST-1', endToEndId: 'E2E-FRST-1' }),
+            basisTransaktion({ seqTp: 'RCUR', amount: 200.00, mandateId: 'MND-RCUR-1', endToEndId: 'E2E-RCUR-1' }),
+            basisTransaktion({ seqTp: 'RCUR', amount: 300.00, mandateId: 'MND-RCUR-2', endToEndId: 'E2E-RCUR-2' })
+        ]
+    });
+
+    const pmtBlocks = xml.match(/<PmtInf>[\s\S]*?<\/PmtInf>/g) || [];
+    assert.equal(pmtBlocks.length, 2, 'Es müssen genau zwei PmtInf-Blöcke entstehen');
+
+    const frstBlock = pmtBlocks.find(b => b.includes('<SeqTp>FRST</SeqTp>'));
+    const rcurBlock = pmtBlocks.find(b => b.includes('<SeqTp>RCUR</SeqTp>'));
+    assert.ok(frstBlock && rcurBlock, 'Je Sequenztyp muss ein Block existieren');
+
+    assert.ok(frstBlock.includes('<NbOfTxs>1</NbOfTxs>'));
+    assert.ok(frstBlock.includes('<CtrlSum>100.00</CtrlSum>'));
+
+    assert.ok(rcurBlock.includes('<NbOfTxs>2</NbOfTxs>'));
+    assert.ok(rcurBlock.includes('<CtrlSum>500.00</CtrlSum>'));
+    assert.equal((rcurBlock.match(/<DrctDbtTxInf>/g) || []).length, 2);
+
+    const grpHdr = (xml.match(/<GrpHdr>[\s\S]*?<\/GrpHdr>/g) || [])[0];
+    assert.ok(grpHdr.includes('<NbOfTxs>3</NbOfTxs>'), 'GrpHdr-NbOfTxs muss Summe der Blöcke sein');
+    assert.ok(grpHdr.includes('<CtrlSum>600.00</CtrlSum>'), 'GrpHdr-CtrlSum muss Summe aller InstdAmt sein');
 });
 
 if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
-    test('SEPA-Lastschriftlauf DB-Integration (via Electron-as-Node Runtime)', () => {
+    function starteElectronInner(markerArg) {
         const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
         assert.ok(fs.existsSync(electronBin), 'Electron-Binary muss vorhanden sein');
-
-        const stdout = execFileSync(
+        return execFileSync(
             electronBin,
-            [path.join(__filename), `--${RUN_INNER_MARKER}`],
+            [path.join(__filename), markerArg],
             {
                 env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', NODE_OPTIONS: '' },
                 encoding: 'utf-8',
                 maxBuffer: 64 * 1024 * 1024,
-                timeout: 180000
+                timeout: 240000
             }
         );
+    }
 
+    test('SEPA-Lastschriftlauf DB-Integration (via Electron-as-Node Runtime)', () => {
+        const stdout = starteElectronInner(`--${RUN_INNER_MARKER}`);
         assert.match(stdout, /SEPA_PAIN008_DB_TESTS_PASSED/, 'Alle SEPA-DB-Tests müssen bestehen');
     });
+
+    test('T-R10: Pre-Notification-Frist wird erzwungen; bestätigte Abweichung erlaubt Lauf mit Audit (via Electron-as-Node Runtime)', () => {
+        const stdout = starteElectronInner('--SEPA_T10_EXTRA_RUN');
+        assert.match(stdout, /SEPA_T10_PASSED/, 'PreNot-Frist-Szenario muss bestehen');
+    });
 } else {
-    process.env.RECHNUNGSPROGRAMM_DB_PATH = path.join(os.tmpdir(), `sepa-pain008-test-${Date.now()}-${process.pid}.sqlite`);
-    const { db, dbAPI } = require('../db.js');
+    const isT10Extra = process.argv.some(a => String(a).includes('SEPA_T10_EXTRA_RUN'));
+    process.env.RECHNUNGSPROGRAMM_DB_PATH = path.join(os.tmpdir(), `sepa-pain008-${isT10Extra ? 't10' : 'main'}-${Date.now()}-${process.pid}.sqlite`);
+    const { db, dbAPI, verifiziereAuditKette } = require('../db.js');
+
+    if (isT10Extra) {
+        (async () => {
+            try {
+                const konto = await dbAPI.saveBankKonto({
+                    kontoname: 'T10-Konto',
+                    bankname: 'Commerzbank',
+                    iban: 'DE89370400440532013000',
+                    bic: 'COBADEFFXXX',
+                    kontoinhaber: 'W-Link Gebäudereinigung GmbH',
+                    glaeubiger_id: 'DE98ZZZ09999999999',
+                    ist_standard: 1
+                });
+                const kundeId = Number(db.prepare(`
+                    INSERT INTO kunden (name, iban, bic, bank_name, kontoinhaber, sepa_mandat_aktiv)
+                    VALUES ('T10 Kunde AG', 'DE44500105175407324931', 'GENODED1STG', 'Volksbank', 'T10 Kunde AG', 1)
+                `).run().lastInsertRowid);
+
+                await dbAPI.saveSepaMandat({
+                    kunde_id: kundeId,
+                    mandatsreferenz: 'MND-T10-' + kundeId,
+                    mandats_typ: 'CORE',
+                    sequenz_typ: 'FRST',
+                    iban: 'DE44500105175407324931',
+                    bic: 'GENODED1STG',
+                    kontoinhaber: 'T10 Kunde AG',
+                    unterschrifts_datum: '2026-01-01',
+                    status: 'AKTIV'
+                });
+
+                const docId = Number(db.prepare(`
+                    INSERT INTO dokumente (nr, type, datum, faellig, kundeId, brutto, netto, steuer, status, offener_betrag, bezahlt_betrag, isLocked)
+                    VALUES ('INV-T10-01', 'rechnung', date('now'), date('now', '+20 day'), ?, 1190.00, 1000.00, 190.00, 'Ausstehend', 1190.00, 0, 0)
+                `).run(kundeId).lastInsertRowid);
+
+                const morgen = new Date(Date.now() + 1 * 86400000).toISOString().substring(0, 10);
+
+                let fristError = null;
+                try {
+                    await dbAPI.createSepaRun({
+                        bankKontoId: konto.id,
+                        invoiceIds: [docId],
+                        ausfuehrungsDatum: morgen,
+                        sammelTyp: 'CORE'
+                    });
+                } catch (e) {
+                    fristError = e;
+                }
+                assert.ok(fristError, 'Lauf innerhalb der PreNot-Frist muss abgelehnt werden');
+                assert.match(fristError.message, /Pre-Notification-Frist/, 'Fehlermeldung muss die Frist benennen');
+
+                const laeufeNachAblehnung = db.prepare('SELECT COUNT(*) AS cnt FROM sepa_lastschrift_laeufe').get().cnt;
+                assert.equal(laeufeNachAblehnung, 0, 'Abgelehnter Lauf darf nicht persistiert werden');
+
+                const okRun = await dbAPI.createSepaRun({
+                    bankKontoId: konto.id,
+                    invoiceIds: [docId],
+                    ausfuehrungsDatum: morgen,
+                    sammelTyp: 'CORE',
+                    preNotFristBestaetigt: true
+                });
+                assert.ok(okRun.laufId, 'Mit Bestätigung muss der Lauf entstehen');
+                assert.equal(okRun.prenotFristAbweichung, true);
+
+                const auditRows = db.prepare(`
+                    SELECT * FROM audit_logs
+                    WHERE entity_type = 'SEPA_RUN' AND action = 'PRENOT_FRIST_ABWEICHEND_BESTAETIGT'
+                      AND entity_id = ?
+                `).all(Number(okRun.laufId));
+                assert.ok(auditRows.length >= 1, 'Bestätigte Fristabweichung muss auditiert werden');
+
+                assert.ok(verifiziereAuditKette().valid, 'GoBD Audit-Kette muss gültig bleiben');
+                assert.ok(!okRun.xmlContent.includes('<BchBookg>'));
+
+                try { db.close(); } catch (_e) {}
+                for (const suffix of ['', '-wal', '-shm']) {
+                    try { fs.rmSync(process.env.RECHNUNGSPROGRAMM_DB_PATH + suffix, { force: true }); } catch (_e) {}
+                }
+
+                console.log('SEPA_T10_PASSED');
+                process.exit(0);
+            } catch (err) {
+                console.error('SEPA T10 Test Error:', err);
+                process.exit(1);
+            }
+        })();
+    } else {
 
     (async () => {
         try {
@@ -231,10 +475,12 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             assert.ok(targetDoc, 'Rechnung mit Mandat muss in SEPA-Vorschlagsliste sein');
             assert.equal(targetDoc.mandatsreferenz, 'MND-KUNDE-' + kundeId);
 
+            const ausfuehrungsDatum = new Date(Date.now() + 15 * 86400000).toISOString().substring(0, 10);
+
             const runRes = await dbAPI.createSepaRun({
                 bankKontoId: kontoId,
                 invoiceIds: [docId],
-                ausfuehrungsDatum: '2026-09-01',
+                ausfuehrungsDatum,
                 xmlFormat: 'pain.008.001.08',
                 sammelTyp: 'CORE'
             });
@@ -245,15 +491,24 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             assert.ok(runRes.xmlContent.includes('pain.008.001.08'));
             assert.ok(runRes.xmlContent.includes('MND-KUNDE-' + kundeId));
 
-            const updatedMandat = db.prepare('SELECT * FROM kunden_sepa_mandate WHERE id = ?').get(mandatId);
-            assert.equal(updatedMandat.sequenz_typ, 'RCUR', 'Sequenztyp muss nach erstem Lastschrifteinzug von FRST auf RCUR übergehen');
+            const mandatNachErstellung = db.prepare('SELECT * FROM kunden_sepa_mandate WHERE id = ?').get(mandatId);
+            assert.equal(mandatNachErstellung.sequenz_typ, 'FRST', 'Sequenztyp bleibt FRST bis zum Export (nur Lauf-Erstellung genügt nicht)');
 
             const exportRes = await dbAPI.exportSepaRunXml(runRes.laufId);
             assert.equal(exportRes.laufId, runRes.laufId);
             assert.ok(exportRes.xmlContent.includes('pain.008.001.08'));
 
+            const updatedMandat = db.prepare('SELECT * FROM kunden_sepa_mandate WHERE id = ?').get(mandatId);
+            assert.equal(updatedMandat.sequenz_typ, 'RCUR', 'Sequenztyp muss erst nach Export von FRST auf RCUR übergehen');
+
             const lauf = db.prepare('SELECT * FROM sepa_lastschrift_laeufe WHERE id = ?').get(runRes.laufId);
             assert.equal(lauf.status, 'EXPORTIERT');
+            assert.ok(lauf.exportiert_am, 'exportiert_am muss beim Export gesetzt werden');
+
+            const laeufeListe = await dbAPI.getSepaLaeufe();
+            assert.ok(Array.isArray(laeufeListe) && laeufeListe.length >= 1, 'getSepaLaeufe muss Läufe liefern');
+
+            assert.ok(verifiziereAuditKette().valid, 'GoBD Audit-Kette muss gültig bleiben');
 
             try { db.close(); } catch (_e) { /* ignore */ }
             for (const suffix of ['', '-wal', '-shm']) {
@@ -271,4 +526,5 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             }
         }
     })();
+    }
 }

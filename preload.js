@@ -115,6 +115,8 @@ contextBridge.exposeInMainWorld('api', {
     getSepaLaeufe: () => ipcRenderer.invoke('db:getSepaLaeufe'),
     getSepaLaufDetails: (laufId) => ipcRenderer.invoke('db:getSepaLaufDetails', laufId),
     exportSepaRunXml: (laufId) => ipcRenderer.invoke('db:exportSepaRunXml', laufId),
+    storniereSepaLauf: (laufId, grund) => ipcRenderer.invoke('db:storniereSepaLauf', laufId, grund),
+    markiereRuecklastschrift: (positionId, grund) => ipcRenderer.invoke('db:markiereRuecklastschrift', positionId, grund),
 
     saveEinstellung: (key, value) => ipcRenderer.invoke('db:saveEinstellung', key, value),
 

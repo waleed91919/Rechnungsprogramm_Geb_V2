@@ -1696,7 +1696,7 @@
                 <!-- Tab 1: Kontoauszug & Import -->
                 <div id="banking-panel-kontoauszug" class="flex flex-col gap-4">
                     <!-- Dropzone & Filters -->
-                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div id="banking-dropzone" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 border-dashed">
                         <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
                             <div class="relative w-64">
                                 <span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-400 text-sm">search</span>
@@ -1712,6 +1712,7 @@
                                 <option value="TEILWEISE_ZUGEORDNET">Teilweise zugeordnet</option>
                                 <option value="IGNORIERT">Ignoriert</option>
                             </select>
+                            <span class="text-xs text-slate-400 italic">oder Datei hierher ziehen (.xml / .csv)</span>
                         </div>
                         <div class="text-xs text-slate-500 flex items-center gap-2">
                             <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
@@ -1757,7 +1758,7 @@
                         </div>
                         <div class="flex items-center gap-3">
                             <span id="banking-opos-badge-count" class="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-semibold">0 Vorschläge</span>
-                            <span class="text-xs text-slate-500">Auto-Skonto nach § 14 Abs. 4 UStG aktiv (Toleranz: 2 Tage)</span>
+                            <span class="text-xs text-slate-500" title="Bemessungsgrundlage: §§ 10 Abs. 1, 17 Abs. 1 UStG">Auto-Skonto nach § 14 Abs. 4 Satz 1 Nr. 7 UStG (Toleranz: 2 Tage)</span>
                         </div>
                     </div>
 
@@ -1829,6 +1830,10 @@
                                 </select>
                             </div>
                         </div>
+                        <div class="flex items-center gap-2 pt-1">
+                            <input type="checkbox" id="sepa-prenot-frist-bestaetigt" class="rounded border-slate-300 text-primary focus:ring-primary">
+                            <label for="sepa-prenot-frist-bestaetigt" class="text-xs text-slate-700">Verkürzte Pre-Notification-Frist vereinbart (Abweichung von Art. 5.6 SEPA Rulebook wird protokolliert)</label>
+                        </div>
                     </div>
 
                     <!-- Invoices with Mandate Table -->
@@ -1899,6 +1904,11 @@
                     <div class="flex flex-col gap-3">
                         <div class="flex items-center justify-between">
                             <h3 class="text-sm font-bold text-slate-800 uppercase tracking-wider">SEPA-Mandate der Kunden</h3>
+                            <button onclick="oeffneMandatModal()"
+                                class="px-3 py-1.5 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1">
+                                <span class="material-symbols-outlined text-sm">add</span>
+                                <span>Mandat anlegen</span>
+                            </button>
                         </div>
                         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                             <div class="overflow-x-auto">
@@ -2004,6 +2014,123 @@
                         <span>Kopieren</span>
                     </button>
                     <button onclick="schliessePreNotificationModal()" class="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-medium">Schließen</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mandate Modal -->
+        <div id="mandat-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-100 max-h-[90vh] overflow-y-auto">
+                <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                    <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">history_edu</span>
+                        SEPA-Mandat anlegen
+                    </h3>
+                    <button onclick="schliesseMandatModal()" class="text-slate-400 hover:text-slate-600">✕</button>
+                </div>
+                <div class="p-6 flex flex-col gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Kunde *</label>
+                        <select id="mandat-kunde" class="w-full text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3"></select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Mandatsreferenz *</label>
+                            <input type="text" id="mandat-referenz" placeholder="z. B. MND-KD1001"
+                                class="w-full text-xs font-mono border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Unterschriftsdatum *</label>
+                            <input type="date" id="mandat-unterschrift"
+                                class="w-full text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Typ</label>
+                            <select id="mandat-typ" class="w-full text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                                <option value="CORE" selected>CORE (Basislastschrift)</option>
+                                <option value="B2B">B2B (Firmenlastschrift)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Sequenztyp</label>
+                            <select id="mandat-sequenz" class="w-full text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                                <option value="FRST" selected>FRST (Erstlastschrift)</option>
+                                <option value="RCUR">RCUR (Folgelastschrift)</option>
+                                <option value="FNAL">FNAL (Letztlastschrift)</option>
+                                <option value="OOFF">OOFF (Einmal-LASTSCHRIFT)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">IBAN *</label>
+                            <input type="text" id="mandat-iban" placeholder="DE89 3704 0044 0532 0130 00"
+                                class="w-full text-xs font-mono border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">BIC</label>
+                            <input type="text" id="mandat-bic" placeholder="COBADEFFXXX"
+                                class="w-full text-xs font-mono border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Kontoinhaber *</label>
+                            <input type="text" id="mandat-kontoinhaber" placeholder="Firma Mustermann GmbH"
+                                class="w-full text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Bankname</label>
+                            <input type="text" id="mandat-bankname" placeholder="z. B. Sparkasse KölnBonn"
+                                class="w-full text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Pre-Notification-Tage</label>
+                            <input type="number" id="mandat-prenot-tage" value="14" min="1"
+                                class="w-full text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Bemerkung</label>
+                            <input type="text" id="mandat-bemerkung" placeholder="optional"
+                                class="w-full text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                        </div>
+                    </div>
+                </div>
+                <div class="px-6 py-3 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+                    <button onclick="schliesseMandatModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-medium">Abbrechen</button>
+                    <button onclick="speichereMandatForm()" class="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-medium">Speichern</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SEPA Lauf Detail Modal -->
+        <div id="sepa-lauf-detail-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden border border-slate-100 max-h-[90vh] overflow-y-auto">
+                <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                    <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">receipt_long</span>
+                        Lauf-Positionen
+                    </h3>
+                    <button onclick="schliesseSepaLaufDetail()" class="text-slate-400 hover:text-slate-600">✕</button>
+                </div>
+                <div class="p-6 overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs font-semibold">
+                                <th class="px-3 py-2">Beleg</th>
+                                <th class="px-3 py-2">Kunde</th>
+                                <th class="px-3 py-2">Mandatsreferenz</th>
+                                <th class="px-3 py-2 text-right">Betrag</th>
+                                <th class="px-3 py-2 text-center">Status</th>
+                                <th class="px-3 py-2 text-center">Aktion</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sepa-lauf-detail-tbody" class="divide-y divide-slate-100"></tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -4948,7 +5075,7 @@
                                         </label>
                                         <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer pt-2">
                                             <input type="checkbox" id="rechnung-ist-privatkunde" onchange="handleRechtlicheCheckboxes()" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
-                                            <span>Privatkunde (Hinweispflicht nach §14 Abs. 4 Nr. 9 UStG)</span>
+                                            <span>Privatkunde</span>
                                         </label>
                                         <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer pt-2">
                                             <input type="checkbox" id="rechnung-unterliegt-bauabzugsteuer" onchange="handleRechtlicheCheckboxes()" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
@@ -4958,6 +5085,7 @@
                                             <input type="checkbox" id="rechnung-13b-ustg" onchange="handleRechtlicheCheckboxes()" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
                                             <span>§ 13b UStG (Reverse Charge)</span>
                                         </label>
+                                        <p class="text-xs text-slate-500 leading-relaxed">Bei Bauleistungen trifft den Leistungsempfänger (Unternehmer/Juristische Person des öffentlichen Rechts) eine Aufbewahrungspflicht nach § 14b Abs. 1 Satz 5 UStG.</p>
                                     </div>
                                 </div>
                             </div>

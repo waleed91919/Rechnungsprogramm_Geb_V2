@@ -221,3 +221,181 @@ test('B6: SHA-256 Transaktions-Hash ist deterministisch und verhindert Duplikate
     assert.equal(hash1, hash2);
     assert.notEqual(hash1, hash3);
 });
+
+const SAMPLE_COMMERZBANK_CSV = `Buchungstag;Wertstellung;Umsatzart;Auftraggeber / Begünstigter;Verwendungszweck;IBAN;BIC;Betrag;Währung
+14.08.2026;14.08.2026;Lastschrift;Stadtwerke Strom AG;Abschlag August;DE99500105170000000000;DEUTDEDDXXX;-120,50;EUR
+15.08.2026;15.08.2026;Überweisungsgutschrift;Delta Reinigung GmbH;Gutschrift Projekt X;DE12500105170000000001;DEUTDEDDXXX;950,00;EUR`;
+
+function baueCamtMitStatus(statusXml, mitRvsl) {
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.052.001.08">
+  <BkToCstmrAcctRpt>
+    <Rpt>
+      <Id>RPT-2026-001</Id>
+      <Acct>
+        <Id>
+          <IBAN>DE89370400440532013000</IBAN>
+        </Id>
+      </Acct>
+      <Ntry>
+        <Amt Ccy="EUR">500.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        ${mitRvsl ? '<RvslInd>true</RvslInd>' : ''}
+        ${statusXml}
+        <BookgDt><Dt>2026-08-10</Dt></BookgDt>
+        <ValDt><Dt>2026-08-10</Dt></ValDt>
+        <NtryDtls>
+          <TxDtls>
+            <RltdPties>
+              <Dbtr><Nm>Vorgemerkter Kunde</Nm></Dbtr>
+              <DbtrAcct><Id><IBAN>DE44500105175407324931</IBAN></Id></DbtrAcct>
+            </RltdPties>
+            <RmtInf><Ustrd>Rechnung RPT-100</Ustrd></RmtInf>
+          </TxDtls>
+        </NtryDtls>
+      </Ntry>
+    </Rpt>
+  </BkToCstmrAcctRpt>
+</Document>`;
+}
+
+const CAMT_BOOK_ONLY = `<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02">
+  <BkToCstmrStmt>
+    <Stmt>
+      <Id>STMT-PREFIX</Id>
+      <Acct><Id><IBAN>DE89370400440532013000</IBAN></Id></Acct>
+      <Ntry>
+        <Amt Ccy="EUR">300.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt><Dt>2026-08-11</Dt></BookgDt>
+        <NtryDtls><TxDtls><RltdPties><Dbtr><Nm>Präfix Kunde</Nm></Dbtr>
+          <DbtrAcct><Id><IBAN>DE27300606010123456789</IBAN></Id></DbtrAcct></RltdPties>
+          <RmtInf><Ustrd>Rechnung PREFIX-1</Ustrd></RmtInf></TxDtls></NtryDtls>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>`;
+
+const CAMT_BOOK_ONLY_PREFIXED = `<?xml version="1.0" encoding="UTF-8"?>
+<hcamt:Document xmlns:hcamt="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02">
+  <hcamt:BkToCstmrStmt>
+    <hcamt:Stmt>
+      <hcamt:Id>STMT-PREFIX</hcamt:Id>
+      <hcamt:Acct><hcamt:Id><hcamt:IBAN>DE89370400440532013000</hcamt:IBAN></hcamt:Id></hcamt:Acct>
+      <hcamt:Ntry>
+        <hcamt:Amt Ccy="EUR">300.00</hcamt:Amt>
+        <hcamt:CdtDbtInd>CRDT</hcamt:CdtDbtInd>
+        <hcamt:Sts>BOOK</hcamt:Sts>
+        <hcamt:BookgDt><hcamt:Dt>2026-08-11</hcamt:Dt></hcamt:BookgDt>
+        <hcamt:NtryDtls><hcamt:TxDtls><hcamt:RltdPties><hcamt:Dbtr><hcamt:Nm>Präfix Kunde</hcamt:Nm></hcamt:Dbtr>
+          <hcamt:DbtrAcct><hcamt:Id><hcamt:IBAN>DE27300606010123456789</hcamt:IBAN></hcamt:Id></hcamt:DbtrAcct></hcamt:RltdPties>
+          <hcamt:RmtInf><hcamt:Ustrd>Rechnung PREFIX-1</hcamt:Ustrd></hcamt:RmtInf></hcamt:TxDtls></hcamt:NtryDtls>
+      </hcamt:Ntry>
+    </hcamt:Stmt>
+  </hcamt:BkToCstmrStmt>
+</hcamt:Document>`;
+
+test('T-R17: CSV-Auto-Erkennung erkennt alle vier Realheader-Profile korrekt', () => {
+    const txsSpk = BankingController.parseCsvStatement(SAMPLE_SPARKASSE_CSV, 'AUTO');
+    assert.equal(txsSpk[0].importFormat, 'CSV_SPARKASSE');
+
+    const txsVb = BankingController.parseCsvStatement(SAMPLE_VOLKSBANK_CSV, 'AUTO');
+    assert.equal(txsVb[0].importFormat, 'CSV_VOLKSBANK');
+
+    const txsDb = BankingController.parseCsvStatement(SAMPLE_DEUTSCHE_BANK_CSV, 'AUTO');
+    assert.equal(txsDb[0].importFormat, 'CSV_DEUTSCHE_BANK');
+
+    const txsCoBa = BankingController.parseCsvStatement(SAMPLE_COMMERZBANK_CSV, 'AUTO');
+    assert.equal(txsCoBa[0].importFormat, 'CSV_COMMERZBANK');
+});
+
+test('T-R18: Soll-Buchung 120,50 wird bei Auto-Erkennung mit negativem Vorzeichen importiert (DB und CoBa)', () => {
+    const txsDb = BankingController.parseCsvStatement(SAMPLE_DEUTSCHE_BANK_CSV, 'AUTO');
+    const sollDb = txsDb.find(t => t.partner_name === 'Stadtwerke Strom');
+    assert.ok(sollDb, 'DB-Soll-Buchung muss vorhanden sein');
+    assert.equal(sollDb.betrag, -120.50);
+
+    const txsCoBa = BankingController.parseCsvStatement(SAMPLE_COMMERZBANK_CSV, 'AUTO');
+    const sollCoBa = txsCoBa.find(t => t.partner_name === 'Stadtwerke Strom AG');
+    assert.ok(sollCoBa, 'CoBa-Soll-Buchung muss vorhanden sein');
+    assert.equal(sollCoBa.betrag, -120.50);
+
+    const habenCoBa = txsCoBa.find(t => t.partner_name === 'Delta Reinigung GmbH');
+    assert.equal(habenCoBa.betrag, 950.00);
+});
+
+test('T-R19: CAMT mit PDNG- und BOOK-Eintrag importiert nur BOOK und zählt skippedPending', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.052.001.08">
+  <BkToCstmrAcctRpt>
+    <Rpt>
+      <Id>RPT-T19</Id>
+      <Acct><Id><IBAN>DE89370400440532013000</IBAN></Id></Acct>
+      <Ntry>
+        <Amt Ccy="EUR">200.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Sts>PDNG</Sts>
+        <BookgDt><Dt>2026-08-09</Dt></BookgDt>
+        <NtryDtls><TxDtls><RltdPties><Dbtr><Nm>Vorgemerkt GmbH</Nm></Dbtr></RltdPties></TxDtls></NtryDtls>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="EUR">150.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <Sts>BOOK</Sts>
+        <BookgDt><Dt>2026-08-10</Dt></BookgDt>
+        <NtryDtls><TxDtls><RltdPties><Dbtr><Nm>Gebucht GmbH</Nm></Dbtr></RltdPties></TxDtls></NtryDtls>
+      </Ntry>
+    </Rpt>
+  </BkToCstmrAcctRpt>
+</Document>`;
+
+    const statements = BankingController.parseCamt053(xml);
+    assert.equal(statements.length, 1);
+    assert.equal(statements[0].transactions.length, 1, 'Nur der BOOK-Eintrag darf importiert werden');
+    assert.equal(statements[0].skippedPending, 1);
+    assert.equal(statements[0].transactions[0].partner_name, 'Gebucht GmbH');
+});
+
+test('T-R20: RvslInd=true (Storno) wird übersprungen und gezählt', () => {
+    const statements = BankingController.parseCamt053(baueCamtMitStatus('<Sts>BOOK</Sts>', true));
+    assert.equal(statements.length, 1);
+    assert.equal(statements[0].transactions.length, 0, 'Stornierter Eintrag darf nicht importiert werden');
+    assert.equal(statements[0].rvslSkipped, 1);
+});
+
+test('T-R21: Rpt-Report setzt CAMT052, Stmt-Setzung CAMT053 als importFormat', () => {
+    const rptStatements = BankingController.parseCamt053(baueCamtMitStatus('<Sts>BOOK</Sts>', false));
+    assert.equal(rptStatements[0].statementType, 'CAMT052');
+    assert.equal(rptStatements[0].transactions[0].importFormat, 'CAMT052');
+
+    const stmtXml = baueCamtMitStatus('<Sts>BOOK</Sts>', false).replace(/<\/?BkToCstmrAcctRpt>/g, '').replace('<Rpt>', '<Stmt>').replace('</Rpt>', '</Stmt>');
+    const stmtStatements = BankingController.parseCamt053(stmtXml);
+    assert.equal(stmtStatements[0].statementType, 'CAMT053');
+    assert.equal(stmtStatements[0].transactions[0].importFormat, 'CAMT053');
+});
+
+test('T-R22: CAMT mit Namespace-Präfixen wird identisch geparst wie präfixfreie Variante', () => {
+    const clean = BankingController.parseCamt053(CAMT_BOOK_ONLY);
+    const prefixed = BankingController.parseCamt053(CAMT_BOOK_ONLY_PREFIXED);
+
+    assert.equal(prefixed.length, clean.length);
+    assert.equal(prefixed[0].iban, clean[0].iban);
+    assert.equal(prefixed[0].transactions.length, clean[0].transactions.length);
+
+    const tClean = clean[0].transactions[0];
+    const tPrefix = prefixed[0].transactions[0];
+    assert.equal(tPrefix.betrag, tClean.betrag);
+    assert.equal(tPrefix.partner_name, tClean.partner_name);
+    assert.equal(tPrefix.verwendungszweck, tClean.verwendungszweck);
+    assert.equal(tPrefix.dedup_hash, tClean.dedup_hash);
+});
+
+test('T-R22b: Encoding-Heuristik erkennt Mojibake (CP1252 als UTF-8 gelesen)', () => {
+    assert.equal(BankingController.detectEncodingProblem('MÃ¼ller & SÃ¶hne GmbH'), true);
+    assert.equal(BankingController.detectEncodingProblem('Müller & Söhne GmbH'), false);
+    assert.equal(BankingController.detectEncodingProblem('Kaputt \uFFFD Zeichen'), true);
+    assert.equal(BankingController.detectEncodingProblem(''), false);
+    assert.equal(BankingController.detectEncodingProblem(null), false);
+});

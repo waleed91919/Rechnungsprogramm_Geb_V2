@@ -184,6 +184,24 @@ const SepaController = {
         return this.generatePain008Xml({ ...opts, schemaVersion: 'pain.008.001.02' });
     },
 
+    validateGlaeubigerId(ci) {
+        const clean = String(ci || '').replace(/\s+/g, '').toUpperCase();
+        if (!/^[A-Z]{2}\d{2}[A-Z0-9]{3}[A-Z0-9]{1,28}$/.test(clean)) return false;
+        const country = clean.substring(0, 2);
+        const pruefziffer = clean.substring(2, 4);
+        const national = clean.substring(7);
+        let rest = 0;
+        const basis = national + country + '00';
+        for (const ch of basis) {
+            const code = ch.charCodeAt(0);
+            const wert = (code >= 65 && code <= 90) ? String(code - 55) : ch;
+            for (const ziffer of wert) {
+                rest = (rest * 10 + parseInt(ziffer, 10)) % 97;
+            }
+        }
+        return String(98 - rest).padStart(2, '0') === pruefziffer;
+    },
+
     generatePain008Xml({
         msgId,
         messageId,
@@ -205,6 +223,13 @@ const SepaController = {
         const finalScheme = localInstrument || schemeType || 'CORE';
         const cleanCredIban = this._cleanIban(creditorIban);
         const cleanCredBic = this._cleanBic(creditorBic);
+
+        if (!['FRST', 'RCUR', 'FNAL', 'OOFF'].includes(sequenceType)) {
+            throw new Error(`Ungültiger Sequenztyp "${sequenceType}" für SEPA-Lastschrift (zulässig: FRST, RCUR, FNAL, OOFF).`);
+        }
+
+        const bicTag = schemaVersion === 'pain.008.001.02' ? 'BIC' : 'BICFI';
+
         const totalSum = Math.round(transactions.reduce((sum, tx) => sum + (parseFloat(tx.betrag !== undefined ? tx.betrag : tx.amount) || 0), 0) * 100) / 100;
         const totalCount = transactions.length;
         const creDtTm = new Date().toISOString().replace(/\.\d{3}Z$/, '');
@@ -212,6 +237,63 @@ const SepaController = {
         const xmlNamespace = schemaVersion === 'pain.008.001.02'
             ? 'urn:iso:std:iso:20022:tech:xsd:pain.008.001.02'
             : 'urn:iso:std:iso:20022:tech:xsd:pain.008.001.08';
+
+        const gueltig = ['FRST', 'RCUR', 'FNAL', 'OOFF'];
+        const gruppen = new Map();
+        for (const tx of transactions) {
+            const seq = String(tx.seqTp || sequenceType).toUpperCase();
+            if (!gueltig.includes(seq)) {
+                throw new Error(`Ungültiger Sequenztyp "${seq}" für SEPA-Lastschrift (zulässig: FRST, RCUR, FNAL, OOFF).`);
+            }
+            if (!gruppen.has(seq)) gruppen.set(seq, []);
+            gruppen.get(seq).push(tx);
+        }
+
+        const pmtBlocks = gueltig
+            .filter(seq => gruppen.has(seq))
+            .map((seq, idx) => this._buildPmtInfBlock({
+                blockId: `${finalMsgId || Date.now()}-${idx + 1}`,
+                sequenceType: seq,
+                transactions: gruppen.get(seq),
+                executionDate,
+                scheme: finalScheme,
+                bicTag,
+                creditorName,
+                creditorIban: cleanCredIban,
+                creditorBic: cleanCredBic,
+                creditorId
+            }));
+
+        return `<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="${xmlNamespace}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <CstmrDrctDbtInitn>
+    <GrpHdr>
+      <MsgId>${this._escapeXml(finalMsgId || `MSG-${Date.now()}`)}</MsgId>
+      <CreDtTm>${creDtTm}</CreDtTm>
+      <NbOfTxs>${totalCount}</NbOfTxs>
+      <CtrlSum>${totalSum.toFixed(2)}</CtrlSum>
+      <InitgPty>
+        <Nm>${this._escapeXml(finalInitName || creditorName)}</Nm>
+      </InitgPty>
+    </GrpHdr>
+    ${pmtBlocks.join('\n')}
+  </CstmrDrctDbtInitn>
+</Document>`;
+    },
+
+    _buildPmtInfBlock({
+        blockId,
+        sequenceType,
+        transactions,
+        executionDate,
+        scheme,
+        bicTag,
+        creditorName,
+        creditorIban,
+        creditorBic,
+        creditorId
+    }) {
+        const blockSum = Math.round(transactions.reduce((sum, tx) => sum + (parseFloat(tx.betrag !== undefined ? tx.betrag : tx.amount) || 0), 0) * 100) / 100;
 
         let txXml = '';
         for (const tx of transactions) {
@@ -226,7 +308,11 @@ const SepaController = {
             const endToEndId = this._escapeXml(tx.endToEndId || `E2E-${tx.dokumentId || Date.now()}`);
             const amountStr = (Math.round((parseFloat(txAmt) || 0) * 100) / 100).toFixed(2);
             const mandateId = this._escapeXml(txMandat);
-            const dtOfSgntr = txDateSig || executionDate;
+            const sigDatum = String(txDateSig || '').trim();
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(sigDatum)) {
+                throw new Error(`Unterschriftsdatum des SEPA-Mandats "${txMandat || 'unbekannt'}" fehlt oder hat ungültiges Format (erwartet JJJJ-MM-DD). Eine Ersetzung durch das Ausführungsdatum ist rechtlich unzulässig.`);
+            }
+            const dtOfSgntr = sigDatum;
             const debtorName = this._escapeXml(txDebtorNm);
             const debtorIban = this._cleanIban(txDebtorIban);
             const debtorBic = this._cleanBic(txDebtorBic);
@@ -244,7 +330,7 @@ const SepaController = {
             <DtOfSgntr>${dtOfSgntr}</DtOfSgntr>
           </MndtRltdInf>
         </DrctDbtTx>
-        ${debtorBic ? `<DbtrAgt><FinInstnId><BIC>${debtorBic}</BIC></FinInstnId></DbtrAgt>` : '<DbtrAgt><FinInstnId><Othr><Id>NOTPROVIDED</Id></Othr></FinInstnId></DbtrAgt>'}
+        ${debtorBic ? `<DbtrAgt><FinInstnId><${bicTag}>${debtorBic}</${bicTag}></FinInstnId></DbtrAgt>` : '<DbtrAgt><FinInstnId><Othr><Id>NOTPROVIDED</Id></Othr></FinInstnId></DbtrAgt>'}
         <Dbtr>
           <Nm>${debtorName}</Nm>
         </Dbtr>
@@ -259,30 +345,18 @@ const SepaController = {
       </DrctDbtTxInf>`;
         }
 
-        return `<?xml version="1.0" encoding="UTF-8"?>
-<Document xmlns="${xmlNamespace}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
-  <CstmrDrctDbtInitn>
-    <GrpHdr>
-      <MsgId>${this._escapeXml(finalMsgId || `MSG-${Date.now()}`)}</MsgId>
-      <CreDtTm>${creDtTm}</CreDtTm>
-      <NbOfTxs>${totalCount}</NbOfTxs>
-      <CtrlSum>${totalSum.toFixed(2)}</CtrlSum>
-      <InitgPty>
-        <Nm>${this._escapeXml(finalInitName || creditorName)}</Nm>
-      </InitgPty>
-    </GrpHdr>
-    <PmtInf>
-      <PmtInfId>PMT-${this._escapeXml(finalMsgId || Date.now())}</PmtInfId>
+        return `    <PmtInf>
+      <PmtInfId>PMT-${this._escapeXml(blockId)}</PmtInfId>
       <PmtMtd>DD</PmtMtd>
-      <BchBookg>true</BchBookg>
-      <NbOfTxs>${totalCount}</NbOfTxs>
-      <CtrlSum>${totalSum.toFixed(2)}</CtrlSum>
+      <BtchBookg>true</BtchBookg>
+      <NbOfTxs>${transactions.length}</NbOfTxs>
+      <CtrlSum>${blockSum.toFixed(2)}</CtrlSum>
       <PmtTpInf>
         <SvcLvl>
           <Cd>SEPA</Cd>
         </SvcLvl>
         <LclInstrm>
-          <Cd>${finalScheme}</Cd>
+          <Cd>${scheme}</Cd>
         </LclInstrm>
         <SeqTp>${sequenceType}</SeqTp>
       </PmtTpInf>
@@ -292,30 +366,29 @@ const SepaController = {
       </Cdtr>
       <CdtrAcct>
         <Id>
-          <IBAN>${cleanCredIban}</IBAN>
+          <IBAN>${creditorIban}</IBAN>
         </Id>
       </CdtrAcct>
       <CdtrAgt>
         <FinInstnId>
-          ${cleanCredBic ? `<BIC>${cleanCredBic}</BIC>` : '<Othr><Id>NOTPROVIDED</Id></Othr>'}
+          ${creditorBic ? `<${bicTag}>${creditorBic}</${bicTag}>` : '<Othr><Id>NOTPROVIDED</Id></Othr>'}
         </FinInstnId>
       </CdtrAgt>
+      <ChrgBr>SLEV</ChrgBr>
       <CdtrSchmeId>
         <Id>
-          <OrgId>
+          <PrvtId>
             <Othr>
               <Id>${this._escapeXml(creditorId)}</Id>
               <SchmeNm>
                 <Prtry>SEPA</Prtry>
               </SchmeNm>
             </Othr>
-          </OrgId>
+          </PrvtId>
         </Id>
       </CdtrSchmeId>
       ${txXml}
-    </PmtInf>
-  </CstmrDrctDbtInitn>
-</Document>`;
+    </PmtInf>`;
     }
 };
 

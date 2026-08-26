@@ -13,8 +13,40 @@ let bankingState = {
 
 async function renderBanking() {
     await ladeBankKonten();
+    initBankDropzone();
     renderBankingTabs();
     await switchBankingTab(bankingState.activeTab);
+}
+
+function initBankDropzone() {
+    const dz = document.getElementById('banking-dropzone');
+    if (!dz || dz.dataset.dropInit === '1') return;
+    dz.dataset.dropInit = '1';
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('border-primary', 'bg-primary/5'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('border-primary', 'bg-primary/5'));
+    dz.addEventListener('drop', e => {
+        e.preventDefault();
+        dz.classList.remove('border-primary', 'bg-primary/5');
+        const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (file) handleBankFileUpload(file);
+    });
+}
+
+function liesseDateiMitEncodingFallback(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            const text = String(e.target.result || '');
+            const mojibake = /\uFFFD|(Ã¤|Ã¶|Ã¼|Ã„|Ã–|Ãœ|ÃŸ)/.test(text);
+            if (!mojibake) return resolve(text);
+            const reader2 = new FileReader();
+            reader2.onload = ev => resolve(String(ev.target.result || ''));
+            reader2.onerror = reject;
+            reader2.readAsText(file, 'windows-1252');
+        };
+        reader.onerror = reject;
+        reader.readAsText(file);
+    });
 }
 
 function renderBankingTabs() {
@@ -190,55 +222,58 @@ async function handleBankFileUpload(file) {
     }
 
     const konto = bankingState.konten.find(k => k.id === bankingState.selectedKontoId);
-    const reader = new FileReader();
 
-    reader.onload = async (e) => {
-        const content = e.target.result;
-        try {
-            let transactions = [];
-            let format = 'CSV_GENERIC';
-            let closingBalance = null;
+    try {
+        const content = await liesseDateiMitEncodingFallback(file);
+        let transactions = [];
+        let format = 'CSV_GENERIC';
+        let closingBalance = null;
+        let skippedPendingSumme = 0;
+        let rvslSkippedSumme = 0;
 
-            if (file.name.toLowerCase().endsWith('.xml') || content.trim().startsWith('<?xml') || content.includes('<Document')) {
-                format = 'CAMT053';
-                const parser = typeof BankingController !== 'undefined' ? BankingController : window.BankingController;
-                const statements = parser.parseCamt053(content);
-                if (statements.length > 0) {
-                    transactions = statements.flatMap(s => s.transactions);
-                    closingBalance = statements[0].closingBalance;
-                }
-            } else {
-                const parser = typeof BankingController !== 'undefined' ? BankingController : window.BankingController;
-                transactions = parser.parseCsvStatement(content, 'AUTO', konto ? konto.iban : '');
-                format = 'CSV';
+        if (file.name.toLowerCase().endsWith('.xml') || content.trim().startsWith('<?xml') || content.includes('<Document')) {
+            format = 'CAMT053';
+            const parser = typeof BankingController !== 'undefined' ? BankingController : window.BankingController;
+            const statements = parser.parseCamt053(content);
+            if (statements.length > 0) {
+                transactions = statements.flatMap(s => s.transactions);
+                closingBalance = statements[0].closingBalance;
+                skippedPendingSumme = statements.reduce((sum, s) => sum + (s.skippedPending || 0), 0);
+                rvslSkippedSumme = statements.reduce((sum, s) => sum + (s.rvslSkipped || 0), 0);
             }
-
-            if (transactions.length === 0) {
-                if (typeof showToast === 'function') showToast('Keine Buchungszeilen in der Datei gefunden.', 'warning');
-                return;
-            }
-
-            const res = await window.api.importBankTransactions(bankingState.selectedKontoId, transactions, {
-                filename: file.name,
-                format,
-                closingBalance
-            });
-
-            if (typeof showToast === 'function') {
-                showToast(`Import abgeschlossen: ${res.inserted} neu importiert, ${res.duplicates} Duplikate übersprungen.`, 'success');
-            }
-
-            await ladeTransaktionen();
-            if (res.inserted > 0) {
-                switchBankingTab('opos');
-            }
-        } catch (err) {
-            console.error('Import-Fehler:', err);
-            if (typeof showToast === 'function') showToast('Fehler beim Importieren: ' + err.message, 'error');
+        } else {
+            const parser = typeof BankingController !== 'undefined' ? BankingController : window.BankingController;
+            transactions = parser.parseCsvStatement(content, 'AUTO', konto ? konto.iban : '');
+            format = 'CSV';
         }
-    };
 
-    reader.readAsText(file);
+        if (transactions.length === 0) {
+            if (typeof showToast === 'function') showToast('Keine buchbaren Zeilen in der Datei gefunden (ggf. nur vorgemerkte/stornierte Einträge).', 'warning');
+            return;
+        }
+
+        const res = await window.api.importBankTransactions(bankingState.selectedKontoId, transactions, {
+            filename: file.name,
+            format,
+            closingBalance
+        });
+
+        if (typeof showToast === 'function') {
+            let msg = `Import abgeschlossen: ${res.inserted} neu importiert, ${res.duplicates} Duplikate übersprungen.`;
+            if (skippedPendingSumme > 0 || rvslSkippedSumme > 0) {
+                msg += `, ${skippedPendingSumme + rvslSkippedSumme} vorgemerkt/storniert übersprungen`;
+            }
+            showToast(msg, 'success');
+        }
+
+        await ladeTransaktionen();
+        if (res.inserted > 0) {
+            switchBankingTab('opos');
+        }
+    } catch (err) {
+        console.error('Import-Fehler:', err);
+        if (typeof showToast === 'function') showToast('Fehler beim Importieren: ' + err.message, 'error');
+    }
 }
 
 async function starteOposAbgleich() {
@@ -477,9 +512,20 @@ function renderSepaLaeufeTabelle() {
         let statusBadge = '';
         if (lauf.status === 'EXPORTIERT') {
             statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-800">Exportiert</span>';
+        } else if (lauf.status === 'EINGEREICHT') {
+            statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">Eingereicht</span>';
+        } else if (lauf.status === 'STORNIERT') {
+            statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Storniert</span>';
         } else {
             statusBadge = '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Erstellt</span>';
         }
+
+        const stornoBtn = (lauf.status === 'ERSTELLT' || lauf.status === 'EXPORTIERT')
+            ? `<button onclick="storniereSepaLauf(${lauf.id})" title="Lauf stornieren"
+                class="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-xs transition-colors">Storno</button>`
+            : '';
+        const detailBtn = `<button onclick="zeigeSepaLaufDetails(${lauf.id})" title="Positionen anzeigen"
+                class="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-xs transition-colors">Positionen</button>`;
 
         return `
             <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
@@ -490,15 +536,84 @@ function renderSepaLaeufeTabelle() {
                 <td class="px-4 py-3 text-xs text-right font-semibold text-slate-800">${summeStr}</td>
                 <td class="px-4 py-3 text-xs text-center">${statusBadge}</td>
                 <td class="px-4 py-3 text-xs text-center whitespace-nowrap">
-                    <button onclick="downloadSepaXml(${lauf.id})"
-                        class="px-2.5 py-1 bg-primary hover:bg-primary-dark text-white rounded text-xs font-medium transition-colors flex items-center gap-1 mx-auto">
-                        <span class="material-symbols-outlined text-xs">download</span>
-                        XML Download
-                    </button>
+                    <div class="flex items-center justify-center gap-1">
+                        ${detailBtn}
+                        ${stornoBtn}
+                        <button onclick="downloadSepaXml(${lauf.id})"
+                            class="px-2.5 py-1 bg-primary hover:bg-primary-dark text-white rounded text-xs font-medium transition-colors flex items-center gap-1">
+                            <span class="material-symbols-outlined text-xs">download</span>
+                            XML
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;
     }).join('');
+}
+
+async function storniereSepaLauf(laufId) {
+    if (!window.api || !window.api.storniereSepaLauf) return;
+    const grund = prompt('Grund der Stornierung (wird GoBD-konform protokolliert):', 'Manuelle Stornierung');
+    if (grund === null) return;
+    try {
+        await window.api.storniereSepaLauf(laufId, grund || 'Manuelle Stornierung');
+        if (typeof showToast === 'function') showToast('SEPA-Lauf wurde storniert. Bereits umgestellte Mandate wurden auf FRST zurückgesetzt.', 'info');
+        await ladeSepaBereich();
+    } catch (e) {
+        console.error('Fehler beim Stornieren des SEPA-Laufs:', e);
+        if (typeof showToast === 'function') showToast('Fehler beim Stornieren: ' + e.message, 'error');
+    }
+}
+
+async function zeigeSepaLaufDetails(laufId) {
+    if (!window.api || !window.api.getSepaLaufDetails) return;
+    try {
+        const details = await window.api.getSepaLaufDetails(laufId);
+        const tbody = document.getElementById('sepa-lauf-detail-tbody');
+        if (!tbody) return;
+
+        tbody.innerHTML = (details.positionen || []).map(pos => {
+            const betragStr = (parseFloat(pos.betrag) || 0).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+            const rueckBtn = pos.status !== 'RUECKLASTSCHRIFT' && pos.status !== 'STORNIERT'
+                ? `<button onclick="markiereRuecklastschrift(${pos.id})" class="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-xs transition-colors">Rücklastschrift</button>`
+                : '';
+            return `
+                <tr class="border-b border-slate-100">
+                    <td class="px-3 py-2 text-xs font-mono">${escapeHtml(pos.beleg_nr || '-')}</td>
+                    <td class="px-3 py-2 text-xs">${escapeHtml(pos.kunden_name || '')}</td>
+                    <td class="px-3 py-2 text-xs font-mono">${escapeHtml(pos.mandatsreferenz || '')}</td>
+                    <td class="px-3 py-2 text-xs text-right font-semibold">${betragStr}</td>
+                    <td class="px-3 py-2 text-xs text-center">${escapeHtml(pos.status)}</td>
+                    <td class="px-3 py-2 text-xs text-center">${rueckBtn}</td>
+                </tr>
+            `;
+        }).join('');
+
+        const modal = document.getElementById('sepa-lauf-detail-modal');
+        if (modal) modal.classList.remove('hidden');
+    } catch (e) {
+        console.error('Fehler beim Laden der Laufdetails:', e);
+        if (typeof showToast === 'function') showToast('Fehler beim Laden der Laufdetails: ' + e.message, 'error');
+    }
+}
+
+function schliesseSepaLaufDetail() {
+    const modal = document.getElementById('sepa-lauf-detail-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function markiereRuecklastschrift(positionId) {
+    if (!window.api || !window.api.markiereRuecklastschrift) return;
+    const grund = prompt('Grund der Rücklastschrift:', 'Rücklastschrift durch Zahlungsinstitut');
+    if (grund === null) return;
+    try {
+        await window.api.markiereRuecklastschrift(positionId, grund || 'Rücklastschrift durch Zahlungsinstitut');
+        if (typeof showToast === 'function') showToast('Position als Rücklastschrift markiert. Der Beleg bleibt offen.', 'warning');
+        await ladeSepaBereich();
+    } catch (e) {
+        console.error('Fehler bei Rücklastschrift:', e);
+        if (typeof showToast === 'function') showToast('Fehler bei Rücklastschrift: ' + e.message, 'error');
+    }
 }
 
 async function erstelleSepaLastschriftlauf() {
@@ -525,6 +640,8 @@ async function erstelleSepaLastschriftlauf() {
     const xmlFormat = formatSelect ? formatSelect.value : 'pain.008.001.08';
     const typeSelect = document.getElementById('sepa-type-select');
     const sammelTyp = typeSelect ? typeSelect.value : 'CORE';
+    const fristCheckbox = document.getElementById('sepa-prenot-frist-bestaetigt');
+    const preNotFristBestaetigt = !!(fristCheckbox && fristCheckbox.checked);
 
     try {
         const res = await window.api.createSepaRun({
@@ -532,11 +649,18 @@ async function erstelleSepaLastschriftlauf() {
             invoiceIds,
             ausfuehrungsDatum: executionDate,
             xmlFormat,
-            sammelTyp
+            sammelTyp,
+            preNotFristBestaetigt
         });
 
         if (typeof showToast === 'function') {
-            showToast(`SEPA-Lauf ${res.laufNr} erfolgreich mit ${res.anzahlTransaktionen} Posten (${res.summeGesamt.toFixed(2)} €) generiert.`, 'success');
+            let msg = `SEPA-Lauf ${res.laufNr} erfolgreich mit ${res.anzahlTransaktionen} Posten (${res.summeGesamt.toFixed(2)} €) generiert.`;
+            if (res.warnings && res.warnings.length > 0) {
+                msg += ` ${res.warnings.length} Position(en) gefiltert (Mandatstyp passt nicht zum Lauf).`;
+                showToast(msg, 'warning');
+            } else {
+                showToast(msg, 'success');
+            }
         }
 
         downloadXmlFile(res.laufNr + '.xml', res.xmlContent);
@@ -576,8 +700,13 @@ function zeigePreNotificationModal(invoiceId) {
 
     const konto = bankingState.konten.find(k => k.id === bankingState.selectedKontoId) || {};
     const parser = typeof SepaController !== 'undefined' ? SepaController : window.SepaController;
+    const glaeubigerIdRaw = konto.glaeubiger_id || '';
+    const glaeubigerOk = glaeubigerIdRaw && parser.validateGlaeubigerId(glaeubigerIdRaw);
+    if (!glaeubigerOk && typeof showToast === 'function') {
+        showToast('Warnung: Keine gültige Gläubiger-ID am Bankkonto hinterlegt. Bitte unter Tab 4 konfigurieren.', 'warning');
+    }
     const text = parser.buildPreNotification({
-        glaeubigerId: konto.glaeubiger_id || 'DE98ZZZ09999999999',
+        glaeubigerId: glaeubigerOk ? glaeubigerIdRaw : 'BITTE GLÄUBIGER-ID HINTERLEGEN',
         firmenname: konto.kontoinhaber || 'W-Link ERP',
         mandatsreferenz: doc.mandatsreferenz,
         faelligkeitsdatum: doc.faellig || new Date().toISOString().substring(0, 10),
@@ -727,6 +856,12 @@ async function speichereBankKontoForm() {
         return;
     }
 
+    const sepaCtrl = typeof SepaController !== 'undefined' ? SepaController : window.SepaController;
+    if (glaeubiger_id && !(sepaCtrl && sepaCtrl.validateGlaeubigerId && sepaCtrl.validateGlaeubigerId(glaeubiger_id))) {
+        if (typeof showToast === 'function') showToast('Ungültige Gläubiger-Identifikationsnummer (Format DE##ZZZ###########, Prüfziffer falsch).', 'error');
+        return;
+    }
+
     try {
         await window.api.saveBankKonto({
             id: id ? parseInt(id, 10) : undefined,
@@ -754,6 +889,95 @@ async function loescheBankKonto(id) {
         await ladeKontenUndMandate();
     } catch (e) {
         if (typeof showToast === 'function') showToast('Fehler beim Löschen: ' + e.message, 'error');
+    }
+}
+
+async function oeffneMandatModal() {
+    const modal = document.getElementById('mandat-modal');
+    if (!modal) return;
+
+    let kunden = (typeof state !== 'undefined' && state.kunden) ? state.kunden : [];
+    if ((!kunden || kunden.length === 0) && window.api && window.api.getFullState) {
+        try {
+            const full = await window.api.getFullState();
+            kunden = full.kunden || [];
+        } catch (_e) { kunden = []; }
+    }
+
+    const sel = document.getElementById('mandat-kunde');
+    if (sel) {
+        sel.innerHTML = kunden.length > 0
+            ? kunden.map(k => `<option value="${k.id}" data-kundennummer="${escapeHtml(k.kundennummer || '')}" data-name="${escapeHtml(k.name || '')}">${escapeHtml(k.name)} (${escapeHtml(k.kundennummer || '')})</option>`).join('')
+            : '<option value="">Keine Kunden vorhanden</option>';
+    }
+    sel.onchange = () => fuelleMandatsreferenzVorschlag(sel);
+
+    document.getElementById('mandat-referenz').value = '';
+    document.getElementById('mandat-unterschrift').value = new Date().toISOString().substring(0, 10);
+    document.getElementById('mandat-typ').value = 'CORE';
+    document.getElementById('mandat-sequenz').value = 'FRST';
+    document.getElementById('mandat-iban').value = '';
+    document.getElementById('mandat-bic').value = '';
+    document.getElementById('mandat-kontoinhaber').value = '';
+    document.getElementById('mandat-bankname').value = '';
+    document.getElementById('mandat-prenot-tage').value = '14';
+    document.getElementById('mandat-bemerkung').value = '';
+
+    if (kunden.length > 0) fuelleMandatsreferenzVorschlag(sel);
+
+    modal.classList.remove('hidden');
+}
+
+function fuelleMandatsreferenzVorschlag(sel) {
+    const opt = sel.selectedOptions[0];
+    if (!opt) return;
+    const parser = typeof SepaController !== 'undefined' ? SepaController : window.SepaController;
+    const refInput = document.getElementById('mandat-referenz');
+    if (refInput && !refInput.value.trim() && parser && parser.generateMandateReference) {
+        refInput.value = parser.generateMandateReference(opt.dataset.kundennummer || opt.value);
+    }
+}
+
+function schliesseMandatModal() {
+    const modal = document.getElementById('mandat-modal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function speichereMandatForm() {
+    const kundeSel = document.getElementById('mandat-kunde');
+    const kundeId = parseInt(kundeSel.value, 10);
+    const mandatsreferenz = document.getElementById('mandat-referenz').value.trim();
+    const iban = document.getElementById('mandat-iban').value.trim();
+
+    if (!kundeId) {
+        if (typeof showToast === 'function') showToast('Bitte wählen Sie einen Kunden aus.', 'warning');
+        return;
+    }
+    if (!mandatsreferenz || !iban) {
+        if (typeof showToast === 'function') showToast('Kunde, Mandatsreferenz und IBAN sind Pflichtfelder.', 'warning');
+        return;
+    }
+
+    try {
+        await window.api.saveSepaMandat({
+            kunde_id: kundeId,
+            mandatsreferenz,
+            mandats_typ: document.getElementById('mandat-typ').value,
+            sequenz_typ: document.getElementById('mandat-sequenz').value,
+            unterschrifts_datum: document.getElementById('mandat-unterschrift').value,
+            iban,
+            bic: document.getElementById('mandat-bic').value.trim(),
+            kontoinhaber: document.getElementById('mandat-kontoinhaber').value.trim(),
+            bank_name: document.getElementById('mandat-bankname').value.trim(),
+            pre_notification_tage: parseInt(document.getElementById('mandat-prenot-tage').value, 10) || 14,
+            bemerkung: document.getElementById('mandat-bemerkung').value.trim() || null
+        });
+        if (typeof showToast === 'function') showToast('SEPA-Mandat gespeichert.', 'success');
+        schliesseMandatModal();
+        await ladeKontenUndMandate();
+    } catch (e) {
+        console.error('Fehler beim Speichern des Mandats:', e);
+        if (typeof showToast === 'function') showToast('Fehler beim Speichern: ' + e.message, 'error');
     }
 }
 

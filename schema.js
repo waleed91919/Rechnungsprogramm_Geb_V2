@@ -822,6 +822,12 @@ function runMigrations(db) {
     try { db.exec(`ALTER TABLE kunden ADD COLUMN kontoinhaber TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
     try { db.exec(`ALTER TABLE kunden ADD COLUMN sepa_mandat_aktiv INTEGER DEFAULT 0`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
 
+    try { db.exec(`ALTER TABLE dokumente ADD COLUMN was_locked_vor_zahlung INTEGER DEFAULT 0`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+
+    try { db.exec(`ALTER TABLE zahlung_zuordnungen ADD COLUMN storno_flag INTEGER DEFAULT 0`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE zahlung_zuordnungen ADD COLUMN storniert_am DATETIME`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE zahlung_zuordnungen ADD COLUMN storno_grund TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+
     // --- Datenintegrität: Duplikate bereinigen + UNIQUE-Indizes ---
     ensureUniqueConstraints(db);
 }
@@ -946,7 +952,7 @@ function seedDefaultData(db) {
         bic: 'COBADEFFXXX',
         mahngebuehr: '5.00',
         manuelleRechnungsnummer: 'false',
-        glaeubiger_id: 'DE98ZZZ09999999999',
+        glaeubiger_id: '',
         sepa_xml_standard: 'pain.008.001.08',
         sepa_pre_notification_standard_tage: '14',
         matching_auto_skonto_toleranz_tage: '2'

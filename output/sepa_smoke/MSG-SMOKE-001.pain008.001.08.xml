@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.008.001.08" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <CstmrDrctDbtInitn>
+    <GrpHdr>
+      <MsgId>MSG-SMOKE-001</MsgId>
+      <CreDtTm>2026-08-26T12:55:16</CreDtTm>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>1190.00</CtrlSum>
+      <InitgPty>
+        <Nm>W-Link Gebäudereinigung GmbH</Nm>
+      </InitgPty>
+    </GrpHdr>
+        <PmtInf>
+      <PmtInfId>PMT-MSG-SMOKE-001-1</PmtInfId>
+      <PmtMtd>DD</PmtMtd>
+      <BtchBookg>true</BtchBookg>
+      <NbOfTxs>1</NbOfTxs>
+      <CtrlSum>1190.00</CtrlSum>
+      <PmtTpInf>
+        <SvcLvl>
+          <Cd>SEPA</Cd>
+        </SvcLvl>
+        <LclInstrm>
+          <Cd>CORE</Cd>
+        </LclInstrm>
+        <SeqTp>FRST</SeqTp>
+      </PmtTpInf>
+      <ReqdColltnDt>2026-09-15</ReqdColltnDt>
+      <Cdtr>
+        <Nm>W-Link Gebäudereinigung GmbH</Nm>
+      </Cdtr>
+      <CdtrAcct>
+        <Id>
+          <IBAN>DE89370400440532013000</IBAN>
+        </Id>
+      </CdtrAcct>
+      <CdtrAgt>
+        <FinInstnId>
+          <BICFI>COBADEFFXXX</BICFI>
+        </FinInstnId>
+      </CdtrAgt>
+      <ChrgBr>SLEV</ChrgBr>
+      <CdtrSchmeId>
+        <Id>
+          <PrvtId>
+            <Othr>
+              <Id>DE98ZZZ09999999999</Id>
+              <SchmeNm>
+                <Prtry>SEPA</Prtry>
+              </SchmeNm>
+            </Othr>
+          </PrvtId>
+        </Id>
+      </CdtrSchmeId>
+      
+      <DrctDbtTxInf>
+        <PmtId>
+          <EndToEndId>E2E-SMOKE-1</EndToEndId>
+        </PmtId>
+        <InstdAmt Ccy="EUR">1190.00</InstdAmt>
+        <DrctDbtTx>
+          <MndtRltdInf>
+            <MndtId>MND-SMOKE-001</MndtId>
+            <DtOfSgntr>2026-01-10</DtOfSgntr>
+          </MndtRltdInf>
+        </DrctDbtTx>
+        <DbtrAgt><FinInstnId><BICFI>COBADEFFXXX</BICFI></FinInstnId></DbtrAgt>
+        <Dbtr>
+          <Nm>Smoke Kunde GmbH</Nm>
+        </Dbtr>
+        <DbtrAcct>
+          <Id>
+            <IBAN>DE44500105175407324931</IBAN>
+          </Id>
+        </DbtrAcct>
+        <RmtInf>
+          <Ustrd>Rechnung SMOKE-1</Ustrd>
+        </RmtInf>
+      </DrctDbtTxInf>
+    </PmtInf>
+  </CstmrDrctDbtInitn>
+</Document>

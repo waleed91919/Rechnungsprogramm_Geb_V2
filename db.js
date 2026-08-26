@@ -108,8 +108,8 @@ function applyDocumentWrite(d, requestedLockedInt) {
 
     if (docId) {
 
-        const updateStmt = db.prepare('UPDATE dokumente SET type=?, nr=?, datum=?, faellig=?, kundeId=?, projektId=?, status=?, isLocked=?, netto=?, steuer=?, brutto=?, globalRabattAbzug=?, globalRabattType=?, globalRabattValue=?, anzahlung=?, mahnungLevel=?, mahnungDatum=?, mahnungGebuehr=?, eingabemodus=?, vortext=?, fusstext=?, leistungszeitraum_von=?, leistungszeitraum_bis=?, baustellen_adresse=?, vob_vereinbart=?, ist_privatkunde=?, unterliegt_bauabzugsteuer=?, bauabzugsteuer_betrag=?, ausweis_35a_erforderlich=?, summe_lohnkosten_brutto=?, rechnungsart=?, kumulierte_leistung_netto=?, sicherheitseinbehalt=?, unterliegt_13b=?, leitweg_id=?, buyer_reference=?, objekt_typ=?, objekt_id=?, sha256_hash=? WHERE id=?');
-        updateStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt(d), d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.mahnungLevel || 0, d.mahnungDatum || null, d.mahnungGebuehr || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.objekt_typ || null, d.objekt_id == null ? null : d.objekt_id, d.sha256_hash || null, docId);
+        const updateStmt = db.prepare('UPDATE dokumente SET type=?, nr=?, datum=?, faellig=?, kundeId=?, projektId=?, status=?, isLocked=?, netto=?, steuer=?, brutto=?, globalRabattAbzug=?, globalRabattType=?, globalRabattValue=?, anzahlung=?, mahnungLevel=?, mahnungDatum=?, mahnungGebuehr=?, eingabemodus=?, vortext=?, fusstext=?, leistungszeitraum_von=?, leistungszeitraum_bis=?, baustellen_adresse=?, vob_vereinbart=?, ist_privatkunde=?, unterliegt_bauabzugsteuer=?, bauabzugsteuer_betrag=?, ausweis_35a_erforderlich=?, summe_lohnkosten_brutto=?, rechnungsart=?, kumulierte_leistung_netto=?, sicherheitseinbehalt=?, unterliegt_13b=?, leitweg_id=?, buyer_reference=?, objekt_typ=?, objekt_id=?, skonto_tage=?, skonto_prozent=?, sepa_mandat_id=?, sha256_hash=? WHERE id=?');
+        updateStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt(d), d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.mahnungLevel || 0, d.mahnungDatum || null, d.mahnungGebuehr || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.objekt_typ || null, d.objekt_id == null ? null : d.objekt_id, d.skonto_tage || 0, d.skonto_prozent || 0, d.sepa_mandat_id == null ? null : d.sepa_mandat_id, d.sha256_hash || null, docId);
 
         action = (calculateDocumentContentHash(existing) === calculateDocumentContentHash(d)) ? 'STATUS_GEÄNDERT' : 'GEÄNDERT';
 
@@ -135,8 +135,8 @@ function applyDocumentWrite(d, requestedLockedInt) {
         const deleteVerrechnungStmt = db.prepare('DELETE FROM rechnung_verrechnungen WHERE aktuelle_rechnung_id=?');
         deleteVerrechnungStmt.run(docId);
     } else {
-        const insertStmt = db.prepare('INSERT INTO dokumente (type, nr, datum, faellig, kundeId, projektId, status, isLocked, netto, steuer, brutto, globalRabattAbzug, globalRabattType, globalRabattValue, anzahlung, eingabemodus, vortext, fusstext, leistungszeitraum_von, leistungszeitraum_bis, baustellen_adresse, vob_vereinbart, ist_privatkunde, unterliegt_bauabzugsteuer, bauabzugsteuer_betrag, ausweis_35a_erforderlich, summe_lohnkosten_brutto, rechnungsart, kumulierte_leistung_netto, sicherheitseinbehalt, unterliegt_13b, leitweg_id, buyer_reference, objekt_typ, objekt_id, sha256_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-        const res = insertStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt(d), d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.objekt_typ || null, d.objekt_id == null ? null : d.objekt_id, d.sha256_hash || null);
+        const insertStmt = db.prepare('INSERT INTO dokumente (type, nr, datum, faellig, kundeId, projektId, status, isLocked, netto, steuer, brutto, globalRabattAbzug, globalRabattType, globalRabattValue, anzahlung, eingabemodus, vortext, fusstext, leistungszeitraum_von, leistungszeitraum_bis, baustellen_adresse, vob_vereinbart, ist_privatkunde, unterliegt_bauabzugsteuer, bauabzugsteuer_betrag, ausweis_35a_erforderlich, summe_lohnkosten_brutto, rechnungsart, kumulierte_leistung_netto, sicherheitseinbehalt, unterliegt_13b, leitweg_id, buyer_reference, objekt_typ, objekt_id, skonto_tage, skonto_prozent, sepa_mandat_id, sha256_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        const res = insertStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt(d), d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.objekt_typ || null, d.objekt_id == null ? null : d.objekt_id, d.skonto_tage || 0, d.skonto_prozent || 0, d.sepa_mandat_id == null ? null : d.sepa_mandat_id, d.sha256_hash || null);
         docId = res.lastInsertRowid;
     }
 
@@ -584,10 +584,12 @@ const dbAPI = {
         // § 48b: sec48b_valid_until ist fachlich die Gültigkeit der Freistellungsbescheinigung;
         // falls nicht explizit gesetzt, wird sie aus freistellung_gueltig_bis gespiegelt.
         const sec48bValidUntil = kunde.sec48b_valid_until !== undefined ? kunde.sec48b_valid_until : (kunde.freistellung_gueltig_bis || null);
+        const cleanIban = String(kunde.iban || '').replace(/[\s-]+/g, '').toUpperCase() || null;
+        const cleanBic = String(kunde.bic || '').replace(/[\s-]+/g, '').toUpperCase() || null;
         if (kunde.id) {
             await dbRun(
-                'UPDATE kunden SET kundennummer=?, name=?, adresse=?, plz=?, ort=?, telefon=?, email=?, ustId=?, ist_bauleistender_13b=?, ust_1_tg_gueltig_bis=?, hat_freistellungsbescheinigung=?, freistellung_gueltig_bis=?, ist_umsatzsteuerfreie_vermietung=?, customer_type=?, leitweg_id=?, peppol_id=?, buyer_reference=?, tax_number=?, sec48b_status=?, sec48b_certificate_path=?, is_subcontractor=?, sec48b_valid_until=? WHERE id=?',
-                [kunde.kundennummer, kunde.name, kunde.adresse, kunde.plz, kunde.ort, kunde.telefon, kunde.email, kunde.ustId, kunde.ist_bauleistender_13b || 0, kunde.ust_1_tg_gueltig_bis, kunde.hat_freistellungsbescheinigung || 0, kunde.freistellung_gueltig_bis, kunde.ist_umsatzsteuerfreie_vermietung || 0, kunde.customer_type || 'B2C', kunde.leitweg_id || null, kunde.peppol_id || null, kunde.buyer_reference || null, kunde.tax_number || null, kunde.sec48b_status || 'NONE', kunde.sec48b_certificate_path || null, kunde.is_subcontractor ? 1 : 0, sec48bValidUntil, kunde.id]
+                'UPDATE kunden SET kundennummer=?, name=?, adresse=?, plz=?, ort=?, telefon=?, email=?, ustId=?, ist_bauleistender_13b=?, ust_1_tg_gueltig_bis=?, hat_freistellungsbescheinigung=?, freistellung_gueltig_bis=?, ist_umsatzsteuerfreie_vermietung=?, customer_type=?, leitweg_id=?, peppol_id=?, buyer_reference=?, tax_number=?, sec48b_status=?, sec48b_certificate_path=?, is_subcontractor=?, sec48b_valid_until=?, iban=?, bic=?, bank_name=?, kontoinhaber=? WHERE id=?',
+                [kunde.kundennummer, kunde.name, kunde.adresse, kunde.plz, kunde.ort, kunde.telefon, kunde.email, kunde.ustId, kunde.ist_bauleistender_13b || 0, kunde.ust_1_tg_gueltig_bis, kunde.hat_freistellungsbescheinigung || 0, kunde.freistellung_gueltig_bis, kunde.ist_umsatzsteuerfreie_vermietung || 0, kunde.customer_type || 'B2C', kunde.leitweg_id || null, kunde.peppol_id || null, kunde.buyer_reference || null, kunde.tax_number || null, kunde.sec48b_status || 'NONE', kunde.sec48b_certificate_path || null, kunde.is_subcontractor ? 1 : 0, sec48bValidUntil, cleanIban, cleanBic, kunde.bank_name || null, kunde.kontoinhaber || null, kunde.id]
             );
             return kunde.id;
         } else {
@@ -600,8 +602,8 @@ const dbAPI = {
             }
 
             const res = await dbRun(
-                'INSERT INTO kunden (kundennummer, name, adresse, plz, ort, telefon, email, ustId, ist_bauleistender_13b, ust_1_tg_gueltig_bis, hat_freistellungsbescheinigung, freistellung_gueltig_bis, ist_umsatzsteuerfreie_vermietung, customer_type, leitweg_id, peppol_id, buyer_reference, tax_number, sec48b_status, sec48b_certificate_path, is_subcontractor, sec48b_valid_until, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
-                [knr, kunde.name, kunde.adresse, kunde.plz, kunde.ort, kunde.telefon, kunde.email, kunde.ustId, kunde.ist_bauleistender_13b || 0, kunde.ust_1_tg_gueltig_bis, kunde.hat_freistellungsbescheinigung || 0, kunde.freistellung_gueltig_bis, kunde.ist_umsatzsteuerfreie_vermietung || 0, kunde.customer_type || 'B2C', kunde.leitweg_id || null, kunde.peppol_id || null, kunde.buyer_reference || null, kunde.tax_number || null, kunde.sec48b_status || 'NONE', kunde.sec48b_certificate_path || null, kunde.is_subcontractor ? 1 : 0, sec48bValidUntil]
+                'INSERT INTO kunden (kundennummer, name, adresse, plz, ort, telefon, email, ustId, ist_bauleistender_13b, ust_1_tg_gueltig_bis, hat_freistellungsbescheinigung, freistellung_gueltig_bis, ist_umsatzsteuerfreie_vermietung, customer_type, leitweg_id, peppol_id, buyer_reference, tax_number, sec48b_status, sec48b_certificate_path, is_subcontractor, sec48b_valid_until, iban, bic, bank_name, kontoinhaber, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+                [knr, kunde.name, kunde.adresse, kunde.plz, kunde.ort, kunde.telefon, kunde.email, kunde.ustId, kunde.ist_bauleistender_13b || 0, kunde.ust_1_tg_gueltig_bis, kunde.hat_freistellungsbescheinigung || 0, kunde.freistellung_gueltig_bis, kunde.ist_umsatzsteuerfreie_vermietung || 0, kunde.customer_type || 'B2C', kunde.leitweg_id || null, kunde.peppol_id || null, kunde.buyer_reference || null, kunde.tax_number || null, kunde.sec48b_status || 'NONE', kunde.sec48b_certificate_path || null, kunde.is_subcontractor ? 1 : 0, sec48bValidUntil, cleanIban, cleanBic, kunde.bank_name || null, kunde.kontoinhaber || null]
             );
             return res.id;
         }
@@ -615,14 +617,16 @@ const dbAPI = {
         if (!kunden || !Array.isArray(kunden) || kunden.length === 0) return [];
 
         const bulkTransaction = db.transaction((kundenList) => {
-            const updateStmt = db.prepare('UPDATE kunden SET kundennummer=?, name=?, adresse=?, plz=?, ort=?, telefon=?, email=?, ustId=?, ist_bauleistender_13b=?, ust_1_tg_gueltig_bis=?, hat_freistellungsbescheinigung=?, freistellung_gueltig_bis=?, ist_umsatzsteuerfreie_vermietung=?, customer_type=?, leitweg_id=?, peppol_id=?, buyer_reference=?, tax_number=?, sec48b_status=?, sec48b_certificate_path=?, is_subcontractor=?, sec48b_valid_until=? WHERE id=?');
-            const insertStmt = db.prepare('INSERT INTO kunden (kundennummer, name, adresse, plz, ort, telefon, email, ustId, ist_bauleistender_13b, ust_1_tg_gueltig_bis, hat_freistellungsbescheinigung, freistellung_gueltig_bis, ist_umsatzsteuerfreie_vermietung, customer_type, leitweg_id, peppol_id, buyer_reference, tax_number, sec48b_status, sec48b_certificate_path, is_subcontractor, sec48b_valid_until, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)');
+            const updateStmt = db.prepare('UPDATE kunden SET kundennummer=?, name=?, adresse=?, plz=?, ort=?, telefon=?, email=?, ustId=?, ist_bauleistender_13b=?, ust_1_tg_gueltig_bis=?, hat_freistellungsbescheinigung=?, freistellung_gueltig_bis=?, ist_umsatzsteuerfreie_vermietung=?, customer_type=?, leitweg_id=?, peppol_id=?, buyer_reference=?, tax_number=?, sec48b_status=?, sec48b_certificate_path=?, is_subcontractor=?, sec48b_valid_until=?, iban=?, bic=?, bank_name=?, kontoinhaber=? WHERE id=?');
+            const insertStmt = db.prepare('INSERT INTO kunden (kundennummer, name, adresse, plz, ort, telefon, email, ustId, ist_bauleistender_13b, ust_1_tg_gueltig_bis, hat_freistellungsbescheinigung, freistellung_gueltig_bis, ist_umsatzsteuerfreie_vermietung, customer_type, leitweg_id, peppol_id, buyer_reference, tax_number, sec48b_status, sec48b_certificate_path, is_subcontractor, sec48b_valid_until, iban, bic, bank_name, kontoinhaber, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)');
 
             const ids = [];
             for (const k of kundenList) {
                 const sec48bValidUntil = k.sec48b_valid_until !== undefined ? k.sec48b_valid_until : (k.freistellung_gueltig_bis || null);
+                const cleanIban = String(k.iban || '').replace(/[\s-]+/g, '').toUpperCase() || null;
+                const cleanBic = String(k.bic || '').replace(/[\s-]+/g, '').toUpperCase() || null;
                 if (k.id) {
-                    updateStmt.run(k.kundennummer, k.name, k.adresse, k.plz, k.ort, k.telefon, k.email, k.ustId, k.ist_bauleistender_13b || 0, k.ust_1_tg_gueltig_bis, k.hat_freistellungsbescheinigung || 0, k.freistellung_gueltig_bis, k.ist_umsatzsteuerfreie_vermietung || 0, k.customer_type || 'B2C', k.leitweg_id || null, k.peppol_id || null, k.buyer_reference || null, k.tax_number || null, k.sec48b_status || 'NONE', k.sec48b_certificate_path || null, k.is_subcontractor ? 1 : 0, sec48bValidUntil, k.id);
+                    updateStmt.run(k.kundennummer, k.name, k.adresse, k.plz, k.ort, k.telefon, k.email, k.ustId, k.ist_bauleistender_13b || 0, k.ust_1_tg_gueltig_bis, k.hat_freistellungsbescheinigung || 0, k.freistellung_gueltig_bis, k.ist_umsatzsteuerfreie_vermietung || 0, k.customer_type || 'B2C', k.leitweg_id || null, k.peppol_id || null, k.buyer_reference || null, k.tax_number || null, k.sec48b_status || 'NONE', k.sec48b_certificate_path || null, k.is_subcontractor ? 1 : 0, sec48bValidUntil, cleanIban, cleanBic, k.bank_name || null, k.kontoinhaber || null, k.id);
                     ids.push(k.id);
                 } else {
                     let knr = k.kundennummer;
@@ -631,7 +635,7 @@ const dbAPI = {
                         const nextId = (row && row.mx) ? row.mx + 1 : 1;
                         knr = `KD-${1000 + nextId}`;
                     }
-                    const res = insertStmt.run(knr, k.name, k.adresse, k.plz, k.ort, k.telefon, k.email, k.ustId, k.ist_bauleistender_13b || 0, k.ust_1_tg_gueltig_bis, k.hat_freistellungsbescheinigung || 0, k.freistellung_gueltig_bis, k.ist_umsatzsteuerfreie_vermietung || 0, k.customer_type || 'B2C', k.leitweg_id || null, k.peppol_id || null, k.buyer_reference || null, k.tax_number || null, k.sec48b_status || 'NONE', k.sec48b_certificate_path || null, k.is_subcontractor ? 1 : 0, sec48bValidUntil);
+                    const res = insertStmt.run(knr, k.name, k.adresse, k.plz, k.ort, k.telefon, k.email, k.ustId, k.ist_bauleistender_13b || 0, k.ust_1_tg_gueltig_bis, k.hat_freistellungsbescheinigung || 0, k.freistellung_gueltig_bis, k.ist_umsatzsteuerfreie_vermietung || 0, k.customer_type || 'B2C', k.leitweg_id || null, k.peppol_id || null, k.buyer_reference || null, k.tax_number || null, k.sec48b_status || 'NONE', k.sec48b_certificate_path || null, k.is_subcontractor ? 1 : 0, sec48bValidUntil, cleanIban, cleanBic, k.bank_name || null, k.kontoinhaber || null);
                     ids.push(res.lastInsertRowid);
                 }
             }
@@ -657,8 +661,8 @@ const dbAPI = {
         if (!docs || !Array.isArray(docs) || docs.length === 0) return [];
 
         const bulkTransaction = db.transaction((docsList) => {
-            const updateStmt = db.prepare('UPDATE dokumente SET type=?, nr=?, datum=?, faellig=?, kundeId=?, projektId=?, status=?, isLocked=?, netto=?, steuer=?, brutto=?, globalRabattAbzug=?, globalRabattType=?, globalRabattValue=?, anzahlung=?, mahnungLevel=?, mahnungDatum=?, mahnungGebuehr=?, eingabemodus=?, vortext=?, fusstext=?, leistungszeitraum_von=?, leistungszeitraum_bis=?, baustellen_adresse=?, vob_vereinbart=?, ist_privatkunde=?, unterliegt_bauabzugsteuer=?, bauabzugsteuer_betrag=?, ausweis_35a_erforderlich=?, summe_lohnkosten_brutto=?, rechnungsart=?, kumulierte_leistung_netto=?, sicherheitseinbehalt=?, unterliegt_13b=?, leitweg_id=?, buyer_reference=?, objekt_typ=?, objekt_id=?, sha256_hash=? WHERE id=?');
-            const insertDocStmt = db.prepare('INSERT INTO dokumente (type, nr, datum, faellig, kundeId, projektId, status, isLocked, netto, steuer, brutto, globalRabattAbzug, globalRabattType, globalRabattValue, anzahlung, eingabemodus, vortext, fusstext, leistungszeitraum_von, leistungszeitraum_bis, baustellen_adresse, vob_vereinbart, ist_privatkunde, unterliegt_bauabzugsteuer, bauabzugsteuer_betrag, ausweis_35a_erforderlich, summe_lohnkosten_brutto, rechnungsart, kumulierte_leistung_netto, sicherheitseinbehalt, unterliegt_13b, leitweg_id, buyer_reference, objekt_typ, objekt_id, sha256_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            const updateStmt = db.prepare('UPDATE dokumente SET type=?, nr=?, datum=?, faellig=?, kundeId=?, projektId=?, status=?, isLocked=?, netto=?, steuer=?, brutto=?, globalRabattAbzug=?, globalRabattType=?, globalRabattValue=?, anzahlung=?, mahnungLevel=?, mahnungDatum=?, mahnungGebuehr=?, eingabemodus=?, vortext=?, fusstext=?, leistungszeitraum_von=?, leistungszeitraum_bis=?, baustellen_adresse=?, vob_vereinbart=?, ist_privatkunde=?, unterliegt_bauabzugsteuer=?, bauabzugsteuer_betrag=?, ausweis_35a_erforderlich=?, summe_lohnkosten_brutto=?, rechnungsart=?, kumulierte_leistung_netto=?, sicherheitseinbehalt=?, unterliegt_13b=?, leitweg_id=?, buyer_reference=?, objekt_typ=?, objekt_id=?, skonto_tage=?, skonto_prozent=?, sepa_mandat_id=?, sha256_hash=? WHERE id=?');
+            const insertDocStmt = db.prepare('INSERT INTO dokumente (type, nr, datum, faellig, kundeId, projektId, status, isLocked, netto, steuer, brutto, globalRabattAbzug, globalRabattType, globalRabattValue, anzahlung, eingabemodus, vortext, fusstext, leistungszeitraum_von, leistungszeitraum_bis, baustellen_adresse, vob_vereinbart, ist_privatkunde, unterliegt_bauabzugsteuer, bauabzugsteuer_betrag, ausweis_35a_erforderlich, summe_lohnkosten_brutto, rechnungsart, kumulierte_leistung_netto, sicherheitseinbehalt, unterliegt_13b, leitweg_id, buyer_reference, objekt_typ, objekt_id, skonto_tage, skonto_prozent, sepa_mandat_id, sha256_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             const deletePosStmt = db.prepare('DELETE FROM positionen WHERE dokumentId=?');
             const deleteVerrechnungStmt = db.prepare('DELETE FROM rechnung_verrechnungen WHERE aktuelle_rechnung_id=?');
             const insertPosStmt = db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -694,7 +698,7 @@ const dbAPI = {
                         }
                     }
 
-                    updateStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt(d), d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.mahnungLevel || 0, d.mahnungDatum || null, d.mahnungGebuehr || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.objekt_typ || null, d.objekt_id == null ? null : d.objekt_id, d.sha256_hash || null, docId);
+                    updateStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt(d), d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.mahnungLevel || 0, d.mahnungDatum || null, d.mahnungGebuehr || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.objekt_typ || null, d.objekt_id == null ? null : d.objekt_id, d.skonto_tage || 0, d.skonto_prozent || 0, d.sepa_mandat_id == null ? null : d.sepa_mandat_id, d.sha256_hash || null, docId);
 
                     action = (calculateDocumentContentHash(existing) === calculateDocumentContentHash(d)) ? 'STATUS_GEÄNDERT' : 'GEÄNDERT';
 
@@ -717,7 +721,7 @@ const dbAPI = {
                     deletePosStmt.run(docId);
                     deleteVerrechnungStmt.run(docId);
                 } else {
-                    const res = insertDocStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt(d), d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.objekt_typ || null, d.objekt_id == null ? null : d.objekt_id, d.sha256_hash || null);
+                    const res = insertDocStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt(d), d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.objekt_typ || null, d.objekt_id == null ? null : d.objekt_id, d.skonto_tage || 0, d.skonto_prozent || 0, d.sepa_mandat_id == null ? null : d.sepa_mandat_id, d.sha256_hash || null);
                     docId = res.lastInsertRowid;
                 }
 
@@ -2625,7 +2629,15 @@ const dbAPI = {
                 )
             `);
 
+            const existsPrimanotaStmt = db.prepare('SELECT id FROM bank_transaktionen WHERE bank_konto_id = ? AND primanota = ?');
+
             for (const t of transactions) {
+                const primanotaKey = String(t.primanota || '').trim();
+                if (primanotaKey) {
+                    const exists = existsPrimanotaStmt.get(kontoId, primanotaKey);
+                    if (exists) { duplicates++; continue; }
+                }
+
                 const hash = t.dedupHash || BankingController.calculateTransactionHash({
                     iban: konto.iban,
                     buchungstag: t.buchungstag,
@@ -2729,7 +2741,7 @@ const dbAPI = {
             FROM zahlung_zuordnungen zz
             LEFT JOIN dokumente d ON zz.dokument_id = d.id
             LEFT JOIN eingangsrechnungen er ON zz.eingangsrechnung_id = er.id
-            WHERE zz.transaktion_id = ?
+            WHERE zz.transaktion_id = ? AND zz.storno_flag = 0
         `);
 
         for (const r of rows) {
@@ -2834,6 +2846,7 @@ const dbAPI = {
 
                         const isFull = neuOffen <= 0.009;
                         const newStatus = isFull ? 'Bezahlt' : 'Teilweise bezahlt';
+                        const wasLockedVorZahlung = doc.isLocked ? 1 : 0;
                         const newLocked = isFull ? 1 : (doc.isLocked ? 1 : 0);
                         const newMahnung = isFull ? 0 : doc.mahnungLevel;
 
@@ -2847,9 +2860,9 @@ const dbAPI = {
                         db.prepare(`
                             UPDATE dokumente
                             SET bezahlt_betrag = ?, offener_betrag = ?, status = ?,
-                                isLocked = ?, mahnungLevel = ?, sha256_hash = ?
+                                isLocked = ?, mahnungLevel = ?, was_locked_vor_zahlung = ?, sha256_hash = ?
                             WHERE id = ?
-                        `).run(neuBezahlt, neuOffen, newStatus, newLocked, newMahnung, doc.sha256_hash, doc.id);
+                        `).run(neuBezahlt, neuOffen, newStatus, newLocked, newMahnung, wasLockedVorZahlung, doc.sha256_hash, doc.id);
 
                         appendAuditLog({
                             entityType: 'DOKUMENT',
@@ -2897,8 +2910,8 @@ const dbAPI = {
     },
 
     unmatchTransaction(zuordnungId, grund = '') {
-        const zuordnung = db.prepare('SELECT * FROM zahlung_zuordnungen WHERE id = ?').get(zuordnungId);
-        if (!zuordnung) throw new Error(`Zuordnung #${zuordnungId} nicht gefunden.`);
+        const zuordnung = db.prepare('SELECT * FROM zahlung_zuordnungen WHERE id = ? AND storno_flag = 0').get(zuordnungId);
+        if (!zuordnung) throw new Error(`Zuordnung #${zuordnungId} nicht gefunden oder bereits storniert.`);
 
         const tx = db.transaction(() => {
             if (zuordnung.dokument_id) {
@@ -2910,7 +2923,9 @@ const dbAPI = {
                     const neuOffen = Math.round((docBrutto - neuBezahlt) * 100) / 100;
 
                     const newStatus = neuBezahlt <= 0.009 ? 'Ausstehend' : 'Teilweise bezahlt';
-                    const newLocked = 0;
+                    const newLocked = (doc.was_locked_vor_zahlung !== undefined && doc.was_locked_vor_zahlung !== null)
+                        ? (doc.was_locked_vor_zahlung ? 1 : 0)
+                        : 0;
 
                     doc.bezahlt_betrag = neuBezahlt;
                     doc.offener_betrag = neuOffen;
@@ -2967,7 +2982,7 @@ const dbAPI = {
                 );
             }
 
-            db.prepare('DELETE FROM zahlung_zuordnungen WHERE id = ?').run(zuordnungId);
+            db.prepare('UPDATE zahlung_zuordnungen SET storno_flag = 1, storniert_am = CURRENT_TIMESTAMP, storno_grund = ? WHERE id = ?').run(grund || 'Manuelle Entkopplung', zuordnungId);
 
             return { success: true };
         });
@@ -3127,7 +3142,11 @@ const dbAPI = {
         const settings = {};
         for (const r of settingsRows) settings[r.key] = r.value;
 
-        const creditorId = bankKonto.glaeubiger_id || settings.glaeubiger_id || 'DE98ZZZ09999999999';
+        const creditorIdRaw = bankKonto.glaeubiger_id || settings.glaeubiger_id || '';
+        if (!creditorIdRaw || !SepaController.validateGlaeubigerId(creditorIdRaw)) {
+            throw new Error(`Keine gültige Gläubiger-Identifikationsnummer hinterlegt (Bankkonto "${bankKonto.kontoname}" bzw. Einstellungen). Bitte hinterlegen Sie eine gültige Gläubiger-ID (Format DE##ZZZ###########, Prüfziffer nach ISO 7064), bevor Sie einen SEPA-Lastschriftlauf erstellen.`);
+        }
+        const creditorId = creditorIdRaw;
         const creditorName = bankKonto.kontoinhaber || settings.firmenname || 'W-Link ERP';
         const creditorIban = bankKonto.iban;
         const creditorBic = bankKonto.bic;
@@ -3136,6 +3155,9 @@ const dbAPI = {
         const schemeType = payload.sammelTyp || 'CORE';
         const sequenceType = payload.sequenzTyp || 'RCUR';
         const executionDate = payload.ausfuehrungsDatum || SepaController.getNextTarget2BankingDay(new Date().toISOString().substring(0, 10), 1);
+
+        let fristVerletzungen = [];
+        let gefiltertePositionen = [];
 
         const tx = db.transaction(() => {
             const todayStr = new Date().toISOString().substring(0, 10).replace(/-/g, '');
@@ -3166,10 +3188,34 @@ const dbAPI = {
                 throw new Error('Keine fälligen Rechnungen mit aktivem SEPA-Mandat ausgewählt.');
             }
 
+            const heuteIso = new Date().toISOString().substring(0, 10);
+            fristVerletzungen = [];
+            for (const item of items) {
+                const tage = parseInt(item.pre_notification_tage, 10)
+                    || parseInt(settings.sepa_pre_notification_standard_tage, 10)
+                    || 14;
+                const minDateIso = new Date(Date.parse(heuteIso + 'T00:00:00Z') + tage * 86400000).toISOString().substring(0, 10);
+                if (String(executionDate) < minDateIso) {
+                    fristVerletzungen.push({ mandatsreferenz: item.mandatsreferenz, fristTage: tage, fruehesterTermin: minDateIso });
+                }
+            }
+            if (fristVerletzungen.length > 0 && !payload.preNotFristBestaetigt) {
+                const detailListe = fristVerletzungen
+                    .map(v => `${v.mandatsreferenz}: frühester Einzugstermin ${v.fruehesterTermin} (Pre-Notification-Frist ${v.fristTage} Tage)`)
+                    .join(' | ');
+                throw new Error(`Pre-Notification-Frist (Art. 5.6 SEPA Rulebook) nicht eingehalten für ${fristVerletzungen.length} Mandat(e): ${detailListe}. Bitte passen Sie das Ausführungsdatum an oder bestätigen Sie die vereinbarte verkürzte Frist.`);
+            }
+
             const transactions = [];
             let totalSum = 0;
+            gefiltertePositionen = [];
 
             for (const item of items) {
+                if (item.mandats_typ && schemeType && String(item.mandats_typ).toUpperCase() !== String(schemeType).toUpperCase()) {
+                    gefiltertePositionen.push({ nr: item.nr || item.dokument_id || null, mandatsreferenz: item.mandatsreferenz, mandats_typ: item.mandats_typ, laufTyp: schemeType });
+                    continue;
+                }
+
                 const offenerBetrag = item.betrag !== undefined
                     ? parseFloat(item.betrag)
                     : (item.offener_betrag !== null && item.offener_betrag !== undefined
@@ -3197,11 +3243,19 @@ const dbAPI = {
                     iban: item.mandat_iban || item.iban,
                     bic: item.mandat_bic || item.bic,
                     verwendungszweck,
-                    belegNr: item.nr
+                    belegNr: item.nr,
+                    seqTp: item.sequenz_typ
                 });
             }
 
+            if (transactions.length === 0) {
+                throw new Error('Keine positionierbaren Lastschrift-Posten gefunden (alle Positionen wurden gefiltert oder haben keinen offenen Betrag).');
+            }
+
             totalSum = Math.round(totalSum * 100) / 100;
+
+            const effektiveTypen = [...new Set(transactions.map(t => t.seqTp))];
+            const laufSeqTyp = effektiveTypen.length === 1 ? effektiveTypen[0] : 'MIXED';
 
             const xmlContent = SepaController.generatePain008Xml({
                 msgId,
@@ -3227,7 +3281,7 @@ const dbAPI = {
                 laufNr,
                 payload.bankKontoId,
                 schemeType,
-                sequenceType,
+                laufSeqTyp,
                 executionDate,
                 transactions.length,
                 totalSum,
@@ -3236,6 +3290,24 @@ const dbAPI = {
             );
 
             const laufId = runInfo.lastInsertRowid;
+
+            if (fristVerletzungen.length > 0 && payload.preNotFristBestaetigt) {
+                appendAuditLog({
+                    entityType: 'SEPA_RUN',
+                    entityId: Number(laufId),
+                    action: 'PRENOT_FRIST_ABWEICHEND_BESTAETIGT',
+                    details: { laufNr, fristVerletzungen }
+                });
+            }
+
+            if (gefiltertePositionen.length > 0) {
+                appendAuditLog({
+                    entityType: 'SEPA_RUN',
+                    entityId: Number(laufId),
+                    action: 'POSITIONEN_GEFILTERT_SCHEME_MISMATCH',
+                    details: { laufNr, gefiltertePositionen }
+                });
+            }
 
             const posStmt = db.prepare(`
                 INSERT INTO sepa_lastschrift_positionen (
@@ -3257,8 +3329,7 @@ const dbAPI = {
 
                 db.prepare(`
                     UPDATE kunden_sepa_mandate
-                    SET letzter_einzug_am = ?, letzte_lauf_nr = ?,
-                        sequenz_typ = CASE WHEN sequenz_typ = 'FRST' THEN 'RCUR' ELSE sequenz_typ END
+                    SET letzter_einzug_am = ?, letzte_lauf_nr = ?
                     WHERE id = ?
                 `).run(executionDate, laufNr, txItem.mandatId);
             }
@@ -3271,7 +3342,10 @@ const dbAPI = {
                     laufNr,
                     anzahl: transactions.length,
                     summe: totalSum,
-                    ausfuehrung: executionDate
+                    ausfuehrung: executionDate,
+                    sequenzTyp: laufSeqTyp,
+                    prenotFristBestaetigt: fristVerletzungen.length > 0 && !!payload.preNotFristBestaetigt,
+                    gefiltertSchemeMismatch: gefiltertePositionen.length
                 }
             });
 
@@ -3282,7 +3356,10 @@ const dbAPI = {
                 anzahlTransaktionen: transactions.length,
                 summeGesamt: totalSum,
                 ausfuehrungsDatum: executionDate,
-                xmlContent
+                xmlContent,
+                warnings: gefiltertePositionen.map(f => `Position ${f.nr || f.mandatsreferenz} wurde gefiltert: Mandatstyp ${f.mandats_typ} passt nicht zum Lauf-Typ ${f.laufTyp}.`),
+                gefiltertePositionen,
+                prenotFristAbweichung: fristVerletzungen.length > 0
             };
         });
 
@@ -3294,7 +3371,7 @@ const dbAPI = {
             SELECT sl.*, bk.kontoname, bk.iban as konto_iban
             FROM sepa_lastschrift_laeufe sl
             JOIN bank_konten bk ON sl.bank_konto_id = bk.id
-            ORDER BY sl.created_at DESC, sl.id DESC
+            ORDER BY sl.erstellt_am DESC, sl.id DESC
         `).all();
     },
 
@@ -3325,13 +3402,21 @@ const dbAPI = {
         const lauf = db.prepare('SELECT * FROM sepa_lastschrift_laeufe WHERE id = ?').get(laufId);
         if (!lauf) throw new Error(`SEPA-Lauf #${laufId} nicht gefunden.`);
 
-        db.prepare("UPDATE sepa_lastschrift_laeufe SET status = 'EXPORTIERT', exportiert_am = CURRENT_TIMESTAMP WHERE id = ?").run(laufId);
-        appendAuditLog({
-            entityType: 'SEPA_RUN',
-            entityId: Number(laufId),
-            action: 'EXPORTIERT',
-            details: `XML-Export für Lauf ${lauf.lauf_nr}`
+        const tx = db.transaction(() => {
+            db.prepare("UPDATE sepa_lastschrift_laeufe SET status = 'EXPORTIERT', exportiert_am = CURRENT_TIMESTAMP WHERE id = ?").run(laufId);
+            db.prepare(`
+                UPDATE kunden_sepa_mandate SET sequenz_typ = 'RCUR'
+                WHERE sequenz_typ = 'FRST'
+                  AND id IN (SELECT DISTINCT mandat_id FROM sepa_lastschrift_positionen WHERE lauf_id = ?)
+            `).run(laufId);
+            appendAuditLog({
+                entityType: 'SEPA_RUN',
+                entityId: Number(laufId),
+                action: 'EXPORTIERT',
+                details: `XML-Export für Lauf ${lauf.lauf_nr}`
+            });
         });
+        tx();
 
         return {
             id: laufId,
@@ -3340,6 +3425,67 @@ const dbAPI = {
             xmlContent: lauf.xml_content,
             summeGesamt: lauf.summe_gesamt
         };
+    },
+
+    storniereSepaLauf(laufId, grund) {
+        const tx = db.transaction(() => {
+            const lauf = db.prepare('SELECT * FROM sepa_lastschrift_laeufe WHERE id = ?').get(laufId);
+            if (!lauf) throw new Error(`SEPA-Lauf #${laufId} nicht gefunden.`);
+            if (lauf.status === 'EINGEREICHT') throw new Error('Ein eingereichter Lauf kann nicht storniert werden.');
+            if (lauf.status === 'STORNIERT') return { success: true, bereitsStorniert: true };
+
+            db.prepare("UPDATE sepa_lastschrift_laeufe SET status = 'STORNIERT' WHERE id = ?").run(laufId);
+            db.prepare("UPDATE sepa_lastschrift_positionen SET status = 'STORNIERT' WHERE lauf_id = ? AND status = 'EINGEREICHT'").run(laufId);
+            db.prepare(`
+                UPDATE kunden_sepa_mandate SET sequenz_typ = 'FRST'
+                WHERE letzte_lauf_nr = ?
+                  AND sequenz_typ = 'RCUR'
+                  AND id IN (SELECT DISTINCT mandat_id FROM sepa_lastschrift_positionen WHERE lauf_id = ?)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM sepa_lastschrift_positionen sp2
+                      JOIN sepa_lastschrift_laeufe l2 ON l2.id = sp2.lauf_id
+                      WHERE sp2.mandat_id = kunden_sepa_mandate.id
+                        AND l2.status IN ('EXPORTIERT', 'EINGEREICHT') AND l2.id != ?
+                  )
+            `).run(lauf.lauf_nr, laufId, laufId);
+            appendAuditLog({ entityType: 'SEPA_RUN', entityId: Number(laufId), action: 'STORNIERT', details: grund || 'Manuelle Stornierung' });
+
+            return { success: true };
+        });
+        return tx();
+    },
+
+    markiereRuecklastschrift(positionId, grund) {
+        const tx = db.transaction(() => {
+            const pos = db.prepare('SELECT * FROM sepa_lastschrift_positionen WHERE id = ?').get(positionId);
+            if (!pos) throw new Error(`SEPA-Position #${positionId} nicht gefunden.`);
+            if (pos.status === 'RUECKLASTSCHRIFT') return { success: true, bereitsMarkiert: true };
+
+            db.prepare("UPDATE sepa_lastschrift_positionen SET status = 'RUECKLASTSCHRIFT' WHERE id = ?").run(positionId);
+
+            const lauf = db.prepare('SELECT * FROM sepa_lastschrift_laeufe WHERE id = ?').get(pos.lauf_id);
+            if (lauf && lauf.sequenz_typ === 'FRST') {
+                db.prepare(`
+                    UPDATE kunden_sepa_mandate SET sequenz_typ = 'FRST'
+                    WHERE id = ? AND sequenz_typ = 'RCUR'
+                `).run(pos.mandat_id);
+            }
+
+            appendAuditLog({
+                entityType: 'SEPA_POSITION',
+                entityId: Number(positionId),
+                action: 'RUECKLASTSCHRIFT',
+                details: {
+                    mandatId: pos.mandat_id,
+                    laufNr: lauf ? lauf.lauf_nr : null,
+                    betrag: pos.betrag,
+                    grund: grund || 'Rücklastschrift durch Zahlungsinstitut'
+                }
+            });
+
+            return { success: true };
+        });
+        return tx();
     }
 };
 

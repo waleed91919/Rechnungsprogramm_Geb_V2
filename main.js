@@ -692,6 +692,16 @@ function setupIpc() {
         return await dbAPI.exportSepaRunXml(laufId);
     }));
 
+    ipcMain.handle('db:storniereSepaLauf', wrapHandler(async (e, laufId, grund) => {
+        if (typeof laufId !== 'number') throw new Error('Ungültige Lauf-ID');
+        return await dbAPI.storniereSepaLauf(laufId, grund);
+    }));
+
+    ipcMain.handle('db:markiereRuecklastschrift', wrapHandler(async (e, positionId, grund) => {
+        if (typeof positionId !== 'number') throw new Error('Ungültige Positions-ID');
+        return await dbAPI.markiereRuecklastschrift(positionId, grund);
+    }));
+
     // Einstellungen
     ipcMain.handle('db:saveEinstellung', wrapHandler(async (e, key, val) => {
         if (!key) throw new Error('Ungültiger Einstellungs-Key');

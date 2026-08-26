@@ -1,5 +1,33 @@
 # Changelog / Fortschritt
 
+## 26.08.2026 (Reparaturplan F11-R: Banking/OPOS/SEPA nach Validierungsbericht)
+- **Umsetzung:** Freigegebener Master-Reparaturplan [`plans/banking-sepa-reparatur-plan.md`](../plans/banking-sepa-reparatur-plan.md) vollständig umgesetzt (Phasen A–E, Fixes 1–20, Findings [B1]–[B7] + P2/P3); Plan als abgeschlossen markiert.
+- **P1-Blocker:**
+  - **[B1] pain.008-XSD-Konformität** ([`controllers/SepaController.js`](../controllers/SepaController.js):205–405): `<BtchBookg>` statt ungültigem `<BchBookg>` (Z.352), versionsabhängig `<BICFI>` (.001.08) vs. `<BIC>` (.001.02-Fallback, bicTag Z.231), `<ChrgBr>SLEV</ChrgBr>` in korrekter XSD-Sequenz CdtrAgt→ChrgBr→CdtrSchmeId→DrctDbtTxInf (Z.377), `CdtrSchmeId/Id/PrvtId/Othr/Id` statt OrgId (Z.380).
+  - **[B2] Skonto-Persistenz** ([`db.js`](../db.js):71 ff., 660 ff.): `skonto_tage`, `skonto_prozent`, `sepa_mandat_id` werden in `applyDocumentWrite` (INSERT+UPDATE) und `bulkSaveDocuments` persistiert; `bezahlt_betrag`/`offener_betrag` bewusst ausgenommen (nur Matching-Pfade).
+  - **[B3] Kunden-Bankdaten** ([`db.js`](../db.js):583–657): `saveKunde`/`bulkSaveKunden` speichern `iban/bic/bank_name/kontoinhaber` (normalisiert); Frontend ([`js/kunden.js`](../js/kunden.js)) erhält Bestandswerte bei leerer Eingabe.
+  - **[B4]** `getSepaLaeufe()` sortiert nach `erstellt_am` statt nicht existierender Spalte `created_at` ([`db.js`](../db.js):3369–3375).
+  - **[B5] CSV-Profil-Reihenfolge** ([`controllers/BankingController.js`](../controllers/BankingController.js):350–370): Deutsche Bank (`kundenreferenz`/`wertstellung+betrag (eur)`) und Commerzbank (`auftraggeber / begünstigter`/`umsatzart`) matchen vor Sparkasse → Soll/Haben-Vorzeichen wieder korrekt (Regression T-R17/T-R18).
+  - **[B6] CAMT.052/.053** ([`controllers/BankingController.js`](../controllers/BankingController.js):145–330): `Sts`-Filter überspringt PDNG/INFO (gezählt), `RvslInd=true` wird übersprungen (gezählt), `<Rpt>` setzt `import_format='CAMT052'` inkl. `statementType/skippedPending/rvslSkipped` je Statement.
+  - **[B7] Gläubiger-ID** ([`controllers/SepaController.js`](../controllers/SepaController.js):187–203): `validateGlaeubigerId` (ISO 7064 Mod 97-10 ohne CBC, Prüfziffer=98−Rest, offizielle Bundesbank-Test-ID valide); Demo-Fallback `DE98ZZZ09999999999` entfernt aus `createSepaRun` ([`db.js`](../db.js):3150 ff.) und Pre-Notification ([`js/banking.js`](../js/banking.js)); Seed auf Leerstring ([`schema.js`](../schema.js):955); Modal-Validierung beim Bankkonto-Speichern.
+- **P2 Regelkonformität:**
+  - **Fix 8:** Pre-Notification-Frist (Art. 5.6 EPC Rulebook) wird erzwungen; mit `preNotFristBestaetigt` + Audit `PRENOT_FRIST_ABWEICHEND_BESTAETIGT` erlaubt; UI-Checkbox Tab 3.
+  - **Fix 9:** SeqTp je Mandat (`tx.seqTp`), mehrere `PmtInf`-Blöcke via `_buildPmtInfBlock`, `MIXED` nur als Lauf-Label (nie im XML), CORE/B2B-Mismatch-Filterung mit Warning + Audit `POSITIONEN_GEFILTERT_SCHEME_MISMATCH`.
+  - **Fix 10:** FRST→RCUR erst bei `exportSepaRunXml`; neue Methoden `storniereSepaLauf` ([`db.js`](../db.js):3430) und `markiereRuecklastschrift` ([`db.js`](../db.js):3458) mit Rücknahme des Sequenztyps; IPC-Kanäle `db:storniereSepaLauf`/`db:markiereRuecklastschrift` (main.js/preload.js); UI: Storno-Button je Lauf, Laufdetail-Modal mit Rücklastschrift-Button.
+  - **Fix 11:** `DtOfSgntr` ohne Ausführungsdatum-Fallback – hartes Validierungsfehler-Verhalten bei fehlendem/ungültigem Unterschriftsdatum.
+  - **Fix 12:** Rechtsverweise präzisiert (code.html:1760 „§ 14 Abs. 4 Satz 1 Nr. 7 UStG" mit §§ 10/17-Tooltip; code.html:4951 „Privatkunde" entkoppelt, statischer § 14b Abs. 1 Satz 5 UStG-Hinweis im Steuerblock).
+- **P3 Robustheit/GoBD:**
+  - **Fix 13:** `dokumente.was_locked_vor_zahlung` (Migration schema.js:825); `applyPaymentMatching` sichert Sperren-Herkunft, `unmatchTransaction` stellt sie wieder her.
+  - **Fix 14:** `zahlung_zuordnungen.storno_flag/storniert_am/storno_grund` (Migrationen schema.js:827 ff.); Entkopplung nur noch logisch; alle Lesezugriffe filtern `storno_flag = 0`.
+  - **Fix 15:** `_isDateWithinDays` fail-closed ([`controllers/BankingController.js`](../controllers/BankingController.js):594).
+  - **Fix 16:** Drag&Drop-Uploadzone im Import-Tab (code.html `#banking-dropzone`, [`js/banking.js`](../js/banking.js) `initBankDropzone`).
+  - **Fix 17:** Mandats-Anlege-UI (Tab 4): Modal + `oeffneMandatModal/speichereMandatForm` binden `saveSepaMandat` an, Referenz-Vorschlag via `generateMandateReference`.
+  - **Fix 18:** Namespace-Präfix-Toleranz durch Single-Point-Normalisierung am CAMT-Parser-Eingang.
+  - **Fix 19:** CP1252-Encoding-Fallback beim Upload (`liesseDateiMitEncodingFallback`) + isomorphe Heuristik `detectEncodingProblem`.
+  - **Fix 20:** Primanota (AcctSvcrRef/Kundenreferenz) als primärer Dedup-Key vor Content-Hash-Fallback in `importBankTransactions`.
+- **Tests:** Suite von 167 auf **194/194** erweitert (+27: T-R1 bis T-R27 gemäß Plan Abschnitt 6.2, davon 16 Pure-, 11 DB-basierte über Electron-as-Node-Marker-Läufe; neue Datei [`tests/sepa_lauf_lifecycle.test.js`](../tests/sepa_lauf_lifecycle.test.js)). Drei dokumentierte Bestands-Anpassungen (Plan 6.3) umgesetzt. Audit-Kette (`verifiziereAuditKette().valid`) in allen Lifecycle-DB-Läufen geprüft.
+- **E2-Nachweis:** Smoke-CAMT mit `camt:`-Präfixen + PDNG importiert (nur BOOK, `skippedPending=1`); generierte pain.008-Dateien gegen offizielle ISO-20022-XSDs validiert (JDK javax.xml.validation): Einzelblock .001.08, Multi-PmtInf FRST+RCUR .001.08 und Legacy .001.02 jeweils **XSD_VALID**; Artefakte unter [`output/sepa_smoke/`](../output/sepa_smoke/).
+
 ## 26.08.2026 (Recherche-Validierungs-Fixes [F1]–[F5] + Kernmodul F11 Banking / OPOS / SEPA)
 - **Umsetzung per Multi-Subagent-Kette:** Detaillierte Web-Recherche von Gesetzen und ISO 20022/EPC-Standards (`plan_creator`) -> Vollständige Implementierung aller Schichten (`plan_executor`) -> Verifikation. Details: [`doc/session_summary_2026-08-26.md`](session_summary_2026-08-26.md).
 - **Recherche-Validierungs-Fixes ([F1] bis [F5]):**

@@ -212,10 +212,16 @@ async function saveKunde() {
         return;
     }
 
+    const bestand = id ? (state.kunden || []).find(k => k.id === parseInt(id)) : null;
+
     const kundeData = { kundennummer, name, adresse, plz, ort, telefon, email, ustId, customer_type, leitweg_id, buyer_reference, peppol_id, ist_bauleistender_13b, ust_1_tg_gueltig_bis, hat_freistellungsbescheinigung, freistellung_gueltig_bis, is_subcontractor, sec48b_valid_until: freistellung_gueltig_bis || null, ist_umsatzsteuerfreie_vermietung, iban, bic, bank_name, kontoinhaber };
 
     if (id) {
         kundeData.id = parseInt(id);
+        if (!iban && bestand) kundeData.iban = bestand.iban || '';
+        if (!bic && bestand) kundeData.bic = bestand.bic || '';
+        if (!bank_name && bestand) kundeData.bank_name = bestand.bank_name || '';
+        if (!kontoinhaber && bestand) kundeData.kontoinhaber = bestand.kontoinhaber || '';
     }
 
     try {

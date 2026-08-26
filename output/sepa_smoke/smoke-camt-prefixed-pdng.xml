@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hcamt:Document xmlns:hcamt="urn:iso:std:iso:20022:tech:xsd:camt.052.001.08">
+  <hcamt:BkToCstmrAcctRpt>
+    <hcamt:Rpt>
+      <hcamt:Id>SMOKE-RPT-1</hcamt:Id>
+      <hcamt:Acct><hcamt:Id><hcamt:IBAN>DE89370400440532013000</hcamt:IBAN></hcamt:Id></hcamt:Acct>
+      <hcamt:Ntry>
+        <hcamt:Amt Ccy="EUR">99.00</hcamt:Amt><hcamt:CdtDbtInd>CRDT</hcamt:CdtDbtInd><hcamt:Sts>PDNG</hcamt:Sts>
+        <hcamt:BookgDt><hcamt:Dt>2026-08-26</hcamt:Dt></hcamt:BookgDt>
+      </hcamt:Ntry>
+      <hcamt:Ntry>
+        <hcamt:Amt Ccy="EUR">250.00</hcamt:Amt><hcamt:CdtDbtInd>CRDT</hcamt:CdtDbtInd><hcamt:Sts>BOOK</hcamt:Sts>
+        <hcamt:BookgDt><hcamt:Dt>2026-08-26</hcamt:Dt></hcamt:BookgDt>
+        <hcamt:NtryDtls><hcamt:TxDtls><hcamt:RltdPties><hcamt:Dbtr><hcamt:Nm>Smoke Kunde GmbH</hcamt:Nm></hcamt:Dbtr></hcamt:RltdPties>
+        <hcamt:RmtInf><hcamt:Ustrd>Rechnung SMOKE-1</hcamt:Ustrd></hcamt:RmtInf></hcamt:TxDtls></hcamt:NtryDtls>
+      </hcamt:Ntry>
+    </hcamt:Rpt>
+  </hcamt:BkToCstmrAcctRpt>
+</hcamt:Document>

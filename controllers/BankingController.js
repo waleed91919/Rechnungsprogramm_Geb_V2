@@ -146,6 +146,7 @@ const BankingController = {
         if (!xmlString || typeof xmlString !== 'string') {
             throw new Error('Ungültiger CAMT.053/052-XML-Inhalt.');
         }
+        xmlString = String(xmlString).replace(/(<\/?)([A-Za-z0-9]+):/g, '$1');
 
         const statements = [];
         const stmtRegex = /<(?:Stmt|Rpt)\b[^>]*>([\s\S]*?)<\/(?:Stmt|Rpt)>/gi;
@@ -153,6 +154,9 @@ const BankingController = {
 
         while ((stmtMatch = stmtRegex.exec(xmlString)) !== null) {
             const stmtContent = stmtMatch[1];
+            const stmtTag = (stmtMatch[0].match(/^<\s*(?:[A-Za-z0-9]+:)?(Stmt|Rpt)\b/i) || [])[1];
+            const isReport = String(stmtTag).toUpperCase() === 'RPT';
+            const importFormat = isReport ? 'CAMT052' : 'CAMT053';
 
             const ibanMatch = stmtContent.match(/<Acct>[\s\S]*?<Id>[\s\S]*?<IBAN>([A-Z0-9\s]+)<\/IBAN>/i)
                 || stmtContent.match(/<Acct>[\s\S]*?<Id>[\s\S]*?<Othr>[\s\S]*?<Id>([^<]+)<\/Id>/i);
@@ -180,9 +184,23 @@ const BankingController = {
             const transactions = [];
             const ntryRegex = /<Ntry\b[^>]*>([\s\S]*?)<\/Ntry>/gi;
             let ntryMatch;
+            let skippedPending = 0;
+            let rvslSkipped = 0;
 
             while ((ntryMatch = ntryRegex.exec(stmtContent)) !== null) {
                 const ntry = ntryMatch[1];
+
+                const sts = (ntry.match(/<Sts>([^<]+)<\/Sts>/i) || [])[1];
+                if (sts && /^(PDNG|INFO)$/i.test(sts.trim())) {
+                    skippedPending++;
+                    continue;
+                }
+
+                const rvsl = (ntry.match(/<RvslInd>([^<]+)/i) || [])[1];
+                if (rvsl && /^(true|1)$/i.test(rvsl.trim())) {
+                    rvslSkipped++;
+                    continue;
+                }
 
                 const amtMatch = ntry.match(/<Amt\s+Ccy="([^"]+)">([\d.,]+)<\/Amt>/i);
                 const currency = amtMatch ? amtMatch[1] : 'EUR';
@@ -293,7 +311,7 @@ const BankingController = {
                     dedup_hash: dedupHash,
                     endToEndId,
                     end_to_end_id: endToEndId,
-                    importFormat: 'CAMT053'
+                    importFormat
                 });
             }
 
@@ -302,7 +320,10 @@ const BankingController = {
                 iban: accountIban,
                 openingBalance,
                 closingBalance,
-                transactions
+                transactions,
+                statementType: importFormat,
+                skippedPending,
+                rvslSkipped
             });
         }
 
@@ -351,16 +372,24 @@ const BankingController = {
         if (headerLower.includes('zahlungsbeteiligter')) {
             return 'CSV_VOLKSBANK';
         }
-        if (headerLower.includes('beguenstigter') || headerLower.includes('begünstigter') || headerLower.includes('kontonummer/iban')) {
-            return 'CSV_SPARKASSE';
-        }
         if (headerLower.includes('kundenreferenz') || (headerLower.includes('wertstellung') && headerLower.includes('betrag (eur)'))) {
             return 'CSV_DEUTSCHE_BANK';
         }
         if (headerLower.includes('auftraggeber / begünstigter') || headerLower.includes('umsatzart')) {
             return 'CSV_COMMERZBANK';
         }
+        if (headerLower.includes('beguenstigter/zahlungspflichtiger') || headerLower.includes('begünstigter/zahlungspflichtiger') || headerLower.includes('kontonummer/iban')) {
+            return 'CSV_SPARKASSE';
+        }
+        if (headerLower.includes('beguenstigter') || headerLower.includes('begünstigter')) {
+            return 'CSV_SPARKASSE';
+        }
         return 'CSV_GENERIC';
+    },
+
+    detectEncodingProblem(text) {
+        if (!text || typeof text !== 'string') return false;
+        return /\uFFFD|(Ã¤|Ã¶|Ã¼|Ã„|Ã–|Ãœ|ÃŸ)/.test(text);
     },
 
     parseCsvStatement(csvString, forcedFormat = 'AUTO', accountIbanFallback = '') {
@@ -563,15 +592,15 @@ const BankingController = {
     },
 
     _isDateWithinDays(startDateStr, checkDateStr, maxDays) {
-        if (!startDateStr || !checkDateStr) return true;
+        if (!startDateStr || !checkDateStr) return false;
         try {
             const d1 = new Date(startDateStr.substring(0, 10) + 'T00:00:00Z');
             const d2 = new Date(checkDateStr.substring(0, 10) + 'T00:00:00Z');
-            const diffMs = d2.getTime() - d1.getTime();
-            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return false;
+            const diffDays = Math.floor((d2.getTime() - d1.getTime()) / 86400000);
             return diffDays >= -1 && diffDays <= maxDays;
         } catch (e) {
-            return true;
+            return false;
         }
     },
 
