@@ -51,6 +51,82 @@ const viewConfig = {
         subtitle: 'Kontoauszug, Zahlungsabgleich & SEPA-Lastschriften',
         action: () => { if (typeof renderBanking === 'function') renderBanking(); }
     },
+    maengel: {
+        title: 'Mängelkataster & Fristenradar',
+        subtitle: 'VOB/B § 13 & BGB § 641 (3)',
+        action: () => {
+            if (!window.maengelViewInstance && window.MaengelView) {
+                window.maengelViewInstance = new window.MaengelView();
+            }
+            if (window.maengelViewInstance) {
+                window.maengelViewInstance.loadAndRender();
+            }
+        }
+    },
+    zeiterfassung: {
+        title: 'Zeiterfassung & VOB/B Bautagebuch',
+        subtitle: 'BAG / ArbZG-Arbeitszeitkonten & VOB-Meldewesen',
+        action: () => {
+            if (!window.zeiterfassungViewInstance && window.ZeiterfassungView) {
+                window.zeiterfassungViewInstance = new window.ZeiterfassungView();
+            }
+            if (window.zeiterfassungViewInstance) {
+                window.currentViewInstance = window.zeiterfassungViewInstance;
+                const container = document.getElementById('view-zeiterfassung');
+                if (container) {
+                    window.zeiterfassungViewInstance.render().then(html => container.innerHTML = html);
+                }
+            }
+        }
+    },
+    sync: {
+        title: 'Local-First P2P Sync & Mobile Hub',
+        subtitle: 'PWA-Verbindung, QR-Pairing & Quarantäne-Center',
+        action: () => {
+            if (!window.syncViewInstance && window.SyncView) {
+                window.syncViewInstance = new window.SyncView();
+            }
+            if (window.syncViewInstance) {
+                window.currentViewInstance = window.syncViewInstance;
+                const container = document.getElementById('view-sync');
+                if (container) {
+                    window.syncViewInstance.render().then(html => container.innerHTML = html);
+                }
+            }
+        }
+    },
+    grosshandel: {
+        title: 'Großhandels-Center & IDS Connect 2.5',
+        subtitle: 'GC Online Plus, Richter+Frenzel, Sonepar, Rexel & Würth',
+        action: () => {
+            if (!window.grosshandelViewInstance && window.GrosshandelView) {
+                window.grosshandelViewInstance = new window.GrosshandelView();
+            }
+            if (window.grosshandelViewInstance) {
+                window.currentViewInstance = window.grosshandelViewInstance;
+                const container = document.getElementById('view-grosshandel');
+                if (container) {
+                    window.grosshandelViewInstance.render().then(html => container.innerHTML = html);
+                }
+            }
+        }
+    },
+    sokabau: {
+        title: 'SOKA-BAU & Lohn-Compliance Center',
+        subtitle: 'BRTV Bau 2026/2027, DTA-Bau, SOKA-XML & § 14 AEntG',
+        action: () => {
+            if (!window.sokaBauViewInstance && window.SokaBauView) {
+                window.sokaBauViewInstance = new window.SokaBauView();
+            }
+            if (window.sokaBauViewInstance) {
+                window.currentViewInstance = window.sokaBauViewInstance;
+                const container = document.getElementById('view-sokabau');
+                if (container) {
+                    window.sokaBauViewInstance.render().then(html => container.innerHTML = html);
+                }
+            }
+        }
+    },
     'objekt-details': {
         title: 'Objekt-Detail',
         subtitle: 'Struktur & Historie',
@@ -70,8 +146,24 @@ const viewConfig = {
 
 const views = [
     'dashboard', 'rechnungen', 'artikel', 'kunden', 'angebote',
-    'projekte', 'projekt-details', 'objekte', 'objekt-details', 'dauerrechnungen', 'putzplan', 'banking', 'berichte', 'einstellungen'
+    'projekte', 'projekt-details', 'objekte', 'objekt-details', 'dauerrechnungen', 'putzplan', 'banking', 'maengel', 'zeiterfassung', 'sync', 'grosshandel', 'sokabau', 'berichte', 'einstellungen'
 ];
+
+// Initialisiere Event-Listener für empfangene IDS-Warenkörbe
+if (typeof window !== 'undefined' && window.api && window.api.onIdsCartReceived) {
+    window.api.onIdsCartReceived((cartData) => {
+        if (typeof showNotification === 'function') {
+            showNotification(
+                'Warenkorb empfangen!',
+                `${cartData.items ? cartData.items.length : 0} Positionen (${(cartData.totalNetAmount || 0).toFixed(2)} € Netto) vom Großhandel empfangen.`
+            );
+        }
+        if (window.grosshandelViewInstance) {
+            window.grosshandelViewInstance.refresh();
+        }
+    });
+}
+
 
 function switchView(viewName) {
     if (typeof state !== 'undefined') {

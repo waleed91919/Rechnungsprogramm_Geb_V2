@@ -192,6 +192,38 @@
                 <span class="text-sm font-medium">Banking &amp; OPOS</span>
             </a>
             <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
+                id="nav-maengel" onclick="switchView('maengel')">
+                <span
+                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">assignment_late</span>
+                <span class="text-sm font-medium">Mängelkataster</span>
+            </a>
+            <div class="pt-4 pb-1 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Mobil &amp; Baustelle</div>
+            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
+                id="nav-zeiterfassung" onclick="switchView('zeiterfassung')">
+                <span
+                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">schedule</span>
+                <span class="text-sm font-medium">Zeiterfassung</span>
+            </a>
+            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
+                id="nav-sync" onclick="switchView('sync')">
+                <span
+                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">sync_saved_locally</span>
+                <span class="text-sm font-medium">PWA &amp; Sync Hub</span>
+            </a>
+            <div class="pt-4 pb-1 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Großhandel &amp; Compliance</div>
+            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
+                id="nav-grosshandel" onclick="switchView('grosshandel')">
+                <span
+                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">storefront</span>
+                <span class="text-sm font-medium">Großhandel (IDS 2.5)</span>
+            </a>
+            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
+                id="nav-sokabau" onclick="switchView('sokabau')">
+                <span
+                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">foundation</span>
+                <span class="text-sm font-medium">SOKA-BAU &amp; Recht</span>
+            </a>
+            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
                 id="nav-berichte" onclick="switchView('berichte')">
                 <span
                     class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">analytics</span>
@@ -573,6 +605,11 @@
                                 class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
                                 <span class="material-symbols-outlined text-[18px]">download</span>
                                 CSV Import
+                            </button>
+                            <button onclick="if (!window.datanormViewInstance && window.DatanormView) { window.datanormViewInstance = new window.DatanormView(); } if (window.datanormViewInstance) { window.datanormViewInstance.openModal(); }"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">upload_file</span>
+                                DATANORM Import
                             </button>
                             <button onclick="openArtikelModal()"
                                 class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
@@ -2216,6 +2253,16 @@
                         <span class="material-symbols-outlined text-[18px]">price_change</span>
                         EFB-Preisblätter (221/223)
                     </button>
+                    <button type="button" onclick="switchProjektTab('kalkulation')" id="pd-tab-btn-kalkulation"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">calculate</span>
+                        Zuschlagskalkulation (EFB 221/222)
+                    </button>
+                    <button type="button" onclick="switchProjektTab('maengel')" id="pd-tab-btn-maengel"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">assignment_late</span>
+                        Projekt-Mängel
+                    </button>
                 </div>
 
                 <!-- TAB 1: FINANZEN & BELEGE -->
@@ -2773,7 +2820,22 @@
                 <div id="pd-panel-efb" class="pd-tab-panel hidden flex-col gap-6">
                     <!-- EFBView dynamically renders here -->
                 </div>
+
+                <!-- TAB 7: ZUSCHLAGSKALKULATION & MITTELLOHN -->
+                <div id="pd-panel-kalkulation" class="pd-tab-panel hidden flex-col gap-6">
+                    <!-- KalkulationView dynamically renders here -->
+                </div>
+
+                <!-- TAB 8: PROJEKT-MÄNGELKATASTER -->
+                <div id="pd-panel-maengel" class="pd-tab-panel hidden flex-col gap-6">
+                    <!-- MaengelView dynamically renders here -->
+                </div>
             </div>
+        </div>
+
+        <!-- Mängelkataster & Fristenradar Hauptansicht -->
+        <div id="view-maengel" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <!-- MaengelView dynamically renders here -->
         </div>
 
         <!-- ========================================== -->
@@ -3340,6 +3402,16 @@
         </div>
 
 
+        <!-- Zeiterfassung View -->
+        <div id="view-zeiterfassung" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden">
+            <!-- Dynamically rendered by ZeiterfassungView -->
+        </div>
+
+        <!-- Sync View -->
+        <div id="view-sync" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden">
+            <!-- Dynamically rendered by SyncView -->
+        </div>
+
         <!-- System Einstellungen View -->
         <div id="view-einstellungen" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden">
             <div class="max-w-4xl mx-auto flex flex-col gap-6">
@@ -3755,6 +3827,12 @@
                 </div>
             </div>
         </div>
+
+        <!-- Großhandels-Center & IDS Connect 2.5 View (Phase 4) -->
+        <div id="view-grosshandel" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6"></div>
+
+        <!-- SOKA-BAU & Lohn-Compliance View (Phase 4) -->
+        <div id="view-sokabau" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6"></div>
 
         <!-- Kunde Modal Overlay -->
         <div id="kunde-modal"
@@ -5909,6 +5987,21 @@
     <script src="controllers/BankingController.js"></script>
     <script src="controllers/SepaController.js"></script>
     <script src="js/banking.js"></script>
+    <script src="controllers/KalkulationController.js"></script>
+    <script src="views/KalkulationView.js"></script>
+    <script src="controllers/DatanormParser.js"></script>
+    <script src="views/DatanormView.js"></script>
+    <script src="controllers/MaengelController.js"></script>
+    <script src="views/MaengelView.js"></script>
+    <script src="controllers/ZeiterfassungController.js"></script>
+    <script src="views/ZeiterfassungView.js"></script>
+    <script src="controllers/BautagebuchMobileController.js"></script>
+    <script src="views/SyncView.js"></script>
+    <script src="controllers/IDSConnectController.js"></script>
+    <script src="views/GrosshandelView.js"></script>
+    <script src="controllers/SokaBauController.js"></script>
+    <script src="controllers/SubcontractorComplianceController.js"></script>
+    <script src="views/SokaBauView.js"></script>
     <script src="js/editor.js"></script>
     <script src="js/einstellungen.js"></script>
     <script src="js/berichte.js"></script>

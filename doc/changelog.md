@@ -1,5 +1,48 @@
 # Changelog / Fortschritt
 
+## 30.08.2026 (Release 2.0: Phase 4 – IDS Connect 2.5, SOKA-BAU & Nachunternehmer-Compliance)
+- **IDS Connect 2.5 & Open Masterdata Engine:**
+  - [`controllers/IDSConnectController.js`](../controllers/IDSConnectController.js) & [`main/ids-connect-service.js`](../main/ids-connect-service.js): Deep-Link Handshake-URL-Builder mit Hook-URL, Session-Token und CSRF-Schutz.
+  - Lokaler Node.js Loopback-Callback-Server für Webshop-Rücksprünge.
+  - ITEK/BVBS XML-Warenkorb-Parser (Artikelnummer, EAN, Kurz-/Langtext, Preise, Preisbasis, Mengeneinheiten, Lieferzeit, Bild-/Dokumenten-URLs wie Sicherheitsdatenblätter).
+  - Automatischer Import empfangener Warenkörbe in Angebote/Rechnungen mit konfigurierbarem Aufschlag.
+  - Stammdaten-Seeding für Standard-Großhändler: *GC Online Plus, Richter+Frenzel, Sonepar, Rexel, Adolf Würth*.
+  - UI-View: [`views/GrosshandelView.js`](../views/GrosshandelView.js).
+- **SOKA-BAU / ZVK Meldedaten-Engine (BRTV 2026/2027):**
+  - [`controllers/SokaBauController.js`](../controllers/SokaBauController.js): Dynamische Beitragssatztabelle `soka_beitragssaetze` für West (ULAK 14,70%, ZVK 3,20%, BBV 1,45%), Ost (ULAK 12,10%, ZVK 0,80%) und Berlin.
+  - Urlaubsanspruchsberechnung (1 Tag je 12 SV-Tage) und Plausibilitätsprüfungen gegen Mindestlohn 1 & 2 sowie § 3 ArbZG.
+  - Standard-Exportgeneratoren: **DTA-Bau** Festbreitendatei (Satzarten 01, 02, 03, 09) und **SOKA-BAU XML V3.0** mit SHA-256-Auditierung.
+  - UI-View: [`views/SokaBauView.js`](../views/SokaBauView.js).
+- **Nachunternehmer-Haftungsschutz (§ 14 AEntG & § 48b EStG):**
+  - [`controllers/SubcontractorComplianceController.js`](../controllers/SubcontractorComplianceController.js): Fristenradar für SOKA-Unbedenklichkeitsbescheinigungen (UB) und Freistellungsbescheinigungen mit automatischer Auszahlungssperre bei fehlenden Nachweisen.
+- **Tests:** [`tests/phase4_ids_grosshandel_sokabau.test.js`](../tests/phase4_ids_grosshandel_sokabau.test.js) (100% Pass).
+
+## 30.08.2026 (Release 1.2: Phase 3 – Mobile PWA, Zeiterfassung & Local-First Offline-Sync)
+- **Arbeitszeit- & ArbZG-Engine:**
+  - [`controllers/ZeiterfassungController.js`](../controllers/ZeiterfassungController.js): Minutengenaue Erfassung, automatische Pausenabzüge (§ 4 ArbZG: 30 Min ab 6h, 45 Min ab 9h), 10h-Höchstarbeitszeit (§ 3 ArbZG), 11h-Mindestruhezeit (§ 5 ArbZG).
+  - Tarifliche Wegezeitstaffeln nach BRTV-Bau § 7 (Staffel 2024–2026: 0–50 km = 7 €, 51–75 km = 8 €, >75 km = 9 €, Fernbaustellen 9 € bis 39 €).
+  - UI-View: [`views/ZeiterfassungView.js`](../views/ZeiterfassungView.js).
+- **Mobiles Bautagebuch & VOB/B Meldewesen:**
+  - [`controllers/BautagebuchMobileController.js`](../controllers/BautagebuchMobileController.js): Formelle Bedenkenanzeigen (§ 4 Abs. 3 VOB/B) und Behinderungsanzeigen (§ 6 Abs. 1 VOB/B) mit digitaler Touch-Signatur und PDF-Export.
+- **PWA Baustellenbegleiter:**
+  - Installierbare Progressive Web App unter `pwa/` (`manifest.webmanifest`, `sw.js`, `js/pwa-db.js` mit Dexie.js, `js/camera-engine.js` mit Canvas-Kompression, GPS-Wasserzeichen und HTML-File-Capture Fallback, `js/sync-worker.js`, `js/pwa-app.js`).
+- **Local-First P2P Sync Server:**
+  - [`main/sync-server.js`](../main/sync-server.js): HTTP/WS Sync Hub auf Port 38400 mit QR-Pairing, Idempotenz durch UUIDv4, Last-Write-Wins (LWW), Large-Blob Photo-Streaming und Quarantäne-Tabelle `sync_conflicts`.
+  - UI-View: [`views/SyncView.js`](../views/SyncView.js).
+- **Tests:** [`tests/phase3_zeiterfassung_pwa_sync.test.js`](../tests/phase3_zeiterfassung_pwa_sync.test.js) (100% Pass).
+
+## 30.08.2026 (Release 1.1: Phase 2 – Zuschlagskalkulation, DATANORM & Mängelkataster)
+- **Zuschlags- & Endsummenkalkulation (EFB 221 / 222):**
+  - [`controllers/KalkulationController.js`](../controllers/KalkulationController.js): Mittellohn-Kalkulation ($ML, LK, LNK \to KL \to VL$), 5 Kostenarten (Lohn, Stoffe, Geräte, Sonstige, Nachunternehmer), Gemeinkostenzuschläge (BGK, AGK, W&G), Endsummenkalkulation (EFB 222) mit Umlageverfahren und Deckungsbeitragsrechnung ($DB_I, DB_{II}$).
+  - UI-View: [`views/KalkulationView.js`](../views/KalkulationView.js).
+- **DATANORM 4.0 & 5.0 High-Performance Streaming Parser:**
+  - [`controllers/DatanormParser.js`](../controllers/DatanormParser.js): CP850-DOS-Dekodierung, Unterstützung der Satzarten `V, A, B, C, P, R, S, T, Z`, Preisteilung bei `preisEinheit` (100/1000 Stück) und 1.000er-Transaktions-Batches.
+  - UI-View: [`views/DatanormView.js`](../views/DatanormView.js).
+- **Projektübergreifendes Mängelkataster & 2-stufiges Mahnwesen:**
+  - [`controllers/MaengelController.js`](../controllers/MaengelController.js) & [`main/maengel-pdf-builder.js`](../main/maengel-pdf-builder.js): State-Machine (`ERFASST` bis `ERLEDIGT`/`ERSATZVORNAHME`), VOB/B § 13 Fristenradar (Ampellogik) und 200% Druckzuschlag nach § 641 Abs. 3 BGB bei Nachunternehmermängeln.
+  - UI-View: [`views/MaengelView.js`](../views/MaengelView.js).
+- **Tests:** [`tests/phase2_kalkulation_datanorm_maengel.test.js`](../tests/phase2_kalkulation_datanorm_maengel.test.js) (100% Pass).
+
 ## 30.08.2026 (Release 1.0.6: Phase 1 EFB-Preisblätter 221/223, GAEB DA XML 3.3 Phase X31 & Auto-Backup Engine)
 - **EFB-Preisblätter 221 & 223 (VHB Bund / BMWSB):**
   - [`controllers/EFBController.js`](../controllers/EFBController.js) & [`views/EFBView.js`](../views/EFBView.js): Vollständige Zuschlagskalkulations- und Verprobungsengine nach VHB 2024/2026.

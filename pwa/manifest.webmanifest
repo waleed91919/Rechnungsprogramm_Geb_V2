@@ -1,0 +1,42 @@
+{
+  "name": "W-Link ERP Baustellenbegleiter",
+  "short_name": "W-Link Mobile",
+  "description": "Offline-fähige Baustellen-Zeiterfassung, mobiles Bautagebuch, VOB/B Meldewesen und Fotodokumentation",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f172a",
+  "theme_color": "#1366ec",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Stempeluhr",
+      "url": "./index.html#stempeluhr"
+    },
+    {
+      "name": "Bautagebuch",
+      "url": "./index.html#bautagebuch"
+    },
+    {
+      "name": "VOB/B Meldungen",
+      "url": "./index.html#vob"
+    },
+    {
+      "name": "Baustellenkamera",
+      "url": "./index.html#kamera"
+    }
+  ]
+}

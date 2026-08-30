@@ -127,6 +127,29 @@ contextBridge.exposeInMainWorld('api', {
 
     saveEinstellung: (key, value) => ipcRenderer.invoke('db:saveEinstellung', key, value),
 
+    // --- Phase 2: Zuschlagskalkulation & Mittellohn ---
+    getZuschlagskalkulationStamm: (id) => ipcRenderer.invoke('kalkulation:getStammProfil', id),
+    getAllZuschlagskalkulationStamm: () => ipcRenderer.invoke('kalkulation:getAllStammProfile'),
+    saveZuschlagskalkulationStamm: (profileData) => ipcRenderer.invoke('kalkulation:saveStammProfil', profileData),
+    deleteZuschlagskalkulationStamm: (id) => ipcRenderer.invoke('kalkulation:deleteStammProfil', id),
+    getProjectKalkulation: (projektId) => ipcRenderer.invoke('kalkulation:getProjectKalkulation', projektId),
+    saveProjectKalkulationProfil: (projektId, profileData) => ipcRenderer.invoke('kalkulation:saveProjectProfil', projektId, profileData),
+
+    // --- Phase 2: DATANORM 4.0 / 5.0 Streaming Import ---
+    startDatanormImport: (filePaths, options) => ipcRenderer.invoke('datanorm:startImport', { filePaths, options }),
+    getDatanormKataloge: (filter) => ipcRenderer.invoke('datanorm:getKataloge', filter),
+    deleteDatanormKatalog: (katalogId) => ipcRenderer.invoke('datanorm:deleteKatalog', katalogId),
+
+    // --- Phase 2: Projektübergreifendes Mängelkataster & Fristenmanagement ---
+    getMaengelKataster: (filter) => ipcRenderer.invoke('maengel:getKataster', filter),
+    getMangelDetails: (mangelId) => ipcRenderer.invoke('maengel:getDetails', mangelId),
+    saveMangel: (mangelData, fotos) => ipcRenderer.invoke('maengel:saveMangel', mangelData, fotos),
+    updateMangelStatus: (mangelId, newStatus, kommentar, geaendertVon) => ipcRenderer.invoke('maengel:updateStatus', { mangelId, newStatus, kommentar, geaendertVon }),
+    deleteMangel: (mangelId) => ipcRenderer.invoke('maengel:deleteMangel', mangelId),
+    generateMahnschreiben: (mangelId, stufe, optionen) => ipcRenderer.invoke('maengel:generateMahnschreiben', { mangelId, stufe, optionen }),
+    generateMangelProtokoll: (mangelId) => ipcRenderer.invoke('maengel:generateProtokoll', mangelId),
+    executeMangelErsatzvornahme: (payload) => ipcRenderer.invoke('maengel:executeErsatzvornahme', payload),
+
     // --- Revisionssichere Auto-Backup Engine (GoBD & GFS) ---
     createBackup: (triggerType, bemerkung) => ipcRenderer.invoke('backup:create', triggerType, bemerkung),
     getBackupHistory: () => ipcRenderer.invoke('backup:getHistory'),
@@ -141,7 +164,64 @@ contextBridge.exposeInMainWorld('api', {
 
     generateQrCode: (text) => ipcRenderer.invoke('qr:generate', text),
 
+    // --- Phase 3: Mitarbeiter- & Arbeitszeit-Engine (BAG/ArbZG/BRTV) ---
+    getMitarbeiter: (filter) => ipcRenderer.invoke('mitarbeiter:getAll', filter),
+    saveMitarbeiter: (data) => ipcRenderer.invoke('mitarbeiter:save', data),
+    deleteMitarbeiter: (id) => ipcRenderer.invoke('mitarbeiter:delete', id),
+    getZeiteintraege: (filter) => ipcRenderer.invoke('zeiterfassung:getAll', filter),
+    saveZeiteintrag: (data) => ipcRenderer.invoke('zeiterfassung:save', data),
+    deleteZeiteintrag: (id) => ipcRenderer.invoke('zeiterfassung:delete', id),
+    getZeiterfassungMonatsauswertung: (monat, jahr, mitarbeiterId) => ipcRenderer.invoke('zeiterfassung:getMonatsauswertung', { monat, jahr, mitarbeiterId }),
+
+    // --- Phase 3: VOB/B Bedenken- & Behinderungsanzeigen ---
+    getVobMeldungen: (filter) => ipcRenderer.invoke('vob:getAll', filter),
+    saveVobMeldung: (data) => ipcRenderer.invoke('vob:save', data),
+    deleteVobMeldung: (id) => ipcRenderer.invoke('vob:delete', id),
+    generateVobPdf: (id) => ipcRenderer.invoke('vob:generatePdf', id),
+
+    // --- Phase 3: Local-First P2P Sync Server & Konflikt-Schlichtung ---
+    getSyncStatus: () => ipcRenderer.invoke('sync:getStatus'),
+    startSyncServer: () => ipcRenderer.invoke('sync:startServer'),
+    stopSyncServer: () => ipcRenderer.invoke('sync:stopServer'),
+    getSyncPairingPayload: () => ipcRenderer.invoke('sync:getPairingPayload'),
+    getSyncConflicts: () => ipcRenderer.invoke('sync:getConflicts'),
+    resolveSyncConflict: (conflictId, strategy, mergedData) => ipcRenderer.invoke('sync:resolveConflict', { conflictId, strategy, mergedData }),
+
+    // --- Phase 4: Großhandel & IDS Connect 2.5 ---
+    getIdsKonten: (filter) => ipcRenderer.invoke('ids:getKonten', filter),
+    getIdsKonto: (id) => ipcRenderer.invoke('ids:getKonto', id),
+    saveIdsKonto: (data) => ipcRenderer.invoke('ids:saveKonto', data),
+    deleteIdsKonto: (id) => ipcRenderer.invoke('ids:deleteKonto', id),
+    launchIdsShop: (options) => ipcRenderer.invoke('ids:launchShop', options),
+    getIdsWarenkoerbe: (filter) => ipcRenderer.invoke('ids:getWarenkoerbe', filter),
+    getIdsWarenkorbDetails: (id) => ipcRenderer.invoke('ids:getWarenkorbDetails', id),
+    deleteIdsWarenkorb: (id) => ipcRenderer.invoke('ids:deleteWarenkorb', id),
+    importCartToDocument: (options) => ipcRenderer.invoke('ids:importCartToDocument', options),
+    queryIdsPriceAvailability: (options) => ipcRenderer.invoke('ids:queryPriceAvailability', options),
+    onIdsCartReceived: (callback) => {
+        ipcRenderer.on('ids:cartReceived', (_event, data) => callback(data));
+    },
+
+    // --- Phase 4: SOKA-BAU Meldedaten & Beitrags-Engine ---
+    getSokaBeitragssaetze: (stichtag) => ipcRenderer.invoke('soka:getBeitragssaetze', stichtag),
+    saveSokaBeitragssatz: (data) => ipcRenderer.invoke('soka:saveBeitragssatz', data),
+    getSokaMeldungen: (filter) => ipcRenderer.invoke('soka:getMeldungen', filter),
+    getSokaMeldungDetails: (id) => ipcRenderer.invoke('soka:getMeldungDetails', id),
+    calculateSokaMeldung: (options) => ipcRenderer.invoke('soka:calculateMeldung', options),
+    saveSokaMeldung: (data) => ipcRenderer.invoke('soka:saveMeldung', data),
+    deleteSokaMeldung: (id) => ipcRenderer.invoke('soka:deleteMeldung', id),
+    exportSokaFiles: (options) => ipcRenderer.invoke('soka:exportFiles', options),
+
+    // --- Phase 4: Nachunternehmer Compliance & § 14 AEntG ---
+    getSubcontractorCompliance: (kundeId, pruefDatum) => ipcRenderer.invoke('subcontractor:getCompliance', { kundeId, pruefDatum }),
+    auditAllSubcontractors: (options) => ipcRenderer.invoke('subcontractor:auditAll', options),
+    saveSubcontractorNachweis: (data) => ipcRenderer.invoke('subcontractor:saveNachweis', data),
+    deleteSubcontractorNachweis: (id) => ipcRenderer.invoke('subcontractor:deleteNachweis', id),
+    getSubcontractorNachweise: (kundeId) => ipcRenderer.invoke('subcontractor:getNachweise', { kundeId }),
+
     focusWindow: () => ipcRenderer.invoke('app:focusWindow'),
     confirm: (options) => ipcRenderer.invoke('dialog:confirm', options),
     alert: (options) => ipcRenderer.invoke('dialog:alert', options)
 });
+
+

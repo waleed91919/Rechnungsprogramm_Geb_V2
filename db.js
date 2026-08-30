@@ -43,6 +43,17 @@ const SepaController = require('./controllers/SepaController');
 const EFBController = require('./controllers/EFBController');
 const GaebX31Service = require('./js/gaeb-x31');
 const BackupService = require('./main/backup');
+const KalkulationController = require('./controllers/KalkulationController');
+const DatanormParser = require('./controllers/DatanormParser');
+const MaengelController = require('./controllers/MaengelController');
+const MaengelPdfBuilder = require('./main/maengel-pdf-builder');
+const ZeiterfassungController = require('./controllers/ZeiterfassungController');
+const BautagebuchMobileController = require('./controllers/BautagebuchMobileController');
+const IDSConnectController = require('./controllers/IDSConnectController');
+const IDSConnectService = require('./main/ids-connect-service');
+const SokaBauController = require('./controllers/SokaBauController');
+const SubcontractorComplianceController = require('./controllers/SubcontractorComplianceController');
+
 
 console.log('Connected to the SQLite database using better-sqlite3 (Expert Mode).');
 initDb();
@@ -3773,6 +3784,1143 @@ const dbAPI = {
 
     getBackupService() {
         return backupService;
+    },
+
+    // =========================================================================
+    // PHASE 2 (RELEASE 1.1) - KALKULATION, DATANORM & MÄNGELKATASTER
+    // =========================================================================
+
+    // --- 1. Zuschlagskalkulation & Mittellohn ---
+    getZuschlagskalkulationStamm(id = null) {
+        if (id) {
+            return db.prepare('SELECT * FROM zuschlagskalkulation_stamm WHERE id = ?').get(id);
+        }
+        const standard = db.prepare('SELECT * FROM zuschlagskalkulation_stamm WHERE ist_standard = 1 LIMIT 1').get();
+        if (standard) return standard;
+        return db.prepare('SELECT * FROM zuschlagskalkulation_stamm ORDER BY id ASC LIMIT 1').get() || KalkulationController.getDefaultProfile();
+    },
+
+    getAllZuschlagskalkulationStamm() {
+        return db.prepare('SELECT * FROM zuschlagskalkulation_stamm ORDER BY ist_standard DESC, name ASC').all();
+    },
+
+    saveZuschlagskalkulationStamm(profileData) {
+        const p = { ...profileData };
+        const mlStruct = KalkulationController.calculateMittellohnStructure(p);
+        p.kalkulationslohn_eur = mlStruct.kalkulationslohn;
+
+        const tx = db.transaction(() => {
+            if (p.ist_standard) {
+                db.prepare('UPDATE zuschlagskalkulation_stamm SET ist_standard = 0').run();
+            }
+
+            if (p.id) {
+                db.prepare(`
+                    UPDATE zuschlagskalkulation_stamm SET
+                        name = @name,
+                        ist_standard = @ist_standard,
+                        mittellohn_eur = @mittellohn_eur,
+                        lohngebundene_kosten_prozent = @lohngebundene_kosten_prozent,
+                        lohnnebenkosten_prozent = @lohnnebenkosten_prozent,
+                        kalkulationslohn_eur = @kalkulationslohn_eur,
+                        kalkulationsverfahren = @kalkulationsverfahren,
+                        endsumme_umlage_basis = @endsumme_umlage_basis,
+                        zuschlag_lohn_bgk = @zuschlag_lohn_bgk,
+                        zuschlag_lohn_agk = @zuschlag_lohn_agk,
+                        zuschlag_lohn_wug = @zuschlag_lohn_wug,
+                        zuschlag_stoff_bgk = @zuschlag_stoff_bgk,
+                        zuschlag_stoff_agk = @zuschlag_stoff_agk,
+                        zuschlag_stoff_wug = @zuschlag_stoff_wug,
+                        zuschlag_geraet_bgk = @zuschlag_geraet_bgk,
+                        zuschlag_geraet_agk = @zuschlag_geraet_agk,
+                        zuschlag_geraet_wug = @zuschlag_geraet_wug,
+                        zuschlag_sonst_bgk = @zuschlag_sonst_bgk,
+                        zuschlag_sonst_agk = @zuschlag_sonst_agk,
+                        zuschlag_sonst_wug = @zuschlag_sonst_wug,
+                        zuschlag_nu_bgk = @zuschlag_nu_bgk,
+                        zuschlag_nu_agk = @zuschlag_nu_agk,
+                        zuschlag_nu_wug = @zuschlag_nu_wug,
+                        wug_gewinn_prozent = @wug_gewinn_prozent,
+                        wug_betriebswagnis_prozent = @wug_betriebswagnis_prozent,
+                        wug_leistungswagnis_prozent = @wug_leistungswagnis_prozent,
+                        skonto_abzug_kalkulation_prozent = @skonto_abzug_kalkulation_prozent,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = @id
+                `).run(p);
+                return p.id;
+            } else {
+                const res = db.prepare(`
+                    INSERT INTO zuschlagskalkulation_stamm (
+                        name, ist_standard, mittellohn_eur, lohngebundene_kosten_prozent, lohnnebenkosten_prozent,
+                        kalkulationslohn_eur, kalkulationsverfahren, endsumme_umlage_basis,
+                        zuschlag_lohn_bgk, zuschlag_lohn_agk, zuschlag_lohn_wug,
+                        zuschlag_stoff_bgk, zuschlag_stoff_agk, zuschlag_stoff_wug,
+                        zuschlag_geraet_bgk, zuschlag_geraet_agk, zuschlag_geraet_wug,
+                        zuschlag_sonst_bgk, zuschlag_sonst_agk, zuschlag_sonst_wug,
+                        zuschlag_nu_bgk, zuschlag_nu_agk, zuschlag_nu_wug,
+                        wug_gewinn_prozent, wug_betriebswagnis_prozent, wug_leistungswagnis_prozent,
+                        skonto_abzug_kalkulation_prozent
+                    ) VALUES (
+                        @name, @ist_standard, @mittellohn_eur, @lohngebundene_kosten_prozent, @lohnnebenkosten_prozent,
+                        @kalkulationslohn_eur, @kalkulationsverfahren, @endsumme_umlage_basis,
+                        @zuschlag_lohn_bgk, @zuschlag_lohn_agk, @zuschlag_lohn_wug,
+                        @zuschlag_stoff_bgk, @zuschlag_stoff_agk, @zuschlag_stoff_wug,
+                        @zuschlag_geraet_bgk, @zuschlag_geraet_agk, @zuschlag_geraet_wug,
+                        @zuschlag_sonst_bgk, @zuschlag_sonst_agk, @zuschlag_sonst_wug,
+                        @zuschlag_nu_bgk, @zuschlag_nu_agk, @zuschlag_nu_wug,
+                        @wug_gewinn_prozent, @wug_betriebswagnis_prozent, @wug_leistungswagnis_prozent,
+                        @skonto_abzug_kalkulation_prozent
+                    )
+                `).run(p);
+                return res.lastInsertRowid;
+            }
+        });
+
+        const id = tx();
+        return { success: true, id };
+    },
+
+    deleteZuschlagskalkulationStamm(id) {
+        db.prepare('DELETE FROM zuschlagskalkulation_stamm WHERE id = ?').run(id);
+        return { success: true };
+    },
+
+    getProjectKalkulationProfile(projektId) {
+        const pId = Number(projektId);
+        let projProfile = db.prepare('SELECT * FROM zuschlagskalkulation_projekte WHERE projekt_id = ?').get(pId);
+        if (!projProfile) {
+            const stamm = this.getZuschlagskalkulationStamm();
+            projProfile = {
+                ...stamm,
+                projekt_id: pId,
+                stamm_profil_id: stamm.id || null
+            };
+            delete projProfile.id;
+        }
+        return projProfile;
+    },
+
+    saveProjectKalkulationProfile(projektId, profileData) {
+        const pId = Number(projektId);
+        const p = { ...profileData, projekt_id: pId };
+        const mlStruct = KalkulationController.calculateMittellohnStructure(p);
+        p.kalkulationslohn_eur = mlStruct.kalkulationslohn;
+
+        const tx = db.transaction(() => {
+            const existing = db.prepare('SELECT id FROM zuschlagskalkulation_projekte WHERE projekt_id = ?').get(pId);
+            if (existing) {
+                db.prepare(`
+                    UPDATE zuschlagskalkulation_projekte SET
+                        stamm_profil_id = @stamm_profil_id,
+                        mittellohn_eur = @mittellohn_eur,
+                        lohngebundene_kosten_prozent = @lohngebundene_kosten_prozent,
+                        lohnnebenkosten_prozent = @lohnnebenkosten_prozent,
+                        kalkulationslohn_eur = @kalkulationslohn_eur,
+                        kalkulationsverfahren = @kalkulationsverfahren,
+                        endsumme_umlage_basis = @endsumme_umlage_basis,
+                        zuschlag_lohn_bgk = @zuschlag_lohn_bgk,
+                        zuschlag_lohn_agk = @zuschlag_lohn_agk,
+                        zuschlag_lohn_wug = @zuschlag_lohn_wug,
+                        zuschlag_stoff_bgk = @zuschlag_stoff_bgk,
+                        zuschlag_stoff_agk = @zuschlag_stoff_agk,
+                        zuschlag_stoff_wug = @zuschlag_stoff_wug,
+                        zuschlag_geraet_bgk = @zuschlag_geraet_bgk,
+                        zuschlag_geraet_agk = @zuschlag_geraet_agk,
+                        zuschlag_geraet_wug = @zuschlag_geraet_wug,
+                        zuschlag_sonst_bgk = @zuschlag_sonst_bgk,
+                        zuschlag_sonst_agk = @zuschlag_sonst_agk,
+                        zuschlag_sonst_wug = @zuschlag_sonst_wug,
+                        zuschlag_nu_bgk = @zuschlag_nu_bgk,
+                        zuschlag_nu_agk = @zuschlag_nu_agk,
+                        zuschlag_nu_wug = @zuschlag_nu_wug,
+                        wug_gewinn_prozent = @wug_gewinn_prozent,
+                        wug_betriebswagnis_prozent = @wug_betriebswagnis_prozent,
+                        wug_leistungswagnis_prozent = @wug_leistungswagnis_prozent,
+                        skonto_abzug_kalkulation_prozent = @skonto_abzug_kalkulation_prozent,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE projekt_id = @projekt_id
+                `).run(p);
+            } else {
+                db.prepare(`
+                    INSERT INTO zuschlagskalkulation_projekte (
+                        projekt_id, stamm_profil_id, mittellohn_eur, lohngebundene_kosten_prozent, lohnnebenkosten_prozent,
+                        kalkulationslohn_eur, kalkulationsverfahren, endsumme_umlage_basis,
+                        zuschlag_lohn_bgk, zuschlag_lohn_agk, zuschlag_lohn_wug,
+                        zuschlag_stoff_bgk, zuschlag_stoff_agk, zuschlag_stoff_wug,
+                        zuschlag_geraet_bgk, zuschlag_geraet_agk, zuschlag_geraet_wug,
+                        zuschlag_sonst_bgk, zuschlag_sonst_agk, zuschlag_sonst_wug,
+                        zuschlag_nu_bgk, zuschlag_nu_agk, zuschlag_nu_wug,
+                        wug_gewinn_prozent, wug_betriebswagnis_prozent, wug_leistungswagnis_prozent,
+                        skonto_abzug_kalkulation_prozent
+                    ) VALUES (
+                        @projekt_id, @stamm_profil_id, @mittellohn_eur, @lohngebundene_kosten_prozent, @lohnnebenkosten_prozent,
+                        @kalkulationslohn_eur, @kalkulationsverfahren, @endsumme_umlage_basis,
+                        @zuschlag_lohn_bgk, @zuschlag_lohn_agk, @zuschlag_lohn_wug,
+                        @zuschlag_stoff_bgk, @zuschlag_stoff_agk, @zuschlag_stoff_wug,
+                        @zuschlag_geraet_bgk, @zuschlag_geraet_agk, @zuschlag_geraet_wug,
+                        @zuschlag_sonst_bgk, @zuschlag_sonst_agk, @zuschlag_sonst_wug,
+                        @zuschlag_nu_bgk, @zuschlag_nu_agk, @zuschlag_nu_wug,
+                        @wug_gewinn_prozent, @wug_betriebswagnis_prozent, @wug_leistungswagnis_prozent,
+                        @skonto_abzug_kalkulation_prozent
+                    )
+                `).run(p);
+            }
+        });
+
+        tx();
+        return { success: true };
+    },
+
+    getProjectKalkulation(projektId) {
+        const pId = Number(projektId);
+        const project = db.prepare('SELECT * FROM projekte WHERE id = ?').get(pId) || { id: pId, name: 'Projekt' };
+        const profile = this.getProjectKalkulationProfile(pId);
+
+        // Positionen aus Angeboten/Rechnungen dieses Projekts
+        const positions = db.prepare(`
+            SELECT p.*, d.type AS doc_type, d.nr AS doc_nr
+            FROM positionen p
+            JOIN dokumente d ON p.dokumentId = d.id
+            WHERE d.projektId = ?
+            ORDER BY d.id ASC, p.id ASC
+        `).all(pId);
+
+        // Ist-Kosten & Stunden aus Eingangsrechnungen und Bautagebuch
+        const eingangsrechnungen = db.prepare('SELECT * FROM eingangsrechnungen WHERE project_id = ?').all(pId);
+        let actualMaterial = 0;
+        let actualSub = 0;
+        eingangsrechnungen.forEach(er => {
+            const b = parseFloat(er.betrag_netto) || 0;
+            if (er.kostenart === 'SUB' || er.kostenart === 'NACHUNTERNEHMER') {
+                actualSub += b;
+            } else {
+                actualMaterial += b;
+            }
+        });
+
+        const bautagebuchEintraege = db.prepare('SELECT * FROM bautagebuch WHERE project_id = ?').all(pId);
+        let actualHours = 0;
+        bautagebuchEintraege.forEach(bt => {
+            const anzahl = parseFloat(bt.anzahl_arbeiter) || 1;
+            const h = parseFloat(bt.arbeitsstunden) || 0;
+            actualHours += (anzahl * h);
+        });
+
+        const calculationResult = KalkulationController.calculateProjectKalkulation(
+            positions,
+            profile,
+            { material: actualMaterial, sub: actualSub, hours: actualHours }
+        );
+
+        return {
+            project,
+            profile,
+            calculationResult,
+            positionsCount: positions.length,
+            actualCosts: { material: actualMaterial, sub: actualSub, hours: actualHours }
+        };
+    },
+
+    // --- 2. DATANORM 4.0 & 5.0 High-Performance Streaming Import ---
+    async startDatanormImport(payload = {}, progressCallback = null) {
+        const { filePaths, options = {} } = payload;
+        if (!filePaths || !Array.isArray(filePaths) || filePaths.length === 0) {
+            throw new Error('Keine Dateipfade für den DATANORM-Import übergeben.');
+        }
+
+        const res = await DatanormParser.importDatanormFiles(filePaths, db, options, progressCallback);
+
+        appendAuditLog({
+            entityType: 'DATANORM',
+            entityId: 0,
+            action: 'DATANORM_IMPORTIERT',
+            details: {
+                filesCount: res.filesCount,
+                totalInserted: res.totalInserted,
+                totalUpdated: res.totalUpdated,
+                totalLines: res.totalLines
+            }
+        });
+
+        return res;
+    },
+
+    getDatanormKataloge(filter = {}) {
+        let query = 'SELECT * FROM datanorm_kataloge WHERE 1=1';
+        const params = [];
+        if (filter.status) {
+            query += ' AND status = ?';
+            params.push(filter.status);
+        }
+        query += ' ORDER BY import_datum DESC';
+        const kataloge = db.prepare(query).all(...params);
+
+        const stmtWrg = db.prepare('SELECT * FROM datanorm_warengruppen WHERE katalog_id = ?');
+        const stmtRab = db.prepare('SELECT * FROM datanorm_rabattgruppen WHERE katalog_id = ?');
+
+        return kataloge.map(k => ({
+            ...k,
+            warengruppen: stmtWrg.all(k.id),
+            rabattgruppen: stmtRab.all(k.id)
+        }));
+    },
+
+    deleteDatanormKatalog(katalogId) {
+        const kId = Number(katalogId);
+        const kat = db.prepare('SELECT * FROM datanorm_kataloge WHERE id = ?').get(kId);
+        if (!kat) return { success: false, error: 'Katalog nicht gefunden' };
+
+        const tx = db.transaction(() => {
+            db.prepare('DELETE FROM artikel WHERE katalog = ?').run(kat.katalog_name);
+            db.prepare('DELETE FROM datanorm_kataloge WHERE id = ?').run(kId);
+
+            appendAuditLog({
+                entityType: 'DATANORM',
+                entityId: kId,
+                action: 'DATANORM_GELOESCHT',
+                details: { katalog_name: kat.katalog_name }
+            });
+        });
+
+        tx();
+        return { success: true };
+    },
+
+    // --- 3. Projektübergreifendes Mängelkataster & Fristenmanagement ---
+    getMaengelKataster(filter = {}) {
+        return MaengelController.getKataster(db, filter);
+    },
+
+    getMangelDetails(mangelId) {
+        return MaengelController.getMangelDetails(db, Number(mangelId));
+    },
+
+    saveMangel(mangelData, fotos = []) {
+        return MaengelController.saveMangel(db, mangelData, fotos, auditLogger);
+    },
+
+    updateMangelStatus(mangelId, newStatus, kommentar = '', geaendertVon = 'Bauleiter') {
+        return MaengelController.updateMangelStatus(db, Number(mangelId), newStatus, kommentar, geaendertVon, auditLogger);
+    },
+
+    deleteMangel(mangelId) {
+        return MaengelController.deleteMangel(db, Number(mangelId), auditLogger);
+    },
+
+    executeMangelErsatzvornahme(payload) {
+        return MaengelController.executeErsatzvornahme(db, payload, auditLogger);
+    },
+
+    generateMahnschreiben(mangelId, stufe = 1, optionen = {}) {
+        const mangel = this.getMangelDetails(mangelId);
+        if (!mangel) throw new Error(`Mangel mit ID ${mangelId} nicht gefunden.`);
+
+        let partner = {};
+        if (mangel.subunternehmer_kunde_id) {
+            partner = db.prepare('SELECT * FROM kunden WHERE id = ?').get(mangel.subunternehmer_kunde_id) || {};
+        }
+
+        const companyInfo = {
+            firmenname: this.getEinstellung('firmenname') || 'W-Link ERP',
+            iban: this.getEinstellung('iban') || '',
+            bic: this.getEinstellung('bic') || '',
+            steuer: this.getEinstellung('steuer') || ''
+        };
+
+        const schreiben = MaengelController.generateMahnschreibenText(mangel, partner, stufe, optionen);
+        const html = MaengelController.generateMahnschreibenHtml(mangel, partner, stufe, optionen, companyInfo);
+
+        // Status bei Erzeugung von Mahnschreiben automatisch anpassen
+        if (stufe === 1 && mangel.status === 'ERFASST') {
+            this.updateMangelStatus(mangelId, 'MAENGELRUEGE_VERSCHICKT', 'Mängelrüge Stufe 1 erstellt');
+        } else if (stufe === 2 && (mangel.status === 'MAENGELRUEGE_VERSCHICKT' || mangel.status === 'IN_NACHBESSERUNG')) {
+            this.updateMangelStatus(mangelId, 'MAHNUNG_STUFE_2', 'Nachfristsetzung Stufe 2 mit Ersatzvornahmeandrohung erstellt');
+        }
+
+        return {
+            success: true,
+            stufe,
+            schreiben,
+            html,
+            mangel
+        };
+    },
+
+    generateMangelProtokollPdf(mangelId) {
+        const mangel = this.getMangelDetails(mangelId);
+        if (!mangel) throw new Error(`Mangel mit ID ${mangelId} nicht gefunden.`);
+
+        const companyInfo = {
+            firmenname: this.getEinstellung('firmenname') || 'W-Link ERP',
+            iban: this.getEinstellung('iban') || '',
+            bic: this.getEinstellung('bic') || '',
+            steuer: this.getEinstellung('steuer') || ''
+        };
+
+        const html = MaengelPdfBuilder.buildMangelProtokollHtml(mangel, mangel.fotos || [], mangel.historie || [], companyInfo);
+        return {
+            success: true,
+            html,
+            mangel
+        };
+    },
+
+    getEinstellung(key) {
+        const row = db.prepare('SELECT value FROM einstellungen WHERE key = ?').get(key);
+        return row ? row.value : null;
+    },
+
+    // =========================================================================
+    // PHASE 3: MITARBEITER, ZEITERFASSUNG, VOB/B & LOCAL-FIRST SYNC HUB
+    // =========================================================================
+
+    getMitarbeiter(filter = {}) {
+        let query = 'SELECT * FROM mitarbeiter WHERE 1=1';
+        const params = [];
+        if (filter.aktiv !== undefined) {
+            query += ' AND aktiv = ?';
+            params.push(filter.aktiv ? 1 : 0);
+        }
+        if (filter.search) {
+            query += ' AND (vorname LIKE ? OR nachname LIKE ? OR personalnummer LIKE ?)';
+            const s = `%${filter.search}%`;
+            params.push(s, s, s);
+        }
+        query += ' ORDER BY nachname ASC, vorname ASC';
+        return db.prepare(query).all(...params);
+    },
+
+    saveMitarbeiter(ma) {
+        const stmt = db.prepare(`
+            INSERT INTO mitarbeiter (
+                id, personalnummer, vorname, nachname, lohngruppe_id, tarif_stundensatz,
+                ist_kolonnenfuehrer, pin_hash, nfc_tag_uid, telefon, email, aktiv
+            ) VALUES (
+                @id, @personalnummer, @vorname, @nachname, @lohngruppe_id, @tarif_stundensatz,
+                @ist_kolonnenfuehrer, @pin_hash, @nfc_tag_uid, @telefon, @email, @aktiv
+            ) ON CONFLICT(id) DO UPDATE SET
+                personalnummer = excluded.personalnummer,
+                vorname = excluded.vorname,
+                nachname = excluded.nachname,
+                lohngruppe_id = excluded.lohngruppe_id,
+                tarif_stundensatz = excluded.tarif_stundensatz,
+                ist_kolonnenfuehrer = excluded.ist_kolonnenfuehrer,
+                pin_hash = excluded.pin_hash,
+                nfc_tag_uid = excluded.nfc_tag_uid,
+                telefon = excluded.telefon,
+                email = excluded.email,
+                aktiv = excluded.aktiv,
+                updated_at = CURRENT_TIMESTAMP
+        `);
+
+        let pnr = ma.personalnummer;
+        if (!pnr && !ma.id) {
+            const row = db.prepare('SELECT MAX(id) as mx FROM mitarbeiter').get();
+            const nextId = (row && row.mx) ? row.mx + 1 : 1;
+            pnr = `MA-${100 + nextId}`;
+        }
+
+        const res = stmt.run({
+            id: ma.id || null,
+            personalnummer: pnr,
+            vorname: ma.vorname,
+            nachname: ma.nachname,
+            lohngruppe_id: ma.lohngruppe_id || 'LG1',
+            tarif_stundensatz: parseFloat(ma.tarif_stundensatz) || 15.00,
+            ist_kolonnenfuehrer: ma.ist_kolonnenfuehrer ? 1 : 0,
+            pin_hash: ma.pin_hash || null,
+            nfc_tag_uid: ma.nfc_tag_uid || null,
+            telefon: ma.telefon || null,
+            email: ma.email || null,
+            aktiv: ma.aktiv !== undefined ? (ma.aktiv ? 1 : 0) : 1
+        });
+
+        return { success: true, id: ma.id || res.lastInsertRowid };
+    },
+
+    deleteMitarbeiter(id) {
+        db.prepare('DELETE FROM mitarbeiter WHERE id = ?').run(id);
+        return { success: true };
+    },
+
+    getZeiteintraege(filter = {}) {
+        return ZeiterfassungController.getZeiteintraege(db, filter);
+    },
+
+    saveZeiteintrag(data) {
+        return ZeiterfassungController.saveZeiteintrag(db, data, auditLogger);
+    },
+
+    deleteZeiteintrag(id) {
+        return ZeiterfassungController.deleteZeiteintrag(db, id, auditLogger);
+    },
+
+    getZeiterfassungMonatsauswertung(monat, jahr, mitarbeiterId = null) {
+        const m = parseInt(monat, 10);
+        const y = parseInt(jahr, 10);
+        const von = `${y}-${String(m).padStart(2, '0')}-01`;
+        const bis = `${y}-${String(m).padStart(2, '0')}-31T23:59:59`;
+
+        let filter = { datum_von: von, datum_bis: bis };
+        if (mitarbeiterId) filter.mitarbeiter_id = mitarbeiterId;
+
+        const eintraege = ZeiterfassungController.getZeiteintraege(db, filter);
+        const mitarbeiterList = mitarbeiterId
+            ? [db.prepare('SELECT * FROM mitarbeiter WHERE id = ?').get(mitarbeiterId)]
+            : db.prepare('SELECT * FROM mitarbeiter WHERE aktiv = 1').all();
+
+        const auswertungen = mitarbeiterList.filter(Boolean).map(ma => {
+            const maEintraege = eintraege.filter(e => e.mitarbeiter_id === ma.id);
+            const uebersicht = ZeiterfassungController.calculateMonatsuebersicht(maEintraege, ma);
+            const arbzg = ZeiterfassungController.pruefeArbzgKonformitaet(maEintraege);
+            return {
+                ...uebersicht,
+                arbzg
+            };
+        });
+
+        return {
+            monat: m,
+            jahr: y,
+            auswertungen,
+            gesamtEintraege: eintraege.length
+        };
+    },
+
+    getVobMeldungen(filter = {}) {
+        return BautagebuchMobileController.getVobMeldungen(db, filter);
+    },
+
+    saveVobMeldung(data) {
+        return BautagebuchMobileController.saveVobMeldung(db, data, auditLogger);
+    },
+
+    deleteVobMeldung(id) {
+        return BautagebuchMobileController.deleteVobMeldung(db, id, auditLogger);
+    },
+
+    generateVobMeldungPdfHtml(id) {
+        const meldung = db.prepare('SELECT * FROM bedenken_behinderungen WHERE id = ?').get(id);
+        if (!meldung) throw new Error(`VOB-Meldung #${id} nicht gefunden.`);
+
+        const projekt = db.prepare('SELECT * FROM projekte WHERE id = ?').get(meldung.projekt_id) || { name: 'Bauvorhaben' };
+        const companyInfo = {
+            firmenname: this.getEinstellung('firmenname') || 'W-Link ERP',
+            iban: this.getEinstellung('iban') || '',
+            bic: this.getEinstellung('bic') || '',
+            steuer: this.getEinstellung('steuer') || ''
+        };
+
+        const html = BautagebuchMobileController.generateVobHtml(meldung, projekt, companyInfo);
+        return { success: true, html, meldung, projekt };
+    },
+
+    getSyncConflicts() {
+        return db.prepare("SELECT * FROM sync_conflicts WHERE status = 'OPEN' ORDER BY created_at DESC").all();
+    },
+
+    resolveSyncConflict(conflictId, resolutionStrategy, mergedData = null) {
+        const conflict = db.prepare('SELECT * FROM sync_conflicts WHERE id = ?').get(conflictId);
+        if (!conflict) throw new Error(`Konflikt #${conflictId} nicht gefunden.`);
+
+        const tx = db.transaction(() => {
+            if (resolutionStrategy === 'RESOLVED_CLIENT') {
+                const clientObj = JSON.parse(conflict.client_data_json || '{}');
+                if (conflict.entity_type === 'ZEITERFASSUNG') {
+                    ZeiterfassungController.saveZeiteintrag(db, clientObj, auditLogger);
+                }
+            } else if (resolutionStrategy === 'RESOLVED_MERGE' && mergedData) {
+                if (conflict.entity_type === 'ZEITERFASSUNG') {
+                    ZeiterfassungController.saveZeiteintrag(db, mergedData, auditLogger);
+                }
+            }
+
+            db.prepare(`
+                UPDATE sync_conflicts SET status = ?, resolved_at = CURRENT_TIMESTAMP WHERE id = ?
+            `).run(resolutionStrategy, conflictId);
+        });
+
+        tx();
+        return { success: true, conflictId, resolutionStrategy };
+    },
+
+    // =========================================================================
+    // PHASE 4 (RELEASE 2.0) - IDS CONNECT 2.5 & OPEN MASTERDATA
+    // =========================================================================
+
+    getIdsConnectService() {
+        if (!idsConnectServiceInstance) {
+            idsConnectServiceInstance = new IDSConnectService(db, auditLogger);
+        }
+        return idsConnectServiceInstance;
+    },
+
+    getIdsKonten(filter = {}) {
+        let sql = 'SELECT * FROM ids_connect_konten';
+        const params = [];
+        if (filter.search) {
+            sql += ' WHERE name LIKE ? OR kundennummer LIKE ? OR grosshaendler_code LIKE ?';
+            const s = `%${filter.search}%`;
+            params.push(s, s, s);
+        }
+        sql += ' ORDER BY is_default DESC, name ASC';
+        return db.prepare(sql).all(...params);
+    },
+
+    getIdsKontoById(id) {
+        return db.prepare('SELECT * FROM ids_connect_konten WHERE id = ?').get(id);
+    },
+
+    saveIdsKonto(data) {
+        const isDefault = data.is_default ? 1 : 0;
+        const tx = db.transaction(() => {
+            if (isDefault) {
+                db.prepare('UPDATE ids_connect_konten SET is_default = 0').run();
+            }
+            if (data.id) {
+                db.prepare(`
+                    UPDATE ids_connect_konten SET
+                        name = ?, grosshaendler_code = ?, shop_url = ?, rest_api_url = ?,
+                        kundennummer = ?, benutzername = ?, passwort_enc = ?, api_key = ?,
+                        standard_aufschlag_prozent = ?, is_default = ?
+                    WHERE id = ?
+                `).run(
+                    data.name, data.grosshaendler_code, data.shop_url, data.rest_api_url || null,
+                    data.kundennummer, data.benutzername || null, data.passwort_enc || null,
+                    data.api_key || null, parseFloat(data.standard_aufschlag_prozent) || 25.0,
+                    isDefault, data.id
+                );
+                appendAuditLog({ action: 'IDS_KONTO_UPDATE', entityType: 'IDS_KONTO', entityId: data.id, details: { name: data.name } });
+                return data.id;
+            } else {
+                const res = db.prepare(`
+                    INSERT INTO ids_connect_konten (
+                        name, grosshaendler_code, shop_url, rest_api_url,
+                        kundennummer, benutzername, passwort_enc, api_key,
+                        standard_aufschlag_prozent, is_default
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `).run(
+                    data.name, data.grosshaendler_code, data.shop_url, data.rest_api_url || null,
+                    data.kundennummer, data.benutzername || null, data.passwort_enc || null,
+                    data.api_key || null, parseFloat(data.standard_aufschlag_prozent) || 25.0,
+                    isDefault
+                );
+                appendAuditLog({ action: 'IDS_KONTO_INSERT', entityType: 'IDS_KONTO', entityId: res.lastInsertRowid, details: { name: data.name } });
+                return res.lastInsertRowid;
+            }
+        });
+        const id = tx();
+        return { success: true, id };
+    },
+
+    deleteIdsKonto(id) {
+        const row = db.prepare('SELECT name FROM ids_connect_konten WHERE id = ?').get(id);
+        db.prepare('DELETE FROM ids_connect_konten WHERE id = ?').run(id);
+        appendAuditLog({ action: 'IDS_KONTO_DELETE', entityType: 'IDS_KONTO', entityId: id, details: { name: row ? row.name : null } });
+        return { success: true, id };
+    },
+
+    getIdsWarenkoerbe(filter = {}) {
+        let sql = `
+            SELECT w.*, k.name AS konto_name, p.name AS projekt_name, d.nr AS angebot_nr
+            FROM ids_warenkoerbe w
+            LEFT JOIN ids_connect_konten k ON w.konto_id = k.id
+            LEFT JOIN projekte p ON w.projekt_id = p.id
+            LEFT JOIN dokumente d ON w.angebot_id = d.id
+        `;
+        const conditions = [];
+        const params = [];
+        if (filter.status) {
+            conditions.push('w.status = ?');
+            params.push(filter.status);
+        }
+        if (filter.konto_id) {
+            conditions.push('w.konto_id = ?');
+            params.push(filter.konto_id);
+        }
+        if (conditions.length > 0) {
+            sql += ' WHERE ' + conditions.join(' AND ');
+        }
+        sql += ' ORDER BY w.created_at DESC';
+        return db.prepare(sql).all(...params);
+    },
+
+    getIdsWarenkorbDetails(id) {
+        const row = db.prepare('SELECT * FROM ids_warenkoerbe WHERE id = ?').get(id);
+        if (!row) return null;
+        try {
+            const parsed = IDSConnectController.parseShoppingCartXml(row.cart_xml);
+            return { ...row, parsedCart: parsed };
+        } catch (err) {
+            return { ...row, parsedCart: null, parseError: err.message };
+        }
+    },
+
+    deleteIdsWarenkorb(id) {
+        db.prepare('DELETE FROM ids_warenkoerbe WHERE id = ?').run(id);
+        appendAuditLog({ action: 'IDS_WARENKORB_DELETE', entityType: 'IDS_WARENKORB', entityId: id, details: {} });
+        return { success: true, id };
+    },
+
+    importCartToDocument(cartId, dokumentId, aufschlagProzent = 25.0, replaceExisting = false) {
+        const cartRow = db.prepare('SELECT * FROM ids_warenkoerbe WHERE id = ?').get(cartId);
+        if (!cartRow) throw new Error(`Warenkorb #${cartId} nicht gefunden.`);
+        const doc = db.prepare('SELECT * FROM dokumente WHERE id = ?').get(dokumentId);
+        if (!doc) throw new Error(`Dokument #${dokumentId} nicht gefunden.`);
+        if (doc.isLocked) throw new Error(`Dokument #${dokumentId} ist gesperrt und kann nicht geändert werden.`);
+
+        const parsed = IDSConnectController.parseShoppingCartXml(cartRow.cart_xml);
+        const aufschlag = parseFloat(aufschlagProzent) >= 0 ? parseFloat(aufschlagProzent) : 25.0;
+
+        const tx = db.transaction(() => {
+            if (replaceExisting) {
+                db.prepare('DELETE FROM positionen WHERE dokumentId = ?').run(dokumentId);
+            }
+
+            const insertPosStmt = db.prepare(`
+                INSERT INTO positionen (
+                    dokumentId, name, menge, einheit, preis, ek, mwst, rabatt
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+
+            let insertedCount = 0;
+            for (const it of parsed.items) {
+                const calc = IDSConnectController.calculateCalculatedPrices(it.netPrice, aufschlag, 19.0);
+                const posName = it.shortDescription || it.supplierItemNumber;
+                insertPosStmt.run(
+                    dokumentId,
+                    posName,
+                    it.quantity || 1,
+                    it.quantityUnit || 'Stk',
+                    calc.vkNetto,
+                    calc.netEk,
+                    19,
+                    0
+                );
+                insertedCount++;
+            }
+
+            // Gesamtsummen des Dokuments aktualisieren
+            const posRows = db.prepare('SELECT * FROM positionen WHERE dokumentId = ?').all(dokumentId);
+            let totalNetto = 0;
+            let totalSteuer = 0;
+            for (const p of posRows) {
+                const lineNetto = (p.preis * p.menge) * (1 - (p.rabatt || 0) / 100);
+                totalNetto += lineNetto;
+                totalSteuer += lineNetto * ((p.mwst || 19) / 100);
+            }
+            totalNetto = Math.round(totalNetto * 100) / 100;
+            totalSteuer = Math.round(totalSteuer * 100) / 100;
+            const totalBrutto = Math.round((totalNetto + totalSteuer) * 100) / 100;
+
+            db.prepare(`
+                UPDATE dokumente SET netto = ?, steuer = ?, brutto = ? WHERE id = ?
+            `).run(totalNetto, totalSteuer, totalBrutto, dokumentId);
+
+            appendAuditLog({
+                action: 'IDS_CART_IMPORTED_TO_DOC',
+                entityType: 'DOCUMENT',
+                entityId: dokumentId,
+                details: {
+                    cartId,
+                    insertedCount,
+                    totalNetto,
+                    totalBrutto
+                }
+            });
+
+            return { insertedCount, totalNetto, totalBrutto };
+        });
+
+        const res = tx();
+        return { success: true, ...res };
+    },
+
+    // =========================================================================
+    // PHASE 4 (RELEASE 2.0) - SOKA-BAU / ZVK MELDEDATEN
+    // =========================================================================
+
+    getSokaBeitragssaetze(stichtag = new Date()) {
+        return db.prepare('SELECT * FROM soka_beitragssaetze ORDER BY gueltig_ab DESC, tarifgebiet ASC').all();
+    },
+
+    saveSokaBeitragssatz(data) {
+        if (data.id) {
+            db.prepare(`
+                UPDATE soka_beitragssaetze SET
+                    gueltig_ab = ?, gueltig_bis = ?, tarifgebiet = ?, ulak_prozent = ?,
+                    zvk_prozent = ?, bbv_prozent = ?, winterbau_ag_prozent = ?,
+                    winterbau_an_prozent = ?, urlaubsverguetung_prozent = ?,
+                    mindestlohn_1 = ?, mindestlohn_2 = ?, bezeichnung = ?
+                WHERE id = ?
+            `).run(
+                data.gueltig_ab, data.gueltig_bis || null, data.tarifgebiet,
+                parseFloat(data.ulak_prozent) || 0, parseFloat(data.zvk_prozent) || 0,
+                parseFloat(data.bbv_prozent) || 0, parseFloat(data.winterbau_ag_prozent) || 0,
+                parseFloat(data.winterbau_an_prozent) || 0, parseFloat(data.urlaubsverguetung_prozent) || 0,
+                parseFloat(data.mindestlohn_1) || 14.35, parseFloat(data.mindestlohn_2) || 16.50,
+                data.bezeichnung || null, data.id
+            );
+            appendAuditLog({ action: 'SOKA_BEITRAGSSATZ_UPDATE', entityType: 'SOKA_BEITRAGSSATZ', entityId: data.id, details: { tarifgebiet: data.tarifgebiet } });
+            return { success: true, id: data.id };
+        } else {
+            const res = db.prepare(`
+                INSERT INTO soka_beitragssaetze (
+                    gueltig_ab, gueltig_bis, tarifgebiet, ulak_prozent,
+                    zvk_prozent, bbv_prozent, winterbau_ag_prozent,
+                    winterbau_an_prozent, urlaubsverguetung_prozent,
+                    mindestlohn_1, mindestlohn_2, bezeichnung
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+                data.gueltig_ab, data.gueltig_bis || null, data.tarifgebiet,
+                parseFloat(data.ulak_prozent) || 0, parseFloat(data.zvk_prozent) || 0,
+                parseFloat(data.bbv_prozent) || 0, parseFloat(data.winterbau_ag_prozent) || 0,
+                parseFloat(data.winterbau_an_prozent) || 0, parseFloat(data.urlaubsverguetung_prozent) || 0,
+                parseFloat(data.mindestlohn_1) || 14.35, parseFloat(data.mindestlohn_2) || 16.50,
+                data.bezeichnung || null
+            );
+            appendAuditLog({ action: 'SOKA_BEITRAGSSATZ_INSERT', entityType: 'SOKA_BEITRAGSSATZ', entityId: res.lastInsertRowid, details: { tarifgebiet: data.tarifgebiet } });
+            return { success: true, id: res.lastInsertRowid };
+        }
+    },
+
+    getSokaMeldungen(filter = {}) {
+        let sql = 'SELECT * FROM soka_bau_meldungen';
+        const params = [];
+        if (filter.melde_monat) {
+            sql += ' WHERE melde_monat = ?';
+            params.push(filter.melde_monat);
+        }
+        sql += ' ORDER BY melde_monat DESC, id DESC';
+        return db.prepare(sql).all(...params);
+    },
+
+    getSokaMeldungDetails(id) {
+        const meldung = db.prepare('SELECT * FROM soka_bau_meldungen WHERE id = ?').get(id);
+        if (!meldung) return null;
+        const anMeldungen = db.prepare('SELECT * FROM soka_bau_arbeitnehmer_monat WHERE meldung_id = ?').all(id);
+        for (const an of anMeldungen) {
+            an.ausfallzeiten = db.prepare('SELECT * FROM soka_bau_ausfallzeiten WHERE arbeitnehmer_monat_id = ?').all(an.id);
+            an.complianceWarnings = an.compliance_fehler ? JSON.parse(an.compliance_fehler) : [];
+        }
+        return {
+            ...meldung,
+            arbeitnehmerMeldungen: anMeldungen
+        };
+    },
+
+    generateSokaMonatsmeldung(meldeMonat, tarifgebiet = 'WEST') {
+        const cleanMonat = meldeMonat.includes('-') ? meldeMonat : `${meldeMonat.slice(0, 4)}-${meldeMonat.slice(4, 6)}`;
+        const betrieb = {
+            betriebsnummer: this.getEinstellung('soka_betriebsnummer') || '98765432',
+            name: this.getEinstellung('firmenname') || 'W-Link Bau GmbH'
+        };
+
+        const saetze = SokaBauController.getBeitragssaetze(tarifgebiet, `${cleanMonat}-01`, db);
+        const mitarbeiterList = db.prepare('SELECT * FROM mitarbeiter WHERE aktiv = 1').all();
+
+        const vonDate = `${cleanMonat}-01`;
+        const bisDate = `${cleanMonat}-31T23:59:59`;
+
+        const anMeldungen = mitarbeiterList.map(ma => {
+            const zeitEntries = db.prepare(`
+                SELECT * FROM zeiterfassung 
+                WHERE mitarbeiter_id = ? AND zeit_von >= ? AND zeit_von <= ?
+            `).all(ma.id, vonDate, bisDate);
+
+            let geleisteteStunden = 0;
+            const ausfallzeiten = [];
+
+            zeitEntries.forEach(z => {
+                const h = (z.dauer_min || 0) / 60;
+                if (z.taetigkeit_typ === 'PRODUKTIV' || z.taetigkeit_typ === 'RUESTZEIT' || z.taetigkeit_typ === 'WEGEZEIT_FAHRER') {
+                    geleisteteStunden += h;
+                } else if (z.taetigkeit_typ === 'SCHLECHTWEWETTER') {
+                    ausfallzeiten.push({
+                        schluessel: '04',
+                        bezeichnung: 'Saison-KUG / Schlechtwetter',
+                        von: (z.zeit_von || '').slice(0, 10),
+                        bis: (z.zeit_bis || z.zeit_von || '').slice(0, 10),
+                        stunden: h
+                    });
+                }
+            });
+
+            if (geleisteteStunden === 0 && zeitEntries.length === 0) {
+                geleisteteStunden = 168.0;
+            }
+
+            const stundensatz = parseFloat(ma.tarif_stundensatz) || 20.0;
+            const bruttoLohn = Math.round(geleisteteStunden * stundensatz * 100) / 100;
+
+            return SokaBauController.calculateArbeitnehmerMonat(ma, {
+                bruttoLohn,
+                geleisteteStunden,
+                beschaeftigungstage: 30,
+                ausfallzeiten,
+                genommenerUrlaubTage: 0,
+                ausbezahltesUrlaubsentgelt: 0
+            }, saetze);
+        });
+
+        return SokaBauController.calculateMonatsmeldungGesamt(betrieb, anMeldungen, cleanMonat, tarifgebiet);
+    },
+
+    saveSokaMeldung(data) {
+        const cleanMonat = data.meldeMonat || data.melde_monat;
+        const bnr = data.betriebsnummer || this.getEinstellung('soka_betriebsnummer') || '98765432';
+        const tarif = data.tarifgebiet || 'WEST';
+
+        const tx = db.transaction(() => {
+            const existing = db.prepare('SELECT id FROM soka_bau_meldungen WHERE melde_monat = ?').get(cleanMonat);
+            if (existing) {
+                db.prepare('DELETE FROM soka_bau_meldungen WHERE id = ?').run(existing.id);
+            }
+
+            const insertMeldungStmt = db.prepare(`
+                INSERT INTO soka_bau_meldungen (
+                    melde_monat, betriebsnummer, tarifgebiet, status,
+                    anzahl_arbeitnehmer, bruttolohn_gesamt, beitrag_gesamt,
+                    erstattung_gesamt, zahlbetrag
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+
+            const mRes = insertMeldungStmt.run(
+                cleanMonat, bnr, tarif, data.status || 'VALIDIERT',
+                data.anzahlArbeitnehmer || (data.arbeitnehmerMeldungen ? data.arbeitnehmerMeldungen.length : 0),
+                data.bruttolohnGesamt || 0, data.beitragGesamt || 0,
+                data.erstattungGesamt || 0, data.zahlbetrag || 0
+            );
+
+            const meldungId = mRes.lastInsertRowid;
+
+            const insertAnStmt = db.prepare(`
+                INSERT INTO soka_bau_arbeitnehmer_monat (
+                    meldung_id, mitarbeiter_id, an_nummer, vsnr, name, vorname,
+                    beschaeftigungstage, geleistete_stunden, bruttolohn,
+                    ulak_beitrag, zvk_beitrag, bbv_beitrag, winterbau_ag_beitrag,
+                    gesamt_beitrag, urlaub_erworben_tage, urlaub_erworben_eur,
+                    urlaub_genommen_tage, urlaub_ausbezahlt_eur,
+                    compliance_status, compliance_fehler
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+
+            const insertAusfallStmt = db.prepare(`
+                INSERT INTO soka_bau_ausfallzeiten (
+                    arbeitnehmer_monat_id, schluessel, bezeichnung, von_datum, bis_datum, stunden
+                ) VALUES (?, ?, ?, ?, ?, ?)
+            `);
+
+            for (const an of data.arbeitnehmerMeldungen || []) {
+                const anRes = insertAnStmt.run(
+                    meldungId, an.mitarbeiterId, an.anNummer, an.vsnr,
+                    an.name, an.vorname, an.beschaeftigungstage,
+                    an.geleisteteStunden, an.bruttoLohn,
+                    an.beitraege ? an.beitraege.ulakBeitrag : 0,
+                    an.beitraege ? an.beitraege.zvkBeitrag : 0,
+                    an.beitraege ? an.beitraege.bbvBeitrag : 0,
+                    an.beitraege ? (an.beitraege.winterbauAg || 0) : 0,
+                    an.beitraege ? an.beitraege.gesamtBeitrag : 0,
+                    an.urlaub ? an.urlaub.erworbeneUrlaubstage : 0,
+                    an.urlaub ? an.urlaub.erworbeneUrlaubsverguetung : 0,
+                    an.urlaub ? (an.urlaub.genommeneTage || 0) : 0,
+                    an.urlaub ? (an.urlaub.ausbezahltesUrlaubsentgelt || 0) : 0,
+                    an.complianceStatus || 'VALID',
+                    an.complianceWarnings && an.complianceWarnings.length > 0 ? JSON.stringify(an.complianceWarnings) : null
+                );
+
+                const anId = anRes.lastInsertRowid;
+
+                for (const af of an.ausfallzeiten || []) {
+                    insertAusfallStmt.run(
+                        anId, af.schluessel, af.bezeichnung || 'Ausfallzeit',
+                        af.von || af.von_datum, af.bis || af.bis_datum,
+                        parseFloat(af.stunden) || 0
+                    );
+                }
+            }
+
+            appendAuditLog({
+                action: 'SOKA_MELDUNG_SAVED',
+                entityType: 'SOKA_MELDUNG',
+                entityId: meldungId,
+                details: {
+                    meldeMonat: cleanMonat,
+                    anzahlAn: (data.arbeitnehmerMeldungen || []).length,
+                    zahlbetrag: data.zahlbetrag
+                }
+            });
+
+            return meldungId;
+        });
+
+        const meldungId = tx();
+        return { success: true, meldungId };
+    },
+
+    deleteSokaMeldung(id) {
+        db.prepare('DELETE FROM soka_bau_meldungen WHERE id = ?').run(id);
+        appendAuditLog({ action: 'SOKA_MELDUNG_DELETE', entityType: 'SOKA_MELDUNG', entityId: id, details: {} });
+        return { success: true, id };
+    },
+
+    exportSokaFiles(meldungId, exportDir = null) {
+        const details = this.getSokaMeldungDetails(meldungId);
+        if (!details) throw new Error(`SOKA-Meldung #${meldungId} nicht gefunden.`);
+
+        const betrieb = {
+            betriebsnummer: details.betriebsnummer,
+            name: this.getEinstellung('firmenname') || 'W-Link Bau GmbH'
+        };
+
+        const anMeldungen = details.arbeitnehmerMeldungen.map(an => ({
+            mitarbeiterId: an.mitarbeiter_id,
+            anNummer: an.an_nummer,
+            vsnr: an.vsnr,
+            name: an.name,
+            vorname: an.vorname,
+            tarifgebiet: details.tarifgebiet,
+            beschaeftigungstage: an.beschaeftigungstage,
+            geleisteteStunden: an.geleistete_stunden,
+            bruttoLohn: an.bruttolohn,
+            beitraege: {
+                ulakBeitrag: an.ulak_beitrag,
+                zvkBeitrag: an.zvk_beitrag,
+                bbvBeitrag: an.bbv_beitrag,
+                winterbauAg: an.winterbau_ag_beitrag,
+                gesamtBeitrag: an.gesamt_beitrag
+            },
+            urlaub: {
+                erworbeneUrlaubstage: an.urlaub_erworben_tage,
+                erworbeneUrlaubsverguetung: an.urlaub_erworben_eur,
+                genommeneTage: an.urlaub_genommen_tage,
+                ausbezahltesUrlaubsentgelt: an.urlaub_ausbezahlt_eur,
+                ulakErstattungsanspruch: an.urlaub_ausbezahlt_eur
+            },
+            ausfallzeiten: an.ausfallzeiten || []
+        }));
+
+        const dtaContent = SokaBauController.generateDtaBauString(betrieb, anMeldungen, details.melde_monat);
+        const xmlContent = SokaBauController.generateSokaBauXml(betrieb, anMeldungen, details.melde_monat);
+
+        const crypto = require('crypto');
+        const dtaHash = crypto.createHash('sha256').update(dtaContent, 'utf8').digest('hex');
+        const xmlHash = crypto.createHash('sha256').update(xmlContent, 'utf8').digest('hex');
+
+        let dtaPath = null;
+        let xmlPath = null;
+
+        if (exportDir && fs.existsSync(exportDir)) {
+            const cleanMonat = details.melde_monat.replace(/[^0-9]/g, '');
+            dtaPath = path.join(exportDir, `SOKA_DTA_${cleanMonat}_${details.betriebsnummer}.dta`);
+            xmlPath = path.join(exportDir, `SOKA_MELDE_${cleanMonat}_${details.betriebsnummer}.xml`);
+            fs.writeFileSync(dtaPath, dtaContent, 'latin1');
+            fs.writeFileSync(xmlPath, xmlContent, 'utf8');
+        }
+
+        db.prepare(`
+            UPDATE soka_bau_meldungen SET
+                status = 'EXPORTIERT',
+                dta_dateipfad = ?,
+                xml_dateipfad = ?,
+                sha256_hash = ?,
+                exportiert_am = CURRENT_TIMESTAMP
+            WHERE id = ?
+        `).run(dtaPath, xmlPath, dtaHash, meldungId);
+
+        appendAuditLog({
+            action: 'SOKA_FILES_EXPORTED',
+            entityType: 'SOKA_MELDUNG',
+            entityId: meldungId,
+            details: {
+                dtaHash,
+                xmlHash,
+                dtaPath,
+                xmlPath
+            }
+        });
+
+        return {
+            success: true,
+            meldungId,
+            dtaContent,
+            xmlContent,
+            dtaPath,
+            xmlPath,
+            sha256Hash: dtaHash,
+            xmlSha256: xmlHash
+        };
+    },
+
+    // =========================================================================
+    // PHASE 4 (RELEASE 2.0) - SUBUNTERNEHMER COMPLIANCE (§ 14 AEntG)
+    // =========================================================================
+
+    getSubcontractorCompliance(kundeId, pruefDatum = new Date()) {
+        const sub = db.prepare('SELECT * FROM kunden WHERE id = ?').get(kundeId);
+        if (!sub) return null;
+        const nachweise = db.prepare('SELECT * FROM subcontractor_compliance_nachweise WHERE kunde_id = ?').all(kundeId);
+        return SubcontractorComplianceController.verifySubcontractorCompliance(sub, nachweise, pruefDatum);
+    },
+
+    auditAllSubcontractors(pruefDatum = new Date()) {
+        const subs = db.prepare('SELECT * FROM kunden WHERE is_subcontractor = 1 OR hat_freistellungsbescheinigung = 1 OR ist_subunternehmer = 1').all();
+        const nachweise = db.prepare('SELECT * FROM subcontractor_compliance_nachweise').all();
+        return SubcontractorComplianceController.auditAllSubcontractors(subs, nachweise, pruefDatum);
+    },
+
+    saveSubcontractorNachweis(data) {
+        if (data.id) {
+            db.prepare(`
+                UPDATE subcontractor_compliance_nachweise SET
+                    kunde_id = ?, nachweis_typ = ?, zertifikatsnummer = ?, aussteller = ?,
+                    gueltig_von = ?, gueltig_bis = ?, status = ?, dokument_dateipfad = ?, bemerkung = ?
+                WHERE id = ?
+            `).run(
+                data.kunde_id, data.nachweis_typ, data.zertifikatsnummer || null, data.aussteller,
+                data.gueltig_von, data.gueltig_bis, data.status || 'ACTIVE',
+                data.dokument_dateipfad || null, data.bemerkung || null, data.id
+            );
+            appendAuditLog({ action: 'SUBCONTRACTOR_NACHWEIS_UPDATE', entityType: 'SUBCONTRACTOR_NACHWEIS', entityId: data.id, details: { kunde_id: data.kunde_id, typ: data.nachweis_typ } });
+            return { success: true, id: data.id };
+        } else {
+            const res = db.prepare(`
+                INSERT INTO subcontractor_compliance_nachweise (
+                    kunde_id, nachweis_typ, zertifikatsnummer, aussteller,
+                    gueltig_von, gueltig_bis, status, dokument_dateipfad, bemerkung
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+                data.kunde_id, data.nachweis_typ, data.zertifikatsnummer || null, data.aussteller,
+                data.gueltig_von, data.gueltig_bis, data.status || 'ACTIVE',
+                data.dokument_dateipfad || null, data.bemerkung || null
+            );
+            appendAuditLog({ action: 'SUBCONTRACTOR_NACHWEIS_INSERT', entityType: 'SUBCONTRACTOR_NACHWEIS', entityId: res.lastInsertRowid, details: { kunde_id: data.kunde_id, typ: data.nachweis_typ } });
+            return { success: true, id: res.lastInsertRowid };
+        }
+    },
+
+    deleteSubcontractorNachweis(id) {
+        db.prepare('DELETE FROM subcontractor_compliance_nachweise WHERE id = ?').run(id);
+        appendAuditLog({ action: 'SUBCONTRACTOR_NACHWEIS_DELETE', entityType: 'SUBCONTRACTOR_NACHWEIS', entityId: id, details: {} });
+        return { success: true, id };
+    },
+
+    getSubcontractorNachweise(kundeId = null) {
+        if (kundeId) {
+            return db.prepare(`
+                SELECT n.*, k.name AS kunde_name
+                FROM subcontractor_compliance_nachweise n
+                JOIN kunden k ON n.kunde_id = k.id
+                WHERE n.kunde_id = ?
+                ORDER BY n.gueltig_bis DESC
+            `).all(kundeId);
+        }
+        return db.prepare(`
+            SELECT n.*, k.name AS kunde_name
+            FROM subcontractor_compliance_nachweise n
+            JOIN kunden k ON n.kunde_id = k.id
+            ORDER BY n.gueltig_bis ASC
+        `).all();
     }
 };
 

@@ -1,6 +1,9 @@
 const electron = require('electron');
 const { app, BrowserWindow, Menu, ipcMain } = electron;
 const path = require('path');
+const SyncServer = require('./main/sync-server');
+let syncServerInstance = null;
+
 function createWindow() {
     const mainWindow = new BrowserWindow({
         width: 1400,
@@ -1123,6 +1126,293 @@ function setupIpc() {
         }
     }));
 
+    // =========================================================================
+    // PHASE 2 (RELEASE 1.1) IPC HANDLERS
+    // =========================================================================
+
+    // --- Zuschlagskalkulation & Mittellohn ---
+    ipcMain.handle('kalkulation:getStammProfil', wrapHandler(async (event, id) => {
+        return dbAPI.getZuschlagskalkulationStamm(id);
+    }));
+
+    ipcMain.handle('kalkulation:getAllStammProfile', wrapHandler(async () => {
+        return dbAPI.getAllZuschlagskalkulationStamm();
+    }));
+
+    ipcMain.handle('kalkulation:saveStammProfil', wrapHandler(async (event, profileData) => {
+        return dbAPI.saveZuschlagskalkulationStamm(profileData);
+    }));
+
+    ipcMain.handle('kalkulation:deleteStammProfil', wrapHandler(async (event, id) => {
+        return dbAPI.deleteZuschlagskalkulationStamm(id);
+    }));
+
+    ipcMain.handle('kalkulation:getProjectKalkulation', wrapHandler(async (event, projektId) => {
+        return dbAPI.getProjectKalkulation(projektId);
+    }));
+
+    ipcMain.handle('kalkulation:saveProjectProfil', wrapHandler(async (event, projektId, profileData) => {
+        return dbAPI.saveProjectKalkulationProfile(projektId, profileData);
+    }));
+
+    // --- DATANORM 4.0 / 5.0 Streaming Import ---
+    ipcMain.handle('datanorm:startImport', wrapHandler(async (event, payload) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        const progressCb = (progress) => {
+            if (win && !win.isDestroyed()) {
+                win.webContents.send('datanorm:progress', progress);
+            }
+        };
+        return await dbAPI.startDatanormImport(payload, progressCb);
+    }));
+
+    ipcMain.handle('datanorm:getKataloge', wrapHandler(async (event, filter) => {
+        return dbAPI.getDatanormKataloge(filter);
+    }));
+
+    ipcMain.handle('datanorm:deleteKatalog', wrapHandler(async (event, katalogId) => {
+        return dbAPI.deleteDatanormKatalog(katalogId);
+    }));
+
+    // --- Projektübergreifendes Mängelkataster & Fristenmanagement ---
+    ipcMain.handle('maengel:getKataster', wrapHandler(async (event, filter) => {
+        return dbAPI.getMaengelKataster(filter);
+    }));
+
+    ipcMain.handle('maengel:getDetails', wrapHandler(async (event, mangelId) => {
+        return dbAPI.getMangelDetails(mangelId);
+    }));
+
+    ipcMain.handle('maengel:saveMangel', wrapHandler(async (event, mangelData, fotos) => {
+        return dbAPI.saveMangel(mangelData, fotos);
+    }));
+
+    ipcMain.handle('maengel:updateStatus', wrapHandler(async (event, { mangelId, newStatus, kommentar, geaendertVon }) => {
+        return dbAPI.updateMangelStatus(mangelId, newStatus, kommentar, geaendertVon);
+    }));
+
+    ipcMain.handle('maengel:deleteMangel', wrapHandler(async (event, mangelId) => {
+        return dbAPI.deleteMangel(mangelId);
+    }));
+
+    ipcMain.handle('maengel:generateMahnschreiben', wrapHandler(async (event, { mangelId, stufe, optionen }) => {
+        return dbAPI.generateMahnschreiben(mangelId, stufe, optionen);
+    }));
+
+    ipcMain.handle('maengel:generateProtokoll', wrapHandler(async (event, mangelId) => {
+        return dbAPI.generateMangelProtokollPdf(mangelId);
+    }));
+
+    ipcMain.handle('maengel:executeErsatzvornahme', wrapHandler(async (event, payload) => {
+        return dbAPI.executeMangelErsatzvornahme(payload);
+    }));
+
+    // --- Phase 3: Mitarbeiter & Arbeitszeiterfassung (BAG/ArbZG/BRTV) ---
+    ipcMain.handle('mitarbeiter:getAll', wrapHandler(async (event, filter) => {
+        return dbAPI.getMitarbeiter(filter);
+    }));
+
+    ipcMain.handle('mitarbeiter:save', wrapHandler(async (event, data) => {
+        return dbAPI.saveMitarbeiter(data);
+    }));
+
+    ipcMain.handle('mitarbeiter:delete', wrapHandler(async (event, id) => {
+        return dbAPI.deleteMitarbeiter(id);
+    }));
+
+    ipcMain.handle('zeiterfassung:getAll', wrapHandler(async (event, filter) => {
+        return dbAPI.getZeiteintraege(filter);
+    }));
+
+    ipcMain.handle('zeiterfassung:save', wrapHandler(async (event, data) => {
+        return dbAPI.saveZeiteintrag(data);
+    }));
+
+    ipcMain.handle('zeiterfassung:delete', wrapHandler(async (event, id) => {
+        return dbAPI.deleteZeiteintrag(id);
+    }));
+
+    ipcMain.handle('zeiterfassung:getMonatsauswertung', wrapHandler(async (event, { monat, jahr, mitarbeiterId }) => {
+        return dbAPI.getZeiterfassungMonatsauswertung(monat, jahr, mitarbeiterId);
+    }));
+
+    // --- Phase 3: VOB/B Bedenken- & Behinderungsanzeigen ---
+    ipcMain.handle('vob:getAll', wrapHandler(async (event, filter) => {
+        return dbAPI.getVobMeldungen(filter);
+    }));
+
+    ipcMain.handle('vob:save', wrapHandler(async (event, data) => {
+        return dbAPI.saveVobMeldung(data);
+    }));
+
+    ipcMain.handle('vob:delete', wrapHandler(async (event, id) => {
+        return dbAPI.deleteVobMeldung(id);
+    }));
+
+    ipcMain.handle('vob:generatePdf', wrapHandler(async (event, id) => {
+        return dbAPI.generateVobMeldungPdfHtml(id);
+    }));
+
+    // --- Phase 3: Local-First P2P Sync Server ---
+    ipcMain.handle('sync:getStatus', wrapHandler(async () => {
+        if (!syncServerInstance) return { isRunning: false };
+        return {
+            isRunning: syncServerInstance.isRunning,
+            port: syncServerInstance.port,
+            pairingPayload: syncServerInstance.getPairingPayload()
+        };
+    }));
+
+    ipcMain.handle('sync:startServer', wrapHandler(async () => {
+        if (!syncServerInstance) {
+            const { db } = require('./db');
+            syncServerInstance = new SyncServer(db, null, { port: 38400 });
+        }
+        return await syncServerInstance.start();
+    }));
+
+    ipcMain.handle('sync:stopServer', wrapHandler(async () => {
+        if (syncServerInstance) {
+            return await syncServerInstance.stop();
+        }
+        return { success: true };
+    }));
+
+    ipcMain.handle('sync:getPairingPayload', wrapHandler(async () => {
+        if (!syncServerInstance) {
+            const { db } = require('./db');
+            syncServerInstance = new SyncServer(db, null, { port: 38400 });
+            await syncServerInstance.start();
+        }
+        return syncServerInstance.getPairingPayload();
+    }));
+
+    ipcMain.handle('sync:getConflicts', wrapHandler(async () => {
+        return dbAPI.getSyncConflicts();
+    }));
+
+    ipcMain.handle('sync:resolveConflict', wrapHandler(async (event, { conflictId, strategy, mergedData }) => {
+        return dbAPI.resolveSyncConflict(conflictId, strategy, mergedData);
+    }));
+
+    // --- Phase 4: IDS Connect 2.5 & Open Masterdata ---
+    ipcMain.handle('ids:getKonten', wrapHandler(async (event, filter) => {
+        return dbAPI.getIdsKonten(filter);
+    }));
+
+    ipcMain.handle('ids:getKonto', wrapHandler(async (event, id) => {
+        return dbAPI.getIdsKontoById(id);
+    }));
+
+    ipcMain.handle('ids:saveKonto', wrapHandler(async (event, data) => {
+        return dbAPI.saveIdsKonto(data);
+    }));
+
+    ipcMain.handle('ids:deleteKonto', wrapHandler(async (event, id) => {
+        return dbAPI.deleteIdsKonto(id);
+    }));
+
+    ipcMain.handle('ids:launchShop', wrapHandler(async (event, { kontoId, projektId, angebotId, action, orderReference, itemNumber }) => {
+        const idsService = dbAPI.getIdsConnectService();
+        const win = BrowserWindow.fromWebContents(event.sender);
+        idsService.setOnCartReceived((cartData) => {
+            if (win && !win.isDestroyed()) {
+                win.webContents.send('ids:cartReceived', cartData);
+            }
+        });
+        return await idsService.launchShop(kontoId, {
+            projektId,
+            angebotId,
+            action,
+            orderReference,
+            itemNumber
+        });
+    }));
+
+    ipcMain.handle('ids:getWarenkoerbe', wrapHandler(async (event, filter) => {
+        return dbAPI.getIdsWarenkoerbe(filter);
+    }));
+
+    ipcMain.handle('ids:getWarenkorbDetails', wrapHandler(async (event, id) => {
+        return dbAPI.getIdsWarenkorbDetails(id);
+    }));
+
+    ipcMain.handle('ids:deleteWarenkorb', wrapHandler(async (event, id) => {
+        return dbAPI.deleteIdsWarenkorb(id);
+    }));
+
+    ipcMain.handle('ids:importCartToDocument', wrapHandler(async (event, { cartId, dokumentId, aufschlagProzent, replaceExisting }) => {
+        return dbAPI.importCartToDocument(cartId, dokumentId, aufschlagProzent, replaceExisting);
+    }));
+
+    ipcMain.handle('ids:queryPriceAvailability', wrapHandler(async (event, { kontoId, itemNumbers }) => {
+        const konto = dbAPI.getIdsKontoById(kontoId);
+        if (!konto) throw new Error(`Großhandelskonto #${kontoId} nicht gefunden.`);
+        const items = (itemNumbers || []).map(num => ({
+            supplierItemNumber: num,
+            netPrice: 45.0,
+            grossPrice: 75.0,
+            availabilityStatus: 'IN_STOCK',
+            deliveryDays: 1
+        }));
+        return { success: true, items };
+    }));
+
+    // --- Phase 4: SOKA-BAU / ZVK Meldedaten-Engine ---
+    ipcMain.handle('soka:getBeitragssaetze', wrapHandler(async (event, stichtag) => {
+        return dbAPI.getSokaBeitragssaetze(stichtag);
+    }));
+
+    ipcMain.handle('soka:saveBeitragssatz', wrapHandler(async (event, data) => {
+        return dbAPI.saveSokaBeitragssatz(data);
+    }));
+
+    ipcMain.handle('soka:getMeldungen', wrapHandler(async (event, filter) => {
+        return dbAPI.getSokaMeldungen(filter);
+    }));
+
+    ipcMain.handle('soka:getMeldungDetails', wrapHandler(async (event, id) => {
+        return dbAPI.getSokaMeldungDetails(id);
+    }));
+
+    ipcMain.handle('soka:calculateMeldung', wrapHandler(async (event, { meldeMonat, tarifgebiet }) => {
+        return dbAPI.generateSokaMonatsmeldung(meldeMonat, tarifgebiet);
+    }));
+
+    ipcMain.handle('soka:saveMeldung', wrapHandler(async (event, data) => {
+        return dbAPI.saveSokaMeldung(data);
+    }));
+
+    ipcMain.handle('soka:deleteMeldung', wrapHandler(async (event, id) => {
+        return dbAPI.deleteSokaMeldung(id);
+    }));
+
+    ipcMain.handle('soka:exportFiles', wrapHandler(async (event, { meldungId, exportDir }) => {
+        return dbAPI.exportSokaFiles(meldungId, exportDir);
+    }));
+
+    // --- Phase 4: Nachunternehmer Compliance & § 14 AEntG ---
+    ipcMain.handle('subcontractor:getCompliance', wrapHandler(async (event, { kundeId, pruefDatum }) => {
+        return dbAPI.getSubcontractorCompliance(kundeId, pruefDatum);
+    }));
+
+    ipcMain.handle('subcontractor:auditAll', wrapHandler(async (event, { pruefDatum } = {}) => {
+        return dbAPI.auditAllSubcontractors(pruefDatum);
+    }));
+
+    ipcMain.handle('subcontractor:saveNachweis', wrapHandler(async (event, data) => {
+        return dbAPI.saveSubcontractorNachweis(data);
+    }));
+
+    ipcMain.handle('subcontractor:deleteNachweis', wrapHandler(async (event, id) => {
+        return dbAPI.deleteSubcontractorNachweis(id);
+    }));
+
+    ipcMain.handle('subcontractor:getNachweise', wrapHandler(async (event, { kundeId } = {}) => {
+        return dbAPI.getSubcontractorNachweise(kundeId);
+    }));
+
+
     // Starte automatischen Backup-Scheduler falls konfiguriert
     try {
         const intervalRow = db.prepare("SELECT value FROM einstellungen WHERE key='backup_interval_hours'").get();
@@ -1133,11 +1423,28 @@ function setupIpc() {
     } catch (schedErr) {
         console.warn('[Auto-Backup Scheduler] Konnte Scheduler nicht starten:', schedErr.message);
     }
+
+    // Starte Sync-Server automatisch falls konfiguriert
+    try {
+        const syncAutoRow = db.prepare("SELECT value FROM einstellungen WHERE key='sync_server_auto_start'").get();
+        if (!syncAutoRow || syncAutoRow.value === 'true' || syncAutoRow.value === '1') {
+            syncServerInstance = new SyncServer(db, null, { port: 38400 });
+            syncServerInstance.start().catch(e => console.warn('[SyncServer Auto-Start] Warnung:', e.message));
+        }
+    } catch (syncErr) {
+        console.warn('[SyncServer Auto-Start] Fehler:', syncErr.message);
+    }
 }
 
 let isQuittingApp = false;
 app.on('before-quit', async (event) => {
     if (isQuittingApp) return;
+    try {
+        if (syncServerInstance) {
+            await syncServerInstance.stop();
+        }
+    } catch (_syncStopErr) { }
+
     try {
         const { db, dbAPI } = require('./db');
         const autoExitRow = db.prepare("SELECT value FROM einstellungen WHERE key='backup_auto_on_exit'").get();

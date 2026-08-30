@@ -690,6 +690,442 @@ function createSchema(db) {
     )`);
 
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_backup_created ON backup_history(erstellt_am)`); } catch (e) { console.error('[DB Schema] Index idx_backup_created:', e.message); }
+
+    // =========================================================================
+    // PHASE 2 (RELEASE 1.1) - KALKULATION, DATANORM & MÄNGELKATASTER
+    // =========================================================================
+
+    // 1. Unternehmensweite Stammdaten-Zuschlagsprofile
+    db.exec(`CREATE TABLE IF NOT EXISTS zuschlagskalkulation_stamm (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        ist_standard INTEGER DEFAULT 0 CHECK(ist_standard IN (0, 1)),
+        mittellohn_eur REAL NOT NULL DEFAULT 26.00,
+        lohngebundene_kosten_prozent REAL NOT NULL DEFAULT 84.50,
+        lohnnebenkosten_prozent REAL NOT NULL DEFAULT 13.50,
+        kalkulationslohn_eur REAL NOT NULL DEFAULT 51.48,
+        kalkulationsverfahren TEXT NOT NULL DEFAULT 'ZUSCHLAGSKALKULATION' CHECK(kalkulationsverfahren IN ('ZUSCHLAGSKALKULATION', 'ENDSUMMENKALKULATION')),
+        endsumme_umlage_basis TEXT NOT NULL DEFAULT 'HERSTELLKOSTEN' CHECK(endsumme_umlage_basis IN ('HERSTELLKOSTEN', 'LOHNSTUNDEN')),
+        zuschlag_lohn_bgk REAL NOT NULL DEFAULT 18.00,
+        zuschlag_lohn_agk REAL NOT NULL DEFAULT 22.00,
+        zuschlag_lohn_wug REAL NOT NULL DEFAULT 8.00,
+        zuschlag_stoff_bgk REAL NOT NULL DEFAULT 12.00,
+        zuschlag_stoff_agk REAL NOT NULL DEFAULT 14.00,
+        zuschlag_stoff_wug REAL NOT NULL DEFAULT 6.00,
+        zuschlag_geraet_bgk REAL NOT NULL DEFAULT 15.00,
+        zuschlag_geraet_agk REAL NOT NULL DEFAULT 16.00,
+        zuschlag_geraet_wug REAL NOT NULL DEFAULT 6.00,
+        zuschlag_sonst_bgk REAL NOT NULL DEFAULT 10.00,
+        zuschlag_sonst_agk REAL NOT NULL DEFAULT 12.00,
+        zuschlag_sonst_wug REAL NOT NULL DEFAULT 5.00,
+        zuschlag_nu_bgk REAL NOT NULL DEFAULT 8.00,
+        zuschlag_nu_agk REAL NOT NULL DEFAULT 10.00,
+        zuschlag_nu_wug REAL NOT NULL DEFAULT 4.00,
+        wug_gewinn_prozent REAL NOT NULL DEFAULT 5.00,
+        wug_betriebswagnis_prozent REAL NOT NULL DEFAULT 2.00,
+        wug_leistungswagnis_prozent REAL NOT NULL DEFAULT 1.00,
+        skonto_abzug_kalkulation_prozent REAL NOT NULL DEFAULT 0.00,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    // 2. Projektbezogene Kalkulationsprofile
+    db.exec(`CREATE TABLE IF NOT EXISTS zuschlagskalkulation_projekte (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        projekt_id INTEGER NOT NULL UNIQUE REFERENCES projekte(id) ON DELETE CASCADE,
+        stamm_profil_id INTEGER REFERENCES zuschlagskalkulation_stamm(id) ON DELETE SET NULL,
+        mittellohn_eur REAL NOT NULL DEFAULT 26.00,
+        lohngebundene_kosten_prozent REAL NOT NULL DEFAULT 84.50,
+        lohnnebenkosten_prozent REAL NOT NULL DEFAULT 13.50,
+        kalkulationslohn_eur REAL NOT NULL DEFAULT 51.48,
+        kalkulationsverfahren TEXT NOT NULL DEFAULT 'ZUSCHLAGSKALKULATION' CHECK(kalkulationsverfahren IN ('ZUSCHLAGSKALKULATION', 'ENDSUMMENKALKULATION')),
+        endsumme_umlage_basis TEXT NOT NULL DEFAULT 'HERSTELLKOSTEN' CHECK(endsumme_umlage_basis IN ('HERSTELLKOSTEN', 'LOHNSTUNDEN')),
+        zuschlag_lohn_bgk REAL NOT NULL DEFAULT 18.00,
+        zuschlag_lohn_agk REAL NOT NULL DEFAULT 22.00,
+        zuschlag_lohn_wug REAL NOT NULL DEFAULT 8.00,
+        zuschlag_stoff_bgk REAL NOT NULL DEFAULT 12.00,
+        zuschlag_stoff_agk REAL NOT NULL DEFAULT 14.00,
+        zuschlag_stoff_wug REAL NOT NULL DEFAULT 6.00,
+        zuschlag_geraet_bgk REAL NOT NULL DEFAULT 15.00,
+        zuschlag_geraet_agk REAL NOT NULL DEFAULT 16.00,
+        zuschlag_geraet_wug REAL NOT NULL DEFAULT 6.00,
+        zuschlag_sonst_bgk REAL NOT NULL DEFAULT 10.00,
+        zuschlag_sonst_agk REAL NOT NULL DEFAULT 12.00,
+        zuschlag_sonst_wug REAL NOT NULL DEFAULT 5.00,
+        zuschlag_nu_bgk REAL NOT NULL DEFAULT 8.00,
+        zuschlag_nu_agk REAL NOT NULL DEFAULT 10.00,
+        zuschlag_nu_wug REAL NOT NULL DEFAULT 4.00,
+        wug_gewinn_prozent REAL NOT NULL DEFAULT 5.00,
+        wug_betriebswagnis_prozent REAL NOT NULL DEFAULT 2.00,
+        wug_leistungswagnis_prozent REAL NOT NULL DEFAULT 1.00,
+        skonto_abzug_kalkulation_prozent REAL NOT NULL DEFAULT 0.00,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_zuschlag_proj_pid ON zuschlagskalkulation_projekte(projekt_id)`); } catch (e) { console.error('[DB Schema] Index idx_zuschlag_proj_pid:', e.message); }
+
+    // 3. DATANORM Kataloge, Warengruppen und Rabattgruppen
+    db.exec(`CREATE TABLE IF NOT EXISTS datanorm_kataloge (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        lieferant_name TEXT NOT NULL,
+        katalog_name TEXT NOT NULL,
+        version TEXT DEFAULT '5',
+        import_datum DATETIME DEFAULT CURRENT_TIMESTAMP,
+        anzahl_artikel INTEGER DEFAULT 0,
+        dateipfade_json TEXT,
+        sha256_hash TEXT,
+        status TEXT DEFAULT 'AKTIV' CHECK(status IN ('AKTIV', 'ARCHIVIERT'))
+    )`);
+
+    db.exec(`CREATE TABLE IF NOT EXISTS datanorm_warengruppen (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        katalog_id INTEGER REFERENCES datanorm_kataloge(id) ON DELETE CASCADE,
+        hauptwarengruppe TEXT NOT NULL,
+        warengruppe TEXT NOT NULL,
+        bezeichnung TEXT NOT NULL,
+        aufschlag_prozent REAL DEFAULT 25.0,
+        UNIQUE(katalog_id, hauptwarengruppe, warengruppe)
+    )`);
+
+    db.exec(`CREATE TABLE IF NOT EXISTS datanorm_rabattgruppen (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        katalog_id INTEGER REFERENCES datanorm_kataloge(id) ON DELETE CASCADE,
+        rabattgruppe TEXT NOT NULL,
+        bezeichnung TEXT,
+        rabatt_prozent1 REAL DEFAULT 0.0,
+        rabatt_prozent2 REAL DEFAULT 0.0,
+        zuschlag_prozent REAL DEFAULT 0.0,
+        UNIQUE(katalog_id, rabattgruppe)
+    )`);
+
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_datanorm_wrg_kat ON datanorm_warengruppen(katalog_id)`); } catch (e) { console.error('[DB Schema] Index idx_datanorm_wrg_kat:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_datanorm_rab_kat ON datanorm_rabattgruppen(katalog_id)`); } catch (e) { console.error('[DB Schema] Index idx_datanorm_rab_kat:', e.message); }
+
+    // 4. Zentrales Mängelkataster & Fristenmanagement
+    db.exec(`CREATE TABLE IF NOT EXISTS maengelkataster (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        projekt_id INTEGER NOT NULL REFERENCES projekte(id) ON DELETE CASCADE,
+        mangel_nr TEXT NOT NULL,
+        titel TEXT NOT NULL,
+        beschreibung TEXT,
+        gewerk TEXT,
+        bauteil TEXT,
+        objekt_typ TEXT CHECK(objekt_typ IN ('LIEGENSCHAFT', 'GEBAEUDE', 'ETAGE', 'RAUM')),
+        objekt_id INTEGER,
+        ort_beschreibung TEXT,
+        schweregrad TEXT DEFAULT 'MITTEL' CHECK(schweregrad IN ('LEICHT', 'MITTEL', 'SCHWER', 'ABNAHMEHINDERND')),
+        status TEXT DEFAULT 'ERFASST' CHECK(status IN (
+            'ERFASST', 'MAENGELRUEGE_VERSCHICKT', 'IN_NACHBESSERUNG',
+            'MAHNUNG_STUFE_2', 'ZUR_ABNAHME', 'ERLEDIGT', 'ERSATZVORNAHME', 'ABGEWIESEN'
+        )),
+        verursacher_typ TEXT DEFAULT 'SUB' CHECK(verursacher_typ IN ('SUB', 'EIGENLEISTUNG', 'PLANER', 'UNBEKANNT')),
+        subunternehmer_kunde_id INTEGER REFERENCES kunden(id) ON DELETE SET NULL,
+        erfasst_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+        erfasst_von TEXT,
+        nachbesserungsfrist DATE,
+        nachfrist_stufe2 DATE,
+        maengelruege_versandt_am DATETIME,
+        mahnung_stufe2_versandt_am DATETIME,
+        erledigt_am DATETIME,
+        abnahme_am DATETIME,
+        geschaetzte_beseitigungskosten_eur REAL DEFAULT 0.0,
+        tatsaechliche_ersatzvornahme_kosten_eur REAL DEFAULT 0.0,
+        druckzuschlag_faktor REAL DEFAULT 2.0,
+        einbehalt_betrag_eur REAL DEFAULT 0.0,
+        verknuepfte_eingangsrechnung_id INTEGER REFERENCES eingangsrechnungen(id) ON DELETE SET NULL,
+        verknuepfter_einbehalt_id INTEGER REFERENCES security_retentions(id) ON DELETE SET NULL,
+        bemerkungen TEXT
+    )`);
+
+    try { db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_maengel_projekt_nr ON maengelkataster(projekt_id, mangel_nr)`); } catch (e) { console.error('[DB Schema] Index idx_maengel_projekt_nr:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_maengel_status ON maengelkataster(status)`); } catch (e) { console.error('[DB Schema] Index idx_maengel_status:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_maengel_frist ON maengelkataster(nachbesserungsfrist)`); } catch (e) { console.error('[DB Schema] Index idx_maengel_frist:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_maengel_sub ON maengelkataster(subunternehmer_kunde_id)`); } catch (e) { console.error('[DB Schema] Index idx_maengel_sub:', e.message); }
+
+    // 5. Fotobeweise & Dokumentation
+    db.exec(`CREATE TABLE IF NOT EXISTS maengel_fotos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mangel_id INTEGER NOT NULL REFERENCES maengelkataster(id) ON DELETE CASCADE,
+        dateipfad TEXT NOT NULL,
+        thumbnail_base64 TEXT,
+        aufnahme_datum DATETIME DEFAULT CURRENT_TIMESTAMP,
+        typ TEXT DEFAULT 'VOR_NACHBESSERUNG' CHECK(typ IN ('VOR_NACHBESSERUNG', 'NACH_NACHBESSERUNG', 'BELEG')),
+        kommentar TEXT
+    )`);
+
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_maengel_fotos_mangel ON maengel_fotos(mangel_id)`); } catch (e) { console.error('[DB Schema] Index idx_maengel_fotos_mangel:', e.message); }
+
+    // 6. Revisionssichere Mängel-Historie (Audit-Trail)
+    db.exec(`CREATE TABLE IF NOT EXISTS maengel_historie (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mangel_id INTEGER NOT NULL REFERENCES maengelkataster(id) ON DELETE CASCADE,
+        alter_status TEXT,
+        neuer_status TEXT NOT NULL,
+        geaendert_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+        geaendert_von TEXT,
+        kommentar TEXT
+    )`);
+
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_maengel_hist_mangel ON maengel_historie(mangel_id)`); } catch (e) { console.error('[DB Schema] Index idx_maengel_hist_mangel:', e.message); }
+
+    // =========================================================================
+    // PHASE 3 (RELEASE 1.2) - MOBIL-PWA, ZEITERFASSUNG, VOB/B & LOCAL-FIRST SYNC
+    // =========================================================================
+
+    // 1. Mitarbeiter-Stammdaten & Lohngruppen
+    db.exec(`CREATE TABLE IF NOT EXISTS mitarbeiter (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        personalnummer TEXT NOT NULL UNIQUE,
+        vorname TEXT NOT NULL,
+        nachname TEXT NOT NULL,
+        lohngruppe_id TEXT NOT NULL DEFAULT 'LG1',
+        tarif_stundensatz REAL NOT NULL DEFAULT 15.00,
+        ist_kolonnenfuehrer INTEGER DEFAULT 0 CHECK(ist_kolonnenfuehrer IN (0,1)),
+        pin_hash TEXT,
+        nfc_tag_uid TEXT UNIQUE,
+        telefon TEXT,
+        email TEXT,
+        aktiv INTEGER DEFAULT 1 CHECK(aktiv IN (0,1)),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_mitarbeiter_persnr ON mitarbeiter(personalnummer)`); } catch (e) { console.error('[DB Schema] Index idx_mitarbeiter_persnr:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_mitarbeiter_aktiv ON mitarbeiter(aktiv)`); } catch (e) { console.error('[DB Schema] Index idx_mitarbeiter_aktiv:', e.message); }
+
+    // 2. Zeiterfassung (Mobile & Desktop)
+    db.exec(`CREATE TABLE IF NOT EXISTS zeiterfassung (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid TEXT NOT NULL UNIQUE,
+        mitarbeiter_id INTEGER NOT NULL REFERENCES mitarbeiter(id) ON DELETE RESTRICT,
+        projekt_id INTEGER REFERENCES projekte(id) ON DELETE SET NULL,
+        liegenschaft_id INTEGER REFERENCES liegenschaften(id) ON DELETE SET NULL,
+        gebaeude_id INTEGER REFERENCES gebaeude(id) ON DELETE SET NULL,
+        raum_id INTEGER REFERENCES raeume(id) ON DELETE SET NULL,
+        taetigkeit_typ TEXT NOT NULL DEFAULT 'PRODUKTIV' CHECK(taetigkeit_typ IN (
+            'PRODUKTIV', 'RUESTZEIT', 'WEGEZEIT_FAHRER', 'WEGEZEIT_MITFAHRER', 'SCHLECHTWEWETTER', 'BEREITSCHAFT', 'REINIGUNG'
+        )),
+        zeit_von DATETIME NOT NULL,
+        zeit_bis DATETIME,
+        dauer_min INTEGER DEFAULT 0,
+        pause_min INTEGER DEFAULT 0,
+        qr_code_scanned INTEGER DEFAULT 0,
+        geo_lat REAL,
+        geo_lng REAL,
+        bemerkung TEXT,
+        wegezeit_eur REAL DEFAULT 0.0,
+        status TEXT NOT NULL DEFAULT 'ERFASST' CHECK(status IN ('ERFASST', 'GEPRUEFT', 'FREIGEGEBEN', 'ABGERECHNET', 'STORNIERT')),
+        device_id TEXT,
+        sha256_hash TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_zeit_mitarbeiter_datum ON zeiterfassung(mitarbeiter_id, zeit_von)`); } catch (e) { console.error('[DB Schema] Index idx_zeit_mitarbeiter_datum:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_zeit_projekt ON zeiterfassung(projekt_id)`); } catch (e) { console.error('[DB Schema] Index idx_zeit_projekt:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_zeit_uuid ON zeiterfassung(uuid)`); } catch (e) { console.error('[DB Schema] Index idx_zeit_uuid:', e.message); }
+
+    // 3. Idempotente Sync-Tracking Tabelle
+    db.exec(`CREATE TABLE IF NOT EXISTS sync_processed_mutations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        mutation_uuid TEXT NOT NULL UNIQUE,
+        device_id TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_uuid TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_sync_mut_uuid ON sync_processed_mutations(mutation_uuid)`); } catch (e) { console.error('[DB Schema] Index idx_sync_mut_uuid:', e.message); }
+
+    // 4. Bedenken- und Behinderungsanzeigen (VOB/B)
+    db.exec(`CREATE TABLE IF NOT EXISTS bedenken_behinderungen (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid TEXT NOT NULL UNIQUE,
+        projekt_id INTEGER NOT NULL REFERENCES projekte(id) ON DELETE CASCADE,
+        typ TEXT NOT NULL CHECK(typ IN ('BEDENKEN_4_3', 'BEHINDERUNG_6_1')),
+        datum DATE NOT NULL,
+        beginn_datum DATE,
+        voraussichtliches_ende DATE,
+        betreff TEXT NOT NULL,
+        sachverhalt TEXT NOT NULL,
+        ursache TEXT,
+        kategorie TEXT,
+        betroffene_gewerke TEXT,
+        vorschlag_abhilfe TEXT,
+        auswirkung_bauzeit_tage INTEGER DEFAULT 0,
+        mehrkosten_angemeldet INTEGER DEFAULT 0 CHECK(mehrkosten_angemeldet IN (0,1)),
+        geschaetzte_mehrkosten_eur REAL DEFAULT 0.0,
+        unterschrift_svg TEXT,
+        status TEXT NOT NULL DEFAULT 'OFFEN' CHECK(status IN ('OFFEN', 'UEBERGEBEN', 'ANERKANNT', 'ABGELEHNT', 'ERLEDIGT')),
+        pdf_pfad TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_vob_projekt ON bedenken_behinderungen(projekt_id)`); } catch (e) { console.error('[DB Schema] Index idx_vob_projekt:', e.message); }
+
+    // 5. Quarantäne- & Konflikt-Tabelle
+    db.exec(`CREATE TABLE IF NOT EXISTS sync_conflicts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        entity_type TEXT NOT NULL,
+        entity_uuid TEXT NOT NULL,
+        client_device_id TEXT NOT NULL,
+        server_data_json TEXT NOT NULL,
+        client_data_json TEXT NOT NULL,
+        conflict_reason TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'OPEN' CHECK(status IN ('OPEN', 'RESOLVED_CLIENT', 'RESOLVED_SERVER', 'RESOLVED_MERGE')),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        resolved_at DATETIME
+    )`);
+
+    // =========================================================================
+    // PHASE 4 (RELEASE 2.0) - IDS CONNECT 2.5, OPEN MASTERDATA & SOKA-BAU COMPLIANCE
+    // =========================================================================
+
+    // 1. Großhandels- & Webshop-Konten (IDS Connect 2.5 & Open Masterdata)
+    db.exec(`CREATE TABLE IF NOT EXISTS ids_connect_konten (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        grosshaendler_code TEXT NOT NULL,
+        shop_url TEXT NOT NULL,
+        rest_api_url TEXT,
+        kundennummer TEXT NOT NULL,
+        benutzername TEXT,
+        passwort_enc TEXT,
+        api_key TEXT,
+        standard_aufschlag_prozent REAL DEFAULT 25.0,
+        is_default INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_ids_konten_code ON ids_connect_konten(grosshaendler_code)`); } catch (e) { console.error('[DB Schema] Index idx_ids_konten_code:', e.message); }
+
+    // 2. Empfangene & exportierte IDS 2.5 Shopping Carts (Warenkörbe)
+    db.exec(`CREATE TABLE IF NOT EXISTS ids_warenkoerbe (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        konto_id INTEGER REFERENCES ids_connect_konten(id) ON DELETE SET NULL,
+        lieferant TEXT NOT NULL,
+        cart_id TEXT NOT NULL,
+        projekt_id INTEGER REFERENCES projekte(id) ON DELETE SET NULL,
+        angebot_id INTEGER REFERENCES dokumente(id) ON DELETE SET NULL,
+        netto_gesamt REAL NOT NULL DEFAULT 0.0,
+        items_count INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL CHECK(status IN ('RECEIVED', 'IMPORTED', 'REJECTED')),
+        cart_xml TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_ids_cart_konto ON ids_warenkoerbe(konto_id)`); } catch (e) { console.error('[DB Schema] Index idx_ids_cart_konto:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_ids_cart_status ON ids_warenkoerbe(status)`); } catch (e) { console.error('[DB Schema] Index idx_ids_cart_status:', e.message); }
+
+    // 3. Verknüpfte Artikel-Dokumente (Sicherheitsdatenblätter, Montage, CAD)
+    db.exec(`CREATE TABLE IF NOT EXISTS ids_artikel_dokumente (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        artikel_id INTEGER REFERENCES artikel(id) ON DELETE CASCADE,
+        warenkorb_id INTEGER REFERENCES ids_warenkoerbe(id) ON DELETE SET NULL,
+        dokument_typ TEXT NOT NULL CHECK(dokument_typ IN ('SDB', 'MANUAL', 'CAD', 'CE_DOP', 'PRODUKTBLATT', 'DOC')),
+        titel TEXT NOT NULL,
+        url TEXT NOT NULL,
+        lokaler_dateipfad TEXT,
+        sha256_hash TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_ids_doc_artikel ON ids_artikel_dokumente(artikel_id)`); } catch (e) { console.error('[DB Schema] Index idx_ids_doc_artikel:', e.message); }
+
+    // 4. Zeitraumbezogene SOKA-BAU Beitragssätze (Stand 01.07.2026 / 2027)
+    db.exec(`CREATE TABLE IF NOT EXISTS soka_beitragssaetze (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        gueltig_ab DATE NOT NULL,
+        gueltig_bis DATE,
+        tarifgebiet TEXT NOT NULL CHECK(tarifgebiet IN ('WEST', 'OST', 'BERLIN_WEST', 'BERLIN_OST')),
+        ulak_prozent REAL NOT NULL,
+        zvk_prozent REAL NOT NULL,
+        bbv_prozent REAL NOT NULL,
+        winterbau_ag_prozent REAL NOT NULL,
+        winterbau_an_prozent REAL NOT NULL,
+        urlaubsverguetung_prozent REAL NOT NULL,
+        mindestlohn_1 REAL DEFAULT 14.35,
+        mindestlohn_2 REAL DEFAULT 16.50,
+        bezeichnung TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_soka_saetze_gebiet ON soka_beitragssaetze(tarifgebiet, gueltig_ab)`); } catch (e) { console.error('[DB Schema] Index idx_soka_saetze_gebiet:', e.message); }
+
+    // 5. SOKA-BAU Monatsmeldungen
+    db.exec(`CREATE TABLE IF NOT EXISTS soka_bau_meldungen (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        melde_monat TEXT NOT NULL,
+        betriebsnummer TEXT NOT NULL,
+        tarifgebiet TEXT NOT NULL DEFAULT 'WEST' CHECK(tarifgebiet IN ('WEST', 'OST', 'BERLIN_WEST', 'BERLIN_OST')),
+        status TEXT NOT NULL DEFAULT 'ENTWURF' CHECK(status IN ('ENTWURF', 'VALIDIERT', 'EXPORTIERT', 'QUITTIERT')),
+        anzahl_arbeitnehmer INTEGER NOT NULL DEFAULT 0,
+        bruttolohn_gesamt REAL NOT NULL DEFAULT 0.0,
+        beitrag_gesamt REAL NOT NULL DEFAULT 0.0,
+        erstattung_gesamt REAL NOT NULL DEFAULT 0.0,
+        zahlbetrag REAL NOT NULL DEFAULT 0.0,
+        dta_dateipfad TEXT,
+        xml_dateipfad TEXT,
+        sha256_hash TEXT,
+        quittungs_protokoll TEXT,
+        erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+        exportiert_am DATETIME
+    )`);
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_soka_monat ON soka_bau_meldungen(melde_monat)`); } catch (e) { console.error('[DB Schema] Index idx_soka_monat:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_soka_status ON soka_bau_meldungen(status)`); } catch (e) { console.error('[DB Schema] Index idx_soka_status:', e.message); }
+
+    // 6. Arbeitnehmer-Monatsmeldesätze
+    db.exec(`CREATE TABLE IF NOT EXISTS soka_bau_arbeitnehmer_monat (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        meldung_id INTEGER NOT NULL REFERENCES soka_bau_meldungen(id) ON DELETE CASCADE,
+        mitarbeiter_id INTEGER NOT NULL REFERENCES mitarbeiter(id) ON DELETE RESTRICT,
+        an_nummer TEXT NOT NULL,
+        vsnr TEXT NOT NULL,
+        name TEXT NOT NULL,
+        vorname TEXT NOT NULL,
+        beschaeftigungstage INTEGER NOT NULL DEFAULT 30,
+        geleistete_stunden REAL NOT NULL DEFAULT 0.0,
+        bruttolohn REAL NOT NULL DEFAULT 0.0,
+        ulak_beitrag REAL NOT NULL DEFAULT 0.0,
+        zvk_beitrag REAL NOT NULL DEFAULT 0.0,
+        bbv_beitrag REAL NOT NULL DEFAULT 0.0,
+        winterbau_ag_beitrag REAL NOT NULL DEFAULT 0.0,
+        gesamt_beitrag REAL NOT NULL DEFAULT 0.0,
+        urlaub_erworben_tage REAL NOT NULL DEFAULT 0.0,
+        urlaub_erworben_eur REAL NOT NULL DEFAULT 0.0,
+        urlaub_genommen_tage REAL NOT NULL DEFAULT 0.0,
+        urlaub_ausbezahlt_eur REAL NOT NULL DEFAULT 0.0,
+        compliance_status TEXT NOT NULL DEFAULT 'VALID' CHECK(compliance_status IN ('VALID', 'WARNING', 'INVALID')),
+        compliance_fehler TEXT
+    )`);
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_soka_an_meldung ON soka_bau_arbeitnehmer_monat(meldung_id)`); } catch (e) { console.error('[DB Schema] Index idx_soka_an_meldung:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_soka_an_mitarbeiter ON soka_bau_arbeitnehmer_monat(mitarbeiter_id)`); } catch (e) { console.error('[DB Schema] Index idx_soka_an_mitarbeiter:', e.message); }
+
+    // 7. SOKA-BAU Ausfallzeiten je Arbeitnehmer
+    db.exec(`CREATE TABLE IF NOT EXISTS soka_bau_ausfallzeiten (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        arbeitnehmer_monat_id INTEGER NOT NULL REFERENCES soka_bau_arbeitnehmer_monat(id) ON DELETE CASCADE,
+        schluessel TEXT NOT NULL,
+        bezeichnung TEXT NOT NULL,
+        von_datum DATE NOT NULL,
+        bis_datum DATE NOT NULL,
+        stunden REAL NOT NULL DEFAULT 0.0
+    )`);
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_soka_ausfall_an ON soka_bau_ausfallzeiten(arbeitnehmer_monat_id)`); } catch (e) { console.error('[DB Schema] Index idx_soka_ausfall_an:', e.message); }
+
+    // 8. Nachunternehmer Compliance & SOKA-Nachweise (§ 14 AEntG & § 48b EStG)
+    db.exec(`CREATE TABLE IF NOT EXISTS subcontractor_compliance_nachweise (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        kunde_id INTEGER NOT NULL REFERENCES kunden(id) ON DELETE CASCADE,
+        nachweis_typ TEXT NOT NULL CHECK(nachweis_typ IN ('SOKA_BAU_UB', 'SEC48B_FINANZAMT', 'BG_BAU_UB', 'BUERGSCHAFT')),
+        zertifikatsnummer TEXT,
+        aussteller TEXT NOT NULL,
+        gueltig_von DATE NOT NULL,
+        gueltig_bis DATE NOT NULL,
+        status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'EXPIRED', 'REVOKED')),
+        dokument_dateipfad TEXT,
+        bemerkung TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_sub_compliance_kunde ON subcontractor_compliance_nachweise(kunde_id)`); } catch (e) { console.error('[DB Schema] Index idx_sub_compliance_kunde:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_sub_compliance_status ON subcontractor_compliance_nachweise(status)`); } catch (e) { console.error('[DB Schema] Index idx_sub_compliance_status:', e.message); }
 }
 
 function runMigrations(db) {
@@ -942,6 +1378,431 @@ function runMigrations(db) {
         if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] backup_history:', e.message);
     }
 
+    // --- Phase 2: Zuschlagskalkulation, DATANORM & Mängelkataster Migrationen ---
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN ekt_stoff_je_me REAL DEFAULT 0.0`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN ekt_geraet_je_me REAL DEFAULT 0.0`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN ekt_sonst_je_me REAL DEFAULT 0.0`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN ekt_nu_je_me REAL DEFAULT 0.0`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE artikel ADD COLUMN datanorm_nr TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE artikel ADD COLUMN warengruppe_id TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE artikel ADD COLUMN rabattgruppe_id TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE security_retentions ADD COLUMN mangel_id INTEGER REFERENCES maengelkataster(id) ON DELETE SET NULL`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+
+    // Phase 2 Tabellen sicherstellen (für bestehende DBs)
+    try {
+        db.exec(`CREATE TABLE IF NOT EXISTS zuschlagskalkulation_stamm (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            ist_standard INTEGER DEFAULT 0 CHECK(ist_standard IN (0, 1)),
+            mittellohn_eur REAL NOT NULL DEFAULT 26.00,
+            lohngebundene_kosten_prozent REAL NOT NULL DEFAULT 84.50,
+            lohnnebenkosten_prozent REAL NOT NULL DEFAULT 13.50,
+            kalkulationslohn_eur REAL NOT NULL DEFAULT 51.48,
+            kalkulationsverfahren TEXT NOT NULL DEFAULT 'ZUSCHLAGSKALKULATION' CHECK(kalkulationsverfahren IN ('ZUSCHLAGSKALKULATION', 'ENDSUMMENKALKULATION')),
+            endsumme_umlage_basis TEXT NOT NULL DEFAULT 'HERSTELLKOSTEN' CHECK(endsumme_umlage_basis IN ('HERSTELLKOSTEN', 'LOHNSTUNDEN')),
+            zuschlag_lohn_bgk REAL NOT NULL DEFAULT 18.00,
+            zuschlag_lohn_agk REAL NOT NULL DEFAULT 22.00,
+            zuschlag_lohn_wug REAL NOT NULL DEFAULT 8.00,
+            zuschlag_stoff_bgk REAL NOT NULL DEFAULT 12.00,
+            zuschlag_stoff_agk REAL NOT NULL DEFAULT 14.00,
+            zuschlag_stoff_wug REAL NOT NULL DEFAULT 6.00,
+            zuschlag_geraet_bgk REAL NOT NULL DEFAULT 15.00,
+            zuschlag_geraet_agk REAL NOT NULL DEFAULT 16.00,
+            zuschlag_geraet_wug REAL NOT NULL DEFAULT 6.00,
+            zuschlag_sonst_bgk REAL NOT NULL DEFAULT 10.00,
+            zuschlag_sonst_agk REAL NOT NULL DEFAULT 12.00,
+            zuschlag_sonst_wug REAL NOT NULL DEFAULT 5.00,
+            zuschlag_nu_bgk REAL NOT NULL DEFAULT 8.00,
+            zuschlag_nu_agk REAL NOT NULL DEFAULT 10.00,
+            zuschlag_nu_wug REAL NOT NULL DEFAULT 4.00,
+            wug_gewinn_prozent REAL NOT NULL DEFAULT 5.00,
+            wug_betriebswagnis_prozent REAL NOT NULL DEFAULT 2.00,
+            wug_leistungswagnis_prozent REAL NOT NULL DEFAULT 1.00,
+            skonto_abzug_kalkulation_prozent REAL NOT NULL DEFAULT 0.00,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+        db.exec(`CREATE TABLE IF NOT EXISTS zuschlagskalkulation_projekte (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            projekt_id INTEGER NOT NULL UNIQUE REFERENCES projekte(id) ON DELETE CASCADE,
+            stamm_profil_id INTEGER REFERENCES zuschlagskalkulation_stamm(id) ON DELETE SET NULL,
+            mittellohn_eur REAL NOT NULL DEFAULT 26.00,
+            lohngebundene_kosten_prozent REAL NOT NULL DEFAULT 84.50,
+            lohnnebenkosten_prozent REAL NOT NULL DEFAULT 13.50,
+            kalkulationslohn_eur REAL NOT NULL DEFAULT 51.48,
+            kalkulationsverfahren TEXT NOT NULL DEFAULT 'ZUSCHLAGSKALKULATION' CHECK(kalkulationsverfahren IN ('ZUSCHLAGSKALKULATION', 'ENDSUMMENKALKULATION')),
+            endsumme_umlage_basis TEXT NOT NULL DEFAULT 'HERSTELLKOSTEN' CHECK(endsumme_umlage_basis IN ('HERSTELLKOSTEN', 'LOHNSTUNDEN')),
+            zuschlag_lohn_bgk REAL NOT NULL DEFAULT 18.00,
+            zuschlag_lohn_agk REAL NOT NULL DEFAULT 22.00,
+            zuschlag_lohn_wug REAL NOT NULL DEFAULT 8.00,
+            zuschlag_stoff_bgk REAL NOT NULL DEFAULT 12.00,
+            zuschlag_stoff_agk REAL NOT NULL DEFAULT 14.00,
+            zuschlag_stoff_wug REAL NOT NULL DEFAULT 6.00,
+            zuschlag_geraet_bgk REAL NOT NULL DEFAULT 15.00,
+            zuschlag_geraet_agk REAL NOT NULL DEFAULT 16.00,
+            zuschlag_geraet_wug REAL NOT NULL DEFAULT 6.00,
+            zuschlag_sonst_bgk REAL NOT NULL DEFAULT 10.00,
+            zuschlag_sonst_agk REAL NOT NULL DEFAULT 12.00,
+            zuschlag_sonst_wug REAL NOT NULL DEFAULT 5.00,
+            zuschlag_nu_bgk REAL NOT NULL DEFAULT 8.00,
+            zuschlag_nu_agk REAL NOT NULL DEFAULT 10.00,
+            zuschlag_nu_wug REAL NOT NULL DEFAULT 4.00,
+            wug_gewinn_prozent REAL NOT NULL DEFAULT 5.00,
+            wug_betriebswagnis_prozent REAL NOT NULL DEFAULT 2.00,
+            wug_leistungswagnis_prozent REAL NOT NULL DEFAULT 1.00,
+            skonto_abzug_kalkulation_prozent REAL NOT NULL DEFAULT 0.00,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_zuschlag_proj_pid ON zuschlagskalkulation_projekte(projekt_id)`);
+        db.exec(`CREATE TABLE IF NOT EXISTS datanorm_kataloge (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            lieferant_name TEXT NOT NULL,
+            katalog_name TEXT NOT NULL,
+            version TEXT DEFAULT '5',
+            import_datum DATETIME DEFAULT CURRENT_TIMESTAMP,
+            anzahl_artikel INTEGER DEFAULT 0,
+            dateipfade_json TEXT,
+            sha256_hash TEXT,
+            status TEXT DEFAULT 'AKTIV' CHECK(status IN ('AKTIV', 'ARCHIVIERT'))
+        )`);
+        db.exec(`CREATE TABLE IF NOT EXISTS datanorm_warengruppen (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            katalog_id INTEGER REFERENCES datanorm_kataloge(id) ON DELETE CASCADE,
+            hauptwarengruppe TEXT NOT NULL,
+            warengruppe TEXT NOT NULL,
+            bezeichnung TEXT NOT NULL,
+            aufschlag_prozent REAL DEFAULT 25.0,
+            UNIQUE(katalog_id, hauptwarengruppe, warengruppe)
+        )`);
+        db.exec(`CREATE TABLE IF NOT EXISTS datanorm_rabattgruppen (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            katalog_id INTEGER REFERENCES datanorm_kataloge(id) ON DELETE CASCADE,
+            rabattgruppe TEXT NOT NULL,
+            bezeichnung TEXT,
+            rabatt_prozent1 REAL DEFAULT 0.0,
+            rabatt_prozent2 REAL DEFAULT 0.0,
+            zuschlag_prozent REAL DEFAULT 0.0,
+            UNIQUE(katalog_id, rabattgruppe)
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_datanorm_wrg_kat ON datanorm_warengruppen(katalog_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_datanorm_rab_kat ON datanorm_rabattgruppen(katalog_id)`);
+        db.exec(`CREATE TABLE IF NOT EXISTS maengelkataster (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            projekt_id INTEGER NOT NULL REFERENCES projekte(id) ON DELETE CASCADE,
+            mangel_nr TEXT NOT NULL,
+            titel TEXT NOT NULL,
+            beschreibung TEXT,
+            gewerk TEXT,
+            bauteil TEXT,
+            objekt_typ TEXT CHECK(objekt_typ IN ('LIEGENSCHAFT', 'GEBAEUDE', 'ETAGE', 'RAUM')),
+            objekt_id INTEGER,
+            ort_beschreibung TEXT,
+            schweregrad TEXT DEFAULT 'MITTEL' CHECK(schweregrad IN ('LEICHT', 'MITTEL', 'SCHWER', 'ABNAHMEHINDERND')),
+            status TEXT DEFAULT 'ERFASST' CHECK(status IN (
+                'ERFASST', 'MAENGELRUEGE_VERSCHICKT', 'IN_NACHBESSERUNG',
+                'MAHNUNG_STUFE_2', 'ZUR_ABNAHME', 'ERLEDIGT', 'ERSATZVORNAHME', 'ABGEWIESEN'
+            )),
+            verursacher_typ TEXT DEFAULT 'SUB' CHECK(verursacher_typ IN ('SUB', 'EIGENLEISTUNG', 'PLANER', 'UNBEKANNT')),
+            subunternehmer_kunde_id INTEGER REFERENCES kunden(id) ON DELETE SET NULL,
+            erfasst_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+            erfasst_von TEXT,
+            nachbesserungsfrist DATE,
+            nachfrist_stufe2 DATE,
+            maengelruege_versandt_am DATETIME,
+            mahnung_stufe2_versandt_am DATETIME,
+            erledigt_am DATETIME,
+            abnahme_am DATETIME,
+            geschaetzte_beseitigungskosten_eur REAL DEFAULT 0.0,
+            tatsaechliche_ersatzvornahme_kosten_eur REAL DEFAULT 0.0,
+            druckzuschlag_faktor REAL DEFAULT 2.0,
+            einbehalt_betrag_eur REAL DEFAULT 0.0,
+            verknuepfte_eingangsrechnung_id INTEGER REFERENCES eingangsrechnungen(id) ON DELETE SET NULL,
+            verknuepfter_einbehalt_id INTEGER REFERENCES security_retentions(id) ON DELETE SET NULL,
+            bemerkungen TEXT
+        )`);
+        db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_maengel_projekt_nr ON maengelkataster(projekt_id, mangel_nr)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_maengel_status ON maengelkataster(status)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_maengel_frist ON maengelkataster(nachbesserungsfrist)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_maengel_sub ON maengelkataster(subunternehmer_kunde_id)`);
+        db.exec(`CREATE TABLE IF NOT EXISTS maengel_fotos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            mangel_id INTEGER NOT NULL REFERENCES maengelkataster(id) ON DELETE CASCADE,
+            dateipfad TEXT NOT NULL,
+            thumbnail_base64 TEXT,
+            aufnahme_datum DATETIME DEFAULT CURRENT_TIMESTAMP,
+            typ TEXT DEFAULT 'VOR_NACHBESSERUNG' CHECK(typ IN ('VOR_NACHBESSERUNG', 'NACH_NACHBESSERUNG', 'BELEG')),
+            kommentar TEXT
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_maengel_fotos_mangel ON maengel_fotos(mangel_id)`);
+        db.exec(`CREATE TABLE IF NOT EXISTS maengel_historie (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            mangel_id INTEGER NOT NULL REFERENCES maengelkataster(id) ON DELETE CASCADE,
+            alter_status TEXT,
+            neuer_status TEXT NOT NULL,
+            geaendert_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+            geaendert_von TEXT,
+            kommentar TEXT
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_maengel_hist_mangel ON maengel_historie(mangel_id)`);
+    } catch (e) {
+        if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] Phase 2 tables:', e.message);
+    }
+
+    // --- Phase 3: Mobile PWA, Zeiterfassung, VOB/B & Sync Hub Migrationen ---
+    try {
+        db.exec(`CREATE TABLE IF NOT EXISTS mitarbeiter (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            personalnummer TEXT NOT NULL UNIQUE,
+            vorname TEXT NOT NULL,
+            nachname TEXT NOT NULL,
+            lohngruppe_id TEXT NOT NULL DEFAULT 'LG1',
+            tarif_stundensatz REAL NOT NULL DEFAULT 15.00,
+            ist_kolonnenfuehrer INTEGER DEFAULT 0 CHECK(ist_kolonnenfuehrer IN (0,1)),
+            pin_hash TEXT,
+            nfc_tag_uid TEXT UNIQUE,
+            telefon TEXT,
+            email TEXT,
+            aktiv INTEGER DEFAULT 1 CHECK(aktiv IN (0,1)),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_mitarbeiter_persnr ON mitarbeiter(personalnummer)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_mitarbeiter_aktiv ON mitarbeiter(aktiv)`);
+
+        db.exec(`CREATE TABLE IF NOT EXISTS zeiterfassung (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid TEXT NOT NULL UNIQUE,
+            mitarbeiter_id INTEGER NOT NULL REFERENCES mitarbeiter(id) ON DELETE RESTRICT,
+            projekt_id INTEGER REFERENCES projekte(id) ON DELETE SET NULL,
+            liegenschaft_id INTEGER REFERENCES liegenschaften(id) ON DELETE SET NULL,
+            gebaeude_id INTEGER REFERENCES gebaeude(id) ON DELETE SET NULL,
+            raum_id INTEGER REFERENCES raeume(id) ON DELETE SET NULL,
+            taetigkeit_typ TEXT NOT NULL DEFAULT 'PRODUKTIV' CHECK(taetigkeit_typ IN (
+                'PRODUKTIV', 'RUESTZEIT', 'WEGEZEIT_FAHRER', 'WEGEZEIT_MITFAHRER', 'SCHLECHTWEWETTER', 'BEREITSCHAFT', 'REINIGUNG'
+            )),
+            zeit_von DATETIME NOT NULL,
+            zeit_bis DATETIME,
+            dauer_min INTEGER DEFAULT 0,
+            pause_min INTEGER DEFAULT 0,
+            qr_code_scanned INTEGER DEFAULT 0,
+            geo_lat REAL,
+            geo_lng REAL,
+            bemerkung TEXT,
+            wegezeit_eur REAL DEFAULT 0.0,
+            status TEXT NOT NULL DEFAULT 'ERFASST' CHECK(status IN ('ERFASST', 'GEPRUEFT', 'FREIGEGEBEN', 'ABGERECHNET', 'STORNIERT')),
+            device_id TEXT,
+            sha256_hash TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_zeit_mitarbeiter_datum ON zeiterfassung(mitarbeiter_id, zeit_von)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_zeit_projekt ON zeiterfassung(projekt_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_zeit_uuid ON zeiterfassung(uuid)`);
+
+        db.exec(`CREATE TABLE IF NOT EXISTS sync_processed_mutations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            mutation_uuid TEXT NOT NULL UNIQUE,
+            device_id TEXT NOT NULL,
+            entity_type TEXT NOT NULL,
+            entity_uuid TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_sync_mut_uuid ON sync_processed_mutations(mutation_uuid)`);
+
+        db.exec(`CREATE TABLE IF NOT EXISTS bedenken_behinderungen (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid TEXT NOT NULL UNIQUE,
+            projekt_id INTEGER NOT NULL REFERENCES projekte(id) ON DELETE CASCADE,
+            typ TEXT NOT NULL CHECK(typ IN ('BEDENKEN_4_3', 'BEHINDERUNG_6_1')),
+            datum DATE NOT NULL,
+            beginn_datum DATE,
+            voraussichtliches_ende DATE,
+            betreff TEXT NOT NULL,
+            sachverhalt TEXT NOT NULL,
+            ursache TEXT,
+            kategorie TEXT,
+            betroffene_gewerke TEXT,
+            vorschlag_abhilfe TEXT,
+            auswirkung_bauzeit_tage INTEGER DEFAULT 0,
+            mehrkosten_angemeldet INTEGER DEFAULT 0 CHECK(mehrkosten_angemeldet IN (0,1)),
+            geschaetzte_mehrkosten_eur REAL DEFAULT 0.0,
+            unterschrift_svg TEXT,
+            status TEXT NOT NULL DEFAULT 'OFFEN' CHECK(status IN ('OFFEN', 'UEBERGEBEN', 'ANERKANNT', 'ABGELEHNT', 'ERLEDIGT')),
+            pdf_pfad TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_vob_projekt ON bedenken_behinderungen(projekt_id)`);
+
+        db.exec(`CREATE TABLE IF NOT EXISTS sync_conflicts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_type TEXT NOT NULL,
+            entity_uuid TEXT NOT NULL,
+            client_device_id TEXT NOT NULL,
+            server_data_json TEXT NOT NULL,
+            client_data_json TEXT NOT NULL,
+            conflict_reason TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'OPEN' CHECK(status IN ('OPEN', 'RESOLVED_CLIENT', 'RESOLVED_SERVER', 'RESOLVED_MERGE')),
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            resolved_at DATETIME
+        )`        );
+    } catch (e) {
+        if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] Phase 3 tables:', e.message);
+    }
+
+    // --- Phase 4: IDS Connect 2.5, Open Masterdata & SOKA-BAU Migrationen ---
+    try {
+        // Mitarbeiter-Erweiterungen für SOKA-BAU
+        try { db.exec(`ALTER TABLE mitarbeiter ADD COLUMN vsnr TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+        try { db.exec(`ALTER TABLE mitarbeiter ADD COLUMN an_nummer TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+        try { db.exec(`ALTER TABLE mitarbeiter ADD COLUMN tarifgebiet TEXT DEFAULT 'WEST'`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+        try { db.exec(`ALTER TABLE mitarbeiter ADD COLUMN beschaeftigungsart TEXT DEFAULT 'GEWERBLICH'`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+        try { db.exec(`ALTER TABLE mitarbeiter ADD COLUMN geburtsdatum DATE`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+        try { db.exec(`ALTER TABLE mitarbeiter ADD COLUMN betriebsnummer TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+
+        // IDS Connect & Open Masterdata
+        db.exec(`CREATE TABLE IF NOT EXISTS ids_connect_konten (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            grosshaendler_code TEXT NOT NULL,
+            shop_url TEXT NOT NULL,
+            rest_api_url TEXT,
+            kundennummer TEXT NOT NULL,
+            benutzername TEXT,
+            passwort_enc TEXT,
+            api_key TEXT,
+            standard_aufschlag_prozent REAL DEFAULT 25.0,
+            is_default INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_ids_konten_code ON ids_connect_konten(grosshaendler_code)`);
+
+        db.exec(`CREATE TABLE IF NOT EXISTS ids_warenkoerbe (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            konto_id INTEGER REFERENCES ids_connect_konten(id) ON DELETE SET NULL,
+            lieferant TEXT NOT NULL,
+            cart_id TEXT NOT NULL,
+            projekt_id INTEGER REFERENCES projekte(id) ON DELETE SET NULL,
+            angebot_id INTEGER REFERENCES dokumente(id) ON DELETE SET NULL,
+            netto_gesamt REAL NOT NULL DEFAULT 0.0,
+            items_count INTEGER NOT NULL DEFAULT 0,
+            status TEXT NOT NULL CHECK(status IN ('RECEIVED', 'IMPORTED', 'REJECTED')),
+            cart_xml TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_ids_cart_konto ON ids_warenkoerbe(konto_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_ids_cart_status ON ids_warenkoerbe(status)`);
+
+        db.exec(`CREATE TABLE IF NOT EXISTS ids_artikel_dokumente (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            artikel_id INTEGER REFERENCES artikel(id) ON DELETE CASCADE,
+            warenkorb_id INTEGER REFERENCES ids_warenkoerbe(id) ON DELETE SET NULL,
+            dokument_typ TEXT NOT NULL CHECK(dokument_typ IN ('SDB', 'MANUAL', 'CAD', 'CE_DOP', 'PRODUKTBLATT', 'DOC')),
+            titel TEXT NOT NULL,
+            url TEXT NOT NULL,
+            lokaler_dateipfad TEXT,
+            sha256_hash TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_ids_doc_artikel ON ids_artikel_dokumente(artikel_id)`);
+
+        // SOKA-BAU Beitragssätze & Meldedaten
+        db.exec(`CREATE TABLE IF NOT EXISTS soka_beitragssaetze (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            gueltig_ab DATE NOT NULL,
+            gueltig_bis DATE,
+            tarifgebiet TEXT NOT NULL CHECK(tarifgebiet IN ('WEST', 'OST', 'BERLIN_WEST', 'BERLIN_OST')),
+            ulak_prozent REAL NOT NULL,
+            zvk_prozent REAL NOT NULL,
+            bbv_prozent REAL NOT NULL,
+            winterbau_ag_prozent REAL NOT NULL,
+            winterbau_an_prozent REAL NOT NULL,
+            urlaubsverguetung_prozent REAL NOT NULL,
+            mindestlohn_1 REAL DEFAULT 14.35,
+            mindestlohn_2 REAL DEFAULT 16.50,
+            bezeichnung TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_soka_saetze_gebiet ON soka_beitragssaetze(tarifgebiet, gueltig_ab)`);
+
+        db.exec(`CREATE TABLE IF NOT EXISTS soka_bau_meldungen (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            melde_monat TEXT NOT NULL,
+            betriebsnummer TEXT NOT NULL,
+            tarifgebiet TEXT NOT NULL DEFAULT 'WEST' CHECK(tarifgebiet IN ('WEST', 'OST', 'BERLIN_WEST', 'BERLIN_OST')),
+            status TEXT NOT NULL DEFAULT 'ENTWURF' CHECK(status IN ('ENTWURF', 'VALIDIERT', 'EXPORTIERT', 'QUITTIERT')),
+            anzahl_arbeitnehmer INTEGER NOT NULL DEFAULT 0,
+            bruttolohn_gesamt REAL NOT NULL DEFAULT 0.0,
+            beitrag_gesamt REAL NOT NULL DEFAULT 0.0,
+            erstattung_gesamt REAL NOT NULL DEFAULT 0.0,
+            zahlbetrag REAL NOT NULL DEFAULT 0.0,
+            dta_dateipfad TEXT,
+            xml_dateipfad TEXT,
+            sha256_hash TEXT,
+            quittungs_protokoll TEXT,
+            erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+            exportiert_am DATETIME
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_soka_monat ON soka_bau_meldungen(melde_monat)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_soka_status ON soka_bau_meldungen(status)`);
+
+        db.exec(`CREATE TABLE IF NOT EXISTS soka_bau_arbeitnehmer_monat (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            meldung_id INTEGER NOT NULL REFERENCES soka_bau_meldungen(id) ON DELETE CASCADE,
+            mitarbeiter_id INTEGER NOT NULL REFERENCES mitarbeiter(id) ON DELETE RESTRICT,
+            an_nummer TEXT NOT NULL,
+            vsnr TEXT NOT NULL,
+            name TEXT NOT NULL,
+            vorname TEXT NOT NULL,
+            beschaeftigungstage INTEGER NOT NULL DEFAULT 30,
+            geleistete_stunden REAL NOT NULL DEFAULT 0.0,
+            bruttolohn REAL NOT NULL DEFAULT 0.0,
+            ulak_beitrag REAL NOT NULL DEFAULT 0.0,
+            zvk_beitrag REAL NOT NULL DEFAULT 0.0,
+            bbv_beitrag REAL NOT NULL DEFAULT 0.0,
+            winterbau_ag_beitrag REAL NOT NULL DEFAULT 0.0,
+            gesamt_beitrag REAL NOT NULL DEFAULT 0.0,
+            urlaub_erworben_tage REAL NOT NULL DEFAULT 0.0,
+            urlaub_erworben_eur REAL NOT NULL DEFAULT 0.0,
+            urlaub_genommen_tage REAL NOT NULL DEFAULT 0.0,
+            urlaub_ausbezahlt_eur REAL NOT NULL DEFAULT 0.0,
+            compliance_status TEXT NOT NULL DEFAULT 'VALID' CHECK(compliance_status IN ('VALID', 'WARNING', 'INVALID')),
+            compliance_fehler TEXT
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_soka_an_meldung ON soka_bau_arbeitnehmer_monat(meldung_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_soka_an_mitarbeiter ON soka_bau_arbeitnehmer_monat(mitarbeiter_id)`);
+
+        db.exec(`CREATE TABLE IF NOT EXISTS soka_bau_ausfallzeiten (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            arbeitnehmer_monat_id INTEGER NOT NULL REFERENCES soka_bau_arbeitnehmer_monat(id) ON DELETE CASCADE,
+            schluessel TEXT NOT NULL,
+            bezeichnung TEXT NOT NULL,
+            von_datum DATE NOT NULL,
+            bis_datum DATE NOT NULL,
+            stunden REAL NOT NULL DEFAULT 0.0
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_soka_ausfall_an ON soka_bau_ausfallzeiten(arbeitnehmer_monat_id)`);
+
+        // Subunternehmer Compliance Nachweise (§ 14 AEntG)
+        db.exec(`CREATE TABLE IF NOT EXISTS subcontractor_compliance_nachweise (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            kunde_id INTEGER NOT NULL REFERENCES kunden(id) ON DELETE CASCADE,
+            nachweis_typ TEXT NOT NULL CHECK(nachweis_typ IN ('SOKA_BAU_UB', 'SEC48B_FINANZAMT', 'BG_BAU_UB', 'BUERGSCHAFT')),
+            zertifikatsnummer TEXT,
+            aussteller TEXT NOT NULL,
+            gueltig_von DATE NOT NULL,
+            gueltig_bis DATE NOT NULL,
+            status TEXT NOT NULL DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'EXPIRED', 'REVOKED')),
+            dokument_dateipfad TEXT,
+            bemerkung TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_sub_compliance_kunde ON subcontractor_compliance_nachweise(kunde_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_sub_compliance_status ON subcontractor_compliance_nachweise(status)`);
+    } catch (e) {
+        if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] Phase 4 tables:', e.message);
+    }
+
     // --- Datenintegrität: Duplikate bereinigen + UNIQUE-Indizes ---
     ensureUniqueConstraints(db);
 }
@@ -1072,7 +1933,13 @@ function seedDefaultData(db) {
         matching_auto_skonto_toleranz_tage: '2',
         backup_interval_hours: '4',
         backup_auto_on_exit: 'true',
-        backup_retention_days: '7'
+        backup_retention_days: '7',
+        sync_server_port: '38400',
+        sync_server_auto_start: 'true',
+        sync_tls_enabled: 'false',
+        ids_callback_port: '0',
+        soka_betriebsnummer: '98765432',
+        soka_standard_tarifgebiet: 'WEST'
     };
     const insertStmt = db.prepare('INSERT OR IGNORE INTO einstellungen (key, value) VALUES (?, ?)');
     const insertTransaction = db.transaction((defs) => {
@@ -1081,6 +1948,107 @@ function seedDefaultData(db) {
         }
     });
     insertTransaction(defaults);
+
+    // Standard-Zuschlagsprofil in zuschlagskalkulation_stamm seeden
+    try {
+        const countRow = db.prepare('SELECT COUNT(*) AS cnt FROM zuschlagskalkulation_stamm').get();
+        if (!countRow || countRow.cnt === 0) {
+            db.prepare(`
+                INSERT INTO zuschlagskalkulation_stamm (
+                    name, ist_standard, mittellohn_eur, lohngebundene_kosten_prozent, lohnnebenkosten_prozent,
+                    kalkulationslohn_eur, kalkulationsverfahren, endsumme_umlage_basis,
+                    zuschlag_lohn_bgk, zuschlag_lohn_agk, zuschlag_lohn_wug,
+                    zuschlag_stoff_bgk, zuschlag_stoff_agk, zuschlag_stoff_wug,
+                    zuschlag_geraet_bgk, zuschlag_geraet_agk, zuschlag_geraet_wug,
+                    zuschlag_sonst_bgk, zuschlag_sonst_agk, zuschlag_sonst_wug,
+                    zuschlag_nu_bgk, zuschlag_nu_agk, zuschlag_nu_wug,
+                    wug_gewinn_prozent, wug_betriebswagnis_prozent, wug_leistungswagnis_prozent,
+                    skonto_abzug_kalkulation_prozent
+                ) VALUES (
+                    'Standard Bau-Kalkulation (VHB 2024/2026)', 1, 26.00, 84.50, 13.50,
+                    51.48, 'ZUSCHLAGSKALKULATION', 'HERSTELLKOSTEN',
+                    18.00, 22.00, 8.00,
+                    12.00, 14.00, 6.00,
+                    15.00, 16.00, 6.00,
+                    10.00, 12.00, 5.00,
+                    8.00, 10.00, 4.00,
+                    5.00, 2.00, 1.00,
+                    0.00
+                )
+            `).run();
+        }
+    } catch (e) {
+        console.warn('[DB Seed Warning] zuschlagskalkulation_stamm:', e.message);
+    }
+
+    // Standard-Mitarbeiter seeden
+    try {
+        const countMa = db.prepare('SELECT COUNT(*) AS cnt FROM mitarbeiter').get();
+        if (!countMa || countMa.cnt === 0) {
+            const seedMaStmt = db.prepare(`
+                INSERT INTO mitarbeiter (personalnummer, an_nummer, vsnr, vorname, nachname, lohngruppe_id, tarif_stundensatz, ist_kolonnenfuehrer, tarifgebiet, beschaeftigungsart, aktiv)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            `);
+            const maTx = db.transaction(() => {
+                seedMaStmt.run('MA-101', 'AN-0101', '65120458K014', 'Max', 'Mustermann', 'LG6', 28.50, 1, 'WEST', 'GEWERBLICH');
+                seedMaStmt.run('MA-102', 'AN-0102', '12050872M009', 'Stefan', 'Schmidt', 'LG4', 21.00, 0, 'WEST', 'GEWERBLICH');
+                seedMaStmt.run('MA-103', 'AN-0103', '33091165P022', 'Jan', 'Kowalski', 'LG1', 15.00, 0, 'WEST', 'GEWERBLICH');
+            });
+            maTx();
+        }
+    } catch (e) {
+        console.warn('[DB Seed Warning] mitarbeiter:', e.message);
+    }
+
+    // Standard-Großhändler (IDS Connect & Open Masterdata) seeden
+    try {
+        const countIds = db.prepare('SELECT COUNT(*) AS cnt FROM ids_connect_konten').get();
+        if (!countIds || countIds.cnt === 0) {
+            const seedIdsStmt = db.prepare(`
+                INSERT INTO ids_connect_konten (
+                    name, grosshaendler_code, shop_url, rest_api_url, kundennummer, standard_aufschlag_prozent, is_default
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            `);
+            const idsTx = db.transaction(() => {
+                seedIdsStmt.run('GC Gruppe (Online Plus)', 'GC_GRUPPE', 'https://onlineplus.gc-gruppe.de/ids', 'https://api.gc-gruppe.de/open-masterdata', '884920', 25.0, 1);
+                seedIdsStmt.run('Richter + Frenzel', 'RICHTER_FRENZEL', 'https://shop.richter-frenzel.de/ids', 'https://api.richter-frenzel.de/open-masterdata', '441029', 25.0, 0);
+                seedIdsStmt.run('Sonepar Deutschland', 'SONEPAR', 'https://www.sonepar.de/ids', 'https://api.sonepar.de/open-masterdata/v1', '109283', 25.0, 0);
+                seedIdsStmt.run('Rexel Germany', 'REXEL', 'https://shop.rexel.de/ids', 'https://api.rexel.de/open-masterdata', '772154', 25.0, 0);
+                seedIdsStmt.run('Adolf Würth GmbH & Co. KG', 'WUERTH', 'https://www.wuerth.de/ids', 'https://api.wuerth.de/masterdata', '992104', 30.0, 0);
+            });
+            idsTx();
+        }
+    } catch (e) {
+        console.warn('[DB Seed Warning] ids_connect_konten:', e.message);
+    }
+
+    // SOKA-BAU Beitragssätze (Stand 01.07.2026 / 2027) seeden
+    try {
+        const countSoka = db.prepare('SELECT COUNT(*) AS cnt FROM soka_beitragssaetze').get();
+        if (!countSoka || countSoka.cnt === 0) {
+            const seedSokaStmt = db.prepare(`
+                INSERT INTO soka_beitragssaetze (
+                    gueltig_ab, gueltig_bis, tarifgebiet, ulak_prozent, zvk_prozent, bbv_prozent,
+                    winterbau_ag_prozent, winterbau_an_prozent, urlaubsverguetung_prozent,
+                    mindestlohn_1, mindestlohn_2, bezeichnung
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+            const sokaTx = db.transaction(() => {
+                // Aktuelle Sätze (Stand 01.07.2026 / 2027)
+                seedSokaStmt.run('2026-07-01', null, 'WEST', 14.70, 3.20, 1.45, 0.60, 0.40, 14.25, 14.35, 16.50, 'BRTV Bau 2026/2027 Tarifgebiet West (Stand 01.07.2026)');
+                seedSokaStmt.run('2026-07-01', null, 'OST', 12.10, 0.80, 1.45, 0.60, 0.40, 11.40, 14.35, 14.35, 'BRTV Bau 2026/2027 Tarifgebiet Ost (Stand 01.07.2026)');
+                seedSokaStmt.run('2026-07-01', null, 'BERLIN_WEST', 15.05, 3.20, 1.45, 0.60, 0.40, 14.25, 14.35, 16.50, 'BRTV Bau 2026/2027 Berlin (West)');
+                seedSokaStmt.run('2026-07-01', null, 'BERLIN_OST', 12.10, 0.80, 1.45, 0.60, 0.40, 11.40, 14.35, 14.35, 'BRTV Bau 2026/2027 Berlin (Ost)');
+
+                // Historische Sätze (bis 30.06.2026)
+                seedSokaStmt.run('2024-01-01', '2026-06-30', 'WEST', 15.20, 3.20, 1.65, 0.80, 0.40, 14.25, 13.80, 15.70, 'BRTV Bau 2024-2026 Tarifgebiet West');
+                seedSokaStmt.run('2024-01-01', '2026-06-30', 'OST', 14.00, 0.70, 1.65, 0.80, 0.40, 11.40, 13.80, 13.80, 'BRTV Bau 2024-2026 Tarifgebiet Ost');
+            });
+            sokaTx();
+        }
+    } catch (e) {
+        console.warn('[DB Seed Warning] soka_beitragssaetze:', e.message);
+    }
 }
 
 module.exports = {

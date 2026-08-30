@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+    <title>W-Link ERP Baustellenbegleiter</title>
+    <link rel="manifest" href="manifest.webmanifest"/>
+    <link rel="stylesheet" href="css/pwa.css"/>
+    <meta name="theme-color" content="#1366ec"/>
+</head>
+<body>
+    <!-- App Header -->
+    <header class="app-header">
+        <div class="brand-title">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2">
+                <rect x="2" y="7" width="20" height="14" rx="2" ry="2"/>
+                <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+            </svg>
+            <span>W-Link Mobile</span>
+        </div>
+        <div class="sync-status-indicator" id="header-sync-status" onclick="switchTab('sync')">
+            <div class="status-dot" id="sync-dot"></div>
+            <span id="sync-text">Offline</span>
+        </div>
+    </header>
+
+    <!-- Main Scrollable Content -->
+    <main class="app-content">
+        <!-- 1. TAB: STEMPELUHR -->
+        <section id="tab-stempeluhr" class="tab-pane active">
+            <div class="card">
+                <div class="card-title">
+                    <span>Arbeitszeit-Stempeluhr</span>
+                    <span id="current-date-label" style="font-size: 13px; color: var(--text-muted);">Heute</span>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Mitarbeiter</label>
+                    <select id="punch-mitarbeiter-select" class="form-select">
+                        <option value="">-- Mitarbeiter wählen --</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Projekt / Baustelle</label>
+                    <select id="punch-projekt-select" class="form-select">
+                        <option value="">-- Kein Projekt (Allgemein) --</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Tätigkeitsart</label>
+                    <select id="punch-taetigkeit-select" class="form-select">
+                        <option value="PRODUKTIV">Produktivzeit (Baustelle/Gewerk)</option>
+                        <option value="RUESTZEIT">Rüstzeit (Lager/Fahrzeug)</option>
+                        <option value="WEGEZEIT_FAHRER">Wegezeit (Fahrer - Arbeitszeit)</option>
+                        <option value="WEGEZEIT_MITFAHRER">Wegezeit (Mitfahrer - BRTV)</option>
+                        <option value="SCHLECHTWEWETTER">Schlechtwetter (Saison-KUG)</option>
+                        <option value="REINIGUNG">Unterhaltsreinigung</option>
+                        <option value="BEREITSCHAFT">Bereitschaft</option>
+                    </select>
+                </div>
+
+                <div class="live-timer" id="live-timer-display">00:00:00</div>
+
+                <div class="punch-grid">
+                    <button class="btn-punch btn-kommen" onclick="handlePunch('KOMMEN')">
+                        <span>▶ KOMMEN</span>
+                        <small style="font-size: 11px; font-weight: normal;">Arbeitsbeginn</small>
+                    </button>
+                    <button class="btn-punch btn-gehen" onclick="handlePunch('GEHEN')">
+                        <span>⏹ GEHEN</span>
+                        <small style="font-size: 11px; font-weight: normal;">Feierabend</small>
+                    </button>
+                    <button class="btn-punch btn-pause" onclick="handlePunch('PAUSE')">
+                        <span>☕ PAUSE STEMPELN (30 Min)</span>
+                    </button>
+                </div>
+
+                <button class="btn btn-secondary" onclick="triggerQrScan()" style="margin-top: 8px;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7"/>
+                        <rect x="14" y="3" width="7" height="7"/>
+                        <rect x="14" y="14" width="7" height="7"/>
+                        <rect x="3" y="14" width="7" height="7"/>
+                    </svg>
+                    <span>Baustellen-QR-Code scannen</span>
+                </button>
+            </div>
+
+            <!-- Heutige Buchungen -->
+            <div class="card">
+                <div class="card-title">Heutige Buchungen</div>
+                <div id="today-punches-list">
+                    <p style="color: var(--text-muted); font-size: 13px;">Noch keine Stempelungen für heute.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. TAB: BAUTAGEBUCH -->
+        <section id="tab-bautagebuch" class="tab-pane">
+            <div class="card">
+                <div class="card-title">Mobiles Bautagebuch</div>
+
+                <div class="form-group">
+                    <label class="form-label">Projekt</label>
+                    <select id="bt-projekt-select" class="form-select"></select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Datum</label>
+                    <input type="date" id="bt-datum-input" class="form-input"/>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Witterung</label>
+                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
+                        <button type="button" class="btn btn-secondary" onclick="setWeather('SONNIG')">☀️ Sonne</button>
+                        <button type="button" class="btn btn-secondary" onclick="setWeather('BEWOELKT')">⛅ Wolken</button>
+                        <button type="button" class="btn btn-secondary" onclick="setWeather('REGEN')">🌧️ Regen</button>
+                        <button type="button" class="btn btn-secondary" onclick="setWeather('FROST')">❄️ Frost</button>
+                    </div>
+                    <input type="hidden" id="bt-wetter-val" value="SONNIG"/>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div class="form-group">
+                        <label class="form-label">Eigene Arbeiter</label>
+                        <input type="number" id="bt-eigen-count" class="form-input" value="1" min="0"/>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Gesamtstunden</label>
+                        <input type="number" step="0.5" id="bt-eigen-hours" class="form-input" value="8" min="0"/>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Tagesbericht / Ausgeführte Leistungen *</label>
+                    <textarea id="bt-bericht-text" class="form-textarea" rows="4" placeholder="Ausgeführte Arbeiten, Gewerke, Räume..."></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Vorkommnisse / Behinderungen</label>
+                    <textarea id="bt-vorkommnisse-text" class="form-textarea" rows="2" placeholder="Besondere Ereignisse..."></textarea>
+                </div>
+
+                <button class="btn" onclick="saveBautagesbericht()">
+                    <span>Tagesbericht speichern & übertragen</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- 3. TAB: VOB/B MELDUNGEN -->
+        <section id="tab-vob" class="tab-pane">
+            <div class="card">
+                <div class="card-title">VOB/B Meldewesen vor Ort</div>
+
+                <div class="form-group">
+                    <label class="form-label">Rechtsgrundlage</label>
+                    <select id="vob-typ-select" class="form-select" onchange="toggleVobFields()">
+                        <option value="BEDENKEN_4_3">Bedenkenanzeige (§ 4 Abs. 3 VOB/B)</option>
+                        <option value="BEHINDERUNG_6_1">Behinderungsanzeige (§ 6 Abs. 1 VOB/B)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Projekt</label>
+                    <select id="vob-projekt-select" class="form-select"></select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Betreff</label>
+                    <input type="text" id="vob-betreff-input" class="form-input" placeholder="z.B. Ungeeigneter Untergrund Estrich"/>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Sachverhalt / Hinderungsgrund *</label>
+                    <textarea id="vob-sachverhalt-text" class="form-textarea" rows="3" placeholder="Genaue Beschreibung der Hinderungstatsache..."></textarea>
+                </div>
+
+                <div id="vob-bedenken-fields">
+                    <div class="form-group">
+                        <label class="form-label">Bedenken-Kategorie</label>
+                        <select id="vob-kategorie-select" class="form-select">
+                            <option value="VORLEISTUNG_UNGEEIGNET">Ungeeignete Vorleistung Dritter</option>
+                            <option value="PLANUNGSFEHLER">Planungsfehler / Lücke</option>
+                            <option value="GUETE_STOFFE">Mangelhafte bauseitige Baustoffe</option>
+                            <option value="UNFALLGEFAHR">Sicherheitsrisiko / Unfallgefahr</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="vob-behinderung-fields" style="display: none;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div class="form-group">
+                            <label class="form-label">Beginn Datum</label>
+                            <input type="date" id="vob-beginn-date" class="form-input"/>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Verzug (Werktage)</label>
+                            <input type="number" id="vob-verzug-tage" class="form-input" value="1" min="0"/>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Unterschrift (Polier / Bauleiter)</label>
+                    <div class="canvas-container" id="sig-canvas-container">
+                        <canvas id="signature-canvas"></canvas>
+                    </div>
+                    <button type="button" class="btn btn-secondary" onclick="clearSignature()" style="padding: 6px; font-size: 12px;">Unterschrift löschen</button>
+                </div>
+
+                <button class="btn" onclick="saveVobMeldungForm()">
+                    <span>Formelle VOB-Meldung erstellen</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- 4. TAB: KAMERA & MÄNGEL -->
+        <section id="tab-kamera" class="tab-pane">
+            <div class="card">
+                <div class="card-title">Baustellenkamera & Markup</div>
+
+                <div class="form-group">
+                    <label class="form-label">Projekt</label>
+                    <select id="cam-projekt-select" class="form-select"></select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Mangel-Titel / Beschreibung</label>
+                    <input type="text" id="cam-titel-input" class="form-input" placeholder="z.B. Undichte Rohrverbindung"/>
+                </div>
+
+                <!-- Kamera Buttons -->
+                <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+                    <button class="btn" id="btn-trigger-camera" onclick="triggerCameraCapture()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                            <circle cx="12" cy="13" r="4"/>
+                        </svg>
+                        <span>Foto aufnehmen</span>
+                    </button>
+                </div>
+
+                <!-- Photo Preview & Markup Canvas -->
+                <div id="photo-preview-container" style="display: none;">
+                    <div class="canvas-container" style="height: 260px;">
+                        <canvas id="markup-canvas"></canvas>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px;">
+                        <button type="button" class="btn btn-secondary" onclick="setMarkupMode('circle')">⭕ Kreis</button>
+                        <button type="button" class="btn btn-secondary" onclick="setMarkupMode('arrow')">➡️ Pfeil</button>
+                        <button type="button" class="btn btn-secondary" onclick="setMarkupMode('freehand')">✏️ Stift</button>
+                    </div>
+                    <button class="btn" onclick="saveCompressedPhoto()">Foto speichern & syncen</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. TAB: SYNC & SERVER -->
+        <section id="tab-sync" class="tab-pane">
+            <div class="card">
+                <div class="card-title">Synchronisation & Pairing</div>
+
+                <div class="form-group">
+                    <label class="form-label">Server-Adresse (Desktop Hub)</label>
+                    <input type="text" id="sync-server-url" class="form-input" placeholder="http://192.168.1.100:38400"/>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Pairing-Token</label>
+                    <input type="text" id="sync-pairing-token" class="form-input" placeholder="Token vom Desktop QR-Code"/>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+                    <button class="btn" onclick="connectAndPairServer()">Koppeln & Speichern</button>
+                </div>
+
+                <div class="form-group">
+                    <button class="btn btn-secondary" onclick="triggerManualSync()">
+                        <span>Jetzt synchronisieren (Push/Pull)</span>
+                    </button>
+                </div>
+
+                <div id="sync-outbox-info" style="font-size: 13px; color: var(--text-muted);">
+                    Warteschlange: <strong id="outbox-count-label">0</strong> ausstehende Änderungen.
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Bottom Navigation Bar -->
+    <nav class="bottom-nav">
+        <div class="nav-item active" onclick="switchTab('stempeluhr')" id="nav-tab-stempeluhr">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+            </svg>
+            <span>Stempeluhr</span>
+        </div>
+        <div class="nav-item" onclick="switchTab('bautagebuch')" id="nav-tab-bautagebuch">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+            <span>Bautagebuch</span>
+        </div>
+        <div class="nav-item" onclick="switchTab('vob')" id="nav-tab-vob">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <span>VOB/B</span>
+        </div>
+        <div class="nav-item" onclick="switchTab('kamera')" id="nav-tab-kamera">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                <circle cx="12" cy="13" r="4"/>
+            </svg>
+            <span>Kamera</span>
+        </div>
+        <div class="nav-item" onclick="switchTab('sync')" id="nav-tab-sync">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"/>
+                <polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+            <span>Sync</span>
+        </div>
+    </nav>
+
+    <!-- Isomorphe Kernmodule & Client Skripte -->
+    <script src="js/dexie.min.js"></script>
+    <script src="js/pwa-db.js"></script>
+    <script src="../controllers/ZeiterfassungController.js"></script>
+    <script src="../controllers/BautagebuchMobileController.js"></script>
+    <script src="js/camera-engine.js"></script>
+    <script src="js/sync-worker.js"></script>
+    <script src="js/pwa-app.js"></script>
+</body>
+</html>

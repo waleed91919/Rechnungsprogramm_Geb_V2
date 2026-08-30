@@ -622,6 +622,10 @@ function switchProjektTab(tabKey) {
         loadProjektControlling(pId);
     } else if (tabKey === 'efb') {
         loadProjektEFB(pId);
+    } else if (tabKey === 'kalkulation') {
+        loadProjektKalkulation(pId);
+    } else if (tabKey === 'maengel') {
+        loadProjektMaengel(pId);
     }
 }
 
@@ -632,6 +636,28 @@ async function loadProjektEFB(projectId) {
     }
     if (window.efbViewInstance) {
         await window.efbViewInstance.loadAndRender(projectId);
+    }
+}
+
+async function loadProjektKalkulation(projectId) {
+    if (!projectId) return;
+    if (!window.kalkulationViewInstance && window.KalkulationView) {
+        window.kalkulationViewInstance = new window.KalkulationView('pd-panel-kalkulation');
+    }
+    if (window.kalkulationViewInstance) {
+        await window.kalkulationViewInstance.loadAndRender(projectId);
+    }
+}
+
+async function loadProjektMaengel(projectId) {
+    if (!projectId) return;
+    if (!window.maengelViewInstance && window.MaengelView) {
+        window.maengelViewInstance = new window.MaengelView('pd-panel-maengel');
+    } else if (window.maengelViewInstance) {
+        window.maengelViewInstance.containerId = 'pd-panel-maengel';
+    }
+    if (window.maengelViewInstance) {
+        await window.maengelViewInstance.loadAndRender({ projektId: projectId });
     }
 }
 
