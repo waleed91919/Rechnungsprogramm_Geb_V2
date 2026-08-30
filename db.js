@@ -40,6 +40,9 @@ const InvoiceController = require('./controllers/InvoiceController');
 const ReinigungController = require('./controllers/ReinigungController');
 const BankingController = require('./controllers/BankingController');
 const SepaController = require('./controllers/SepaController');
+const EFBController = require('./controllers/EFBController');
+const GaebX31Service = require('./js/gaeb-x31');
+const BackupService = require('./main/backup');
 
 console.log('Connected to the SQLite database using better-sqlite3 (Expert Mode).');
 initDb();
@@ -47,6 +50,13 @@ initDb();
 // Zentrale GoBD-Audit-Hashkette (nach Schema-Init, damit audit_logs existiert)
 const auditLogger = createAuditLogger(db);
 const appendAuditLog = auditLogger.appendAuditLog;
+
+// Revisionssichere Auto-Backup Engine Instanz
+const backupService = new BackupService(db, {
+    dbPath,
+    backupDir: path.join(path.dirname(dbPath), 'backups'),
+    auditLogger
+});
 
 // Lädt einen Beleg inkl. Positionen und Verrechnungen (für Schutz-/Hashvergleiche)
 function getDocumentWithChildren(docId) {
@@ -276,6 +286,20 @@ function pruefeObjektLvBezug(typ, id, label) {
     }
     if (gesamt > 0) {
         throw new Error(`${label} enthält Putzplan-/LV-Daten und kann nicht gelöscht werden – bitte stattdessen deaktivieren.`);
+    }
+}
+
+// --- Dauerrechnungen F2: Objekt-Löschschutz (Abrechnungspläne im Teilbaum) ---
+function pruefeObjektPlanBezug(typ, id, label) {
+    const planTableExists = !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='abrechnungsplaene'").get();
+    if (!planTableExists) return;
+    const planStmt = db.prepare('SELECT COUNT(*) AS c FROM abrechnungsplaene WHERE objekt_typ=? AND objekt_id=?');
+    let gesamt = 0;
+    for (const k of sammleObjektNachkommen(typ, id)) {
+        gesamt += planStmt.get(k.typ, k.id).c;
+    }
+    if (gesamt > 0) {
+        throw new Error(`${label} ist in Abrechnungsplänen referenziert und kann nicht gelöscht werden – bitte stattdessen deaktivieren.`);
     }
 }
 
@@ -1356,6 +1380,7 @@ const dbAPI = {
             const lieg = db.prepare('SELECT id FROM liegenschaften WHERE id=?').get(liegId);
             if (!lieg) throw new Error('Liegenschaft nicht gefunden.');
             pruefeObjektLvBezug('LIEGENSCHAFT', liegId, 'Die Liegenschaft');
+            pruefeObjektPlanBezug('LIEGENSCHAFT', liegId, 'Die Liegenschaft');
             pruefeObjektBelegbezug('LIEGENSCHAFT', liegId, 'Die Liegenschaft');
             return db.prepare('DELETE FROM liegenschaften WHERE id=?').run(liegId).changes;
         });
@@ -1383,6 +1408,7 @@ const dbAPI = {
             const g = db.prepare('SELECT id FROM gebaeude WHERE id=?').get(gebId);
             if (!g) throw new Error('Gebäude nicht gefunden.');
             pruefeObjektLvBezug('GEBAEUDE', gebId, 'Das Gebäude');
+            pruefeObjektPlanBezug('GEBAEUDE', gebId, 'Das Gebäude');
             pruefeObjektBelegbezug('GEBAEUDE', gebId, 'Das Gebäude');
             return db.prepare('DELETE FROM gebaeude WHERE id=?').run(gebId).changes;
         });
@@ -1410,6 +1436,7 @@ const dbAPI = {
             const e = db.prepare('SELECT id FROM etagen WHERE id=?').get(etgId);
             if (!e) throw new Error('Etage nicht gefunden.');
             pruefeObjektLvBezug('ETAGE', etgId, 'Die Etage');
+            pruefeObjektPlanBezug('ETAGE', etgId, 'Die Etage');
             pruefeObjektBelegbezug('ETAGE', etgId, 'Die Etage');
             return db.prepare('DELETE FROM etagen WHERE id=?').run(etgId).changes;
         });
@@ -1423,12 +1450,12 @@ const dbAPI = {
             const empfaengerKundeId = d.empfaenger_kunde_id ? Number(d.empfaenger_kunde_id) : null;
             const empfaengerArt = empfaengerKundeId ? (d.empfaenger_art || null) : null;
             if (d.id) {
-                db.prepare('UPDATE raeume SET etage_id=?, name=?, raum_nr=?, flaeche=?, einheit=?, raumtyp=?, empfaenger_kunde_id=?, empfaenger_art=?, notizen=?, aktiv=? WHERE id=?')
-                  .run(d.etage_id, d.name, d.raum_nr || null, isNaN(flaeche) ? 0 : flaeche, d.einheit || 'm²', d.raumtyp || null, empfaengerKundeId, empfaengerArt, d.notizen || null, d.aktiv === 0 ? 0 : 1, d.id);
+                db.prepare('UPDATE raeume SET etage_id=?, name=?, raum_nr=?, flaeche=?, einheit=?, raumtyp=?, bodenbelag=?, empfaenger_kunde_id=?, empfaenger_art=?, notizen=?, aktiv=? WHERE id=?')
+                  .run(d.etage_id, d.name, d.raum_nr || null, isNaN(flaeche) ? 0 : flaeche, d.einheit || 'm²', d.raumtyp || null, d.bodenbelag || null, empfaengerKundeId, empfaengerArt, d.notizen || null, d.aktiv === 0 ? 0 : 1, d.id);
                 return d.id;
             }
-            const res = db.prepare('INSERT INTO raeume (etage_id, name, raum_nr, flaeche, einheit, raumtyp, empfaenger_kunde_id, empfaenger_art, notizen, aktiv) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-              .run(d.etage_id, d.name, d.raum_nr || null, isNaN(flaeche) ? 0 : flaeche, d.einheit || 'm²', d.raumtyp || null, empfaengerKundeId, empfaengerArt, d.notizen || null, d.aktiv === 0 ? 0 : 1);
+            const res = db.prepare('INSERT INTO raeume (etage_id, name, raum_nr, flaeche, einheit, raumtyp, bodenbelag, empfaenger_kunde_id, empfaenger_art, notizen, aktiv) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+              .run(d.etage_id, d.name, d.raum_nr || null, isNaN(flaeche) ? 0 : flaeche, d.einheit || 'm²', d.raumtyp || null, d.bodenbelag || null, empfaengerKundeId, empfaengerArt, d.notizen || null, d.aktiv === 0 ? 0 : 1);
             return res.lastInsertRowid;
         });
         return tx(data);
@@ -1439,6 +1466,7 @@ const dbAPI = {
             const r = db.prepare('SELECT id FROM raeume WHERE id=?').get(raumId);
             if (!r) throw new Error('Raum nicht gefunden.');
             pruefeObjektLvBezug('RAUM', raumId, 'Der Raum');
+            pruefeObjektPlanBezug('RAUM', raumId, 'Der Raum');
             pruefeObjektBelegbezug('RAUM', raumId, 'Der Raum');
             return db.prepare('DELETE FROM raeume WHERE id=?').run(raumId).changes;
         });
@@ -1485,35 +1513,59 @@ const dbAPI = {
 
     async getObjektDetails(objektTyp, objektId) {
         if (!OBJEKT_EBENEN[objektTyp]) throw new Error('Ungültiger Objekttyp');
+        const numId = Number(objektId);
         const ebene = OBJEKT_EBENEN[objektTyp];
-        const knoten = db.prepare(`SELECT * FROM ${ebene.tabelle} WHERE id=?`).get(objektId);
+        const knoten = db.prepare(`SELECT * FROM ${ebene.tabelle} WHERE id=?`).get(numId);
         if (!knoten) throw new Error('Objekt nicht gefunden.');
 
-        const gebaeude = objektTyp === 'LIEGENSCHAFT' ? await dbQuery('SELECT * FROM gebaeude WHERE liegenschaft_id=? ORDER BY name ASC', [objektId]) : [];
-        const etagen = objektTyp === 'GEBAEUDE'
-            ? await dbQuery('SELECT * FROM etagen WHERE gebaeude_id=? ORDER BY COALESCE(ebene_nummer, 999), name ASC', [objektId])
-            : (objektTyp === 'LIEGENSCHAFT' ? await dbQuery('SELECT e.* FROM etagen e JOIN gebaeude g ON g.id=e.gebaeude_id WHERE g.liegenschaft_id=? ORDER BY COALESCE(e.ebene_nummer, 999), e.name ASC', [objektId]) : []);
-        const raeume = objektTyp === 'ETAGE'
-            ? await dbQuery('SELECT * FROM raeume WHERE etage_id=? ORDER BY name ASC', [objektId])
-            : await dbQuery('SELECT r.* FROM raeume r ' +
-                (objektTyp === 'GEBAEUDE' ? 'JOIN etagen e ON e.id=r.etage_id WHERE e.gebaeude_id=?' :
-                 objektTyp === 'LIEGENSCHAFT' ? 'JOIN etagen e ON e.id=r.etage_id JOIN gebaeude g ON g.id=e.gebaeude_id WHERE g.liegenschaft_id=?' :
-                 'WHERE r.etage_id=?') + ' ORDER BY r.name ASC', [objektId]);
+        let gebaeude = [];
+        let etagen = [];
+        let raeume = [];
+        let anzahlGebaeude = 0;
+        let anzahlEtagen = 0;
+        let anzahlRaeume = 0;
+        let flaecheGesamt = 0;
 
-        const flaecheGesamt = Math.round(raeume.reduce((s, r) => s + (r.einheit === 'm²' ? (parseFloat(r.flaeche) || 0) : 0), 0) * 100) / 100;
+        if (objektTyp === 'LIEGENSCHAFT') {
+            gebaeude = await dbQuery('SELECT * FROM gebaeude WHERE liegenschaft_id=? ORDER BY name ASC', [numId]);
+            etagen = await dbQuery('SELECT e.* FROM etagen e JOIN gebaeude g ON g.id=e.gebaeude_id WHERE g.liegenschaft_id=? ORDER BY COALESCE(e.ebene_nummer, 999), e.name ASC', [numId]);
+            raeume = await dbQuery('SELECT r.* FROM raeume r JOIN etagen e ON e.id=r.etage_id JOIN gebaeude g ON g.id=e.gebaeude_id WHERE g.liegenschaft_id=? ORDER BY r.name ASC', [numId]);
+            anzahlGebaeude = gebaeude.length;
+            anzahlEtagen = etagen.length;
+            anzahlRaeume = raeume.length;
+            flaecheGesamt = Math.round(raeume.reduce((s, r) => s + (r.einheit === 'm²' ? (parseFloat(r.flaeche) || 0) : 0), 0) * 100) / 100;
+        } else if (objektTyp === 'GEBAEUDE') {
+            etagen = await dbQuery('SELECT * FROM etagen WHERE gebaeude_id=? ORDER BY COALESCE(ebene_nummer, 999), name ASC', [numId]);
+            raeume = await dbQuery('SELECT r.* FROM raeume r JOIN etagen e ON e.id=r.etage_id WHERE e.gebaeude_id=? ORDER BY r.name ASC', [numId]);
+            anzahlEtagen = etagen.length;
+            anzahlRaeume = raeume.length;
+            flaecheGesamt = Math.round(raeume.reduce((s, r) => s + (r.einheit === 'm²' ? (parseFloat(r.flaeche) || 0) : 0), 0) * 100) / 100;
+        } else if (objektTyp === 'ETAGE') {
+            raeume = await dbQuery('SELECT * FROM raeume WHERE etage_id=? ORDER BY name ASC', [numId]);
+            anzahlRaeume = raeume.length;
+            flaecheGesamt = Math.round(raeume.reduce((s, r) => s + (r.einheit === 'm²' ? (parseFloat(r.flaeche) || 0) : 0), 0) * 100) / 100;
+        } else if (objektTyp === 'RAUM') {
+            flaecheGesamt = knoten.einheit === 'm²' ? (parseFloat(knoten.flaeche) || 0) : 0;
+            flaecheGesamt = Math.round(flaecheGesamt * 100) / 100;
+        }
+
+        const planTableExists = !!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='abrechnungsplaene'").get();
+        const plaene = planTableExists
+            ? await dbQuery('SELECT * FROM abrechnungsplaene WHERE objekt_typ=? AND objekt_id=? ORDER BY name ASC', [objektTyp, numId])
+            : [];
 
         return {
             knoten,
-            pfad: baueObjektPfad(objektTyp, objektId),
-            empfaenger: loeseObjektEmpfaengerAuf(objektTyp, objektId),
+            pfad: baueObjektPfad(objektTyp, numId),
+            empfaenger: loeseObjektEmpfaengerAuf(objektTyp, numId),
             kinder: { gebaeude, etagen, raeume },
             kennzahlen: {
                 flaecheGesamt,
-                anzahlRaeume: raeume.length,
-                anzahlEtagen: etagen.length,
-                anzahlGebaeude: gebaeude.length
+                anzahlRaeume,
+                anzahlEtagen,
+                anzahlGebaeude
             },
-            plaene: []
+            plaene
         };
     },
 
@@ -3486,6 +3538,241 @@ const dbAPI = {
             return { success: true };
         });
         return tx();
+    },
+
+    // --- EFB-Preisblätter 221 & 223 (VHB Bund) ---
+    getEfbProfile(projektId) {
+        if (!projektId) return EFBController.getDefaultProfile();
+        const row = db.prepare('SELECT * FROM efb_profile WHERE projekt_id = ?').get(projektId);
+        return row || EFBController.getDefaultProfile();
+    },
+
+    saveEfbProfile(profileData) {
+        if (!profileData || !profileData.projekt_id) {
+            throw new Error('Projekt-ID für EFB-Profil erforderlich.');
+        }
+        const pId = Number(profileData.projekt_id);
+        const existing = db.prepare('SELECT id FROM efb_profile WHERE projekt_id = ?').get(pId);
+
+        const tx = db.transaction(() => {
+            if (existing) {
+                db.prepare(`
+                    UPDATE efb_profile SET
+                        name = ?, mittellohn_eur = ?, lohngebundene_kosten_prozent = ?, lohnnebenkosten_prozent = ?,
+                        kalkulationslohn_eur = ?, zuschlag_lohn_bgk = ?, zuschlag_lohn_agk = ?, zuschlag_lohn_wug = ?,
+                        zuschlag_stoff_bgk = ?, zuschlag_stoff_agk = ?, zuschlag_stoff_wug = ?,
+                        zuschlag_geraet_bgk = ?, zuschlag_geraet_agk = ?, zuschlag_geraet_wug = ?,
+                        zuschlag_sonst_bgk = ?, zuschlag_sonst_agk = ?, zuschlag_sonst_wug = ?,
+                        zuschlag_nu_bgk = ?, zuschlag_nu_agk = ?, zuschlag_nu_wug = ?,
+                        wug_gewinn_prozent = ?, wug_betriebswagnis_prozent = ?, wug_leistungswagnis_prozent = ?,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                `).run(
+                    profileData.name || 'Standard-Zuschlagsprofil',
+                    parseFloat(profileData.mittellohn_eur) || 24.50,
+                    parseFloat(profileData.lohngebundene_kosten_prozent) || 85.00,
+                    parseFloat(profileData.lohnnebenkosten_prozent) || 12.50,
+                    parseFloat(profileData.kalkulationslohn_eur) || 48.39,
+                    parseFloat(profileData.zuschlag_lohn_bgk) || 18.00,
+                    parseFloat(profileData.zuschlag_lohn_agk) || 22.00,
+                    parseFloat(profileData.zuschlag_lohn_wug) || 8.80,
+                    parseFloat(profileData.zuschlag_stoff_bgk) || 12.00,
+                    parseFloat(profileData.zuschlag_stoff_agk) || 14.00,
+                    parseFloat(profileData.zuschlag_stoff_wug) || 6.00,
+                    parseFloat(profileData.zuschlag_geraet_bgk) || 15.00,
+                    parseFloat(profileData.zuschlag_geraet_agk) || 16.00,
+                    parseFloat(profileData.zuschlag_geraet_wug) || 6.00,
+                    parseFloat(profileData.zuschlag_sonst_bgk) || 10.00,
+                    parseFloat(profileData.zuschlag_sonst_agk) || 12.00,
+                    parseFloat(profileData.zuschlag_sonst_wug) || 5.00,
+                    parseFloat(profileData.zuschlag_nu_bgk) || 8.00,
+                    parseFloat(profileData.zuschlag_nu_agk) || 10.00,
+                    parseFloat(profileData.zuschlag_nu_wug) || 4.00,
+                    parseFloat(profileData.wug_gewinn_prozent) || 5.00,
+                    parseFloat(profileData.wug_betriebswagnis_prozent) || 2.00,
+                    parseFloat(profileData.wug_leistungswagnis_prozent) || 1.80,
+                    existing.id
+                );
+                appendAuditLog({
+                    entityType: 'EFB_PROFIL',
+                    entityId: existing.id,
+                    action: 'AKTUALISIERT',
+                    details: `EFB-Profil für Projekt #${pId} aktualisiert`
+                });
+                return { success: true, id: existing.id };
+            } else {
+                const res = db.prepare(`
+                    INSERT INTO efb_profile (
+                        projekt_id, name, mittellohn_eur, lohngebundene_kosten_prozent, lohnnebenkosten_prozent,
+                        kalkulationslohn_eur, zuschlag_lohn_bgk, zuschlag_lohn_agk, zuschlag_lohn_wug,
+                        zuschlag_stoff_bgk, zuschlag_stoff_agk, zuschlag_stoff_wug,
+                        zuschlag_geraet_bgk, zuschlag_geraet_agk, zuschlag_geraet_wug,
+                        zuschlag_sonst_bgk, zuschlag_sonst_agk, zuschlag_sonst_wug,
+                        zuschlag_nu_bgk, zuschlag_nu_agk, zuschlag_nu_wug,
+                        wug_gewinn_prozent, wug_betriebswagnis_prozent, wug_leistungswagnis_prozent
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `).run(
+                    pId,
+                    profileData.name || 'Standard-Zuschlagsprofil',
+                    parseFloat(profileData.mittellohn_eur) || 24.50,
+                    parseFloat(profileData.lohngebundene_kosten_prozent) || 85.00,
+                    parseFloat(profileData.lohnnebenkosten_prozent) || 12.50,
+                    parseFloat(profileData.kalkulationslohn_eur) || 48.39,
+                    parseFloat(profileData.zuschlag_lohn_bgk) || 18.00,
+                    parseFloat(profileData.zuschlag_lohn_agk) || 22.00,
+                    parseFloat(profileData.zuschlag_lohn_wug) || 8.80,
+                    parseFloat(profileData.zuschlag_stoff_bgk) || 12.00,
+                    parseFloat(profileData.zuschlag_stoff_agk) || 14.00,
+                    parseFloat(profileData.zuschlag_stoff_wug) || 6.00,
+                    parseFloat(profileData.zuschlag_geraet_bgk) || 15.00,
+                    parseFloat(profileData.zuschlag_geraet_agk) || 16.00,
+                    parseFloat(profileData.zuschlag_geraet_wug) || 6.00,
+                    parseFloat(profileData.zuschlag_sonst_bgk) || 10.00,
+                    parseFloat(profileData.zuschlag_sonst_agk) || 12.00,
+                    parseFloat(profileData.zuschlag_sonst_wug) || 5.00,
+                    parseFloat(profileData.zuschlag_nu_bgk) || 8.00,
+                    parseFloat(profileData.zuschlag_nu_agk) || 10.00,
+                    parseFloat(profileData.zuschlag_nu_wug) || 4.00,
+                    parseFloat(profileData.wug_gewinn_prozent) || 5.00,
+                    parseFloat(profileData.wug_betriebswagnis_prozent) || 2.00,
+                    parseFloat(profileData.wug_leistungswagnis_prozent) || 1.80
+                );
+                appendAuditLog({
+                    entityType: 'EFB_PROFIL',
+                    entityId: Number(res.lastInsertRowid),
+                    action: 'ERSTELLT',
+                    details: `EFB-Profil für Projekt #${pId} erstellt`
+                });
+                return { success: true, id: res.lastInsertRowid };
+            }
+        });
+        return tx();
+    },
+
+    getEfbKalkulation(projektId) {
+        const pId = Number(projektId);
+        const project = db.prepare('SELECT * FROM projekte WHERE id = ?').get(pId) || { id: pId, name: 'Projekt' };
+        const profile = this.getEfbProfile(pId);
+
+        // Lade alle Positionen des Projekts
+        const positions = db.prepare(`
+            SELECT p.*, d.type as dok_type, d.nr as dok_nr
+            FROM positionen p
+            JOIN dokumente d ON p.dokumentId = d.id
+            WHERE d.projektId = ?
+            ORDER BY d.id DESC, p.id ASC
+        `).all(pId);
+
+        const efb221 = EFBController.calculateEFB221(project, positions, profile);
+        const efb223 = EFBController.calculateEFB223(positions, efb221);
+
+        return {
+            efb221,
+            efb223,
+            profile,
+            project,
+            positions
+        };
+    },
+
+    // --- GAEB DA XML 3.3 Phase X31 ---
+    exportGAEBX31(projectId, blattId = null) {
+        const pId = Number(projectId);
+        const project = db.prepare('SELECT * FROM projekte WHERE id = ?').get(pId) || { name: 'Projekt' };
+        let blaetter = this.getAufmassBlaetter(pId);
+        if (blattId) {
+            blaetter = blaetter.filter(b => b.id === blattId);
+        }
+        const positions = db.prepare(`
+            SELECT p.* FROM positionen p
+            JOIN dokumente d ON p.dokumentId = d.id
+            WHERE d.projektId = ?
+        `).all(pId);
+
+        const xmlString = GaebX31Service.generateX31Xml(project, blaetter, positions);
+        appendAuditLog({
+            entityType: 'PROJECT',
+            entityId: pId,
+            action: 'GAEB_X31_EXPORT',
+            details: `GAEB X31 Aufmaß für Projekt #${pId} exportiert (${blaetter.length} Blätter)`
+        });
+        return xmlString;
+    },
+
+    importGAEBX31(projectId, xmlContent) {
+        const pId = Number(projectId);
+        const parsed = GaebX31Service.parseX31Xml(xmlContent);
+
+        const tx = db.transaction(() => {
+            const blattRes = db.prepare(`
+                INSERT INTO aufmass_blaetter (project_id, blatt_nummer, titel, status)
+                VALUES (?, ?, ?, 'DRAFT')
+            `).run(pId, 'X31-01', parsed.projectInfo.name || 'GAEB X31 Import');
+            const blattId = blattRes.lastInsertRowid;
+
+            let zeilenCount = 0;
+            const insertZeileStmt = db.prepare(`
+                INSERT INTO aufmass_zeilen (blatt_id, oz_code, zeilen_nr, bezeichnung, formel_reb, rechenansatz, ergebnis, einheit, vorzeichen)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+
+            (parsed.items || []).forEach(item => {
+                (item.ansatze || []).forEach((ansatz, aIdx) => {
+                    zeilenCount++;
+                    insertZeileStmt.run(
+                        blattId,
+                        item.oz_code || '01.01.0010',
+                        ansatz.rowNo || (aIdx + 1),
+                        ansatz.bezeichnung || item.name || '',
+                        ansatz.formulaNo || '91',
+                        ansatz.rechenansatz || '',
+                        ansatz.resultQty || 0,
+                        ansatz.einheit || item.einheit || 'm²',
+                        ansatz.sign !== undefined ? ansatz.sign : 1
+                    );
+                });
+            });
+
+            appendAuditLog({
+                entityType: 'AUFMASS_BLATT',
+                entityId: Number(blattId),
+                action: 'GAEB_X31_IMPORTED',
+                details: `GAEB X31 Import: ${zeilenCount} Zeilen aus ${parsed.items.length} Positionen importiert`
+            });
+
+            return { success: true, blattId, importedCount: zeilenCount, itemsCount: parsed.items.length };
+        });
+
+        return tx();
+    },
+
+    // --- Revisionssichere Auto-Backup Engine (GoBD & GFS) ---
+    async createBackup(triggerType = 'MANUAL', bemerkung = '') {
+        return await backupService.createBackup(triggerType, bemerkung);
+    },
+
+    getBackupHistory() {
+        return db.prepare('SELECT * FROM backup_history ORDER BY erstellt_am DESC').all();
+    },
+
+    async verifyBackup(backupIdOrPath) {
+        return await backupService.verifyBackup(backupIdOrPath);
+    },
+
+    async restoreBackup(backupIdOrPath, bemerkung = '') {
+        return await backupService.restoreBackup(backupIdOrPath, bemerkung);
+    },
+
+    async backup(filePath) {
+        return await backupService.exportBackupTo(filePath);
+    },
+
+    async restore(filePath) {
+        return await backupService.restoreBackup(filePath);
+    },
+
+    getBackupService() {
+        return backupService;
     }
 };
 

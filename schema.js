@@ -343,6 +343,7 @@ function createSchema(db) {
         flaeche REAL DEFAULT 0,
         einheit TEXT DEFAULT 'm²',
         raumtyp TEXT,
+        bodenbelag TEXT,
         empfaenger_kunde_id INTEGER,
         empfaenger_art TEXT CHECK(empfaenger_art IN ('EIGENTUEMER','MIETER','HAUSVERWALTUNG')),
         notizen TEXT,
@@ -639,6 +640,56 @@ function createSchema(db) {
 
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_sepa_pos_lauf ON sepa_lastschrift_positionen(lauf_id)`); } catch (e) { console.error('[DB Schema] Index idx_sepa_pos_lauf:', e.message); }
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_sepa_pos_dokument ON sepa_lastschrift_positionen(dokument_id)`); } catch (e) { console.error('[DB Schema] Index idx_sepa_pos_dokument:', e.message); }
+
+    // --- EFB-Zuschlagsprofile & Mittellohn (VHB Bund Formblatt 221 & 223) ---
+    db.exec(`CREATE TABLE IF NOT EXISTS efb_profile (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        projekt_id INTEGER REFERENCES projekte(id) ON DELETE CASCADE,
+        name TEXT NOT NULL DEFAULT 'Standard-Zuschlagsprofil',
+        mittellohn_eur REAL NOT NULL DEFAULT 24.50,
+        lohngebundene_kosten_prozent REAL NOT NULL DEFAULT 85.00,
+        lohnnebenkosten_prozent REAL NOT NULL DEFAULT 12.50,
+        kalkulationslohn_eur REAL NOT NULL DEFAULT 48.39,
+        zuschlag_lohn_bgk REAL NOT NULL DEFAULT 18.00,
+        zuschlag_lohn_agk REAL NOT NULL DEFAULT 22.00,
+        zuschlag_lohn_wug REAL NOT NULL DEFAULT 8.80,
+        zuschlag_stoff_bgk REAL NOT NULL DEFAULT 12.00,
+        zuschlag_stoff_agk REAL NOT NULL DEFAULT 14.00,
+        zuschlag_stoff_wug REAL NOT NULL DEFAULT 6.00,
+        zuschlag_geraet_bgk REAL NOT NULL DEFAULT 15.00,
+        zuschlag_geraet_agk REAL NOT NULL DEFAULT 16.00,
+        zuschlag_geraet_wug REAL NOT NULL DEFAULT 6.00,
+        zuschlag_sonst_bgk REAL NOT NULL DEFAULT 10.00,
+        zuschlag_sonst_agk REAL NOT NULL DEFAULT 12.00,
+        zuschlag_sonst_wug REAL NOT NULL DEFAULT 5.00,
+        zuschlag_nu_bgk REAL NOT NULL DEFAULT 8.00,
+        zuschlag_nu_agk REAL NOT NULL DEFAULT 10.00,
+        zuschlag_nu_wug REAL NOT NULL DEFAULT 4.00,
+        wug_gewinn_prozent REAL NOT NULL DEFAULT 5.00,
+        wug_betriebswagnis_prozent REAL NOT NULL DEFAULT 2.00,
+        wug_leistungswagnis_prozent REAL NOT NULL DEFAULT 1.80,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_efb_profile_projekt ON efb_profile(projekt_id)`); } catch (e) { console.error('[DB Schema] Index idx_efb_profile_projekt:', e.message); }
+
+    // --- Revisionssichere Backup-Historie (GoBD & GFS) ---
+    db.exec(`CREATE TABLE IF NOT EXISTS backup_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        dateiname TEXT NOT NULL,
+        dateipfad TEXT NOT NULL,
+        dateigroesse_bytes INTEGER NOT NULL,
+        dateigroesse_komprimiert_bytes INTEGER NOT NULL,
+        sha256_hash TEXT NOT NULL,
+        trigger_type TEXT NOT NULL CHECK(trigger_type IN ('MANUAL', 'AUTO_SHUTDOWN', 'CRON', 'PRE_MIGRATION', 'PRE_RESTORE')),
+        retention_category TEXT NOT NULL CHECK(retention_category IN ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY', 'ARCHIVE')),
+        integrity_status TEXT NOT NULL CHECK(integrity_status IN ('OK', 'CORRUPT', 'UNKNOWN')),
+        erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+        bemerkung TEXT
+    )`);
+
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_backup_created ON backup_history(erstellt_am)`); } catch (e) { console.error('[DB Schema] Index idx_backup_created:', e.message); }
 }
 
 function runMigrations(db) {
@@ -800,6 +851,7 @@ function runMigrations(db) {
     // erlaubte Werte (Anwenderebene): 'LIEGENSCHAFT' | 'GEBAEUDE' | 'ETAGE' | 'RAUM'; NULL = kein Objektbezug (Altbestand!)
     try { db.exec(`ALTER TABLE dokumente ADD COLUMN objekt_typ TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
     try { db.exec(`ALTER TABLE dokumente ADD COLUMN objekt_id INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE raeume ADD COLUMN bodenbelag TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
     try {
         db.exec(`CREATE INDEX IF NOT EXISTS idx_dokumente_objekt ON dokumente(objekt_typ, objekt_id)`);
     } catch (e) {
@@ -827,6 +879,68 @@ function runMigrations(db) {
     try { db.exec(`ALTER TABLE zahlung_zuordnungen ADD COLUMN storno_flag INTEGER DEFAULT 0`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
     try { db.exec(`ALTER TABLE zahlung_zuordnungen ADD COLUMN storniert_am DATETIME`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
     try { db.exec(`ALTER TABLE zahlung_zuordnungen ADD COLUMN storno_grund TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+
+    // --- EFB-Preisblätter 221 & 223 (VHB Bund) ---
+    try {
+        db.exec(`CREATE TABLE IF NOT EXISTS efb_profile (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            projekt_id INTEGER REFERENCES projekte(id) ON DELETE CASCADE,
+            name TEXT NOT NULL DEFAULT 'Standard-Zuschlagsprofil',
+            mittellohn_eur REAL NOT NULL DEFAULT 24.50,
+            lohngebundene_kosten_prozent REAL NOT NULL DEFAULT 85.00,
+            lohnnebenkosten_prozent REAL NOT NULL DEFAULT 12.50,
+            kalkulationslohn_eur REAL NOT NULL DEFAULT 48.39,
+            zuschlag_lohn_bgk REAL NOT NULL DEFAULT 18.00,
+            zuschlag_lohn_agk REAL NOT NULL DEFAULT 22.00,
+            zuschlag_lohn_wug REAL NOT NULL DEFAULT 8.80,
+            zuschlag_stoff_bgk REAL NOT NULL DEFAULT 12.00,
+            zuschlag_stoff_agk REAL NOT NULL DEFAULT 14.00,
+            zuschlag_stoff_wug REAL NOT NULL DEFAULT 6.00,
+            zuschlag_geraet_bgk REAL NOT NULL DEFAULT 15.00,
+            zuschlag_geraet_agk REAL NOT NULL DEFAULT 16.00,
+            zuschlag_geraet_wug REAL NOT NULL DEFAULT 6.00,
+            zuschlag_sonst_bgk REAL NOT NULL DEFAULT 10.00,
+            zuschlag_sonst_agk REAL NOT NULL DEFAULT 12.00,
+            zuschlag_sonst_wug REAL NOT NULL DEFAULT 5.00,
+            zuschlag_nu_bgk REAL NOT NULL DEFAULT 8.00,
+            zuschlag_nu_agk REAL NOT NULL DEFAULT 10.00,
+            zuschlag_nu_wug REAL NOT NULL DEFAULT 4.00,
+            wug_gewinn_prozent REAL NOT NULL DEFAULT 5.00,
+            wug_betriebswagnis_prozent REAL NOT NULL DEFAULT 2.00,
+            wug_leistungswagnis_prozent REAL NOT NULL DEFAULT 1.80,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_efb_profile_projekt ON efb_profile(projekt_id)`);
+    } catch (e) {
+        if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] efb_profile:', e.message);
+    }
+
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN zeitansatz_h REAL DEFAULT 0.0`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN lohn_ep REAL DEFAULT 0.0`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN stoff_ep REAL DEFAULT 0.0`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN geraet_ep REAL DEFAULT 0.0`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN sonst_ep REAL DEFAULT 0.0`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+
+    // --- Revisionssichere Backup-Historie (GoBD & GFS) ---
+    try {
+        db.exec(`CREATE TABLE IF NOT EXISTS backup_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dateiname TEXT NOT NULL,
+            dateipfad TEXT NOT NULL,
+            dateigroesse_bytes INTEGER NOT NULL,
+            dateigroesse_komprimiert_bytes INTEGER NOT NULL,
+            sha256_hash TEXT NOT NULL,
+            trigger_type TEXT NOT NULL CHECK(trigger_type IN ('MANUAL', 'AUTO_SHUTDOWN', 'CRON', 'PRE_MIGRATION', 'PRE_RESTORE')),
+            retention_category TEXT NOT NULL CHECK(retention_category IN ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY', 'ARCHIVE')),
+            integrity_status TEXT NOT NULL CHECK(integrity_status IN ('OK', 'CORRUPT', 'UNKNOWN')),
+            erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+            bemerkung TEXT
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_backup_created ON backup_history(erstellt_am)`);
+    } catch (e) {
+        if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] backup_history:', e.message);
+    }
 
     // --- Datenintegrität: Duplikate bereinigen + UNIQUE-Indizes ---
     ensureUniqueConstraints(db);
@@ -955,7 +1069,10 @@ function seedDefaultData(db) {
         glaeubiger_id: '',
         sepa_xml_standard: 'pain.008.001.08',
         sepa_pre_notification_standard_tage: '14',
-        matching_auto_skonto_toleranz_tage: '2'
+        matching_auto_skonto_toleranz_tage: '2',
+        backup_interval_hours: '4',
+        backup_auto_on_exit: 'true',
+        backup_retention_days: '7'
     };
     const insertStmt = db.prepare('INSERT OR IGNORE INTO einstellungen (key, value) VALUES (?, ?)');
     const insertTransaction = db.transaction((defs) => {

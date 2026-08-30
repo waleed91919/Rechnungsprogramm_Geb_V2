@@ -39,27 +39,43 @@ function objektBadge(typ, extra = '') {
     return `<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${farben[typ] || ''} ${extra}">${OBJEKT_TYP_LABEL[typ] || typ}</span>`;
 }
 
-function buildObjekteRows(filterQuery = '') {
+function buildObjekteRows(filterQuery = '', statusFilter = 'alle') {
     const OC = window.ObjektController;
     const q = filterQuery.trim().toLowerCase();
-    const match = k => !q ||
-        String(k.name || '').toLowerCase().includes(q) ||
-        String(k.objekt_nr || '').toLowerCase().includes(q) ||
-        String(k.ort || '').toLowerCase().includes(q) ||
-        String(k.raum_nr || '').toLowerCase().includes(q);
+    const matchQuery = (k, typ) => {
+        if (!q) return true;
+        const pfad = OC ? OC.buildPfad(typ, k.id, state.objekte).toLowerCase() : '';
+        return String(k.name || '').toLowerCase().includes(q) ||
+            String(k.objekt_nr || '').toLowerCase().includes(q) ||
+            String(k.raum_nr || '').toLowerCase().includes(q) ||
+            String(k.ort || '').toLowerCase().includes(q) ||
+            String(k.strasse || '').toLowerCase().includes(q) ||
+            String(k.plz || '').toLowerCase().includes(q) ||
+            String(k.raumtyp || '').toLowerCase().includes(q) ||
+            String(k.bodenbelag || '').toLowerCase().includes(q) ||
+            pfad.includes(q);
+    };
+
+    const matchStatus = k => {
+        if (statusFilter === 'aktiv') return k.aktiv !== 0;
+        if (statusFilter === 'inaktiv') return k.aktiv === 0;
+        return true;
+    };
+
+    const match = (k, typ) => matchQuery(k, typ) && matchStatus(k);
 
     const rows = [];
     const lies = [...(state.objekte.liegenschaften || [])].sort((a, b) => String(a.name).localeCompare(String(b.name)));
     for (const l of lies) {
-        if (match(l)) rows.push({ typ: 'LIEGENSCHAFT', knoten: l, ebene: 0 });
+        if (match(l, 'LIEGENSCHAFT')) rows.push({ typ: 'LIEGENSCHAFT', knoten: l, ebene: 0 });
         const gebs = (state.objekte.gebaeude || []).filter(g => g.liegenschaft_id === l.id);
         for (const g of gebs) {
-            if (match(g)) rows.push({ typ: 'GEBAEUDE', knoten: g, ebene: 1 });
+            if (match(g, 'GEBAEUDE')) rows.push({ typ: 'GEBAEUDE', knoten: g, ebene: 1 });
             const etgs = (state.objekte.etagen || []).filter(e => e.gebaeude_id === g.id);
             for (const e of etgs) {
-                if (match(e)) rows.push({ typ: 'ETAGE', knoten: e, ebene: 2 });
+                if (match(e, 'ETAGE')) rows.push({ typ: 'ETAGE', knoten: e, ebene: 2 });
                 for (const r of (state.objekte.raeume || []).filter(r => r.etage_id === e.id)) {
-                    if (match(r)) rows.push({ typ: 'RAUM', knoten: r, ebene: 3 });
+                    if (match(r, 'RAUM')) rows.push({ typ: 'RAUM', knoten: r, ebene: 3 });
                 }
             }
         }
@@ -67,13 +83,16 @@ function buildObjekteRows(filterQuery = '') {
     return { rows, OC };
 }
 
-function renderObjekte(filterQuery = '') {
+function renderObjekte(filterQuery) {
     if (!state.objekte) state.objekte = objekteStateLeer();
     const tbody = document.getElementById('objekte-table-body');
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    const { rows, OC } = buildObjekteRows(filterQuery);
+    const query = filterQuery !== undefined ? filterQuery : (document.getElementById('search-objekte')?.value || '');
+    const statusFilter = document.getElementById('filter-objekte-status')?.value || 'alle';
+
+    const { rows, OC } = buildObjekteRows(query, statusFilter);
 
     rows.forEach(({ typ, knoten, ebene }) => {
         const tr = document.createElement('tr');
@@ -167,6 +186,89 @@ function renderObjekte(filterQuery = '') {
     document.getElementById('kpi-anzahl-gebaeude').innerText = (state.objekte.gebaeude || []).length;
     const flaecheGesamt = (state.objekte.raeume || []).reduce((s, r) => s + (r.einheit === 'm²' ? (parseFloat(r.flaeche) || 0) : 0), 0);
     document.getElementById('kpi-flaeche-gesamt').innerText = Math.round(flaecheGesamt * 100) / 100;
+}
+
+function exportObjekteCSV() {
+    if (!state.objekte) return;
+    const OC = window.ObjektController;
+    const { rows } = buildObjekteRows('', 'alle');
+
+    const escapeCsv = (val) => {
+        const s = String(val == null ? '' : val);
+        if (s.includes(';') || s.includes('"') || s.includes('\n')) {
+            return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+    };
+
+    const header = [
+        'Ebene',
+        'Objekt-Nr',
+        'Name',
+        'Pfad',
+        'Strasse',
+        'PLZ',
+        'Ort',
+        'Flaeche',
+        'Einheit',
+        'Raumtyp',
+        'Bodenbelag',
+        'Empfaenger_Name',
+        'Empfaenger_Art',
+        'Empfaenger_Herkunft',
+        'Status'
+    ];
+
+    const csvLines = [header.join(';')];
+
+    for (const { typ, knoten } of rows) {
+        const empf = OC ? OC.resolveEmpfaenger(typ, knoten.id, state.objekte) : null;
+        let empfName = '';
+        let empfArt = '';
+        let empfQuelle = '';
+        if (empf && empf.kundeId) {
+            const kunde = (state.kunden || []).find(k => k.id === empf.kundeId);
+            empfName = kunde ? kunde.name : `#${empf.kundeId}`;
+            empfArt = empf.art ? (OBJEKT_ART_LABEL[empf.art] || empf.art) : '';
+            empfQuelle = empf.direkt ? 'DIREKT' : `GEERBT_VON_${empf.quelle}`;
+        }
+
+        const pfad = OC ? OC.buildPfad(typ, knoten.id, state.objekte) : knoten.name;
+        const flaeche = typ === 'RAUM' ? (knoten.flaeche || 0) : (OC ? OC.summiereFlaechen(typ, knoten.id, state.objekte) : 0);
+
+        const zeile = [
+            OBJEKT_TYP_LABEL[typ] || typ,
+            knoten.objekt_nr || knoten.raum_nr || '',
+            knoten.name || '',
+            pfad,
+            knoten.strasse || '',
+            knoten.plz || '',
+            knoten.ort || '',
+            String(flaeche).replace('.', ','),
+            knoten.einheit || (typ === 'RAUM' ? 'm²' : ''),
+            knoten.raumtyp || '',
+            knoten.bodenbelag || '',
+            empfName,
+            empfArt,
+            empfQuelle,
+            knoten.aktiv !== 0 ? 'Aktiv' : 'Inaktiv'
+        ];
+
+        csvLines.push(zeile.map(escapeCsv).join(';'));
+    }
+
+    const csvContent = '\uFEFF' + csvLines.join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const datumStr = new Date().toISOString().split('T')[0];
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Objektstruktur_${datumStr}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('Objektstruktur erfolgreich als CSV exportiert.', 'success');
 }
 
 document.getElementById('search-objekte')?.addEventListener('input', (e) => {
@@ -265,12 +367,17 @@ function openObjektModal(ebene, elternId = null, editId = null) {
             document.getElementById('objekt-modal-flaeche').value = knoten.flaeche != null ? knoten.flaeche : 0;
             document.getElementById('objekt-modal-einheit').value = knoten.einheit || 'm²';
             document.getElementById('objekt-modal-raumtyp').value = knoten.raumtyp || '';
+            const bodenInput = document.getElementById('objekt-modal-bodenbelag');
+            if (bodenInput) bodenInput.value = knoten.bodenbelag || '';
             document.getElementById('objekt-modal-notizen').value = knoten.notizen || '';
             document.getElementById('objekt-modal-aktiv').checked = knoten.aktiv !== 0;
             elternVorbelegung = knoten[OBJEKT_ELTERN_KONFIG[ebene]?.feld];
             fuelleKundenSelect(knoten.empfaenger_kunde_id);
             document.getElementById('objekt-modal-empfaenger-art').value = knoten.empfaenger_art || '';
         }
+    } else {
+        const bodenInput = document.getElementById('objekt-modal-bodenbelag');
+        if (bodenInput) bodenInput.value = '';
     }
 
     fuelleElternSelect(ebene, elternVorbelegung);
@@ -324,6 +431,8 @@ async function saveObjektFromModal() {
         payload.flaeche = parseFloat(document.getElementById('objekt-modal-flaeche').value) || 0;
         payload.einheit = document.getElementById('objekt-modal-einheit').value;
         payload.raumtyp = document.getElementById('objekt-modal-raumtyp').value.trim() || null;
+        const bodenVal = document.getElementById('objekt-modal-bodenbelag')?.value;
+        payload.bodenbelag = bodenVal ? bodenVal.trim() || null : null;
     }
 
     const validation = OC.validateKnoten(ebene, payload);
@@ -511,6 +620,7 @@ function renderObjektStammdaten(details) {
     if (odCurrent.typ === 'RAUM') {
         felder.push(['Fläche', `${knoten.flaeche || 0} ${knoten.einheit || 'm²'}`]);
         if (knoten.raumtyp) felder.push(['Raumtyp', knoten.raumtyp]);
+        if (knoten.bodenbelag) felder.push(['Bodenbelag', knoten.bodenbelag]);
     }
     felder.push(['Status', knoten.aktiv !== 0 ? 'Aktiv' : 'Inaktiv']);
 
@@ -604,6 +714,12 @@ function renderObjektStruktur(details) {
                 b.appendChild(s);
                 return b;
             };
+
+            const subKindEbene = { GEBAEUDE: 'ETAGE', ETAGE: 'RAUM', RAUM: null }[typ];
+            if (subKindEbene) {
+                rechts.appendChild(mkBtn('add', OBJEKT_TYP_LABEL[subKindEbene] + ' anlegen', 'text-slate-400 hover:text-green-600 transition-colors', () => openObjektModal(subKindEbene, kind.id)));
+            }
+
             rechts.appendChild(mkBtn('edit', 'Bearbeiten', 'text-slate-400 hover:text-primary transition-colors', () => openObjektModal(typ, null, kind.id)));
             rechts.appendChild(mkBtn('north_east', 'Details', 'text-slate-400 hover:text-primary transition-colors', () => openObjektDetails(typ, kind.id)));
             rechts.appendChild(mkBtn('delete', 'Löschen', 'text-slate-400 hover:text-red-500 transition-colors', () => deleteObjektMitConfirm(typ, kind.id)));

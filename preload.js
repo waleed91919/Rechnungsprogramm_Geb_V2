@@ -26,12 +26,19 @@ contextBridge.exposeInMainWorld('api', {
     getAufmasseByRechnungId: (rechnungId) => ipcRenderer.invoke('db:getAufmasseByRechnungId', rechnungId),
     getAufmasseByProjektId: (projektId) => ipcRenderer.invoke('db:getAufmasseByProjektId', projektId),
 
-    // --- Aufmaß & DA11 ---
+    // --- Aufmaß & GAEB / DA11 ---
     getAufmassBlaetter: (projectId) => ipcRenderer.invoke('db:getAufmassBlaetter', projectId),
     saveAufmassBlatt: (blattData, zeilen) => ipcRenderer.invoke('db:saveAufmassBlatt', blattData, zeilen),
     deleteAufmassBlatt: (blattId) => ipcRenderer.invoke('db:deleteAufmassBlatt', blattId),
     mergeSchlussaufmass: (projectId) => ipcRenderer.invoke('db:mergeSchlussaufmass', projectId),
     exportDA11: (projectId, blattId) => ipcRenderer.invoke('aufmass:exportDA11', projectId, blattId),
+    exportGAEBX31: (projectId, blattId) => ipcRenderer.invoke('aufmass:exportGAEBX31', projectId, blattId),
+    importGAEBX31: (projectId, xmlContent) => ipcRenderer.invoke('aufmass:importGAEBX31', projectId, xmlContent),
+
+    // --- EFB-Preisblätter 221 & 223 (VHB Bund) ---
+    getEfbKalkulation: (projectId) => ipcRenderer.invoke('efb:getKalkulation', projectId),
+    saveEfbProfil: (profilData) => ipcRenderer.invoke('efb:saveProfil', profilData),
+    generateEfbPdf: (payload) => ipcRenderer.invoke('efb:generatePdf', payload),
 
     // --- Nachtragsverwaltung (VOB/B) ---
     getNachtraege: (projectId) => ipcRenderer.invoke('db:getNachtraege', projectId),
@@ -120,6 +127,11 @@ contextBridge.exposeInMainWorld('api', {
 
     saveEinstellung: (key, value) => ipcRenderer.invoke('db:saveEinstellung', key, value),
 
+    // --- Revisionssichere Auto-Backup Engine (GoBD & GFS) ---
+    createBackup: (triggerType, bemerkung) => ipcRenderer.invoke('backup:create', triggerType, bemerkung),
+    getBackupHistory: () => ipcRenderer.invoke('backup:getHistory'),
+    verifyBackup: (backupId) => ipcRenderer.invoke('backup:verify', backupId),
+    restoreBackup: (backupId, bemerkung) => ipcRenderer.invoke('backup:restore', backupId, bemerkung),
     backupDatabase: () => ipcRenderer.invoke('db:backup'),
     restoreDatabase: () => ipcRenderer.invoke('db:restore'),
 

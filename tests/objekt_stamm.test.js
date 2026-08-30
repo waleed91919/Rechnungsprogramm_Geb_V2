@@ -176,5 +176,92 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
         await dbAPI.deleteDocument(docId);
     });
 
+    test('(i) getObjektDetails liefert korrekte Kennzahlen, Flächen und Kinder für alle 4 Ebenen', async () => {
+        const lId = await dbAPI.saveLiegenschaft({ name: 'Details-Liegenschaft' });
+        const gId = await dbAPI.saveGebaeude({ liegenschaft_id: lId, name: 'Details-Gebäude' });
+        const eId = await dbAPI.saveEtage({ gebaeude_id: gId, name: 'Details-Etage' });
+        const rId1 = await dbAPI.saveRaum({ etage_id: eId, name: 'Raum 1', flaeche: 40.5, einheit: 'm²', bodenbelag: 'Fliesen' });
+        const rId2 = await dbAPI.saveRaum({ etage_id: eId, name: 'Raum 2', flaeche: 20.0, einheit: 'm²', bodenbelag: 'Parkett' });
+
+        // Test Raum-Details
+        const raumDetails = await dbAPI.getObjektDetails('RAUM', rId1);
+        assert.equal(raumDetails.knoten.name, 'Raum 1');
+        assert.equal(raumDetails.knoten.bodenbelag, 'Fliesen');
+        assert.equal(raumDetails.kinder.raeume.length, 0, 'Raum darf keine Kinder-Räume haben');
+        assert.equal(raumDetails.kennzahlen.flaecheGesamt, 40.5, 'Fläche des Raums muss genau der Raumfläche entsprechen');
+        assert.equal(raumDetails.kennzahlen.anzahlRaeume, 0);
+
+        // Test Etagen-Details
+        const etgDetails = await dbAPI.getObjektDetails('ETAGE', eId);
+        assert.equal(etgDetails.kinder.raeume.length, 2);
+        assert.equal(etgDetails.kennzahlen.flaecheGesamt, 60.5);
+        assert.equal(etgDetails.kennzahlen.anzahlRaeume, 2);
+
+        // Test Gebäude-Details
+        const gebDetails = await dbAPI.getObjektDetails('GEBAEUDE', gId);
+        assert.equal(gebDetails.kinder.etagen.length, 1);
+        assert.equal(gebDetails.kinder.raeume.length, 2);
+        assert.equal(gebDetails.kennzahlen.anzahlEtagen, 1);
+        assert.equal(gebDetails.kennzahlen.anzahlRaeume, 2);
+        assert.equal(gebDetails.kennzahlen.flaecheGesamt, 60.5);
+
+        // Test Liegenschafts-Details
+        const liegDetails = await dbAPI.getObjektDetails('LIEGENSCHAFT', lId);
+        assert.equal(liegDetails.kinder.gebaeude.length, 1);
+        assert.equal(liegDetails.kinder.etagen.length, 1);
+        assert.equal(liegDetails.kinder.raeume.length, 2);
+        assert.equal(liegDetails.kennzahlen.anzahlGebaeude, 1);
+        assert.equal(liegDetails.kennzahlen.anzahlEtagen, 1);
+        assert.equal(liegDetails.kennzahlen.anzahlRaeume, 2);
+        assert.equal(liegDetails.kennzahlen.flaecheGesamt, 60.5);
+
+        await dbAPI.deleteLiegenschaft(lId);
+    });
+
+    test('(j) Löschschutz: Objektknoten mit Abrechnungsplan-Bezug nicht löschbar', async () => {
+        const lId = await dbAPI.saveLiegenschaft({ name: 'Plan-Liegenschaft' });
+        const gId = await dbAPI.saveGebaeude({ liegenschaft_id: lId, name: 'Plan-Gebäude' });
+        const eId = await dbAPI.saveEtage({ gebaeude_id: gId, name: 'Plan-Etage' });
+        const rId = await dbAPI.saveRaum({ etage_id: eId, name: 'Plan-Raum', flaeche: 30 });
+
+        const planRes = await dbAPI.saveAbrechnungsplan({
+            name: 'Monatliche Büroreinigung',
+            objekt_typ: 'RAUM',
+            objekt_id: rId,
+            empfaenger_kunde_id: kundeId,
+            rhythmus: 'MONATLICH',
+            start_datum: '2026-01-01',
+            abrechnungs_modus: 'PAUSCHALE',
+            pauschale_netto: 250,
+            mwst_satz: 19
+        });
+
+        // Raum, Etage, Gebäude und Liegenschaft dürfen nicht gelöscht werden
+        await assert.rejects(() => dbAPI.deleteRaum(rId), /Abrechnungsplänen/);
+        await assert.rejects(() => dbAPI.deleteEtage(eId), /Abrechnungsplänen/);
+        await assert.rejects(() => dbAPI.deleteGebaeude(gId), /Abrechnungsplänen/);
+        await assert.rejects(() => dbAPI.deleteLiegenschaft(lId), /Abrechnungsplänen/);
+
+        // Nach Löschen des Plans ist Liegenschaft wieder löschbar
+        await dbAPI.deleteAbrechnungsplan(planRes.id);
+        await dbAPI.deleteLiegenschaft(lId);
+    });
+
+    test('(k) Raum-Bodenbelag persistiert sauber und wird aktualisiert', async () => {
+        const lId = await dbAPI.saveLiegenschaft({ name: 'Boden-Liegenschaft' });
+        const gId = await dbAPI.saveGebaeude({ liegenschaft_id: lId, name: 'Boden-Haus' });
+        const eId = await dbAPI.saveEtage({ gebaeude_id: gId, name: 'EG' });
+        const rId = await dbAPI.saveRaum({ etage_id: eId, name: 'Konferenz', flaeche: 50, bodenbelag: 'PVC / Vinyl' });
+
+        const stored = db.prepare('SELECT bodenbelag FROM raeume WHERE id=?').get(rId);
+        assert.equal(stored.bodenbelag, 'PVC / Vinyl');
+
+        await dbAPI.saveRaum({ id: rId, etage_id: eId, name: 'Konferenz', flaeche: 50, bodenbelag: 'Teppich' });
+        const updated = db.prepare('SELECT bodenbelag FROM raeume WHERE id=?').get(rId);
+        assert.equal(updated.bodenbelag, 'Teppich');
+
+        await dbAPI.deleteLiegenschaft(lId);
+    });
+
     console.log('OBJEKT_STAMM_DB_TESTS_PASSED');
 }

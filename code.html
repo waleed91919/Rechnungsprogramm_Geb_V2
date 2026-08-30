@@ -1184,16 +1184,28 @@
 
                 <!-- Toolbar -->
                 <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
-                    <div class="flex items-center gap-2">
+                    <div class="flex flex-wrap items-center gap-2">
                         <div class="relative">
                             <span
                                 class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
                             <input id="search-objekte"
                                 class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-64 placeholder:text-slate-400"
-                                placeholder="Name, Nr. oder Ort suchen..." type="text">
+                                placeholder="Name, Nr., Ort, Raumtyp suchen..." type="text">
                         </div>
+                        <select id="filter-objekte-status" onchange="renderObjekte()"
+                            class="px-3 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-slate-700">
+                            <option value="alle">Alle Status</option>
+                            <option value="aktiv" selected>Nur Aktive</option>
+                            <option value="inaktiv">Nur Inaktive</option>
+                        </select>
                     </div>
                     <div class="flex items-center gap-2">
+                        <button onclick="exportObjekteCSV()" type="button"
+                            class="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-sm font-semibold rounded shadow-sm transition-all"
+                            title="Objektstruktur als CSV exportieren">
+                            <span class="material-symbols-outlined text-[18px] text-slate-600">download</span>
+                            Export CSV
+                        </button>
                         <button onclick="openObjektModal('LIEGENSCHAFT')"
                             class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
                             <span class="material-symbols-outlined text-[18px]">add</span>
@@ -2199,6 +2211,11 @@
                         <span class="material-symbols-outlined text-[18px]">monitoring</span>
                         Controlling & Eingangsrechnungen
                     </button>
+                    <button type="button" onclick="switchProjektTab('efb')" id="pd-tab-btn-efb"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">price_change</span>
+                        EFB-Preisblätter (221/223)
+                    </button>
                 </div>
 
                 <!-- TAB 1: FINANZEN & BELEGE -->
@@ -2346,6 +2363,14 @@
                             <button type="button" onclick="exportProjektDA11()" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg shadow hover:bg-emerald-700 transition-all" title="DA11 Datei nach REB 23.003 exportieren">
                                 <span class="material-symbols-outlined text-[16px]">file_download</span>
                                 DA11 Export
+                            </button>
+                            <button type="button" onclick="exportProjektGAEBX31()" class="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-xs font-bold rounded-lg shadow hover:bg-teal-700 transition-all" title="GAEB DA XML 3.3 Phase X31 Mengenermittlung exportieren">
+                                <span class="material-symbols-outlined text-[16px]">data_object</span>
+                                GAEB X31 Export
+                            </button>
+                            <button type="button" onclick="importProjektGAEBX31()" class="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 border border-teal-200 text-teal-700 text-xs font-bold rounded-lg hover:bg-teal-100 transition-all" title="GAEB DA XML 3.3 Phase X31 Mengenermittlung importieren">
+                                <span class="material-symbols-outlined text-[16px]">file_open</span>
+                                GAEB X31 Import
                             </button>
                             <button type="button" onclick="calculateSchlussaufmassForProjekt()" class="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold rounded-lg hover:bg-indigo-100 transition-all">
                                 <span class="material-symbols-outlined text-[16px]">calculate</span>
@@ -2742,6 +2767,11 @@
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- TAB 6: EFB-PREISBLÄTTER 221 & 223 (VHB BUND) -->
+                <div id="pd-panel-efb" class="pd-tab-panel hidden flex-col gap-6">
+                    <!-- EFBView dynamically renders here -->
                 </div>
             </div>
         </div>
@@ -3551,35 +3581,96 @@
                     </div>
                 </div>
 
-                <!-- Datensicherung / Backup Section -->
+                <!-- Datensicherung / Revisionssichere Auto-Backup Engine (GoBD & GFS) -->
                 <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-                    <div class="p-6 border-b border-slate-200 bg-amber-50/50">
-                        <h3 class="text-base font-semibold text-amber-800 flex items-center gap-2">
-                            <span class="material-symbols-outlined text-[20px] text-amber-600">backup</span>
-                            Datensicherung (Backup)
-                        </h3>
+                    <div class="p-6 border-b border-slate-200 bg-amber-50/50 flex flex-wrap items-center justify-between gap-4">
+                        <div>
+                            <h3 class="text-base font-semibold text-amber-800 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[22px] text-amber-600">verified_user</span>
+                                Revisionssichere Auto-Backup Engine (GoBD &amp; GFS)
+                            </h3>
+                            <p class="text-xs text-amber-700/80 mt-0.5">
+                                Unterbrechungsfreie Online-Snapshots, Gzip-Kompression, SHA-256 Prüfsummen und Grandfather-Father-Son Aufbewahrungsfristen
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="createDatabaseBackup()"
+                                class="px-4 py-2 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 shadow-md shadow-amber-600/20 transition-all flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">cloud_upload</span>
+                                Jetzt sichern (Snapshot &amp; Gzip)
+                            </button>
+                            <button type="button" onclick="exportManualBackup()"
+                                class="px-3 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">file_download</span>
+                                Export (.sqlite)
+                            </button>
+                            <button type="button" onclick="openRestoreModal()"
+                                class="px-3 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">settings_backup_restore</span>
+                                Datei wiederherstellen
+                            </button>
+                        </div>
                     </div>
-                    <div class="p-6">
-                        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-                            <div class="flex-1">
-                                <p class="text-sm font-medium text-slate-800 mb-1">Sichern Sie Ihre Daten regelmäßig</p>
-                                <p class="text-xs text-slate-500 leading-relaxed">
-                                    Erstellen Sie eine Kopie Ihrer gesamten Datenbank (Rechnungen, Kunden, Artikel). 
-                                    Speichern Sie dieses Backup an einem sicheren Ort wie einem USB-Stick oder in Ihrem Cloud-Speicher (Dropbox, OneDrive etc.), 
-                                    um Datenverlust bei Hardware-Defekten vorzubeugen.
-                                </p>
+                    <div class="p-6 space-y-6">
+                        <!-- Auto-Backup Konfiguration -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-800">Automatisches Hintergrund-Intervall</p>
+                                    <p class="text-xs text-slate-500">Regelmäßige Online-Sicherungen im laufenden Betrieb.</p>
+                                </div>
+                                <select id="setting-backup-interval" class="w-36 px-3 py-1.5 bg-white border border-slate-300 rounded-md text-xs font-semibold focus:ring-2 focus:ring-primary/20">
+                                    <option value="2">Alle 2 Stunden</option>
+                                    <option value="4">Alle 4 Stunden (Standard)</option>
+                                    <option value="8">Alle 8 Stunden</option>
+                                    <option value="24">Einmal täglich (24h)</option>
+                                    <option value="0">Deaktiviert</option>
+                                </select>
                             </div>
-                            <div class="flex flex-col items-center gap-2 w-full md:w-auto">
-                                <button type="button" onclick="createDatabaseBackup()"
-                                    class="w-full px-6 py-3 bg-amber-600 text-white font-semibold rounded-lg hover:bg-amber-700 shadow-lg shadow-amber-600/20 transition-all flex items-center justify-center gap-2 whitespace-nowrap">
-                                    <span class="material-symbols-outlined text-[20px]">cloud_upload</span>
-                                    Backup erstellen
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-800">Auto-Backup beim Schließen</p>
+                                    <p class="text-xs text-slate-500">Erstellt vor dem Beenden einen finalen Snapshot.</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="setting-backup-auto-exit" class="sr-only peer" checked>
+                                    <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Backup Historie Tabelle -->
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                    <span class="material-symbols-outlined text-[16px] text-amber-600">history</span>
+                                    Archivierte GoBD-Sicherungen &amp; GFS-Historie
+                                </h4>
+                                <button type="button" onclick="loadBackupHistory()" class="text-xs text-primary font-semibold hover:underline flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[14px]">refresh</span>
+                                    Aktualisieren
                                 </button>
-                                <button type="button" onclick="openRestoreModal()"
-                                    class="text-slate-400 hover:text-slate-600 text-xs font-medium transition-colors py-1 flex items-center gap-1">
-                                    <span class="material-symbols-outlined text-[14px]">history</span>
-                                    Backup wiederherstellen
-                                </button>
+                            </div>
+                            <div class="overflow-x-auto rounded-lg border border-slate-200">
+                                <table class="w-full text-left text-xs whitespace-nowrap">
+                                    <thead class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+                                        <tr>
+                                            <th class="px-3 py-2.5">Dateiname</th>
+                                            <th class="px-3 py-2.5">Erstellt am</th>
+                                            <th class="px-3 py-2.5">Typ / Auslöser</th>
+                                            <th class="px-3 py-2.5">GFS Generation</th>
+                                            <th class="px-3 py-2.5 text-right">Größe (Gz / Raw)</th>
+                                            <th class="px-3 py-2.5">SHA-256 Hash</th>
+                                            <th class="px-3 py-2.5 text-right">Aktionen</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="backup-history-body" class="divide-y divide-slate-100 bg-white">
+                                        <!-- JS populated -->
+                                    </tbody>
+                                </table>
+                                <div id="backup-history-empty" class="p-6 text-center text-slate-400 text-xs">
+                                    Noch keine archivierten Backups vorhanden. Klicken Sie oben auf "Jetzt sichern".
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -3927,7 +4018,7 @@
                                 class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
                         </div>
 
-                        <div id="objekt-modal-raum-felder" class="grid grid-cols-3 gap-4">
+                        <div id="objekt-modal-raum-felder" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Fläche</label>
                                 <input type="number" id="objekt-modal-flaeche" min="0" step="0.01" value="0"
@@ -3943,9 +4034,40 @@
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Raumtyp <span class="text-slate-400 font-normal">(frei)</span></label>
-                                <input type="text" id="objekt-modal-raumtyp"
+                                <input type="text" id="objekt-modal-raumtyp" list="raumtyp-suggestions"
                                     class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm"
                                     placeholder="BUERO, TREPPE, ...">
+                                <datalist id="raumtyp-suggestions">
+                                    <option value="BUERO">Büroraum</option>
+                                    <option value="BESPRECHUNG">Besprechungsraum</option>
+                                    <option value="SANITAER">Sanitär / WC</option>
+                                    <option value="TREPPENHAUS">Treppenhaus</option>
+                                    <option value="FLUR">Flur / Verkehrsfläche</option>
+                                    <option value="KUECHE">Küche / Teeküche</option>
+                                    <option value="LAGER">Lager / Archiv</option>
+                                    <option value="TECHNIK">Technik / Heizraum</option>
+                                    <option value="VERKAUF">Verkaufsfläche</option>
+                                    <option value="AUSSENBEREICH">Außenbereich</option>
+                                    <option value="WERKSTATT">Werkstatt</option>
+                                    <option value="TIEFGARAGE">Tiefgarage / Stellplatz</option>
+                                </datalist>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Bodenbelag <span class="text-slate-400 font-normal">(FM)</span></label>
+                                <input type="text" id="objekt-modal-bodenbelag" list="bodenbelag-suggestions"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm"
+                                    placeholder="Fliesen, PVC, ...">
+                                <datalist id="bodenbelag-suggestions">
+                                    <option value="Fliesen">Fliesen / Keramik</option>
+                                    <option value="Teppich">Teppich / Nadelvlies</option>
+                                    <option value="PVC / Vinyl">PVC / Vinyl</option>
+                                    <option value="Linoleum">Linoleum</option>
+                                    <option value="Parkett">Parkett</option>
+                                    <option value="Laminat">Laminat</option>
+                                    <option value="Beton / Estrich">Beton / Estrich</option>
+                                    <option value="Naturstein">Naturstein / Marmor</option>
+                                    <option value="Glas">Glas / Fenster</option>
+                                </datalist>
                             </div>
                         </div>
 
@@ -5761,12 +5883,15 @@
     <script src="js/state.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/da11.js"></script>
+    <script src="js/gaeb-x31.js"></script>
     <script src="models/InvoiceModel.js"></script>
     <script src="controllers/InvoiceController.js"></script>
     <script src="views/InvoiceView.js"></script>
     <script src="models/AufmassModel.js"></script>
     <script src="controllers/AufmassController.js"></script>
     <script src="views/AufmassView.js"></script>
+    <script src="controllers/EFBController.js"></script>
+    <script src="views/EFBView.js"></script>
     <script src="controllers/NachtragController.js"></script>
     <script src="controllers/BautagebuchController.js"></script>
     <script src="controllers/ControllingController.js"></script>

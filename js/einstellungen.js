@@ -25,6 +25,17 @@ function loadEinstellungenToForm() {
         document.getElementById('setting-unternehmensart').value = state.einstellungen.unternehmensart || 'handwerk';
     }
 
+    // Auto-Backup Einstellungen
+    if (document.getElementById('setting-backup-interval')) {
+        document.getElementById('setting-backup-interval').value = state.einstellungen.backup_interval_hours || '4';
+    }
+    if (document.getElementById('setting-backup-auto-exit')) {
+        document.getElementById('setting-backup-auto-exit').checked = state.einstellungen.backup_auto_on_exit !== 'false';
+    }
+    if (typeof loadBackupHistory === 'function') {
+        loadBackupHistory();
+    }
+
     if (document.getElementById('setting-email-text-rechnung')) {
         document.getElementById('setting-email-text-rechnung').value = state.einstellungen.email_text_rechnung || '';
         document.getElementById('setting-email-text-mahnung').value = state.einstellungen.email_text_mahnung || '';
@@ -74,6 +85,12 @@ async function saveEinstellungen() {
     if (document.getElementById('setting-unternehmensart')) {
         state.einstellungen.unternehmensart = document.getElementById('setting-unternehmensart').value;
     }
+    if (document.getElementById('setting-backup-interval')) {
+        state.einstellungen.backup_interval_hours = document.getElementById('setting-backup-interval').value;
+    }
+    if (document.getElementById('setting-backup-auto-exit')) {
+        state.einstellungen.backup_auto_on_exit = document.getElementById('setting-backup-auto-exit').checked ? 'true' : 'false';
+    }
     if (document.getElementById('setting-email-text-rechnung')) {
         state.einstellungen.email_text_rechnung = document.getElementById('setting-email-text-rechnung').value;
         state.einstellungen.email_text_mahnung = document.getElementById('setting-email-text-mahnung').value;
@@ -98,6 +115,21 @@ async function saveEinstellungen() {
 
         // Allgemeine Einstellungen speichern
         await window.api.saveEinstellung('manuelleRechnungsnummer', state.einstellungen.manuelleRechnungsnummer);
+        if (state.einstellungen.rechnungsvorlage) {
+            await window.api.saveEinstellung('rechnungsvorlage', state.einstellungen.rechnungsvorlage);
+        }
+        if (state.einstellungen.eingabemodus) {
+            await window.api.saveEinstellung('eingabemodus', state.einstellungen.eingabemodus);
+        }
+        if (state.einstellungen.unternehmensart) {
+            await window.api.saveEinstellung('unternehmensart', state.einstellungen.unternehmensart);
+        }
+        if (state.einstellungen.backup_interval_hours !== undefined) {
+            await window.api.saveEinstellung('backup_interval_hours', state.einstellungen.backup_interval_hours);
+        }
+        if (state.einstellungen.backup_auto_on_exit !== undefined) {
+            await window.api.saveEinstellung('backup_auto_on_exit', state.einstellungen.backup_auto_on_exit);
+        }
         if (state.einstellungen.rechnungsvorlage) {
             await window.api.saveEinstellung('rechnungsvorlage', state.einstellungen.rechnungsvorlage);
         }
@@ -157,15 +189,136 @@ function removeLogo() {
 
 async function createDatabaseBackup() {
     try {
-        const result = await window.api.backupDatabase();
-        if (result.success) {
-            showToast(`Backup erfolgreich erstellt unter: ${result.path}`, 'success');
-        } else if (!result.cancelled) {
-            showToast('Fehler beim Erstellen des Backups.', 'error');
+        if (window.api && window.api.createBackup) {
+            const result = await window.api.createBackup('MANUAL', 'Manuelle Sicherung durch Benutzer');
+            if (result && result.success) {
+                showToast(`GoBD-Backup erfolgreich erstellt: ${result.fileName} (${(result.fileSize / 1024).toFixed(1)} KB)`, 'success');
+                loadBackupHistory();
+                return;
+            }
         }
+        // Fallback to dialog backup
+        await exportManualBackup();
     } catch (e) {
         console.error('Backup error:', e);
-        showToast('Fehler beim Erstellen des Backups.', 'error');
+        showToast('Fehler beim Erstellen des Backups: ' + e.message, 'error');
+    }
+}
+
+async function exportManualBackup() {
+    try {
+        if (window.api && window.api.backupDatabase) {
+            const result = await window.api.backupDatabase();
+            if (result.success) {
+                showToast(`Backup-Export erfolgreich: ${result.path}`, 'success');
+                loadBackupHistory();
+            } else if (!result.cancelled) {
+                showToast('Fehler beim Exportieren des Backups.', 'error');
+            }
+        }
+    } catch (e) {
+        console.error('Export error:', e);
+        showToast('Fehler beim Exportieren: ' + e.message, 'error');
+    }
+}
+
+async function loadBackupHistory() {
+    const tbody = document.getElementById('backup-history-body');
+    const emptyEl = document.getElementById('backup-history-empty');
+    if (!tbody) return;
+
+    try {
+        let history = [];
+        if (window.api && window.api.getBackupHistory) {
+            history = await window.api.getBackupHistory();
+        }
+
+        if (!history || history.length === 0) {
+            tbody.innerHTML = '';
+            if (emptyEl) emptyEl.classList.remove('hidden');
+            return;
+        }
+
+        if (emptyEl) emptyEl.classList.add('hidden');
+        tbody.innerHTML = '';
+
+        history.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.className = 'hover:bg-slate-50 transition-colors';
+
+            const d = new Date(item.erstellt_am);
+            const dateStr = isNaN(d.getTime()) ? item.erstellt_am : d.toLocaleString('de-DE');
+
+            const gfsBadge = item.gfs_generation === 'G' ? '<span class="px-2 py-0.5 rounded bg-purple-100 text-purple-700 font-bold text-[10px]">Großvater (Monat)</span>' :
+                             item.gfs_generation === 'F' ? '<span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 font-bold text-[10px]">Vater (Woche)</span>' :
+                             item.gfs_generation === 'S' ? '<span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold text-[10px]">Sohn (Tag)</span>' :
+                             '<span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-medium text-[10px]">Standard</span>';
+
+            const triggerBadge = item.trigger_typ === 'AUTO_INTERVAL' ? '<span class="text-blue-600 font-semibold">Auto (Intervall)</span>' :
+                                 item.trigger_typ === 'AUTO_SHUTDOWN' ? '<span class="text-amber-600 font-semibold">Auto (Beenden)</span>' :
+                                 item.trigger_typ === 'RESTORE_ROLLBACK' ? '<span class="text-rose-600 font-semibold">Rollback-Sicherung</span>' :
+                                 '<span class="text-slate-700 font-semibold">Manuell</span>';
+
+            const sizeGz = item.file_size_bytes ? (item.file_size_bytes / 1024).toFixed(1) + ' KB' : '-';
+            const sizeRaw = item.uncompressed_size_bytes ? (item.uncompressed_size_bytes / 1024).toFixed(1) + ' KB' : '-';
+            const hashShort = item.sha256_hash ? item.sha256_hash.substring(0, 10) + '...' : '-';
+
+            tr.innerHTML = `
+                <td class="px-3 py-2 font-mono text-xs font-semibold text-slate-800">${item.dateiname || 'backup.sqlite.gz'}</td>
+                <td class="px-3 py-2 text-slate-600 text-xs">${dateStr}</td>
+                <td class="px-3 py-2 text-xs">${triggerBadge}</td>
+                <td class="px-3 py-2 text-xs">${gfsBadge}</td>
+                <td class="px-3 py-2 text-right font-mono text-xs">${sizeGz} <span class="text-slate-400">(${sizeRaw})</span></td>
+                <td class="px-3 py-2 font-mono text-[11px] text-slate-500" title="${item.sha256_hash || ''}">${hashShort}</td>
+                <td class="px-3 py-2 text-right space-x-1.5">
+                    <button type="button" onclick="verifyBackupItem(${item.id})" class="px-2.5 py-1 text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded transition-colors" title="Integrität und SHA-256 Checksumme prüfen">
+                        Prüfen
+                    </button>
+                    <button type="button" onclick="restoreBackupItem(${item.id})" class="px-2.5 py-1 text-[11px] font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded shadow-xs transition-colors" title="Datenbank aus diesem Backup wiederherstellen">
+                        Wiederherstellen
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    } catch (err) {
+        console.error('Fehler beim Laden der Backup-Historie:', err);
+    }
+}
+
+async function verifyBackupItem(backupId) {
+    try {
+        if (!window.api || !window.api.verifyBackup) return;
+        const res = await window.api.verifyBackup(backupId);
+        if (res.valid) {
+            showToast(`✓ Integritätsprüfung erfolgreich! SHA-256 Hash stimmt überein (${(res.fileSize / 1024).toFixed(1)} KB).`, 'success');
+        } else {
+            showToast(`⚠ Integritätsprüfung fehlgeschlagen: ${res.reason || 'Ungültige Checksumme'}`, 'error');
+        }
+    } catch (e) {
+        console.error('Verify error:', e);
+        showToast('Fehler bei der Integritätsprüfung: ' + e.message, 'error');
+    }
+}
+
+async function restoreBackupItem(backupId) {
+    if (!confirm('Möchten Sie die Datenbank wirklich aus diesem Backup wiederherstellen? Vor dem Wiederherstellen wird automatisch ein Sicherheits-Snapshot erstellt.')) {
+        return;
+    }
+    try {
+        if (!window.api || !window.api.restoreBackup) return;
+        const res = await window.api.restoreBackup(backupId, 'Wiederherstellung aus Backup-Historie');
+        if (res.success) {
+            showToast('✓ Datenbank erfolgreich wiederhergestellt! Das System wird aktualisiert...', 'success');
+            setTimeout(() => {
+                if (window.location && window.location.reload) window.location.reload();
+            }, 1000);
+        } else {
+            showToast('Fehler bei der Wiederherstellung: ' + (res.error || 'Unbekannt'), 'error');
+        }
+    } catch (e) {
+        console.error('Restore error:', e);
+        showToast('Fehler bei der Wiederherstellung: ' + e.message, 'error');
     }
 }
 

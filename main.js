@@ -327,6 +327,123 @@ function setupIpc() {
         return { success: false, cancelled: true };
     }));
 
+    // --- GAEB DA XML 3.3 Phase X31 (Mengenermittlung nach REB 23.003) ---
+    ipcMain.handle('aufmass:exportGAEBX31', wrapHandler(async (e, projectId, blattId = null) => {
+        const projekt = (await dbAPI.getFullState()).projekte.find(p => p.id === projectId) || { name: 'Projekt' };
+        const xmlContent = await dbAPI.exportGAEBX31(projectId, blattId);
+
+        const { dialog } = require('electron');
+        const win = BrowserWindow.fromWebContents(e.sender);
+        const { filePath } = await dialog.showSaveDialog(win, {
+            title: 'GAEB DA XML 3.3 Phase X31 (REB 23.003) Mengenermittlung speichern',
+            defaultPath: path.join(app.getPath('documents'), `${(projekt.name || 'Aufmass').replace(/[^a-zA-Z0-9]/g, '_')}_Mengenermittlung.x31`),
+            filters: [
+                { name: 'GAEB DA XML 3.3 Phase X31 (*.x31, *.xml)', extensions: ['x31', 'xml'] },
+                { name: 'Alle Dateien (*.*)', extensions: ['*'] }
+            ]
+        });
+
+        if (filePath) {
+            const fs = require('fs');
+            fs.writeFileSync(filePath, xmlContent, 'utf-8');
+            focusWin(win);
+            return { success: true, filePath, xml: xmlContent };
+        }
+        focusWin(win);
+        return { success: false, cancelled: true };
+    }));
+
+    ipcMain.handle('aufmass:importGAEBX31', wrapHandler(async (e, projectId, xmlContent = null) => {
+        const { dialog } = require('electron');
+        const win = BrowserWindow.fromWebContents(e.sender);
+
+        let content = xmlContent;
+        if (!content) {
+            const { filePaths } = await dialog.showOpenDialog(win, {
+                title: 'GAEB X31 Mengenermittlung importieren',
+                properties: ['openFile'],
+                filters: [
+                    { name: 'GAEB DA XML Phase X31 (*.x31, *.xml)', extensions: ['x31', 'xml'] },
+                    { name: 'Alle Dateien (*.*)', extensions: ['*'] }
+                ]
+            });
+            if (filePaths && filePaths.length > 0) {
+                const fs = require('fs');
+                content = fs.readFileSync(filePaths[0], 'utf-8');
+            } else {
+                focusWin(win);
+                return { success: false, cancelled: true };
+            }
+        }
+
+        const result = await dbAPI.importGAEBX31(projectId, content);
+        focusWin(win);
+        return result;
+    }));
+
+    // --- EFB-Preisblätter 221 & 223 (VHB Bund) ---
+    ipcMain.handle('efb:getKalkulation', wrapHandler(async (e, projectId) => {
+        if (!projectId) throw new Error('Projekt-ID fehlt');
+        return await dbAPI.getEfbKalkulation(projectId);
+    }));
+
+    ipcMain.handle('efb:saveProfil', wrapHandler(async (e, profilData) => {
+        if (!profilData) throw new Error('Profildaten fehlen');
+        return await dbAPI.saveEfbProfile(profilData);
+    }));
+
+    ipcMain.handle('efb:generatePdf', wrapHandler(async (e, payload = {}) => {
+        const { dialog } = require('electron');
+        const win = BrowserWindow.fromWebContents(e.sender);
+        const { projectId, formblatt = '221', html, defaultName } = payload;
+
+        const defaultFileName = defaultName || `EFB_${formblatt}_Projekt.pdf`;
+        const { filePath } = await dialog.showSaveDialog(win, {
+            title: `EFB-Preisblatt ${formblatt} als PDF speichern`,
+            defaultPath: path.join(app.getPath('documents'), defaultFileName),
+            filters: [{ name: 'PDF Dateien', extensions: ['pdf'] }]
+        });
+
+        if (!filePath) {
+            focusWin(win);
+            return { success: false, cancelled: true };
+        }
+
+        const isLandscape = formblatt === '223';
+        const pdfWin = new BrowserWindow({
+            show: false,
+            width: isLandscape ? 1400 : 900,
+            height: isLandscape ? 900 : 1400,
+            webPreferences: { nodeIntegration: false, contextIsolation: true }
+        });
+
+        await pdfWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(html || '<h1>EFB Preisblatt</h1>')}`);
+        const pdfBuffer = await pdfWin.webContents.printToPDF({
+            printBackground: true,
+            pageSize: 'A4',
+            landscape: isLandscape,
+            margins: { marginType: 'custom', top: 0.3, bottom: 0.3, left: 0.4, right: 0.4 }
+        });
+        pdfWin.close();
+
+        const fs = require('fs');
+        fs.writeFileSync(filePath, pdfBuffer);
+
+        appendAuditLog({
+            entityType: 'PROJECT',
+            entityId: Number(projectId) || 0,
+            action: 'EFB_PDF_EXPORT',
+            details: {
+                formblatt,
+                filePath,
+                bytes: pdfBuffer.length
+            }
+        });
+
+        focusWin(win);
+        return { success: true, filePath };
+    }));
+
     // --- Nachtragsverwaltung (VOB/B) ---
     ipcMain.handle('db:getNachtraege', wrapHandler(async (e, projectId) => {
         return await dbAPI.getNachtraege(projectId);
@@ -405,41 +522,44 @@ function setupIpc() {
     }));
 
     ipcMain.handle('db:deleteLiegenschaft', wrapHandler(async (e, id) => {
-        if (typeof id !== 'number') throw new Error('Ungültige Liegenschaft-ID');
-        return await dbAPI.deleteLiegenschaft(id);
+        const numId = Number(id);
+        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Liegenschaft-ID');
+        return await dbAPI.deleteLiegenschaft(numId);
     }));
 
     ipcMain.handle('db:saveGebaeude', wrapHandler(async (e, data) => {
         if (!data || typeof data !== 'object' || !data.name || !String(data.name).trim()) {
             throw new Error('Ungültige Gebäude-Daten');
         }
-        if (typeof data.liegenschaft_id !== 'number') throw new Error('Ungültige Gebäude-Daten');
+        if (data.liegenschaft_id == null || !Number.isInteger(Number(data.liegenschaft_id))) throw new Error('Ungültige Gebäude-Daten');
         return await dbAPI.saveGebaeude(data);
     }));
 
     ipcMain.handle('db:deleteGebaeude', wrapHandler(async (e, id) => {
-        if (typeof id !== 'number') throw new Error('Ungültige Gebäude-ID');
-        return await dbAPI.deleteGebaeude(id);
+        const numId = Number(id);
+        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Gebäude-ID');
+        return await dbAPI.deleteGebaeude(numId);
     }));
 
     ipcMain.handle('db:saveEtage', wrapHandler(async (e, data) => {
         if (!data || typeof data !== 'object' || !data.name || !String(data.name).trim()) {
             throw new Error('Ungültige Etagen-Daten');
         }
-        if (typeof data.gebaeude_id !== 'number') throw new Error('Ungültige Etagen-Daten');
+        if (data.gebaeude_id == null || !Number.isInteger(Number(data.gebaeude_id))) throw new Error('Ungültige Etagen-Daten');
         return await dbAPI.saveEtage(data);
     }));
 
     ipcMain.handle('db:deleteEtage', wrapHandler(async (e, id) => {
-        if (typeof id !== 'number') throw new Error('Ungültige Etage-ID');
-        return await dbAPI.deleteEtage(id);
+        const numId = Number(id);
+        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Etage-ID');
+        return await dbAPI.deleteEtage(numId);
     }));
 
     ipcMain.handle('db:saveRaum', wrapHandler(async (e, data) => {
         if (!data || typeof data !== 'object' || !data.name || !String(data.name).trim()) {
             throw new Error('Ungültige Raum-Daten');
         }
-        if (typeof data.etage_id !== 'number') throw new Error('Ungültige Raum-Daten');
+        if (data.etage_id == null || !Number.isInteger(Number(data.etage_id))) throw new Error('Ungültige Raum-Daten');
         if (data.flaeche != null && data.flaeche !== '' && (isNaN(parseFloat(data.flaeche)) || parseFloat(data.flaeche) < 0)) {
             throw new Error('Ungültige Fläche');
         }
@@ -447,20 +567,23 @@ function setupIpc() {
     }));
 
     ipcMain.handle('db:deleteRaum', wrapHandler(async (e, id) => {
-        if (typeof id !== 'number') throw new Error('Ungültige Raum-ID');
-        return await dbAPI.deleteRaum(id);
+        const numId = Number(id);
+        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Raum-ID');
+        return await dbAPI.deleteRaum(numId);
     }));
 
     ipcMain.handle('db:getObjektDetails', wrapHandler(async (e, objektTyp, objektId) => {
         if (!OBJEKT_TYPEN.includes(objektTyp)) throw new Error('Ungültiger Objekttyp');
-        if (typeof objektId !== 'number') throw new Error('Ungültige Objekt-ID');
-        return await dbAPI.getObjektDetails(objektTyp, objektId);
+        const numId = Number(objektId);
+        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Objekt-ID');
+        return await dbAPI.getObjektDetails(objektTyp, numId);
     }));
 
     ipcMain.handle('db:getObjektHistorie', wrapHandler(async (e, objektTyp, objektId, optionen = {}) => {
         if (!OBJEKT_TYPEN.includes(objektTyp)) throw new Error('Ungültiger Objekttyp');
-        if (typeof objektId !== 'number') throw new Error('Ungültige Objekt-ID');
-        return await dbAPI.getObjektHistorie(objektTyp, objektId, optionen.includeKinder !== false);
+        const numId = Number(objektId);
+        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Objekt-ID');
+        return await dbAPI.getObjektHistorie(objektTyp, numId, optionen.includeKinder !== false);
     }));
 
     // --- Dauerrechnungen (F2) ---
@@ -738,7 +861,26 @@ function setupIpc() {
         }
     };
 
-    // Backup
+    // --- Revisionssichere Auto-Backup Engine (GoBD & GFS) ---
+    ipcMain.handle('backup:create', wrapHandler(async (event, triggerType = 'MANUAL', bemerkung = '') => {
+        return await dbAPI.createBackup(triggerType, bemerkung);
+    }));
+
+    ipcMain.handle('backup:getHistory', wrapHandler(async () => {
+        return await dbAPI.getBackupHistory();
+    }));
+
+    ipcMain.handle('backup:verify', wrapHandler(async (event, backupId) => {
+        if (!backupId) throw new Error('Backup-ID fehlt für die Prüfung.');
+        return await dbAPI.verifyBackup(backupId);
+    }));
+
+    ipcMain.handle('backup:restore', wrapHandler(async (event, backupId, bemerkung = '') => {
+        if (!backupId) throw new Error('Backup-ID fehlt für die Wiederherstellung.');
+        return await dbAPI.restoreBackup(backupId, bemerkung);
+    }));
+
+    // Backup (Dialog-Export)
     ipcMain.handle('db:backup', wrapHandler(async (event) => {
         const { dialog } = require('electron');
         const win = BrowserWindow.fromWebContents(event.sender);
@@ -747,19 +889,19 @@ function setupIpc() {
         const { filePath } = await dialog.showSaveDialog(win, {
             title: 'Datenbank-Backup speichern',
             defaultPath: defaultPath,
-            filters: [{ name: 'SQLite Datenbank', extensions: ['sqlite'] }]
+            filters: [{ name: 'SQLite Datenbank (*.sqlite, *.sqlite.gz)', extensions: ['sqlite', 'gz'] }]
         });
 
         if (filePath) {
-            await dbAPI.backup(filePath);
+            const result = await dbAPI.backup(filePath);
             focusWin(win);
-            return { success: true, path: filePath };
+            return { success: true, path: filePath, ...result };
         }
         focusWin(win);
         return { success: false, cancelled: true };
     }));
 
-    // Restore
+    // Restore (Dialog-Import)
     ipcMain.handle('db:restore', wrapHandler(async (event) => {
         const { dialog } = require('electron');
         const win = BrowserWindow.fromWebContents(event.sender);
@@ -767,13 +909,13 @@ function setupIpc() {
         const { filePaths } = await dialog.showOpenDialog(win, {
             title: 'Backup-Datei zum Wiederherstellen auswählen',
             properties: ['openFile'],
-            filters: [{ name: 'SQLite Datenbank', extensions: ['sqlite'] }]
+            filters: [{ name: 'SQLite Datenbank (*.sqlite, *.sqlite.gz)', extensions: ['sqlite', 'gz', 'db'] }]
         });
 
         if (filePaths && filePaths.length > 0) {
-            await dbAPI.restore(filePaths[0]);
+            const result = await dbAPI.restore(filePaths[0]);
             focusWin(win);
-            return { success: true };
+            return { success: true, ...result };
         }
         focusWin(win);
         return { success: false, cancelled: true };
@@ -980,7 +1122,34 @@ function setupIpc() {
             return { success: false, error: err.message || String(err) };
         }
     }));
+
+    // Starte automatischen Backup-Scheduler falls konfiguriert
+    try {
+        const intervalRow = db.prepare("SELECT value FROM einstellungen WHERE key='backup_interval_hours'").get();
+        const intervalHours = intervalRow ? parseFloat(intervalRow.value) : 4;
+        if (intervalHours > 0 && dbAPI.getBackupService) {
+            dbAPI.getBackupService().startAutoScheduler(intervalHours);
+        }
+    } catch (schedErr) {
+        console.warn('[Auto-Backup Scheduler] Konnte Scheduler nicht starten:', schedErr.message);
+    }
 }
+
+let isQuittingApp = false;
+app.on('before-quit', async (event) => {
+    if (isQuittingApp) return;
+    try {
+        const { db, dbAPI } = require('./db');
+        const autoExitRow = db.prepare("SELECT value FROM einstellungen WHERE key='backup_auto_on_exit'").get();
+        if (!autoExitRow || autoExitRow.value === 'true' || autoExitRow.value === '1') {
+            console.log('[Auto-Backup] Erstelle Sicherung beim Beenden der Anwendung...');
+            await dbAPI.createBackup('AUTO_SHUTDOWN', 'Automatisches Backup beim Beenden der Anwendung');
+        }
+    } catch (e) {
+        console.warn('[Auto-Backup on Exit] Warnung:', e.message);
+    }
+    isQuittingApp = true;
+});
 
 app.whenReady().then(() => {
     setupIpc();

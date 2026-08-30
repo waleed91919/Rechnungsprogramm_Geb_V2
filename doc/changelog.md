@@ -1,5 +1,40 @@
 # Changelog / Fortschritt
 
+## 30.08.2026 (Release 1.0.6: Phase 1 EFB-Preisblätter 221/223, GAEB DA XML 3.3 Phase X31 & Auto-Backup Engine)
+- **EFB-Preisblätter 221 & 223 (VHB Bund / BMWSB):**
+  - [`controllers/EFBController.js`](../controllers/EFBController.js) & [`views/EFBView.js`](../views/EFBView.js): Vollständige Zuschlagskalkulations- und Verprobungsengine nach VHB 2024/2026.
+  - Mittellohn-, Kalkulationslohn- und Verrechnungslohnermittlung sowie 5-spaltige Zuschlagsmatrix (Lohn, Stoffe, Geräte, Sonstige, Nachunternehmer).
+  - Aufgliederung der Einheitspreise (EFB 223) mit Cent-genauer Verprobung gegen Formblatt 221 ($\Delta = 0{,}00\text{ €}$).
+  - Druckfertiger, amtlicher HTML/PDF-Export (EFB 221 DIN A4 Hochformat, EFB 223 DIN A4 Querformat).
+- **GAEB DA XML 3.3 Datenaustauschphase X31 (Mengenermittlung nach REB 23.003):**
+  - [`js/gaeb-x31.js`](../js/gaeb-x31.js): Konforme Generierung und Parser für GAEB DA XML 3.3 X31 mit `<QtyDeterm>`, `<QDetermItem>` und `<QTakeoff>`.
+  - Mathematischer Formelevaluator für REB-Formeln 01–05, 23 und 91.
+  - Nahtlose Verknüpfung mit Projekt-Aufmaßblättern.
+- **Revisionssichere Auto-Backup & Retention Engine (GoBD & GFS):**
+  - [`main/backup.js`](../main/backup.js) & [`main/backup-service.js`](../main/backup-service.js): Unterbrechungsfreies Online-Snapshot-Backup via `better-sqlite3` mit `PRAGMA integrity_check` und `PRAGMA wal_checkpoint(TRUNCATE)`.
+  - Gzip-Kompression, SHA-256 Checksummen-Erstellung, lückenlose GoBD-Audit-Protokollierung.
+  - Grandfather-Father-Son (GFS) Retention Policy mit automatischem Pruning und Disaster-Recovery-Assistent.
+- **UI-Integration & Einstellungen:**
+  - EFB-Kalkulationstab und GAEB X31 Export/Import im Projektbereich ([`js/projekte.js`](../js/projekte.js), [`code.html`](../code.html)).
+  - Backup- und Disaster-Recovery-Management in den Einstellungen ([`js/einstellungen.js`](../js/einstellungen.js), [`code.html`](../code.html)).
+- **Tests:** Neue Testdateien [`tests/efb.test.js`](../tests/efb.test.js), [`tests/gaeb-x31.test.js`](../tests/gaeb-x31.test.js) und [`tests/backup.test.js`](../tests/backup.test.js). Alle **218 Tests** 100 % grün.
+
+## 27.08.2026 (Objektverwaltung F1: Detaillierte Analyse, Löschschutz-Härtung, Bodenbelag-Erweiterung & CSV-Export)
+- **Umsetzung & Audit:** Vollständige Code-Analyse der Objektverwaltung (Liegenschaften $\rightarrow$ Gebäude $\rightarrow$ Etagen $\rightarrow$ Räume) und Verknüpfung zu Dauerrechnungen (F2), Reinigungs-LV (F3) und GoBD-Audit-Kette. Details: [`doc/session_summary_2026-08-27_objektverwaltung-analyse-und-erweiterung.md`](session_summary_2026-08-27_objektverwaltung-analyse-und-erweiterung.md).
+- **Löschschutz & Integrität:**
+  - `pruefeObjektPlanBezug`: Löschschutz für referenzierende `abrechnungsplaene` in allen 4 Ebenen (`deleteLiegenschaft`, `deleteGebaeude`, `deleteEtage`, `deleteRaum` in [`db.js`](../db.js)) integriert.
+  - Löschprüfungen deterministisch geordnet: Reinigungs-LV $\rightarrow$ Abrechnungspläne $\rightarrow$ GoBD-Belege.
+- **Datenmodell & FM-Erweiterungen:**
+  - `bodenbelag TEXT` zu Tabelle `raeume` in [`schema.js`](../schema.js) und automatische Migration hinzugefügt; Persistenz in `saveRaum` ([`db.js`](../db.js)).
+  - Schnellauswahl-Datalists für Raumtypen (`#raumtyp-suggestions`) und Bodenbeläge (`#bodenbelag-suggestions`) in [`code.html`](../code.html) und [`js/objekte.js`](../js/objekte.js).
+  - Korrektur `getObjektDetails` in [`db.js`](../db.js): Raumfläche für `RAUM`-Knoten als `flaecheGesamt` berechnet und verknüpfte Abrechnungspläne geladen.
+- **UI & Export-Features:**
+  - **Erweiterte Suche & Filter:** `buildObjekteRows` in [`js/objekte.js`](../js/objekte.js) sucht jetzt auch nach Vollpfad (`buildPfad`), Straße, PLZ, Ort, Raumtyp und Bodenbelag; Statusfilter (*Alle*, *Aktiv*, *Inaktiv*).
+  - **CSV-Export:** Neue Funktion `exportObjekteCSV()` mit Toolbar-Button in [`code.html`](../code.html) für hierarchischen CSV-Export mit UTF-8 BOM.
+  - **Quick-Add:** Direkte Schnell-Anlege-Buttons (`+`) auf Zwischenebenen im Struktur-Tab der Detailansicht.
+  - **IPC-Normalisierung:** Numerische ID-Prüfung (`Number.isInteger`) in allen Objekt-IPC-Handlern ([`main.js`](../main.js)).
+- **Tests:** Testsuite in [`tests/objekt_stamm.test.js`](../tests/objekt_stamm.test.js) um Testfälle (i), (j), (k) erweitert. Alle **194/194 Tests** im Gesamtsystem 100 % grün.
+
 ## 26.08.2026 (Reparaturplan F11-R: Banking/OPOS/SEPA nach Validierungsbericht)
 - **Umsetzung:** Freigegebener Master-Reparaturplan [`plans/banking-sepa-reparatur-plan.md`](../plans/banking-sepa-reparatur-plan.md) vollständig umgesetzt (Phasen A–E, Fixes 1–20, Findings [B1]–[B7] + P2/P3); Plan als abgeschlossen markiert.
 - **P1-Blocker:**

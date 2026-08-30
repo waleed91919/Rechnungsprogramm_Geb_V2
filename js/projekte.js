@@ -620,6 +620,18 @@ function switchProjektTab(tabKey) {
         loadProjektAbnahmen(pId);
     } else if (tabKey === 'controlling') {
         loadProjektControlling(pId);
+    } else if (tabKey === 'efb') {
+        loadProjektEFB(pId);
+    }
+}
+
+async function loadProjektEFB(projectId) {
+    if (!projectId) return;
+    if (!window.efbViewInstance && window.EFBView) {
+        window.efbViewInstance = new window.EFBView();
+    }
+    if (window.efbViewInstance) {
+        await window.efbViewInstance.loadAndRender(projectId);
     }
 }
 
@@ -1472,6 +1484,39 @@ async function exportProjektDA11(blattId = null) {
     } catch (e) {
         console.error('Error exporting DA11:', e);
         showToast('Fehler beim Exportieren der DA11 Datei.', 'error');
+    }
+}
+
+async function exportProjektGAEBX31(blattId = null) {
+    const pId = window.currentViewProjektId;
+    if (!pId) return;
+    try {
+        if (window.api && window.api.exportGAEBX31) {
+            const res = await window.api.exportGAEBX31(pId, blattId);
+            if (res && res.success) {
+                showToast(`GAEB DA XML 3.3 Phase X31 Mengenermittlung exportiert: ${res.filePath}`, 'success');
+            }
+        }
+    } catch (e) {
+        console.error('Fehler beim GAEB X31 Export:', e);
+        showToast('Fehler beim GAEB X31 Export: ' + e.message, 'error');
+    }
+}
+
+async function importProjektGAEBX31() {
+    const pId = window.currentViewProjektId;
+    if (!pId) return;
+    try {
+        if (window.api && window.api.importGAEBX31) {
+            const res = await window.api.importGAEBX31(pId);
+            if (res && res.success) {
+                showToast(`GAEB X31 Import erfolgreich: ${res.importedCount} Zeilen aus ${res.itemsCount} Positionen importiert.`, 'success');
+                loadProjektAufmassBlaetter(pId);
+            }
+        }
+    } catch (e) {
+        console.error('Fehler beim GAEB X31 Import:', e);
+        showToast('Fehler beim GAEB X31 Import: ' + e.message, 'error');
     }
 }
 
