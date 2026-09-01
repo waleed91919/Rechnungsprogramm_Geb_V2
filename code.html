@@ -5157,12 +5157,41 @@
                                             (ohne Sa/So).</p>
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Eingabemodus (Preise)</label>
+                                        <div class="flex items-center justify-between mb-1.5">
+                                            <label class="block text-sm font-medium text-slate-700">Rechnungs-Standard / Empfängertyp</label>
+                                            <span id="rechnung-type-badge" class="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-700">B2B (Gewerbe)</span>
+                                        </div>
+                                        <div class="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-lg border border-slate-200" id="rechnung-type-toggle-group">
+                                            <button type="button" id="btn-type-b2c" onclick="setRechnungCustomerType('B2C')"
+                                                class="py-1.5 px-2 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1 text-slate-600 hover:text-slate-800">
+                                                <span class="material-symbols-outlined text-[15px]">person</span>
+                                                <span>B2C (Privat)</span>
+                                            </button>
+                                            <button type="button" id="btn-type-b2b" onclick="setRechnungCustomerType('B2B')"
+                                                class="py-1.5 px-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1 shadow-sm bg-primary text-white">
+                                                <span class="material-symbols-outlined text-[15px]">domain</span>
+                                                <span>B2B (Gewerbe)</span>
+                                            </button>
+                                            <button type="button" id="btn-type-b2g" onclick="setRechnungCustomerType('B2G')"
+                                                class="py-1.5 px-2 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1 text-slate-600 hover:text-slate-800">
+                                                <span class="material-symbols-outlined text-[15px]">account_balance</span>
+                                                <span>B2G (Behörde)</span>
+                                            </button>
+                                        </div>
+                                        <input type="hidden" id="rechnung-customer-type" value="B2B">
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center justify-between mb-1.5">
+                                            <label class="block text-sm font-medium text-slate-700">Eingabemodus (Preise)</label>
+                                            <span id="rechnung-b2g-netto-hint" class="text-[11px] text-blue-700 font-semibold italic hidden">
+                                                * B2G erfordert Netto (EN 16931)
+                                            </span>
+                                        </div>
                                         <div class="flex gap-2 p-1 bg-slate-100 rounded-lg border border-slate-200">
                                             <button type="button" id="btn-mode-netto" onclick="setEingabeModus('netto')"
-                                                class="flex-1 py-1.5 text-xs font-bold rounded-md transition-all shadow-sm bg-primary text-white">Netto (B2B)</button>
+                                                class="flex-1 py-1.5 text-xs font-bold rounded-md transition-all shadow-sm bg-primary text-white">Netto (zzgl. MwSt.)</button>
                                             <button type="button" id="btn-mode-brutto" onclick="setEingabeModus('brutto')"
-                                                class="flex-1 py-1.5 text-xs font-bold rounded-md transition-all text-slate-600 hover:text-slate-800">Brutto (B2C)</button>
+                                                class="flex-1 py-1.5 text-xs font-bold rounded-md transition-all text-slate-600 hover:text-slate-800">Brutto (inkl. MwSt.)</button>
                                             <input type="hidden" id="rechnung-eingabemodus" value="netto">
                                         </div>
                                     </div>
@@ -5197,13 +5226,13 @@
                                 <h4 class="text-sm font-semibold text-blue-900 uppercase tracking-wider mb-4 flex items-center justify-between">
                                     <span class="flex items-center gap-2">
                                         <span class="material-symbols-outlined text-[20px] text-blue-600">account_balance</span>
-                                        B2G E-Rechnung (Öffentlicher Auftraggeber / EN 16931)
+                                        <span id="b2g-section-title">B2G E-Rechnung (Öffentlicher Auftraggeber / EN 16931)</span>
                                     </span>
-                                    <span class="text-xs bg-blue-200 text-blue-800 font-bold px-2 py-0.5 rounded">XRechnung / ZUGFeRD</span>
+                                    <span id="b2g-section-badge" class="text-xs bg-blue-200 text-blue-800 font-bold px-2 py-0.5 rounded">XRechnung / ZUGFeRD</span>
                                 </h4>
                                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <div>
-                                        <label class="block text-sm font-medium text-blue-900 mb-1.5">Leitweg-ID <span class="text-red-500">*</span></label>
+                                        <label class="block text-sm font-medium text-blue-900 mb-1.5">Leitweg-ID <span id="rechnung-leitweg-required" class="text-red-500">*</span></label>
                                         <input type="text" id="rechnung-leitweg-id" placeholder="z.B. 991-12345678-12"
                                             class="w-full px-4 py-2 bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-400 text-sm font-mono transition-all">
                                     </div>

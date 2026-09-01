@@ -219,6 +219,9 @@ function applyRechnungReadOnlyMode(existing, form, submitBtn) {
     document.getElementById('rechnung-ist-privatkunde').checked = !!existing.ist_privatkunde;
     document.getElementById('rechnung-unterliegt-bauabzugsteuer').checked = !!existing.unterliegt_bauabzugsteuer;
     document.getElementById('rechnung-13b-ustg').checked = !!existing.unterliegt_13b;
+    
+    const detectedTypeReadOnly = existing.customer_type || (existing.ist_privatkunde ? 'B2C' : (existing.leitweg_id ? 'B2G' : 'B2B'));
+    setRechnungCustomerType(detectedTypeReadOnly, { preserveMode: true });
     handleRechtlicheCheckboxes();
     document.getElementById('rechnung-vortext').value = existing.vortext || '';
     document.getElementById('rechnung-fusstext').value = existing.fusstext || '';
@@ -295,6 +298,9 @@ function applyRechnungEditMode(existing, form, submitBtn) {
     document.getElementById('rechnung-ist-privatkunde').checked = !!existing.ist_privatkunde;
     document.getElementById('rechnung-unterliegt-bauabzugsteuer').checked = !!existing.unterliegt_bauabzugsteuer;
     document.getElementById('rechnung-13b-ustg').checked = !!existing.unterliegt_13b;
+
+    const detectedTypeEdit = existing.customer_type || (existing.ist_privatkunde ? 'B2C' : (existing.leitweg_id ? 'B2G' : 'B2B'));
+    setRechnungCustomerType(detectedTypeEdit, { preserveMode: true });
     handleRechtlicheCheckboxes();
     document.getElementById('rechnung-vortext').value = existing.vortext || '';
     document.getElementById('rechnung-fusstext').value = existing.fusstext || '';
@@ -333,6 +339,7 @@ function applyRechnungNewMode(form, submitBtn) {
     document.getElementById('rechnung-ist-privatkunde').checked = false;
     document.getElementById('rechnung-unterliegt-bauabzugsteuer').checked = false;
     document.getElementById('rechnung-13b-ustg').checked = false;
+    setRechnungCustomerType('B2B');
     handleRechtlicheCheckboxes();
     document.getElementById('rechnung-vortext').value = '';
     document.getElementById('rechnung-fusstext').value = '';
@@ -362,7 +369,174 @@ function applyManuelleNummernSetting(existing) {
     }
 }
 
-function setEingabeModus(mode) {
+function setRechnungCustomerType(type, options = {}) {
+    const validTypes = ['B2C', 'B2B', 'B2G'];
+    const selectedType = validTypes.includes(type) ? type : 'B2B';
+
+    const hiddenInput = document.getElementById('rechnung-customer-type');
+    if (hiddenInput) hiddenInput.value = selectedType;
+
+    const btnB2C = document.getElementById('btn-type-b2c');
+    const btnB2B = document.getElementById('btn-type-b2b');
+    const btnB2G = document.getElementById('btn-type-b2g');
+    const typeBadge = document.getElementById('rechnung-type-badge');
+    const modeHint = document.getElementById('rechnung-b2g-netto-hint');
+    const b2gSection = document.getElementById('rechnung-b2g-section');
+    const b2gTitle = document.getElementById('b2g-section-title');
+    const b2gBadge = document.getElementById('b2g-section-badge');
+    const leitwegReq = document.getElementById('rechnung-leitweg-required');
+    const btnModeNetto = document.getElementById('btn-mode-netto');
+    const btnModeBrutto = document.getElementById('btn-mode-brutto');
+
+    const activeClass = 'py-1.5 px-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1 shadow-sm bg-primary text-white';
+    const inactiveClass = 'py-1.5 px-2 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1 text-slate-600 hover:text-slate-800 hover:bg-slate-200/60';
+
+    if (btnB2C) btnB2C.className = (selectedType === 'B2C') ? activeClass : inactiveClass;
+    if (btnB2B) btnB2B.className = (selectedType === 'B2B') ? activeClass : inactiveClass;
+    if (btnB2G) btnB2G.className = (selectedType === 'B2G') ? activeClass : inactiveClass;
+
+    const pKunde = document.getElementById('rechnung-ist-privatkunde');
+    const bauabzug = document.getElementById('rechnung-unterliegt-bauabzugsteuer');
+    const ustg13b = document.getElementById('rechnung-13b-ustg');
+
+    if (selectedType === 'B2G') {
+        if (typeBadge) {
+            typeBadge.textContent = 'B2G (EN 16931)';
+            typeBadge.className = 'text-[11px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800';
+        }
+        if (modeHint) {
+            modeHint.textContent = '* B2G erfordert Netto (EN 16931)';
+            modeHint.className = 'text-[11px] text-blue-700 font-semibold italic block';
+        }
+        if (leitwegReq) leitwegReq.classList.remove('hidden');
+        if (b2gTitle) b2gTitle.textContent = 'B2G E-Rechnung (Öffentlicher Auftraggeber / EN 16931)';
+        if (b2gBadge) {
+            b2gBadge.textContent = 'XRechnung / ZUGFeRD (Pflicht)';
+            b2gBadge.className = 'text-xs bg-blue-200 text-blue-900 font-bold px-2 py-0.5 rounded';
+        }
+
+        // B2G requires Netto by EN 16931: force Netto and disable Brutto
+        if (btnModeNetto) {
+            btnModeNetto.disabled = false;
+            btnModeNetto.title = 'B2G: Netto-Preise gem. EN 16931 aktiv';
+        }
+        if (btnModeBrutto) {
+            btnModeBrutto.disabled = true;
+            btnModeBrutto.title = 'B2G erfordert zwingend Netto-Einzelpreise gem. EN 16931.';
+        }
+        setEingabeModus('netto', { force: true });
+
+        if (pKunde) {
+            pKunde.checked = false;
+            pKunde.disabled = true;
+        }
+        if (bauabzug) bauabzug.disabled = false;
+        if (ustg13b) ustg13b.disabled = false;
+
+        if (b2gSection) {
+            b2gSection.classList.remove('hidden');
+            b2gSection.classList.add('ring-2', 'ring-blue-400/40', 'bg-blue-50/80');
+        }
+    } else if (selectedType === 'B2B') {
+        if (typeBadge) {
+            typeBadge.textContent = 'B2B (Gewerbe)';
+            typeBadge.className = 'text-[11px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-700';
+        }
+        if (modeHint) modeHint.className = 'text-[11px] text-slate-500 font-medium italic hidden';
+        if (leitwegReq) leitwegReq.classList.add('hidden');
+        if (b2gTitle) b2gTitle.textContent = 'E-Rechnung (B2B ZUGFeRD / XRechnung nach EN 16931)';
+        if (b2gBadge) {
+            b2gBadge.textContent = 'ZUGFeRD 2.0.1+ / XRechnung';
+            b2gBadge.className = 'text-xs bg-slate-200 text-slate-700 font-bold px-2 py-0.5 rounded';
+        }
+
+        if (btnModeNetto) {
+            btnModeNetto.disabled = false;
+            btnModeNetto.title = 'Netto-Eingabe (zzgl. MwSt.)';
+        }
+        if (btnModeBrutto) {
+            btnModeBrutto.disabled = false;
+            btnModeBrutto.title = 'Brutto-Eingabe (inkl. MwSt.)';
+        }
+
+        if (!options.preserveMode) {
+            setEingabeModus(state.einstellungen.eingabemodus || 'netto', { force: true });
+        } else {
+            const curMode = document.getElementById('rechnung-eingabemodus')?.value || 'netto';
+            setEingabeModus(curMode, { force: true });
+        }
+
+        if (pKunde) {
+            pKunde.checked = false;
+            pKunde.disabled = false;
+        }
+        if (bauabzug) bauabzug.disabled = false;
+        if (ustg13b) ustg13b.disabled = false;
+
+        applyUnternehmensartVisibility();
+        if (b2gSection) {
+            b2gSection.classList.remove('ring-2', 'ring-blue-400/40');
+        }
+    } else {
+        // B2C: Nur Brutto bleibt!
+        if (typeBadge) {
+            typeBadge.textContent = 'B2C (Privat)';
+            typeBadge.className = 'text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800';
+        }
+        if (modeHint) {
+            modeHint.textContent = '* B2C erfordert Brutto (PAngV)';
+            modeHint.className = 'text-[11px] text-emerald-700 font-semibold italic block';
+        }
+        if (leitwegReq) leitwegReq.classList.add('hidden');
+
+        // B2C requires Brutto by PAngV: force Brutto and disable Netto
+        if (btnModeBrutto) {
+            btnModeBrutto.disabled = false;
+            btnModeBrutto.title = 'B2C: Brutto-Preise gem. PAngV aktiv';
+        }
+        if (btnModeNetto) {
+            btnModeNetto.disabled = true;
+            btnModeNetto.title = 'Für Privatkunden (B2C) sind Endpreise (Brutto) gemäß Preisangabenverordnung (PAngV) vorgeschrieben.';
+        }
+        setEingabeModus('brutto', { force: true });
+
+        if (pKunde) {
+            pKunde.checked = true;
+            pKunde.disabled = false;
+        }
+        if (bauabzug) {
+            bauabzug.checked = false;
+            bauabzug.disabled = true;
+            bauabzug.title = 'Bauabzugsteuer nach § 48b EStG gilt nur im gewerblichen Bereich (B2B/B2G).';
+        }
+        if (ustg13b) {
+            ustg13b.checked = false;
+            ustg13b.disabled = true;
+            ustg13b.title = 'Reverse Charge nach § 13b UStG ist für Privatkunden (B2C) gesetzlich unzulässig.';
+        }
+
+        if (b2gSection) {
+            b2gSection.classList.add('hidden');
+            b2gSection.classList.remove('ring-2', 'ring-blue-400/40');
+        }
+    }
+}
+
+function setEingabeModus(mode, options = {}) {
+    const currentCustomerType = document.getElementById('rechnung-customer-type')?.value || 'B2B';
+    
+    // Guard: B2C is strictly Brutto (PAngV), B2G is strictly Netto (EN 16931) unless force option passed
+    if (!options.force) {
+        if (currentCustomerType === 'B2C' && mode === 'netto') {
+            showToast('Für Privatkunden (B2C) sind Endpreise (Brutto) gem. Preisangabenverordnung (PAngV) vorgeschrieben.', 'info');
+            return;
+        }
+        if (currentCustomerType === 'B2G' && mode === 'brutto') {
+            showToast('Für Rechnungen an Behörden (B2G) sind Netto-Preise gem. EU-Norm EN 16931 vorgeschrieben.', 'info');
+            return;
+        }
+    }
+
     document.getElementById('rechnung-eingabemodus').value = mode;
 
     const btnNetto = document.getElementById('btn-mode-netto');
@@ -372,10 +546,10 @@ function setEingabeModus(mode) {
 
     if (mode === 'netto') {
         btnNetto.className = 'flex-1 py-1.5 text-xs font-bold rounded-md transition-all shadow-sm bg-primary text-white';
-        btnBrutto.className = 'flex-1 py-1.5 text-xs font-bold rounded-md transition-all text-slate-600 hover:text-slate-800';
+        btnBrutto.className = 'flex-1 py-1.5 text-xs font-medium rounded-md transition-all text-slate-600 hover:text-slate-800' + (btnBrutto.disabled ? ' opacity-40 cursor-not-allowed' : '');
     } else {
         btnBrutto.className = 'flex-1 py-1.5 text-xs font-bold rounded-md transition-all shadow-sm bg-primary text-white';
-        btnNetto.className = 'flex-1 py-1.5 text-xs font-bold rounded-md transition-all text-slate-600 hover:text-slate-800';
+        btnNetto.className = 'flex-1 py-1.5 text-xs font-medium rounded-md transition-all text-slate-600 hover:text-slate-800' + (btnNetto.disabled ? ' opacity-40 cursor-not-allowed' : '');
     }
 
     const headerPreis = document.getElementById('header-einzelpreis');
@@ -634,6 +808,10 @@ function handleKundeSelect(event) {
 
     detailsBox.innerHTML = '';
     if (kunde) {
+        // Automatically sync customer type to B2C / B2B / B2G
+        const cType = kunde.customer_type || (kunde.ist_privatkunde ? 'B2C' : (kunde.leitweg_id ? 'B2G' : 'B2B'));
+        setRechnungCustomerType(cType, { fromCustomerSelect: true });
+
         const div = document.createElement('div');
         div.className = 'relative z-10 w-full text-left';
 
@@ -665,11 +843,11 @@ function handleKundeSelect(event) {
         }
 
         // Checkbox defaults for B2C/B2B
-        if (kunde.customer_type === 'B2C' || kunde.ist_privatkunde) {
+        if (cType === 'B2C' || kunde.ist_privatkunde) {
             const privCb = document.getElementById('rechnung-ist-privatkunde');
             if (privCb) privCb.checked = true;
         }
-        if (kunde.customer_type === 'B2B' && kunde.ist_bauleistender_13b) {
+        if (cType === 'B2B' && kunde.ist_bauleistender_13b) {
             const cb13b = document.getElementById('rechnung-13b-ustg');
             if (cb13b) cb13b.checked = true;
         }
@@ -707,6 +885,7 @@ function collectERechnungExportData() {
     const leitweg_id = document.getElementById('rechnung-leitweg-id')?.value || kunde.leitweg_id || '';
     const buyer_reference = document.getElementById('rechnung-buyer-reference')?.value || kunde.buyer_reference || leitweg_id;
     const unterliegt_13b = document.getElementById('rechnung-13b-ustg')?.checked ? 1 : 0;
+    const customer_type = document.getElementById('rechnung-customer-type')?.value || kunde.customer_type || 'B2B';
 
     const currentDoc = {
         nr,
@@ -714,6 +893,7 @@ function collectERechnungExportData() {
         faellig,
         leitweg_id,
         buyer_reference,
+        customer_type,
         unterliegt_13b,
         netto: state.currentRechnungTotals ? state.currentRechnungTotals.netto : 0,
         steuer: state.currentRechnungTotals ? state.currentRechnungTotals.steuer : 0,
@@ -735,7 +915,7 @@ function collectERechnungExportData() {
         kumulierte_leistung_netto: state.currentRechnungTotals ? state.currentRechnungTotals.kumulierte_leistung_netto : 0
     };
 
-    return { currentDoc, customer: { ...kunde, leitweg_id, buyer_reference }, nr };
+    return { currentDoc, customer: { ...kunde, customer_type, leitweg_id, buyer_reference }, nr };
 }
 
 function validateERechnungForB2G(currentDoc, customer) {
@@ -1242,6 +1422,7 @@ async function saveRechnung() {
         zahlbetrag: state.currentRechnungTotals ? state.currentRechnungTotals.zahlbetrag : 0,
         status: status,
         eingabemodus: document.getElementById('rechnung-eingabemodus') ? document.getElementById('rechnung-eingabemodus').value : 'netto',
+        customer_type: document.getElementById('rechnung-customer-type') ? document.getElementById('rechnung-customer-type').value : 'B2B',
         rechnungsart: document.getElementById('rechnung-art') ? document.getElementById('rechnung-art').value : 'Standard',
         leitweg_id: document.getElementById('rechnung-leitweg-id') ? document.getElementById('rechnung-leitweg-id').value : '',
         buyer_reference: document.getElementById('rechnung-buyer-reference') ? document.getElementById('rechnung-buyer-reference').value : '',
@@ -1542,6 +1723,7 @@ function applyUnternehmensartVisibility() {
 
     const handwerkSection = document.getElementById('rechnung-handwerk-section');
     const b2gSection = document.getElementById('rechnung-b2g-section');
+    const currentCustomerType = document.getElementById('rechnung-customer-type')?.value || 'B2B';
 
     if (handwerkSection) {
         if (isHandwerkOrBau) {
@@ -1559,7 +1741,11 @@ function applyUnternehmensartVisibility() {
     }
 
     if (b2gSection) {
-        if (isHandwerkOrBau || isB2GSpezialist) {
+        if (currentCustomerType === 'B2G') {
+            b2gSection.classList.remove('hidden');
+        } else if (currentCustomerType === 'B2C') {
+            b2gSection.classList.add('hidden');
+        } else if (isHandwerkOrBau || isB2GSpezialist) {
             b2gSection.classList.remove('hidden');
         } else {
             b2gSection.classList.add('hidden');

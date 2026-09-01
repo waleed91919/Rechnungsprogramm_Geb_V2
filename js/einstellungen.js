@@ -603,8 +603,8 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
         legalTextsHtml += `<p>Gemäß § 16 Abs. 1 VOB/B ist diese Zahlung innerhalb von 21 Tagen nach Zugang dieser prüfbaren Aufstellung fällig.</p>`;
     }
     
-    if (rech.ist_privatkunde) {
-        legalTextsHtml += `<p><strong>Hinweis gem. § 14b Abs. 1 UStG:</strong> Als Privatperson sind Sie gesetzlich verpflichtet, diese Rechnung sowie den zugehörigen Zahlungsbeleg für steuerliche Zwecke mindestens zwei Jahre lang aufzubewahren.</p>`;
+    if (rech.ist_privatkunde || rech.customer_type === 'B2C' || (kunde && kunde.customer_type === 'B2C')) {
+        legalTextsHtml += `<p><strong>Hinweis gem. § 14b Abs. 1 Satz 5 UStG:</strong> Als Privatperson sind Sie gesetzlich verpflichtet, diese Rechnung sowie den zugehörigen Zahlungsbeleg für steuerliche Zwecke mindestens zwei Jahre lang aufzubewahren.</p>`;
     }
     
     if (rech.ausweis_35a_erforderlich && rech.summe_lohnkosten_brutto > 0) {

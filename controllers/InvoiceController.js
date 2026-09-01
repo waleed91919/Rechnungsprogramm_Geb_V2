@@ -206,6 +206,14 @@ class InvoiceController {
         if (doc.positionen.some(p => !p.artikelId && !p.name)) {
             return { valid: false, message: 'Bitte wählen Sie für alle Positionen einen Artikel aus oder geben Sie eine Beschreibung ein.' };
         }
+        // Compliance-Check 1: B2C darf niemals § 13b Reverse-Charge enthalten
+        if ((doc.customer_type === 'B2C' || doc.ist_privatkunde) && doc.unterliegt_13b) {
+            return { valid: false, message: 'Das Reverse-Charge-Verfahren nach § 13b UStG ist gegenüber Privatkunden (B2C) unzulässig.' };
+        }
+        // Compliance-Check 2: B2G erfordert Netto-Preise gem. EN 16931
+        if (doc.customer_type === 'B2G' && doc.eingabemodus === 'brutto') {
+            return { valid: false, message: 'Rechnungen an öffentliche Auftraggeber (B2G) erfordern zwingend Netto-Einzelpreise gemäß EU-Norm EN 16931.' };
+        }
         return { valid: true };
     }
 
