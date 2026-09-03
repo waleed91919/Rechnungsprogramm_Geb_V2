@@ -61,6 +61,11 @@ async function saveProjekt() {
         return;
     }
 
+    if (start && ende && ende < start) {
+        showToast('Das Projekt-Enddatum darf nicht vor dem Startdatum liegen.', 'error');
+        return;
+    }
+
     const projektObj = { name, kundeId: parseInt(kundeId), start, ende, budget, status, notizen, sicherheitseinbehalt_prozent };
 
     if (id) {
@@ -539,13 +544,28 @@ function handleGAEBFileUpload(event) {
 function renderGAEBPositionsTable(items) {
     const tbody = document.getElementById('gaeb-table-body');
     const container = document.getElementById('gaeb-table-container');
-    if (!tbody || !container) return;
-
-    tbody.innerHTML = '';
-    if (!items || items.length === 0) {
-        container.classList.add('hidden');
-        return;
+    if (tbody && container) {
+        tbody.innerHTML = '';
+        if (!items || items.length === 0) {
+            container.classList.add('hidden');
+        } else {
+            container.classList.remove('hidden');
+        }
     }
+
+    // [D-4] GAEB-Positionen direkt in splitPositionsData überführen und Split-Table aktualisieren
+    if (items && items.length > 0) {
+        splitPositionsData = items.map(item => ({
+            oz: item.oz || '01.01.0010',
+            name: item.name || item.kurztext || 'Position',
+            mengeSoll: parseFloat(item.menge) || 1,
+            einheit: item.einheit || 'm²',
+            mengeIst: 0
+        }));
+        renderSplitPositionsTable();
+    }
+
+    if (!tbody || !items || items.length === 0) return;
 
     items.forEach(item => {
         const tr = document.createElement('tr');
@@ -741,8 +761,24 @@ async function loadSplitViewPositions(projectId) {
         ];
     }
 
+    renderSplitPositionsTable();
+}
+
+function renderSplitPositionsTable() {
+    const tbody = document.getElementById('split-positions-body');
+    const empty = document.getElementById('split-positions-empty');
+    const countEl = document.getElementById('split-pos-count');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
     if (countEl) countEl.innerText = `${splitPositionsData.length} Pos.`;
-    if (empty) empty.classList.add('hidden');
+    if (empty) {
+        if (splitPositionsData.length === 0) {
+            empty.classList.remove('hidden');
+        } else {
+            empty.classList.add('hidden');
+        }
+    }
 
     splitPositionsData.forEach((item, idx) => {
         const tr = document.createElement('tr');
@@ -754,7 +790,7 @@ async function loadSplitViewPositions(projectId) {
             <td class="px-3 py-2 font-mono font-bold text-primary">${item.oz}</td>
             <td class="px-3 py-2 text-slate-800 truncate max-w-[140px]">${item.name}</td>
             <td class="px-3 py-2 text-right font-mono text-slate-500">${item.mengeSoll} ${item.einheit}</td>
-            <td class="px-3 py-2 text-right font-mono font-bold text-emerald-600" id="split-pos-ist-${item.oz}">${item.mengeIst.toFixed(2)}</td>
+            <td class="px-3 py-2 text-right font-mono font-bold text-emerald-600" id="split-pos-ist-${item.oz}">${(item.mengeIst || 0).toFixed(2)}</td>
         `;
         tbody.appendChild(tr);
     });

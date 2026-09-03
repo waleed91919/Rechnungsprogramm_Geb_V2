@@ -255,7 +255,7 @@ class ZeiterfassungView {
     static switchSubTab(subTab) {
         if (window.currentViewInstance) {
             window.currentViewInstance.activeSubTab = subTab;
-            const container = document.getElementById('view-container');
+            const container = document.getElementById('view-zeiterfassung') || document.getElementById('view-container');
             if (container) {
                 window.currentViewInstance.render().then(html => container.innerHTML = html);
             }

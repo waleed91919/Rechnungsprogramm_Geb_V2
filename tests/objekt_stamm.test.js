@@ -55,7 +55,7 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             datum: '2026-08-01',
             faellig: '2026-08-31',
             kundeId,
-            status: 'Ausstehend',
+            status: 'Entwurf',
             netto: 100,
             steuer: 19,
             brutto: 119,

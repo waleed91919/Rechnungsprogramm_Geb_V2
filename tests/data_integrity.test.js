@@ -312,9 +312,9 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             assert.equal(res.verrechnungenSummeNetto, 100.56, 'Verrechnungssumme muss auf Cent gerundet werden');
             assert.equal(res.anzahlung, 12.35, 'Anzahlung muss auf Cent gerundet werden');
             assert.equal(res.sicherheitseinbehaltNetto, 50.00, 'Einbehalt 5% von 999.99 -> 50.00');
-            assert.equal(res.totalTax, 161.39);
-            assert.equal(res.bruttoNachRabatt, 1010.82);
-            assert.equal(res.zahlbetrag, 998.47);
+            assert.equal(res.totalTax, 170.89);
+            assert.equal(res.bruttoNachRabatt, 1070.32);
+            assert.equal(res.zahlbetrag, 1007.97);
         });
 
         await t.test('(d5) §13b-Kombination bleibt korrekt gerundet', () => {

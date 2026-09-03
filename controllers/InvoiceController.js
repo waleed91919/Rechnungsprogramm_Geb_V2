@@ -34,7 +34,7 @@ class InvoiceController {
         let positionenBrutto = 0;
         let totals13bNetto = 0;
         let totalsNormalNetto = 0;
-        const taxBases = { 19: 0, 7: 0 };
+        const taxBases = {};
 
         // 1. Einzelpositionen durchlaufen
         const processedPositions = positionen.map(pos => {
@@ -70,9 +70,7 @@ class InvoiceController {
                 totals13bNetto = this.round2(totals13bNetto + rowNetto);
             } else {
                 totalsNormalNetto = this.round2(totalsNormalNetto + rowNetto);
-                if (mwstRate > 0) {
-                    taxBases[mwstRate] = this.round2((taxBases[mwstRate] || 0) + rowNetto);
-                }
+                taxBases[mwstRate] = this.round2((taxBases[mwstRate] || 0) + rowNetto);
             }
 
             return { ...pos, rowNetto, rowBrutto, tax, pos13b };
@@ -108,13 +106,19 @@ class InvoiceController {
                 sicherheitseinbehaltNetto = this.round2(nettoNachRabatt * (sicherheitseinbehaltProzent / 100));
             }
 
+            // VOB/B & § 13 UStG: Sicherheitseinbehalt mindert NICHT die Steuerentstehung!
+            // Die Steuer bemisst sich auf das volle Netto nach Rabatt abzüglich Netto-Verrechnungen.
             const steuerpflichtigesNetto = this.round2(Math.max(
                 0,
-                this.round2(this.round2(nettoNachRabatt - sicherheitseinbehaltNetto) - verrechnungenSummeNetto)
+                this.round2(nettoNachRabatt - verrechnungenSummeNetto)
             ));
             const taxableRatio = nettoNachRabatt > 0 ? (steuerpflichtigesNetto / nettoNachRabatt) : 0;
 
-            Object.keys(taxBases).forEach(rate => {
+            const taxRates = Object.keys(taxBases)
+                .filter(rate => taxBases[rate] > 0)
+                .sort((a, b) => parseFloat(b) - parseFloat(a));
+
+            taxRates.forEach(rate => {
                 const rateValue = parseFloat(rate);
                 const basisAdj = this.round2(taxBases[rate] * rabattFaktor * taxableRatio);
                 const adjustedTax = rateValue > 0 ? this.round2(basisAdj * rateValue / 100) : 0;
@@ -133,10 +137,14 @@ class InvoiceController {
             bruttoNachRabatt = this.round2(Math.max(0, positionenBrutto - abzug));
             const rabattFaktor = positionenBrutto > 0 ? (bruttoNachRabatt / positionenBrutto) : 1;
 
+            const taxRates = Object.keys(taxBases)
+                .filter(rate => taxBases[rate] > 0)
+                .sort((a, b) => parseFloat(b) - parseFloat(a));
+
             // Steuer je Gruppe auf rabattierter Basis, je Gruppe centgenau gerundet
             const reducedTaxes = {};
             let totalTaxBase = 0;
-            Object.keys(taxBases).forEach(rate => {
+            taxRates.forEach(rate => {
                 const rateValue = parseFloat(rate);
                 const basisAdj = this.round2(taxBases[rate] * rabattFaktor);
                 const taxOnReduced = rateValue > 0 ? this.round2(basisAdj * rateValue / 100) : 0;
@@ -149,15 +157,16 @@ class InvoiceController {
                 sicherheitseinbehaltNetto = this.round2(nettoNachRabatt * (sicherheitseinbehaltProzent / 100));
             }
 
+            // VOB/B & § 13 UStG: Sicherheitseinbehalt mindert NICHT die Steuerentstehung!
             const steuerpflichtigesNetto = this.round2(Math.max(
                 0,
-                this.round2(this.round2(nettoNachRabatt - sicherheitseinbehaltNetto) - verrechnungenSummeNetto)
+                this.round2(nettoNachRabatt - verrechnungenSummeNetto)
             ));
             const taxableRatio = nettoNachRabatt > 0 ? (steuerpflichtigesNetto / nettoNachRabatt) : 0;
 
-            Object.keys(reducedTaxes).forEach(rate => {
+            taxRates.forEach(rate => {
                 const rateValue = parseFloat(rate);
-                const adjustedTax = this.round2(reducedTaxes[rate] * taxableRatio);
+                const adjustedTax = this.round2((reducedTaxes[rate] || 0) * taxableRatio);
                 totalTax = this.round2(totalTax + adjustedTax);
                 taxBreakdown.push({
                     rate: rateValue,
@@ -171,7 +180,7 @@ class InvoiceController {
         }
 
         const anzahlungCent = this.round2(anzahlung);
-        const zahlbetrag = this.round2(Math.max(0, bruttoNachRabatt - anzahlungCent));
+        const zahlbetrag = this.round2(Math.max(0, bruttoNachRabatt - anzahlungCent - sicherheitseinbehaltNetto));
 
         return {
             zwischensumme: mode === 'netto' ? positionenNetto : positionenBrutto,
@@ -213,6 +222,10 @@ class InvoiceController {
         // Compliance-Check 2: B2G erfordert Netto-Preise gem. EN 16931
         if (doc.customer_type === 'B2G' && doc.eingabemodus === 'brutto') {
             return { valid: false, message: 'Rechnungen an öffentliche Auftraggeber (B2G) erfordern zwingend Netto-Einzelpreise gemäß EU-Norm EN 16931.' };
+        }
+        // Compliance-Check 3: B2G erfordert Leitweg-ID gem. XRechnung / ZUGFeRD
+        if (doc.customer_type === 'B2G' && !doc.leitweg_id && !doc.buyer_reference) {
+            return { valid: false, message: 'Rechnungen an öffentliche Auftraggeber (B2G) erfordern zwingend eine Leitweg-ID oder Buyer-Reference.' };
         }
         return { valid: true };
     }

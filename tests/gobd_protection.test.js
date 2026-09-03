@@ -209,6 +209,15 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             assert.ok(delAudit, 'Löschung muss audit-protokolliert sein');
         });
 
+        await t.test('deleteDocument: Rechnungen mit Belegnummer außerhalb Entwurf dürfen nicht gelöscht werden (auch wenn isLocked=false)', async () => {
+            const numberedId = await dbAPI.saveDocument(baseDoc({ nr: 'RE-GOBD-NUM-001', status: 'Ausstehend', isLocked: false }));
+            await assert.rejects(
+                () => dbAPI.deleteDocument(numberedId),
+                /GoBD-Löschsperre|gesperrt/i
+            );
+            assert.ok(getRow(numberedId), 'Beleg mit vergebener Nummer darf nicht gelöscht werden');
+        });
+
         await t.test('bulkSaveDocuments: gesperrter Beleg blockt ganze Transaktion (Rollback)', async () => {
             const lockedId = await dbAPI.saveDocument(baseDoc({ nr: 'RE-BULK-LOCKED', status: 'Ausstehend' }));
             await dbAPI.saveDocument(baseDoc({ id: lockedId, nr: 'RE-BULK-LOCKED', isLocked: true }));

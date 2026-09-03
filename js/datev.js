@@ -43,9 +43,15 @@ class DATEVExporter {
             const buSchluessel = is13b ? (isSKR04 ? '68' : '19') : '';
             const erloeskonto = is13b ? konto13b : konto19;
 
-            const betrag = parseFloat(r.zahlbetrag || r.brutto || r.netto) || 0;
-            const umsatzStr = betrag.toFixed(2).replace('.', ',');
-            const sh = 'H'; // Haben
+            const rawBetrag = parseFloat(r.zahlbetrag !== undefined && r.zahlbetrag !== null ? r.zahlbetrag : (r.brutto !== undefined && r.brutto !== null ? r.brutto : r.netto)) || 0;
+            const isStorno = rawBetrag < 0 ||
+                String(r.nr || '').toUpperCase().startsWith('STORNO') ||
+                r.status === 'Storniert' ||
+                r.type === 'Gutschrift' ||
+                r.rechnungsart === 'STORNO' ||
+                r.rechnungsart === 'GUTSCHRIFT';
+            const umsatzStr = Math.abs(rawBetrag).toFixed(2).replace('.', ',');
+            const sh = isStorno ? 'S' : 'H'; // Storno/Gutschrift wechselt von Haben auf Soll
 
             let belegdatum = '0101';
             if (r.datum) {

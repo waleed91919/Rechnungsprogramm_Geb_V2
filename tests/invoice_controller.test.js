@@ -129,11 +129,14 @@ test('calculateTotals - Sicherungseinbehalt (Security Retention)', () => {
     assert.strictEqual(result.positionenNetto, 1000);
     assert.strictEqual(result.sicherheitseinbehaltNetto, 50); // 5% of 1000
 
-    // Steuerpflichtiges Netto = 1000 - 50 = 950.
-    // Tax = 19% of 950 = 180.5
-    assert.strictEqual(result.totalTax, 180.5);
-    // BruttoNachRabatt = 950 + 180.5 = 1130.5
-    assert.strictEqual(result.bruttoNachRabatt, 1130.5);
+    // VOB/B & § 13 UStG: Sicherheitseinbehalt mindert NICHT das steuerpflichtige Netto!
+    // Steuerpflichtiges Netto = 1000.
+    // Tax = 19% of 1000 = 190.00
+    assert.strictEqual(result.totalTax, 190);
+    // BruttoNachRabatt = 1000 + 190 = 1190.00
+    assert.strictEqual(result.bruttoNachRabatt, 1190);
+    // Zahlbetrag = BruttoNachRabatt (1190) - Sicherheitseinbehalt (50) = 1140.00
+    assert.strictEqual(result.zahlbetrag, 1140);
 });
 
 test('calculateTotals - Verrechnungen and Anzahlung', () => {
@@ -184,22 +187,23 @@ test('calculateTotals - everything combined', () => {
     assert.strictEqual(result.sicherheitseinbehaltNetto, 90);
 
     // Verrechnung: 100
-    // Steuerpflichtiges Netto = 1800 - 90 - 100 = 1610
+    // VOB/B & § 13 UStG: Sicherheitseinbehalt mindert nicht die Steuerentstehung!
+    // Steuerpflichtiges Netto = 1800 - 100 = 1700
 
     // Now tax breakdown.
     // Rabattfaktor = 1800 / 2000 = 0.9.
-    // Taxable Ratio = 1610 / 1800 = 0.894444...
+    // Taxable Ratio = 1700 / 1800 = 0.94444...
     // Base taxes before any global stuff:
     // Pos 1 (13b): 0
     // Pos 2: 19% of 1000 = 190.
-    // Adjusted tax = 190 * 0.9 * (1610 / 1800) = 152.95
-    assert.strictEqual(Math.round(result.totalTax * 100) / 100, 152.95);
+    // Adjusted tax = 190 * 0.9 * (1700 / 1800) = 161.50
+    assert.strictEqual(Math.round(result.totalTax * 100) / 100, 161.5);
 
-    // BruttoNachRabatt = Steuerpflichtiges Netto (1610) + Tax (152.95) = 1762.95
-    assert.strictEqual(Math.round(result.bruttoNachRabatt * 100) / 100, 1762.95);
+    // BruttoNachRabatt = Steuerpflichtiges Netto (1700) + Tax (161.50) = 1861.50
+    assert.strictEqual(Math.round(result.bruttoNachRabatt * 100) / 100, 1861.5);
 
-    // Zahlbetrag = BruttoNachRabatt - Anzahlung(50) = 1712.95
-    assert.strictEqual(Math.round(result.zahlbetrag * 100) / 100, 1712.95);
+    // Zahlbetrag = BruttoNachRabatt (1861.50) - Anzahlung (50) - Sicherheitseinbehalt (90) = 1721.50
+    assert.strictEqual(Math.round(result.zahlbetrag * 100) / 100, 1721.5);
 });
 
 test('validateSaveDocument - valid document', () => {
@@ -292,4 +296,30 @@ test('createStornoData - valid original invoice', () => {
     assert.strictEqual(storno.positionen.length, 1);
     assert.strictEqual(storno.positionen[0].menge, -5);
     assert.strictEqual(storno.positionen[0].preis, 100);
+});
+
+test('calculateTotals - keine Geister-Steuerzeilen bei reinen 19%-Rechnungen oder 0%-Positionen', () => {
+    // 1. Reine 19%-Rechnung darf keine 7%-Zeile enthalten
+    const params19 = {
+        mode: 'netto',
+        positionen: [
+            { menge: 1, preis: 100, rabatt: 0, mwst: 19 }
+        ]
+    };
+    const res19 = InvoiceController.calculateTotals(params19);
+    assert.strictEqual(res19.taxBreakdown.length, 1, 'Reine 19%-Rechnung darf exakt 1 Steuerzeile haben');
+    assert.strictEqual(res19.taxBreakdown[0].rate, 19);
+
+    // 2. Rechnung mit 0% MwSt. (z.B. Photovoltaik § 12 Abs. 3 UStG)
+    const params0 = {
+        mode: 'netto',
+        positionen: [
+            { menge: 1, preis: 500, rabatt: 0, mwst: 0 }
+        ]
+    };
+    const res0 = InvoiceController.calculateTotals(params0);
+    assert.strictEqual(res0.taxBreakdown.length, 1, '0%-Rechnung darf Steuerzeile für 0% ausweisen');
+    assert.strictEqual(res0.taxBreakdown[0].rate, 0);
+    assert.strictEqual(res0.taxBreakdown[0].amount, 0);
+    assert.strictEqual(res0.totalTax, 0);
 });

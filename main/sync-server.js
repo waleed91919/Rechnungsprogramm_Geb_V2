@@ -569,6 +569,101 @@ class SyncServer {
         } else if (entity_type === 'VOB_MELDUNG' || entity_type === 'BEDENKEN_BEHINDERUNGEN') {
             BautagebuchMobileController.saveVobMeldung(this.db, data, this.auditLogger);
             return { conflict: false };
+
+        } else if (entity_type === 'AUFMASS_ZEILE' || entity_type === 'AUFMASS') {
+            const stmt = this.db.prepare(`
+                INSERT INTO aufmass_zeilen (
+                    uuid, blatt_id, oz_code, zeilen_nr, bezeichnung, formel_reb, formel_code, rechenansatz, ergebnis, einheit, raum_id
+                ) VALUES (
+                    @uuid, @blatt_id, @oz_code, @zeilen_nr, @bezeichnung, @formel_code, @formel_code, @rechenansatz, @ergebnis, @einheit, @raum_id
+                ) ON CONFLICT(uuid) DO UPDATE SET
+                    rechenansatz = excluded.rechenansatz,
+                    ergebnis = excluded.ergebnis
+            `);
+            stmt.run({
+                uuid: data.uuid,
+                blatt_id: data.blatt_id || 1,
+                oz_code: data.oz || data.oz_code || '01.01.001',
+                zeilen_nr: data.zeilen_nr || 1,
+                bezeichnung: data.bezeichnung || '',
+                formel_code: data.formel_code || '91',
+                rechenansatz: data.rechenansatz || `${data.ergebnis || 0}=`,
+                ergebnis: parseFloat(data.ergebnis) || 0.0,
+                einheit: data.einheit || 'm²',
+                raum_id: data.raum_id || null
+            });
+            return { conflict: false };
+
+        } else if (entity_type === 'MAENGEL' || entity_type === 'MANGEL') {
+            const stmt = this.db.prepare(`
+                INSERT INTO maengel (
+                    uuid, projekt_id, plan_id, mangel_nr, x_pct, y_pct, titel, beschreibung, status, frist_datum, created_at
+                ) VALUES (
+                    @uuid, @projekt_id, @plan_id, @mangel_nr, @x_pct, @y_pct, @titel, @beschreibung, @status, @frist_datum, @created_at
+                ) ON CONFLICT(uuid) DO UPDATE SET
+                    status = excluded.status,
+                    titel = excluded.titel
+            `);
+            stmt.run({
+                uuid: data.uuid,
+                projekt_id: parseInt(data.projekt_id, 10) || 1,
+                plan_id: data.plan_id || null,
+                mangel_nr: data.mangel_nr || 'M-001',
+                x_pct: parseFloat(data.x_pct) || 0.0,
+                y_pct: parseFloat(data.y_pct) || 0.0,
+                titel: data.titel || 'Mangel',
+                beschreibung: data.beschreibung || '',
+                status: data.status || 'ERFASST',
+                frist_datum: data.frist_datum || null,
+                created_at: data.created_at || new Date().toISOString()
+            });
+            return { conflict: false };
+
+        } else if (entity_type === 'GERAETE_BUCHUNG' || entity_type === 'GERAET') {
+            const stmt = this.db.prepare(`
+                INSERT INTO geraete_buchungen (
+                    uuid, projekt_id, geraet_code, datum, betriebsstunden, stillstand_stunden, stillstand_grund, device_id
+                ) VALUES (
+                    @uuid, @projekt_id, @geraet_code, @datum, @betriebsstunden, @stillstand_stunden, @stillstand_grund, @device_id
+                ) ON CONFLICT(uuid) DO UPDATE SET
+                    betriebsstunden = excluded.betriebsstunden,
+                    stillstand_stunden = excluded.stillstand_stunden,
+                    stillstand_grund = excluded.stillstand_grund
+            `);
+            stmt.run({
+                uuid: data.uuid,
+                projekt_id: parseInt(data.projekt_id, 10) || 1,
+                geraet_code: data.geraet_code || 'GERAET',
+                datum: data.datum || new Date().toISOString().split('T')[0],
+                betriebsstunden: parseFloat(data.betriebsstunden || data.stunden) || 0.0,
+                stillstand_stunden: parseFloat(data.stillstand_stunden) || 0.0,
+                stillstand_grund: data.stillstand_grund || null,
+                device_id: deviceId
+            });
+            return { conflict: false };
+
+        } else if (entity_type === 'LIEFERSCHEIN') {
+            const stmt = this.db.prepare(`
+                INSERT INTO lieferscheine_digital (
+                    uuid, projekt_id, lieferant_name, lieferschein_nr, datum, foto_pfad, sha256_hash, status, device_id
+                ) VALUES (
+                    @uuid, @projekt_id, @lieferant_name, @lieferschein_nr, @datum, @foto_pfad, @sha256_hash, @status, @device_id
+                ) ON CONFLICT(uuid) DO UPDATE SET
+                    lieferschein_nr = excluded.lieferschein_nr,
+                    status = excluded.status
+            `);
+            stmt.run({
+                uuid: data.uuid,
+                projekt_id: parseInt(data.projekt_id, 10) || 1,
+                lieferant_name: data.lieferant_name || 'Lieferant',
+                lieferschein_nr: data.lieferschein_nr || '',
+                datum: data.datum || new Date().toISOString().split('T')[0],
+                foto_pfad: data.foto_pfad || '',
+                sha256_hash: data.sha256_hash || '',
+                status: data.status || 'ERFASST',
+                device_id: deviceId
+            });
+            return { conflict: false };
         }
 
         return { conflict: false };

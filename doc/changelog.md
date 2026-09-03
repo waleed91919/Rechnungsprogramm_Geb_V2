@@ -1,5 +1,57 @@
 # Changelog / Fortschritt
 
+## 04.09.2026 (UI-Klickreparatur, Gesamtsystem-Audit & Tiefenanalyse Modul „Rechnung“)
+- **UI-Auswahl & Klickreparatur:**
+  - [`js/navigation.js`](../js/navigation.js): Schließende Klammer `}` für `switchView(viewName)` ergänzt. Behebt `SyntaxError: Unexpected end of input` und stellt globale Navigation wieder her.
+  - [`js/editor.js`](../js/editor.js): `try...catch...finally` Struktur in `saveRechnung` bereinigt. Behebt `SyntaxError: Missing catch or finally after try`.
+  - [`tests/full_system.test.js`](../tests/full_system.test.js): Automatisierter Syntax-Integritätstest integriert (`node -c` Prüfung über alle JS-Dateien).
+- **Tiefenanalyse Modul „Rechnung“ & Workflow „Neue Rechnung“:**
+  - [`doc/rechnung_modul_analyse_2026.md`](rechnung_modul_analyse_2026.md): 380 Zeilen detaillierter Prüfbericht mit Internet-Recherche zu deutschen Rechtsstandards (§ 14 UStG, EN 16931 E-Rechnung 2026/2027, § 13b UStG, § 35a Abs. 3 EStG, VOB/B § 14/§ 17, GoBD).
+  - Lückenloser Workflow-Audit der Modal-Initialisierung, Adressanzeige, B2C/B2B/B2G-Umschaltung, REB 23.003 Aufmaß-Mengenübernahme und Live-Cent-Kalkulation.
+- **Gesamtsystem-Audit & Dokumentation:**
+  - [`doc/modulaudit_gesamtsystem_2026.md`](modulaudit_gesamtsystem_2026.md): Prüfung aller 10 System-Modulgruppen.
+  - [`doc/session_summary_2026-09-04_modulaudit_und_rechnung_tiefenanalyse.md`](session_summary_2026-09-04_modulaudit_und_rechnung_tiefenanalyse.md): Umfassende Dokumentation der durchgeführten Arbeiten.
+  - Gesamtsystem: **226 von 226 Tests bestanden (100% Pass)**.
+
+## 03.09.2026 (Release 2.2: Phase 5 – Baustellen-Offline-Betrieb, Mobiles Aufmaß REB 23.003, Web Bluetooth Laser & UI/UX Härtung)
+- **Deep Research & Baustellen-Anforderungsanalyse:**
+  - [`Features/10_deep_research_bau_offline_erp_anforderungen_und_gap_optimierung.txt`](../Features/10_deep_research_bau_offline_erp_anforderungen_und_gap_optimierung.txt): 801 Zeilen umfassende Fachstudie zu realen Baustellen-Herausforderungen (Faradayscher Käfig, ländliche Funklöcher, Akku-Drosselung bei Netzsuche, Ausfall reiner SaaS-Web-Apps).
+  - Umfassender Benchmark von 8 Konkurrenzsystemen (*pds, STREIT, KWP, baufaktura, 123erfasst, Capmo, PlanRadar, Craftnote*) und TCO-Vergleich (5-Jahres-Ersparnis > 35.000 € durch Einmalkauf-Modell).
+- **Masterplan Phase 5 (Stufe 1, 2 & 3):**
+  - [`plans/phase5-stufe-1-2-3-baustellen-offline-masterplan.md`](../plans/phase5-stufe-1-2-3-baustellen-offline-masterplan.md): 1.696 Zeilen Architekturplan für Quick Wins, REB 23.003 Aufmaß, Web Bluetooth BLE Laser, PDF.js Plan-Viewer und Barcode-Scanning.
+- **Datenbankschema & Migration 006:**
+  - [`schema.js`](../schema.js): Migration `006_baustellen_offline_stufe_1_2_3` mit Tabellen `kolonnen`, `kolonnen_mitarbeiter`, `bauplaene`, `geraete_buchungen`, `lieferscheine_digital`, `maengel` und Spaltenerweiterungen in `aufmass_zeilen` und `maengelkataster`.
+  - [`pwa/js/pwa-db.js`](../pwa/js/pwa-db.js): Dexie.js Upgrade auf Version 2 mit 7 neuen Offline-Stores (`local_aufmass`, `local_aufmass_zeilen`, `cache_kolonnen`, `cache_bauplaene`, `local_maengel`, `local_geraete_buchungen`, `local_lieferscheine`).
+- **Stufe 1 (Quick Wins):**
+  - [`pwa/js/crypto-sync-bundle.js`](../pwa/js/crypto-sync-bundle.js), [`pwa/js/sync-bundle.js`](../pwa/js/sync-bundle.js) & [`main/sync-bundle-importer.js`](../main/sync-bundle-importer.js): Notfall-USB-Sync (`.wlsync` Paket) via PBKDF2 (100.000 Iterationen), AES-GCM-256 und SHA-256 Integritätsprüfung mit idempotenter Desktop-SQLite-Übernahme.
+  - [`pwa/js/pwa-app.js`](../pwa/js/pwa-app.js) & [`pwa/index.html`](../pwa/index.html): Polier-Kolonnen-Schnellstempelung mit ArbZG-Wächter (§ 3, § 4, § 5) und BRTV-Wegezeitstaffel.
+  - [`pwa/css/pwa.css`](../pwa/css/pwa.css): Baustellen-Sonnenlichtmodus (WCAG AAA Signalgelb/Schwarz) und Handschuhbedienung mit $\ge 52\,\text{px}$ Touch-Targets.
+- **Stufe 2 (Mobiles Aufmaß & Laser-BLE):**
+  - [`pwa/js/reb-aufmass.js`](../pwa/js/reb-aufmass.js): REB 23.003 Aufmaß-Rechenkern (Formeln 01, 02, 04, 23, 91), VOB/C Übermessungsprüfung ($\le 2{,}5\,\text{m}^2$) und normierter DA11-Satzart 11 Export (80 Bytes).
+  - [`pwa/js/bluetooth-laser.js`](../pwa/js/bluetooth-laser.js): Web Bluetooth BLE-Treiber für Leica DISTO (Float32 Little-Endian) und Bosch GLM (MT-Protokoll) mit automatischem Fokus-Sprung ins nächste Maßfeld.
+  - [`pwa/index.html`](../pwa/index.html): Neuer Tab `#tab-aufmass` für mobile Aufmaßblätter mit Raumzuordnung.
+- **Stufe 3 (Offline Plan-Viewer & Barcode-Scanner):**
+  - [`pwa/js/plan-viewer.js`](../pwa/js/plan-viewer.js): Offline Canvas-Viewer mit Pinch-to-Zoom/Pan, zoom-invarianten Prozent-Pins ($X\% / Y\%$) und VOB/B § 13 Fristenampel (Rot/Gelb/Grün/Grau) mit geometrischen Symbolen für Barrierefreiheit.
+  - [`pwa/js/barcode-scanner.js`](../pwa/js/barcode-scanner.js): Native `BarcodeDetector`-API für BGL-Großgerätebuchung und Kontrastfilter für Papier-Lieferscheinfotos.
+- **Strenge UI/UX-Audits & Vollständige Härtung:**
+  - Zwei unabhängige Fach-Audits für Desktop ERP (Note 4,0) und Mobile PWA (Note 4,7) mit 26 identifizierten Mängeln.
+  - Vollständige Behebung aller 13 kritischen (P0) und hohen (P1/P2) Bugs:
+    * USB-Sync persistiert Mutationen & Fotos atomar in IndexedDB.
+    * Plan-Viewer entkoppelt Pan-Wischen und Tap-Mängelplatzierung durch $\ge 8\,\text{px}$ Hysterese.
+    * Foto-Markup-Canvas mit Touch-Listenern für Freihand, Kreis und Pfeil ausgestattet.
+    * Echter Kamera-Barcode-Scanner mit Sucherfenster ersetzt Dummy-Alerts.
+    * Zeiterfassung-Subtabs ([`views/ZeiterfassungView.js`](../views/ZeiterfassungView.js)) und Sync-Navigation ([`views/SyncView.js`](../views/SyncView.js)) repariert.
+    * KalkulationView ([`views/KalkulationView.js`](../views/KalkulationView.js)) Fokusverlust behoben.
+    * GAEB X83 Import ([`js/projekte.js`](../js/projekte.js)) an Aufmaß-Split-Screen angebunden.
+    * Globales Modal-Schließen per `Escape` und Beleg-Schnellspeichern per `Strg+S` implementiert.
+    * B2G Leitweg-ID Pflichtfeldvalidierung in Kunden- und Belegverwaltung verankert.
+- **Tests & Verifikation:**
+  - [`tests/phase5_stufe1_2_3.test.js`](../tests/phase5_stufe1_2_3.test.js): 12 Kernprüfungen (TC-01 bis TC-12) erfolgreich implementiert.
+  - Gesamtsystem: **224 von 224 Tests bestanden (100% grün, 8 Test-Suites)**.
+- **Dokumentation:**
+  - [`doc/session_summary_2026-09-03_ui_ux_reparatur_und_optimierung.md`](session_summary_2026-09-03_ui_ux_reparatur_und_optimierung.md)
+  - [`doc/session_summary_2026-09-03_phase5_offline_erp_und_ui_ux_haertung.md`](session_summary_2026-09-03_phase5_offline_erp_und_ui_ux_haertung.md)
+
 ## 30.08.2026 (Release 2.0: Phase 4 – IDS Connect 2.5, SOKA-BAU & Nachunternehmer-Compliance)
 - **IDS Connect 2.5 & Open Masterdata Engine:**
   - [`controllers/IDSConnectController.js`](../controllers/IDSConnectController.js) & [`main/ids-connect-service.js`](../main/ids-connect-service.js): Deep-Link Handshake-URL-Builder mit Hook-URL, Session-Token und CSRF-Schutz.

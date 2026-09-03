@@ -1125,7 +1125,96 @@ function createSchema(db) {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_sub_compliance_kunde ON subcontractor_compliance_nachweise(kunde_id)`); } catch (e) { console.error('[DB Schema] Index idx_sub_compliance_kunde:', e.message); }
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_sub_compliance_status ON subcontractor_compliance_nachweise(status)`); } catch (e) { console.error('[DB Schema] Index idx_sub_compliance_status:', e.message); }
+    // =========================================================================
+    // PHASE 5 (STUFE 1, 2, 3) - MOBILER BAUSTELLEN-OFFLINE-BETRIEB (MIGRATION 006)
+    // =========================================================================
+
+    // 1. Kolonnen-Stammdaten für Polier-Schnellstempelung
+    db.exec(`CREATE TABLE IF NOT EXISTS kolonnen (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        polier_id INTEGER,
+        aktiv INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (polier_id) REFERENCES mitarbeiter(id) ON DELETE SET NULL
+    )`);
+
+    db.exec(`CREATE TABLE IF NOT EXISTS kolonnen_mitarbeiter (
+        kolonne_id INTEGER NOT NULL,
+        mitarbeiter_id INTEGER NOT NULL,
+        PRIMARY KEY (kolonne_id, mitarbeiter_id),
+        FOREIGN KEY (kolonne_id) REFERENCES kolonnen(id) ON DELETE CASCADE,
+        FOREIGN KEY (mitarbeiter_id) REFERENCES mitarbeiter(id) ON DELETE CASCADE
+    )`);
+
+    // 2. Bauplan-Verwaltung & PDF-Speicher
+    db.exec(`CREATE TABLE IF NOT EXISTS bauplaene (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        projekt_id INTEGER NOT NULL,
+        titel TEXT NOT NULL,
+        dateiname TEXT NOT NULL,
+        rel_pfad TEXT NOT NULL,
+        seiten_anzahl INTEGER DEFAULT 1,
+        file_size_bytes INTEGER DEFAULT 0,
+        sha256_hash TEXT NOT NULL,
+        version INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (projekt_id) REFERENCES projekte(id) ON DELETE CASCADE
+    )`);
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_bauplaene_projekt ON bauplaene(projekt_id)`); } catch (e) { console.error('[DB Schema] Index idx_bauplaene_projekt:', e.message); }
+
+    // 3. Geräte-Einsatzbuchungen (BGL)
+    db.exec(`CREATE TABLE IF NOT EXISTS geraete_buchungen (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid TEXT UNIQUE NOT NULL,
+        projekt_id INTEGER NOT NULL,
+        geraet_code TEXT NOT NULL,
+        datum DATE NOT NULL,
+        betriebsstunden REAL DEFAULT 0.0,
+        stillstand_stunden REAL DEFAULT 0.0,
+        stillstand_grund TEXT,
+        device_id TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (projekt_id) REFERENCES projekte(id) ON DELETE CASCADE
+    )`);
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_geraete_buchungen_proj ON geraete_buchungen(projekt_id, datum)`); } catch (e) { console.error('[DB Schema] Index idx_geraete_buchungen_proj:', e.message); }
+
+    // 4. Digitale Lieferscheine vor Ort
+    db.exec(`CREATE TABLE IF NOT EXISTS lieferscheine_digital (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid TEXT UNIQUE NOT NULL,
+        projekt_id INTEGER NOT NULL,
+        lieferant_name TEXT,
+        lieferschein_nr TEXT,
+        datum DATE NOT NULL,
+        foto_pfad TEXT NOT NULL,
+        sha256_hash TEXT NOT NULL,
+        status TEXT DEFAULT 'ERFASST',
+        device_id TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (projekt_id) REFERENCES projekte(id) ON DELETE CASCADE
+    )`);
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_lieferscheine_proj ON lieferscheine_digital(projekt_id)`); } catch (e) { console.error('[DB Schema] Index idx_lieferscheine_proj:', e.message); }
+
+    // 5. Mängel-Pins & Bauplanverortung
+    db.exec(`CREATE TABLE IF NOT EXISTS maengel (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid TEXT UNIQUE,
+        projekt_id INTEGER NOT NULL REFERENCES projekte(id) ON DELETE CASCADE,
+        plan_id INTEGER REFERENCES bauplaene(id) ON DELETE SET NULL,
+        mangel_nr TEXT NOT NULL,
+        x_pct REAL DEFAULT 0.0,
+        y_pct REAL DEFAULT 0.0,
+        titel TEXT NOT NULL,
+        beschreibung TEXT,
+        gewerk TEXT,
+        status TEXT DEFAULT 'ERFASST',
+        frist_datum DATE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_maengel_proj ON maengel(projekt_id)`); } catch (e) { console.error('[DB Schema] Index idx_maengel_proj:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_maengel_plan ON maengel(plan_id)`); } catch (e) { console.error('[DB Schema] Index idx_maengel_plan:', e.message); }
 }
 
 function runMigrations(db) {
@@ -1802,6 +1891,116 @@ function runMigrations(db) {
     } catch (e) {
         if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] Phase 4 tables:', e.message);
     }
+
+    // =========================================================================
+    // PHASE 5: MIGRATION 006 - BAUSTELLEN-OFFLINE STUFE 1, 2 & 3
+    // =========================================================================
+    try {
+        // 1. Kolonnen-Stammdaten für Polier-Schnellstempelung
+        db.exec(`CREATE TABLE IF NOT EXISTS kolonnen (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            polier_id INTEGER,
+            aktiv INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (polier_id) REFERENCES mitarbeiter(id) ON DELETE SET NULL
+        )`);
+
+        db.exec(`CREATE TABLE IF NOT EXISTS kolonnen_mitarbeiter (
+            kolonne_id INTEGER NOT NULL,
+            mitarbeiter_id INTEGER NOT NULL,
+            PRIMARY KEY (kolonne_id, mitarbeiter_id),
+            FOREIGN KEY (kolonne_id) REFERENCES kolonnen(id) ON DELETE CASCADE,
+            FOREIGN KEY (mitarbeiter_id) REFERENCES mitarbeiter(id) ON DELETE CASCADE
+        )`);
+
+        // 2. Bauplan-Verwaltung & PDF-Speicher
+        db.exec(`CREATE TABLE IF NOT EXISTS bauplaene (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            projekt_id INTEGER NOT NULL,
+            titel TEXT NOT NULL,
+            dateiname TEXT NOT NULL,
+            rel_pfad TEXT NOT NULL,
+            seiten_anzahl INTEGER DEFAULT 1,
+            file_size_bytes INTEGER DEFAULT 0,
+            sha256_hash TEXT NOT NULL,
+            version INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (projekt_id) REFERENCES projekte(id) ON DELETE CASCADE
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_bauplaene_projekt ON bauplaene(projekt_id)`);
+
+        // 3. Geräte-Einsatzbuchungen (BGL)
+        db.exec(`CREATE TABLE IF NOT EXISTS geraete_buchungen (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid TEXT UNIQUE NOT NULL,
+            projekt_id INTEGER NOT NULL,
+            geraet_code TEXT NOT NULL,
+            datum DATE NOT NULL,
+            betriebsstunden REAL DEFAULT 0.0,
+            stillstand_stunden REAL DEFAULT 0.0,
+            stillstand_grund TEXT,
+            device_id TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (projekt_id) REFERENCES projekte(id) ON DELETE CASCADE
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_geraete_buchungen_proj ON geraete_buchungen(projekt_id, datum)`);
+
+        // 4. Digitale Lieferscheine vor Ort
+        db.exec(`CREATE TABLE IF NOT EXISTS lieferscheine_digital (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid TEXT UNIQUE NOT NULL,
+            projekt_id INTEGER NOT NULL,
+            lieferant_name TEXT,
+            lieferschein_nr TEXT,
+            datum DATE NOT NULL,
+            foto_pfad TEXT NOT NULL,
+            sha256_hash TEXT NOT NULL,
+            status TEXT DEFAULT 'ERFASST',
+            device_id TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (projekt_id) REFERENCES projekte(id) ON DELETE CASCADE
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_lieferscheine_proj ON lieferscheine_digital(projekt_id)`);
+
+        // 5. Mängel-Pins & Bauplanverortung
+        db.exec(`CREATE TABLE IF NOT EXISTS maengel (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            uuid TEXT UNIQUE,
+            projekt_id INTEGER NOT NULL REFERENCES projekte(id) ON DELETE CASCADE,
+            plan_id INTEGER REFERENCES bauplaene(id) ON DELETE SET NULL,
+            mangel_nr TEXT NOT NULL,
+            x_pct REAL DEFAULT 0.0,
+            y_pct REAL DEFAULT 0.0,
+            titel TEXT NOT NULL,
+            beschreibung TEXT,
+            gewerk TEXT,
+            status TEXT DEFAULT 'ERFASST',
+            frist_datum DATE,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_maengel_proj ON maengel(projekt_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_maengel_plan ON maengel(plan_id)`);
+    } catch (e) {
+        if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] Phase 5 tables:', e.message);
+    }
+
+    // 6. Mängel-Pins Spaltenerweiterungen auf maengel & maengelkataster
+    try { db.exec(`ALTER TABLE maengelkataster ADD COLUMN plan_id INTEGER REFERENCES bauplaene(id) ON DELETE SET NULL`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE maengelkataster ADD COLUMN x_pct REAL DEFAULT 0.0`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE maengelkataster ADD COLUMN y_pct REAL DEFAULT 0.0`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+
+    try { db.exec(`ALTER TABLE maengel ADD COLUMN plan_id INTEGER REFERENCES bauplaene(id) ON DELETE SET NULL`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE maengel ADD COLUMN x_pct REAL DEFAULT 0.0`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE maengel ADD COLUMN y_pct REAL DEFAULT 0.0`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+
+    // 7. REB 23.003 Aufmaßzeilen Erweiterungen
+    try { db.exec(`ALTER TABLE aufmass_zeilen ADD COLUMN uuid TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE aufmass_zeilen ADD COLUMN raum_id INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE aufmass_zeilen ADD COLUMN formel_code TEXT DEFAULT '91'`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE aufmass_zeilen ADD COLUMN rechenansatz TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_aufmass_zeilen_uuid ON aufmass_zeilen(uuid)`); } catch (e) { if (!e.message.includes('already exists')) console.warn('[DB Migration Warning]:', e.message); }
 
     // --- Datenintegrität: Duplikate bereinigen + UNIQUE-Indizes ---
     ensureUniqueConstraints(db);

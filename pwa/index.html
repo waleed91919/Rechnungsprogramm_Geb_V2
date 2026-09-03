@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
     <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
     <title>W-Link ERP Baustellenbegleiter</title>
     <link rel="manifest" href="manifest.webmanifest"/>
     <link rel="stylesheet" href="css/pwa.css"/>
@@ -18,9 +18,18 @@
             </svg>
             <span>W-Link Mobile</span>
         </div>
-        <div class="sync-status-indicator" id="header-sync-status" onclick="switchTab('sync')">
-            <div class="status-dot" id="sync-dot"></div>
-            <span id="sync-text">Offline</span>
+
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <button type="button" class="btn btn-secondary" onclick="toggleSunlightMode()" title="Sonnenlicht High-Contrast Modus" style="min-height: 48px; min-width: 48px; padding: 6px 12px; font-size: 13px;">
+                ☀️ Sonne
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="toggleGloveMode()" title="Handschuh-Modus (52px Touch)" style="min-height: 48px; min-width: 48px; padding: 6px 12px; font-size: 13px;">
+                🧤 Handschuh
+            </button>
+            <div class="sync-status-indicator" id="header-sync-status" onclick="switchTab('sync')">
+                <div class="status-dot" id="sync-dot"></div>
+                <span id="sync-text">Offline</span>
+            </div>
         </div>
     </header>
 
@@ -34,11 +43,46 @@
                     <span id="current-date-label" style="font-size: 13px; color: var(--text-muted);">Heute</span>
                 </div>
 
-                <div class="form-group">
-                    <label class="form-label">Mitarbeiter</label>
-                    <select id="punch-mitarbeiter-select" class="form-select">
-                        <option value="">-- Mitarbeiter wählen --</option>
-                    </select>
+                <!-- Segmentierter Modus-Schalter: Einzel vs. Kolonne -->
+                <div class="stempel-mode-switch">
+                    <button type="button" class="stempel-mode-btn active" id="mode-btn-einzel" onclick="setStempelModus('EINZEL')">
+                        👤 Einzel-Modus
+                    </button>
+                    <button type="button" class="stempel-mode-btn" id="mode-btn-kolonne" onclick="setStempelModus('KOLONNE')">
+                        ★ Kolonnen-Modus
+                    </button>
+                </div>
+
+                <!-- Einzel-Mitarbeiter Modus -->
+                <div id="punch-einzel-container">
+                    <div class="form-group">
+                        <label class="form-label">Mitarbeiter</label>
+                        <select id="punch-mitarbeiter-select" class="form-select">
+                            <option value="">-- Mitarbeiter wählen --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Kolonnen-Modus -->
+                <div id="punch-kolonne-container" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">Kolonne auswählen</label>
+                        <select id="punch-kolonne-select" class="form-select" onchange="handleKolonneChange()">
+                            <option value="">-- Kolonne wählen --</option>
+                        </select>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <label class="form-label" style="margin: 0;">Monteur-Auswahl</label>
+                        <label style="font-size: 13px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                            <input type="checkbox" id="kolonne-select-all" onchange="toggleSelectAllKolonne(this.checked)"/>
+                            <span>Alle auswählen</span>
+                        </label>
+                    </div>
+
+                    <div class="kolonne-worker-list" id="kolonne-workers-list">
+                        <!-- Dynamisch befüllt -->
+                    </div>
                 </div>
 
                 <div class="form-group">
@@ -53,8 +97,8 @@
                     <select id="punch-taetigkeit-select" class="form-select">
                         <option value="PRODUKTIV">Produktivzeit (Baustelle/Gewerk)</option>
                         <option value="RUESTZEIT">Rüstzeit (Lager/Fahrzeug)</option>
-                        <option value="WEGEZEIT_FAHRER">Wegezeit (Fahrer - Arbeitszeit)</option>
-                        <option value="WEGEZEIT_MITFAHRER">Wegezeit (Mitfahrer - BRTV)</option>
+                        <option value="WEGEZEIT_FAHRER">Wegezeit (Fahrer - volle Arbeitszeit)</option>
+                        <option value="WEGEZEIT_MITFAHRER">Wegezeit (Mitfahrer - BRTV Staffel)</option>
                         <option value="SCHLECHTWEWETTER">Schlechtwetter (Saison-KUG)</option>
                         <option value="REINIGUNG">Unterhaltsreinigung</option>
                         <option value="BEREITSCHAFT">Bereitschaft</option>
@@ -63,7 +107,8 @@
 
                 <div class="live-timer" id="live-timer-display">00:00:00</div>
 
-                <div class="punch-grid">
+                <!-- Einzel-Punch Buttons -->
+                <div class="punch-grid" id="punch-buttons-einzel">
                     <button class="btn-punch btn-kommen" onclick="handlePunch('KOMMEN')">
                         <span>▶ KOMMEN</span>
                         <small style="font-size: 11px; font-weight: normal;">Arbeitsbeginn</small>
@@ -74,6 +119,21 @@
                     </button>
                     <button class="btn-punch btn-pause" onclick="handlePunch('PAUSE')">
                         <span>☕ PAUSE STEMPELN (30 Min)</span>
+                    </button>
+                </div>
+
+                <!-- Kolonnen-Punch Buttons (Großtasten >=52px) -->
+                <div class="punch-grid" id="punch-buttons-kolonne" style="display: none;">
+                    <button class="btn-punch btn-kommen" onclick="handleKolonnenPunch('KOMMEN')">
+                        <span>▶ KOLONNE KOMMEN</span>
+                        <small id="btn-label-kolonne-kommen" style="font-size: 11px; font-weight: normal;">0 Monteure</small>
+                    </button>
+                    <button class="btn-punch btn-gehen" onclick="handleKolonnenPunch('GEHEN')">
+                        <span>⏹ KOLONNE GEHEN</span>
+                        <small id="btn-label-kolonne-gehen" style="font-size: 11px; font-weight: normal;">0 Monteure</small>
+                    </button>
+                    <button class="btn-punch btn-pause" onclick="handleKolonnenPunch('PAUSE')">
+                        <span>☕ KOLONNE PAUSE (30 Min)</span>
                     </button>
                 </div>
 
@@ -97,7 +157,143 @@
             </div>
         </section>
 
-        <!-- 2. TAB: BAUTAGEBUCH -->
+        <!-- 2. TAB: MOBILES AUFMASS (REB 23.003 & LASER-BLE) -->
+        <section id="tab-aufmass" class="tab-pane">
+            <div class="card">
+                <div class="card-title">
+                    <span>Mobiles Aufmaß (REB 23.003)</span>
+                    <div class="laser-active-badge disconnected" id="laser-status-badge">
+                        <span id="laser-status-text">Laser getrennt</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                    <button type="button" class="btn" id="btn-connect-laser" onclick="connectLaserDevice()" style="background: #0284c7;">
+                        ⚡ Web Bluetooth Laser verbinden
+                    </button>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Projekt</label>
+                    <select id="aufmass-projekt-select" class="form-select" onchange="loadProjectAufmassBlatt()"></select>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div class="form-group">
+                        <label class="form-label">Ordnungszahl (OZ) *</label>
+                        <input type="text" id="aufmass-oz-input" class="form-input" placeholder="01.02.0040" value="01.01.0010"/>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Raum / Bauteil</label>
+                        <input type="text" id="aufmass-raum-input" class="form-input" placeholder="z.B. EG Wohnzimmer"/>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">REB 23.003 Formel</label>
+                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px;">
+                        <button type="button" class="btn btn-secondary reb-pill active" id="pill-fn-01" onclick="selectRebFormel('01')">01 Rechteck</button>
+                        <button type="button" class="btn btn-secondary reb-pill" id="pill-fn-02" onclick="selectRebFormel('02')">02 Dreieck</button>
+                        <button type="button" class="btn btn-secondary reb-pill" id="pill-fn-04" onclick="selectRebFormel('04')">04 Trapez</button>
+                        <button type="button" class="btn btn-secondary reb-pill" id="pill-fn-23" onclick="selectRebFormel('23')">23 Quader</button>
+                        <button type="button" class="btn btn-secondary reb-pill" id="pill-fn-91" onclick="selectRebFormel('91')">91 Frei</button>
+                    </div>
+                    <input type="hidden" id="aufmass-formel-code" value="01"/>
+                </div>
+
+                <!-- Dynamische Laser-Eingabefelder -->
+                <div id="aufmass-inputs-container">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;" id="reb-inputs-standard">
+                        <div class="form-group">
+                            <label class="form-label">Länge / a (m) [Laser 1]</label>
+                            <input type="number" step="0.001" inputmode="decimal" id="reb-param-a" class="form-input laser-input" placeholder="0.000" oninput="calculateLiveAufmass()"/>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Breite / b (m) [Laser 2]</label>
+                            <input type="number" step="0.001" inputmode="decimal" id="reb-param-b" class="form-input laser-input" placeholder="0.000" oninput="calculateLiveAufmass()"/>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; display: none;" id="reb-inputs-extended">
+                        <div class="form-group">
+                            <label class="form-label">Seite c (m)</label>
+                            <input type="number" step="0.001" inputmode="decimal" id="reb-param-c" class="form-input laser-input" placeholder="0.000" oninput="calculateLiveAufmass()"/>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Höhe h (m)</label>
+                            <input type="number" step="0.001" inputmode="decimal" id="reb-param-h" class="form-input laser-input" placeholder="0.000" oninput="calculateLiveAufmass()"/>
+                        </div>
+                    </div>
+                    <div class="form-group" id="reb-inputs-free" style="display: none;">
+                        <label class="form-label">Freie Formel (z.B. (5.2+3.1)*2.5)</label>
+                        <input type="text" id="reb-param-free" class="form-input" placeholder="(a + b) * h" oninput="calculateLiveAufmass()"/>
+                    </div>
+                </div>
+
+                <!-- Live-Ergebnis Anzeige & VOB/C Übermessungs-Info -->
+                <div style="background: var(--bg-main); padding: 12px; border-radius: 8px; margin: 12px 0; display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <span style="font-size: 13px; color: var(--text-muted);">Berechnetes Zeilenergebnis:</span>
+                        <div id="reb-live-result" style="font-size: 22px; font-weight: 800; color: var(--primary);">0.000 m²</div>
+                    </div>
+                    <div id="vob-uebermessung-badge" style="display: none; background: #e0f2fe; color: #0369a1; padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: bold;">
+                        ✓ Übermessen (&le; 2,5 m²)
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px;">
+                    <button type="button" class="btn" onclick="saveAufmassZeile()">
+                        <span>+ Zeile hinzufügen</span>
+                    </button>
+                    <button type="button" class="btn btn-secondary" onclick="exportCurrentDa11()">
+                        <span>DA11</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Erfasste Aufmaßzeilen -->
+            <div class="card">
+                <div class="card-title">
+                    <span>Erfasste Zeilen dieser OZ</span>
+                    <span id="aufmass-oz-total" style="font-size: 14px; font-weight: 800; color: var(--primary);">Gesamt: 0.000 m²</span>
+                </div>
+                <div id="aufmass-zeilen-list">
+                    <p style="color: var(--text-muted); font-size: 13px;">Noch keine Aufmaßzeilen für diese OZ erfasst.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. TAB: OFFLINE BAUPLAN-VIEWER & MÄNGEL -->
+        <section id="tab-bauplan" class="tab-pane">
+            <div class="card">
+                <div class="card-title">
+                    <span>Bauplan-Viewer & Mängel-Pins</span>
+                    <div style="display: flex; gap: 6px;">
+                        <button type="button" class="btn btn-secondary" onclick="planZoomIn()" style="padding: 4px 10px; width: auto; min-height: 36px;">+</button>
+                        <button type="button" class="btn btn-secondary" onclick="planZoomOut()" style="padding: 4px 10px; width: auto; min-height: 36px;">-</button>
+                        <button type="button" class="btn btn-secondary" onclick="planResetView()" style="padding: 4px 10px; width: auto; min-height: 36px;">100%</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Bauplan wählen</label>
+                    <select id="plan-select" class="form-select" onchange="loadSelectedPlan()">
+                        <option value="">-- Bauplan wählen (PDF) --</option>
+                    </select>
+                </div>
+
+                <!-- Gestenbasierter Plan-Container mit Pinch/Zoom -->
+                <div class="plan-container" id="bauplan-viewport">
+                    <canvas class="plan-canvas" id="plan-canvas"></canvas>
+                    <div class="plan-overlay" id="plan-overlay-layer"></div>
+                </div>
+
+                <p style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">
+                    💡 Tipp: Mit zwei Fingern zoomen/verschieben. Auf eine Stelle tippen, um einen Mangel mit Fristen-Ampel zu platzieren.
+                </p>
+            </div>
+        </section>
+
+        <!-- 4. TAB: BAUTAGEBUCH -->
         <section id="tab-bautagebuch" class="tab-pane">
             <div class="card">
                 <div class="card-title">Mobiles Bautagebuch</div>
@@ -150,7 +346,7 @@
             </div>
         </section>
 
-        <!-- 3. TAB: VOB/B MELDUNGEN -->
+        <!-- 5. TAB: VOB/B MELDUNGEN -->
         <section id="tab-vob" class="tab-pane">
             <div class="card">
                 <div class="card-title">VOB/B Meldewesen vor Ort</div>
@@ -217,7 +413,7 @@
             </div>
         </section>
 
-        <!-- 4. TAB: KAMERA & MÄNGEL -->
+        <!-- 6. TAB: KAMERA & FOTO-DOKUMENTATION -->
         <section id="tab-kamera" class="tab-pane">
             <div class="card">
                 <div class="card-title">Baustellenkamera & Markup</div>
@@ -232,7 +428,6 @@
                     <input type="text" id="cam-titel-input" class="form-input" placeholder="z.B. Undichte Rohrverbindung"/>
                 </div>
 
-                <!-- Kamera Buttons -->
                 <div style="display: flex; gap: 10px; margin-bottom: 12px;">
                     <button class="btn" id="btn-trigger-camera" onclick="triggerCameraCapture()">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -243,7 +438,6 @@
                     </button>
                 </div>
 
-                <!-- Photo Preview & Markup Canvas -->
                 <div id="photo-preview-container" style="display: none;">
                     <div class="canvas-container" style="height: 260px;">
                         <canvas id="markup-canvas"></canvas>
@@ -258,10 +452,87 @@
             </div>
         </section>
 
-        <!-- 5. TAB: SYNC & SERVER -->
+        <!-- 7. TAB: GERÄTE & LIEFERSCHEINE (BGL / BARCODE) -->
+        <section id="tab-geraete" class="tab-pane">
+            <div class="card">
+                <div class="card-title">Großgeräte-Einsatzbericht (BGL)</div>
+
+                <div class="form-group">
+                    <label class="form-label">Projekt</label>
+                    <select id="ger-projekt-select" class="form-select"></select>
+                </div>
+
+                <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                    <button type="button" class="btn btn-secondary" onclick="scanGeraetQrCode()">
+                        📷 Barcode / QR-Tag scannen
+                    </button>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Geräte-Code / BGL-Nummer *</label>
+                    <input type="text" id="ger-code-input" class="form-input" placeholder="z.B. GER-BGL-042 Kran"/>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div class="form-group">
+                        <label class="form-label">Betriebsstunden (h) *</label>
+                        <input type="number" step="0.5" inputmode="decimal" id="ger-stunden-input" class="form-input" value="8.0"/>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Stillstand (h)</label>
+                        <input type="number" step="0.5" inputmode="decimal" id="ger-stillstand-input" class="form-input" value="0.0"/>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Stillstandsgrund (z.B. Sturm > 6 Bft gem. VOB/B § 6)</label>
+                    <input type="text" id="ger-grund-input" class="form-input" placeholder="Witterung, Reparatur, etc."/>
+                </div>
+
+                <button type="button" class="btn" onclick="saveGeraetBookingForm()">
+                    <span>Gerätestunden verbuchen</span>
+                </button>
+            </div>
+
+            <!-- Digitale Lieferscheinerfassung -->
+            <div class="card">
+                <div class="card-title">Digitaler Lieferschein (Foto & Kontrastfilter)</div>
+
+                <div class="form-group">
+                    <label class="form-label">Projekt</label>
+                    <select id="ls-projekt-select" class="form-select"></select>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div class="form-group">
+                        <label class="form-label">Lieferant</label>
+                        <input type="text" id="ls-lieferant-input" class="form-input" placeholder="Baustoffhändler"/>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Lieferschein-Nr.</label>
+                        <input type="text" id="ls-nummer-input" class="form-input" placeholder="LS-98231"/>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+                    <button type="button" class="btn" onclick="triggerLieferscheinCapture()">
+                        📷 Lieferschein fotografieren & binarisieren
+                    </button>
+                </div>
+
+                <div id="ls-preview-container" style="display: none; margin-bottom: 12px;">
+                    <canvas id="ls-contrast-canvas" style="width: 100%; max-height: 220px; border: 1px solid var(--border); border-radius: 8px;"></canvas>
+                    <button type="button" class="btn btn-secondary" onclick="saveCapturedLieferschein()" style="margin-top: 8px;">
+                        Lieferschein lokal puffern
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 8. TAB: SYNC & NOTFALL-USB-BUNDLE -->
         <section id="tab-sync" class="tab-pane">
             <div class="card">
-                <div class="card-title">Synchronisation & Pairing</div>
+                <div class="card-title">WLAN Hotspot-Sync & Pairing</div>
 
                 <div class="form-group">
                     <label class="form-label">Server-Adresse (Desktop Hub)</label>
@@ -287,32 +558,87 @@
                     Warteschlange: <strong id="outbox-count-label">0</strong> ausstehende Änderungen.
                 </div>
             </div>
+
+            <!-- Notfall-USB-Sync Bundle (.wlsync mit PBKDF2 & AES-GCM-256) -->
+            <div class="card" style="border: 2px solid #3b82f6;">
+                <div class="card-title">
+                    <span>Notfall-USB-Sync (.wlsync)</span>
+                    <span style="font-size: 11px; background: #3b82f6; color: #fff; padding: 2px 6px; border-radius: 4px;">100% Autark</span>
+                </div>
+                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+                    Für Funkschatten, Tunnel & Sicherheitsbereiche: Exportiert alle offenen Buchungen militärisch verschlüsselt auf einen USB-Stick.
+                </p>
+
+                <div class="form-group">
+                    <label class="form-label">Baustellen-Passwort für Verschlüsselung *</label>
+                    <input type="password" id="usb-sync-password" class="form-input" placeholder="Mindestens 4 Zeichen"/>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <button type="button" class="btn" onclick="exportEmergencyUsbBundle()">
+                        💾 Notfall-Bundle exportieren (.wlsync)
+                    </button>
+                    <label class="btn btn-secondary" style="cursor: pointer; text-align: center;">
+                        📂 Notfall-Bundle importieren (.wlsync)
+                        <input type="file" id="usb-sync-import-file" accept=".wlsync,application/json" style="display: none;" onchange="importEmergencyUsbBundle(this)"/>
+                    </label>
+                </div>
+            </div>
         </section>
+
+        <!-- [K-4] Barcode / QR-Code Scanner Modal mit Kamera-Live-Stream -->
+        <div id="barcode-scanner-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; padding: 16px;">
+            <div style="background: var(--card-bg, #1e293b); border-radius: 12px; max-width: 440px; width: 100%; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5); display: flex; flex-direction: column;">
+                <div style="padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border, #334155);">
+                    <strong style="color: var(--text-main, #fff); font-size: 15px;">📷 Barcode / QR-Code Scanner</strong>
+                    <button type="button" class="btn btn-secondary" onclick="closeBarcodeScannerModal()" style="padding: 4px 10px; font-size: 14px; min-height: 36px; min-width: 36px;">✕</button>
+                </div>
+                <div style="position: relative; background: #000; width: 100%; height: 280px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                    <video id="barcode-scanner-video" playsinline autoplay muted style="width: 100%; height: 100%; object-fit: cover;"></video>
+                    <!-- Sucher-Rahmen (Viewfinder) -->
+                    <div style="position: absolute; width: 200px; height: 200px; border: 2px solid #22c55e; border-radius: 12px; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.4); pointer-events: none;"></div>
+                    <div id="barcode-scanner-status" style="position: absolute; bottom: 8px; color: #fff; font-size: 12px; background: rgba(0,0,0,0.6); padding: 3px 8px; border-radius: 4px;">Kamera wird initialisiert...</div>
+                </div>
+                <div style="padding: 12px; display: flex; justify-content: flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="closeBarcodeScannerModal()">Abbrechen</button>
+                </div>
+            </div>
+        </div>
     </main>
 
-    <!-- Bottom Navigation Bar -->
+    <!-- Bottom Navigation Bar (Optimiert für 8 Kern-Bereiche) -->
     <nav class="bottom-nav">
         <div class="nav-item active" onclick="switchTab('stempeluhr')" id="nav-tab-stempeluhr">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="10"/>
                 <polyline points="12 6 12 12 16 14"/>
             </svg>
-            <span>Stempeluhr</span>
+            <span>Stempel</span>
+        </div>
+        <div class="nav-item" onclick="switchTab('aufmass')" id="nav-tab-aufmass">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M2 12h20M2 12l5-5M2 12l5 5M22 12l-5-5M22 12l-5 5"/>
+            </svg>
+            <span>Aufmaß</span>
+        </div>
+        <div class="nav-item" onclick="switchTab('bauplan')" id="nav-tab-bauplan">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/>
+                <line x1="8" y1="2" x2="8" y2="18"/>
+                <line x1="16" y1="6" x2="16" y2="22"/>
+            </svg>
+            <span>Pläne</span>
         </div>
         <div class="nav-item" onclick="switchTab('bautagebuch')" id="nav-tab-bautagebuch">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                 <polyline points="14 2 14 8 20 8"/>
-                <line x1="16" y1="13" x2="8" y2="13"/>
-                <line x1="16" y1="17" x2="8" y2="17"/>
             </svg>
-            <span>Bautagebuch</span>
+            <span>Bericht</span>
         </div>
         <div class="nav-item" onclick="switchTab('vob')" id="nav-tab-vob">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                <line x1="12" y1="9" x2="12" y2="13"/>
-                <line x1="12" y1="17" x2="12.01" y2="17"/>
             </svg>
             <span>VOB/B</span>
         </div>
@@ -321,7 +647,16 @@
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
                 <circle cx="12" cy="13" r="4"/>
             </svg>
-            <span>Kamera</span>
+            <span>Fotos</span>
+        </div>
+        <div class="nav-item" onclick="switchTab('geraete')" id="nav-tab-geraete">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+                <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                <line x1="6" y1="6" x2="6.01" y2="6"/>
+                <line x1="6" y1="18" x2="6.01" y2="18"/>
+            </svg>
+            <span>Geräte</span>
         </div>
         <div class="nav-item" onclick="switchTab('sync')" id="nav-tab-sync">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -338,6 +673,14 @@
     <script src="js/pwa-db.js"></script>
     <script src="../controllers/ZeiterfassungController.js"></script>
     <script src="../controllers/BautagebuchMobileController.js"></script>
+    <script src="../controllers/MaengelController.js"></script>
+    <script src="js/crypto-sync-bundle.js"></script>
+    <script src="js/sync-bundle.js"></script>
+    <script src="js/reb-aufmass.js"></script>
+    <script src="js/bluetooth-laser.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="js/plan-viewer.js"></script>
+    <script src="js/barcode-scanner.js"></script>
     <script src="js/camera-engine.js"></script>
     <script src="js/sync-worker.js"></script>
     <script src="js/pwa-app.js"></script>

@@ -79,6 +79,20 @@ test('3. VOB/B Cumulative Billing Logic (F_t = L_t - sum F_i)', () => {
     assert.strictEqual(res.currentPeriodNet, 4000.00);      // 12000 - 8000 = 4000
     assert.strictEqual(res.securityRetentionAmount, 600.00); // 5% of 12000 = 600
     assert.strictEqual(res.sequenceNumber, 3);               // 3rd cumulative invoice
+
+    // Test mit bereits erfolgten Sicherheitseinbehalten in Vorrechnungen
+    const prevInvoicesWithRetention = [
+        { nr: 'RE-1001', netto: 5000.00, sicherheitseinbehalt: 250.00 },
+        { nr: 'RE-1002', netto: 3000.00, sicherheitseinbehalt: 150.00 }
+    ];
+    const resWithPrevRetention = CumulativeBillingController.calculateCumulativeInvoice({
+        totalPerformanceNet: 12000.00,
+        previousInvoices: prevInvoicesWithRetention,
+        securityRetentionRate: 5.0,
+        vatRate: 19.0
+    });
+    // Gesamtziel 5% von 12000 = 600. Bisher einbehalten: 250 + 150 = 400. In dieser Periode: 200.
+    assert.strictEqual(resWithPrevRetention.securityRetentionAmount, 200.00);
 });
 
 test('4. EN 16931-1 XRechnung & ZUGFeRD Generator & B2G Leitweg-ID Check', () => {
@@ -184,6 +198,22 @@ test('6. DATEV EXTF 700 Export Generation', () => {
     assert.ok(csv.includes('8337')); // § 13b Revenue Account in SKR03
     assert.ok(csv.includes('19'));   // BU Key 19 for § 13b
     assert.ok(csv.includes('1540')); // Security Retention Interim Account
+
+    // Storno / Gutschrift mit negativem Betrag exportieren:
+    // DATEV-Norm: Betrag muss immer positiv sein (Math.abs), Kennzeichen 'S' statt 'H'
+    const stornoRechnungen = [
+        {
+            nr: 'STORNO-2026-001',
+            datum: '2026-08-14',
+            kundeId: 5,
+            brutto: -1190.00,
+            netto: -1000.00,
+            status: 'Storniert',
+            rechnungsart: 'STORNO'
+        }
+    ];
+    const stornoCsv = DATEVExporter.generateEXTFContent(stornoRechnungen, kunden, { skr: 'SKR03' });
+    assert.ok(stornoCsv.includes('"1190,00";"S"'), 'Umsatz darf nicht negativ sein und muss Soll-Kennzeichen S tragen');
 });
 
 test('7. GoBD Immutability & SHA-256 Hash Chaining', () => {

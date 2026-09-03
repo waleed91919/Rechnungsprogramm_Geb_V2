@@ -1388,8 +1388,25 @@ function calculateRechnungTotals() {
 }
 
 
+let isSavingRechnung = false;
+
 async function saveRechnung() {
-    const kundeId = document.getElementById('rechnung-kunde').value;
+    if (isSavingRechnung) return;
+    const submitBtn = document.getElementById('rechnung-modal-submit');
+    const submitText = document.getElementById('rechnung-modal-submit-text');
+    const originalText = submitText ? submitText.innerText : 'Rechnung Speichern';
+
+    try {
+        isSavingRechnung = true;
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+        if (submitText) {
+            submitText.innerText = 'Wird gespeichert...';
+        }
+
+        const kundeId = document.getElementById('rechnung-kunde').value;
     const projektId = document.getElementById('rechnung-projekt').value;
     const objektWert = document.getElementById('rechnung-objekt') ? document.getElementById('rechnung-objekt').value : '';
     const [objektTyp, objektIdStr] = objektWert ? objektWert.split(':') : [null, null];
@@ -1492,8 +1509,7 @@ async function saveRechnung() {
         return;
     }
 
-    try {
-        const model = new window.InvoiceModel(window.api);
+    const model = new window.InvoiceModel(window.api);
         await model.saveDocument(newDoc);
 
         const newState = await model.getFullState();
@@ -1530,6 +1546,15 @@ async function saveRechnung() {
     } catch (e) {
         console.error('Error saving document:', e);
         showToast('Fehler beim Speichern in die Datenbank.', 'error');
+    } finally {
+        isSavingRechnung = false;
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+        if (submitText) {
+            submitText.innerText = originalText;
+        }
     }
 }
 
@@ -1551,7 +1576,7 @@ async function deleteRechnung(id) {
             showToast('Rechnung gelöscht.', 'success');
         } catch (e) {
             console.error('Error deleting document:', e);
-            showToast('Fehler beim Löschen.', 'error');
+            showToast(e && e.message ? e.message : 'Fehler beim Löschen.', 'error');
         }
     }
 }
@@ -1572,7 +1597,7 @@ async function deleteAngebot(id) {
             showToast('Angebot gelöscht.', 'success');
         } catch (e) {
             console.error('Error deleting document:', e);
-            showToast('Fehler beim Löschen.', 'error');
+            showToast(e && e.message ? e.message : 'Fehler beim Löschen.', 'error');
         }
     }
 }

@@ -810,9 +810,13 @@ const dbAPI = {
             const doc = db.prepare('SELECT type, nr, status, isLocked FROM dokumente WHERE id=?').get(docId);
             if (!doc) return 0;
 
-            // GoBD-Löschsperre: Gesperrte Belege dürfen nicht gelöscht werden
-            if (doc.isLocked) {
-                throw new Error(`Beleg ${doc.nr} ist gesperrt (GoBD-Löschsperre) und kann nicht gelöscht werden. Bitte verwenden Sie eine Stornorechnung.`);
+            // GoBD-Löschsperre: Gesperrte Belege sowie Rechnungen mit vergebener Belegnummer (außer Entwurf) dürfen nicht gelöscht werden
+            const isRechnung = doc.type && doc.type.toLowerCase() === 'rechnung';
+            const isDraft = doc.status === 'Entwurf' || doc.status === 'DRAFT';
+            const hasBelegnummer = Boolean(doc.nr && String(doc.nr).trim().length > 0);
+
+            if (Boolean(doc.isLocked) || (isRechnung && hasBelegnummer && !isDraft)) {
+                throw new Error(`Beleg ${doc.nr || id} ist gesperrt (GoBD-Löschsperre) und kann nicht gelöscht werden. Bitte verwenden Sie eine Stornorechnung.`);
             }
 
             if (doc.type === 'rechnung') {

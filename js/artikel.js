@@ -251,6 +251,11 @@ async function saveArtikel() {
         return;
     }
 
+    if (ek < 0 || vk < 0) {
+        showToast('Einkaufs- und Verkaufspreis dürfen nicht negativ sein.', 'error');
+        return;
+    }
+
     const artikelData = { name, ean, beschreibung, ek, vk, mwst, katalog, lieferant, bestand, bilder, ist_bauleistung, kostenart, lohnanteil_prozent };
 
     if (id) {

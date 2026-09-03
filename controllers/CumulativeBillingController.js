@@ -26,16 +26,23 @@ class CumulativeBillingController {
         // Aktuelle Netto-Leistung dieser Periode: F_t = L_t - \sum F_i
         const currentPeriodNet = Math.max(0, totalPerformanceNet - totalPreviousBilledNet);
 
-        // Sicherheitseinbehalt (z.B. 5% nach VOB/B § 17 auf die Gesamte bisher erbrachte Netto-Leistung)
-        const securityRetentionAmount = (totalPerformanceNet * (securityRetentionRate / 100));
+        // Bisher einbehaltene Beträge aus Vorrechnungen ermitteln
+        const previousRetentionTotal = previousInvoices.reduce((sum, inv) => {
+            return sum + (parseFloat(inv.sicherheitseinbehalt) || 0);
+        }, 0);
+
+        // Kumulierter Solleinbehalt auf die Gesamtleistung
+        const totalRetentionTarget = Math.round((totalPerformanceNet * (securityRetentionRate / 100)) * 100) / 100;
+        // In dieser Periode verbleibender Einbehaltsabzug:
+        const securityRetentionAmount = Math.max(0, Math.round((totalRetentionTarget - previousRetentionTotal) * 100) / 100);
 
         // Steuerbare Basis für die aktuelle Periode
         const taxRate = isReverseCharge ? 0 : vatRate;
         const currentPeriodVat = Math.round(currentPeriodNet * (taxRate / 100) * 100) / 100;
-        const currentPeriodGross = currentPeriodNet + currentPeriodVat;
+        const currentPeriodGross = Math.round((currentPeriodNet + currentPeriodVat) * 100) / 100;
 
         // Zahlbetrag dieser Rechnung nach Abzug des Sicherheitseinbehalts
-        const netPayableAmount = Math.max(0, currentPeriodGross - securityRetentionAmount);
+        const netPayableAmount = Math.max(0, Math.round((currentPeriodGross - securityRetentionAmount) * 100) / 100);
 
         return {
             totalPerformanceNet: Math.round(totalPerformanceNet * 100) / 100,

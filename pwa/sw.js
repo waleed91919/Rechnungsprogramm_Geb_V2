@@ -3,18 +3,25 @@
  * Gewährleistet 100% Offline-Verfügbarkeit der App-Shell und Fachmodule.
  */
 
-const CACHE_NAME = 'wlink-mobile-v1.2.0';
+const CACHE_NAME = 'wlink-mobile-v1.3.0';
 const APP_SHELL = [
     './',
     './index.html',
     './css/pwa.css',
     './js/dexie.min.js',
     './js/pwa-db.js',
+    './js/crypto-sync-bundle.js',
+    './js/sync-bundle.js',
+    './js/reb-aufmass.js',
+    './js/bluetooth-laser.js',
+    './js/plan-viewer.js',
+    './js/barcode-scanner.js',
     './js/camera-engine.js',
     './js/sync-worker.js',
     './js/pwa-app.js',
     '../controllers/ZeiterfassungController.js',
     '../controllers/BautagebuchMobileController.js',
+    '../controllers/MaengelController.js',
     './manifest.webmanifest'
 ];
 

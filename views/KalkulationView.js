@@ -137,7 +137,7 @@ window.KalkulationView = class KalkulationView {
                             <div class="flex items-center justify-between">
                                 <label class="text-slate-600">Lohngebundene Kosten (LK):</label>
                                 <div class="flex items-center gap-1">
-                                    <input type="number" step="0.50" id="kalk-lk" value="${profile.lohngebundene_kosten_prozent}" oninput="window.kalkulationViewInstance.onProfileChange()" class="w-24 text-right rounded border-slate-300 text-xs py-1 px-2">
+                                    <input type="number" step="0.50" id="kalk-lk" value="${profile.lohngebundene_kosten_prozent}" onchange="window.kalkulationViewInstance.onProfileChange()" class="w-24 text-right rounded border-slate-300 text-xs py-1 px-2">
                                     <span class="text-slate-400">%</span>
                                     <span class="text-slate-500 font-mono w-20 text-right">(${formatCur(ml.lohngebundeneKosten.eur)})</span>
                                 </div>
@@ -145,7 +145,7 @@ window.KalkulationView = class KalkulationView {
                             <div class="flex items-center justify-between">
                                 <label class="text-slate-600">Lohnnebenkosten (LNK):</label>
                                 <div class="flex items-center gap-1">
-                                    <input type="number" step="0.50" id="kalk-lnk" value="${profile.lohnnebenkosten_prozent}" oninput="window.kalkulationViewInstance.onProfileChange()" class="w-24 text-right rounded border-slate-300 text-xs py-1 px-2">
+                                    <input type="number" step="0.50" id="kalk-lnk" value="${profile.lohnnebenkosten_prozent}" onchange="window.kalkulationViewInstance.onProfileChange()" class="w-24 text-right rounded border-slate-300 text-xs py-1 px-2">
                                     <span class="text-slate-400">%</span>
                                     <span class="text-slate-500 font-mono w-20 text-right">(${formatCur(ml.lohnnebenkosten.eur)})</span>
                                 </div>
@@ -185,27 +185,27 @@ window.KalkulationView = class KalkulationView {
                                 <tbody class="divide-y divide-slate-100">
                                     <tr>
                                         <td class="p-2 font-medium text-slate-700">Baustellengem. (BGK)</td>
-                                        <td class="p-1"><input type="number" step="0.5" id="z-lohn-bgk" value="${profile.zuschlag_lohn_bgk}" oninput="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
-                                        <td class="p-1"><input type="number" step="0.5" id="z-stoff-bgk" value="${profile.zuschlag_stoff_bgk}" oninput="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
-                                        <td class="p-1"><input type="number" step="0.5" id="z-geraet-bgk" value="${profile.zuschlag_geraet_bgk}" oninput="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
-                                        <td class="p-1"><input type="number" step="0.5" id="z-sonst-bgk" value="${profile.zuschlag_sonst_bgk}" oninput="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
-                                        <td class="p-1"><input type="number" step="0.5" id="z-nu-bgk" value="${profile.zuschlag_nu_bgk}" oninput="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
+                                        <td class="p-1"><input type="number" step="0.5" id="z-lohn-bgk" value="${profile.zuschlag_lohn_bgk}" onchange="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
+                                        <td class="p-1"><input type="number" step="0.5" id="z-stoff-bgk" value="${profile.zuschlag_stoff_bgk}" onchange="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
+                                        <td class="p-1"><input type="number" step="0.5" id="z-geraet-bgk" value="${profile.zuschlag_geraet_bgk}" onchange="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
+                                        <td class="p-1"><input type="number" step="0.5" id="z-sonst-bgk" value="${profile.zuschlag_sonst_bgk}" onchange="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
+                                        <td class="p-1"><input type="number" step="0.5" id="z-nu-bgk" value="${profile.zuschlag_nu_bgk}" onchange="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
                                     </tr>
                                     <tr>
                                         <td class="p-2 font-medium text-slate-700">Allg. Geschäftsk. (AGK)</td>
-                                        <td class="p-1"><input type="number" step="0.5" id="z-lohn-agk" value="${profile.zuschlag_lohn_agk}" oninput="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
-                                        <td class="p-1"><input type="number" step="0.5" id="z-stoff-agk" value="${profile.zuschlag_stoff_agk}" oninput="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
-                                        <td class="p-1"><input type="number" step="0.5" id="z-geraet-agk" value="${profile.zuschlag_geraet_agk}" oninput="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
-                                        <td class="p-1"><input type="number" step="0.5" id="z-sonst-agk" value="${profile.zuschlag_sonst_agk}" oninput="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
-                                        <td class="p-1"><input type="number" step="0.5" id="z-nu-agk" value="${profile.zuschlag_nu_agk}" oninput="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
+                                        <td class="p-1"><input type="number" step="0.5" id="z-lohn-agk" value="${profile.zuschlag_lohn_agk}" onchange="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
+                                        <td class="p-1"><input type="number" step="0.5" id="z-stoff-agk" value="${profile.zuschlag_stoff_agk}" onchange="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
+                                        <td class="p-1"><input type="number" step="0.5" id="z-geraet-agk" value="${profile.zuschlag_geraet_agk}" onchange="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
+                                        <td class="p-1"><input type="number" step="0.5" id="z-sonst-agk" value="${profile.zuschlag_sonst_agk}" onchange="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
+                                        <td class="p-1"><input type="number" step="0.5" id="z-nu-agk" value="${profile.zuschlag_nu_agk}" onchange="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
                                     </tr>
                                     <tr>
                                         <td class="p-2 font-medium text-slate-700">Wagnis & Gewinn (W&G)</td>
-                                        <td class="p-1"><input type="number" step="0.5" id="z-lohn-wug" value="${profile.zuschlag_lohn_wug}" oninput="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
-                                        <td class="p-1"><input type="number" step="0.5" id="z-stoff-wug" value="${profile.zuschlag_stoff_wug}" oninput="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
-                                        <td class="p-1"><input type="number" step="0.5" id="z-geraet-wug" value="${profile.zuschlag_geraet_wug}" oninput="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
-                                        <td class="p-1"><input type="number" step="0.5" id="z-sonst-wug" value="${profile.zuschlag_sonst_wug}" oninput="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
-                                        <td class="p-1"><input type="number" step="0.5" id="z-nu-wug" value="${profile.zuschlag_nu_wug}" oninput="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
+                                        <td class="p-1"><input type="number" step="0.5" id="z-lohn-wug" value="${profile.zuschlag_lohn_wug}" onchange="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
+                                        <td class="p-1"><input type="number" step="0.5" id="z-stoff-wug" value="${profile.zuschlag_stoff_wug}" onchange="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
+                                        <td class="p-1"><input type="number" step="0.5" id="z-geraet-wug" value="${profile.zuschlag_geraet_wug}" onchange="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
+                                        <td class="p-1"><input type="number" step="0.5" id="z-sonst-wug" value="${profile.zuschlag_sonst_wug}" onchange="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
+                                        <td class="p-1"><input type="number" step="0.5" id="z-nu-wug" value="${profile.zuschlag_nu_wug}" onchange="window.kalkulationViewInstance.onProfileChange()" class="w-full text-center rounded border-slate-300 text-xs py-1 px-1"></td>
                                     </tr>
                                     <tr class="bg-slate-50 font-bold border-t border-slate-200">
                                         <td class="p-2 text-slate-800">Gesamtzuschlag</td>
@@ -303,8 +303,30 @@ window.KalkulationView = class KalkulationView {
         this.currentData.profile = updatedProfile;
         this.currentData.calculationResult = calculationResult;
         this.currentProfile = updatedProfile;
+
+        const activeId = document.activeElement ? document.activeElement.id : null;
+        let selStart = null, selEnd = null;
+        try {
+            if (document.activeElement && 'selectionStart' in document.activeElement) {
+                selStart = document.activeElement.selectionStart;
+                selEnd = document.activeElement.selectionEnd;
+            }
+        } catch (_selErr) {}
+
         const container = document.getElementById(this.containerId);
         if (container) this.render(container);
+
+        if (activeId) {
+            const restoredEl = document.getElementById(activeId);
+            if (restoredEl) {
+                restoredEl.focus();
+                try {
+                    if (selStart !== null && selEnd !== null && 'setSelectionRange' in restoredEl) {
+                        restoredEl.setSelectionRange(selStart, selEnd);
+                    }
+                } catch (_resErr) {}
+            }
+        }
     }
 
     /**

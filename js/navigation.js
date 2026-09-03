@@ -247,6 +247,65 @@ function switchView(viewName) {
     }
 }
 
+// [D-8] Global Shortcuts: ESC zum Schließen von Modals, Strg+S zum Speichern
+if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', (e) => {
+        // ESC-Handling: Schließt das oberste geöffnete Modal
+        if (e.key === 'Escape') {
+            const modals = [
+                { id: 'pdf-preview-modal', closeFn: () => { if (window.invoiceView && typeof window.invoiceView.closePdfPreview === 'function') { window.invoiceView.closePdfPreview(); } else { const m = document.getElementById('pdf-preview-modal'); if (m) m.classList.add('hidden'); } } },
+                { id: 'aufmass-modal', closeFn: () => { const m = document.getElementById('aufmass-modal'); if (m) m.classList.add('hidden'); } },
+                { id: 'mangel-create-modal', closeFn: () => { const m = document.getElementById('mangel-create-modal'); if (m) m.classList.add('hidden'); } },
+                { id: 'bautagebuch-entry-modal', closeFn: () => { const m = document.getElementById('bautagebuch-entry-modal'); if (m) m.classList.add('hidden'); } },
+                { id: 'rechnung-modal', closeFn: () => typeof closeRechnungModal === 'function' && closeRechnungModal() },
+                { id: 'kunde-modal', closeFn: () => typeof closeKundeModal === 'function' && closeKundeModal() },
+                { id: 'artikel-modal', closeFn: () => typeof closeArtikelModal === 'function' && closeArtikelModal() },
+                { id: 'projekt-modal', closeFn: () => typeof closeProjektModal === 'function' && closeProjektModal() }
+            ];
+
+            for (const item of modals) {
+                const modalEl = document.getElementById(item.id);
+                if (modalEl && !modalEl.classList.contains('hidden')) {
+                    e.preventDefault();
+                    item.closeFn();
+                    return;
+                }
+            }
+        }
+
+        // Strg+S / Cmd+S: Speichert das aktuell offene Modal
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+            const rechnungModal = document.getElementById('rechnung-modal');
+            if (rechnungModal && !rechnungModal.classList.contains('hidden')) {
+                e.preventDefault();
+                if (typeof saveRechnung === 'function') saveRechnung();
+                return;
+            }
+
+            const kundeModal = document.getElementById('kunde-modal');
+            if (kundeModal && !kundeModal.classList.contains('hidden')) {
+                e.preventDefault();
+                if (typeof saveKunde === 'function') saveKunde();
+                return;
+            }
+
+            const artikelModal = document.getElementById('artikel-modal');
+            if (artikelModal && !artikelModal.classList.contains('hidden')) {
+                e.preventDefault();
+                if (typeof saveArtikel === 'function') saveArtikel();
+                return;
+            }
+
+            const projektModal = document.getElementById('projekt-modal');
+            if (projektModal && !projektModal.classList.contains('hidden')) {
+                e.preventDefault();
+                if (typeof saveProjekt === 'function') saveProjekt();
+                return;
+            }
+        }
+    });
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = { switchView, viewConfig };
 }

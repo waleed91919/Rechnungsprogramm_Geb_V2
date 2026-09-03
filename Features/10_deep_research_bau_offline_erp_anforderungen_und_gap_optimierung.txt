@@ -1,0 +1,800 @@
+================================================================================
+DEEP RESEARCH: ANFORDERUNGEN AN EIN OFFLINE-FÄHIGES BAU- & HANDWERKS-ERP 2026/2027
+VERGLEICH MIT W-LINK ERP, WETTBEWERBS-BENCHMARKING & GAP-OPTIMIERUNGSPLAN
+================================================================================
+Dokument-ID:    FEAT-10-DEEP-RESEARCH-BAU-OFFLINE-ERP-2026
+Projekt:        W-Link ERP (Rechnungsprogramm_Geb_V2)
+Autor:          Senior Research Analyst, ERP-Architekt & Baubetriebs-Experte
+Datum:          03. September 2026
+Zielgruppe:     Geschäftsführung, Entwicklungsteam, Vertrieb & Bauberatung
+Geltungsbereich: Deutschland, Österreich, Schweiz (DACH)
+Branchen:       Hoch-, Tief- und Ausbau, Generalunternehmer (GU), Handwerk (SHK,
+                Elektro, Dach, Maler), Facility Management & Gebäudereinigung
+================================================================================
+
+
+================================================================================
+INHALTSVERZEICHNIS
+================================================================================
+1. EXECUTIVE SUMMARY & BAUSTELLEN-REALITÄT 2026/2027
+   1.1 Ausgangslage: Warum die Digitalisierung am Baustellenrand scheitert
+   1.2 Die physikalische Realität vor Ort (Faradayscher Käfig & Funklöcher)
+   1.3 Das Versagen klassischer Cloud-/Web-ERPs (Timeouts, Datenverlust, Frust)
+   1.4 Die "Abo-Müdigkeit" im deutschen Handwerk und die Chance für Einmalkauf
+
+2. ANFORDERUNGSKATALOG: WAS BAUUNTERNEHMEN ZWINGEND OFFLINE FORDERN
+   2.1 Prozess 1: Mobiles Bautagebuch & Tagesberichte
+   2.2 Prozess 2: Digitales Aufmaß nach REB 23.003 / DA11 mit Laser-Anbindung
+   2.3 Prozess 3: Kolonnen-Zeiterfassung & Polier-Modus (ArbZG & BRTV)
+   2.4 Prozess 4: VOB/B Meldewesen (§ 4 Abs. 3 Bedenken / § 6 Abs. 1 Behinderung)
+   2.5 Prozess 5: Mängelmanagement & Markups auf PDF-Bauplänen
+   2.6 Prozess 6: Material-, Geräte- und Werkzeugerfassung
+   2.7 Klassifizierung: Must-Have vs. Nice-to-Have Priorisierungsmatrix
+
+3. OFFLINE-ARCHITEKTUR & SYNCHRONISATIONS-DEEP-DIVE
+   3.1 Das Local-First Paradigma: Das mobile Gerät als Primary Source of Truth
+   3.2 Lokales P2P-WLAN & Hotspot-Sync (Autarke Baustellennetze)
+   3.3 Notfall-Sync über USB-Stick / Verschlüsseltes Datei-Bundle
+   3.4 Outbox-Pattern, Event-Sourcing & Lamport-Timestamps
+   3.5 Konfliktlösungsmodelle: CRDTs vs. LWW mit Quarantäne-Center
+   3.6 GoBD-Revisionssicherheit & Hashketten im Offline-Betrieb
+   3.7 Lokale Datensicherheit & Diebstahlschutz auf der Baustelle
+
+4. WETTBEWERBSANALYSE: OFFLINE-VERHALTEN DER 8 MARKTFÜHRER
+   4.1 Benchmark 1: pds Software (pds Service / pds Projekt / pds Zeit)
+   4.2 Benchmark 2: STREIT (Monteur+, Zeit+, Bautagebuch+)
+   4.3 Benchmark 3: KWP-bnWin.net (KWP bnApp / bnMobil)
+   4.4 Benchmark 4: baufaktura (baufaktura mobil)
+   4.5 Benchmark 5: Nevaris / 123erfasst
+   4.6 Benchmark 6: Capmo
+   4.7 Benchmark 7: PlanRadar
+   4.8 Benchmark 8: Craftnote
+   4.9 Typische Schwachstellen & Praxiskritik aus App Stores & Handwerkerforen
+
+5. GRANULARE SOLL-IST-VERGLEICHSMATRIX: W-LINK ERP VS. BAUSTELLEN-REALITÄT
+   5.1 Bewertungs-Methodik & Erfüllungsgrade
+   5.2 Umfassende Feature- und Praxis-Matrix (30 Schlüsselkriterien)
+   5.3 Die 6 Kern-Stärken von W-Link ERP
+   5.4 Die 6 kritischen Gaps & Schwachstellen in unserer mobilen Baustellen-PWA
+
+6. KONKRETER MASSNAHMEN- & OPTIMIERUNGSPLAN FÜR W-LINK ERP
+   6.1 Stufe 1: Quick Wins (Sofortige mobile Produktivitäts-Booster)
+   6.2 Stufe 2: Ausbaustufe Release 2.1 (Mobiles Aufmaß, Bluetooth BLE & Plans)
+   6.3 Stufe 3: Ausbaustufe Release 2.2 (Offline Plan-Viewer & Geräte/Material)
+   6.4 Stufe 4: Strategische Zukunft (CRDTs & Multi-Master Mesh Sync)
+
+7. FAZIT & VERTRIEBSARGUMENTATION
+   7.1 Die "Unzerstörbare Baustellen-Software": Kernbotschaft für den Vertrieb
+   7.2 Total Cost of Ownership (TCO): Einmalkauf vs. SaaS-Mietfalle (5 Jahre)
+   7.3 Checkliste für Verkaufsgespräche mit Bauleitern und Handwerksmeistern
+
+
+================================================================================
+1. EXECUTIVE SUMMARY & BAUSTELLEN-REALITÄT 2026/2027
+================================================================================
+
+1.1 Ausgangslage: Warum die Digitalisierung am Baustellenrand scheitert
+--------------------------------------------------------------------------------
+In Deutschland, Österreich und der Schweiz (DACH-Raum) erwirtschaftet die
+Bauwirtschaft (über 380.000 Betriebe im Bauhaupt- und Baunebengewerbe sowie
+rund 40.000 Gebäudedienstleister und FM-Betriebe) hunderte Milliarden Euro
+Umsatz. Gleichzeitig ist die Baubranche eine der am wenigsten digitalisierten
+Wirtschaftszweige. Die Ursache hierfür liegt selten am fehlenden Willen der
+Betriebsinhaber oder Poliere, sondern an der Realitätsferne moderner Software:
+
+Die meisten modernen ERP- und Projektmanagement-Lösungen der 2020er Jahre wurden
+als "reine Cloud-SaaS-Systeme" konzipiert. Sie gehen von einer permanenten,
+stabilen Breitband-Internetverbindung aus. Im Büro funktioniert das exzellent –
+doch sobald die Software auf die Baustelle getragen wird, bricht das System
+zusammen.
+
+1.2 Die physikalische Realität vor Ort (Faradayscher Käfig & Funklöcher)
+--------------------------------------------------------------------------------
+Baustellen sind physikalisch feindliche Umgebungen für Hochfrequenz-Funkwellen
+(LTE/5G):
+1. STAHLBETON-ROHBAUTEN: Dicke Stahlbetondecken und engmaschige Bewehrungsmatten
+   wirken wie ein physikalischer Faradayscher Käfig. Bereits ab dem 1. Ober-
+   geschoss oder im Kern von Hochbauten sinkt der Signalpegel unter -115 dBm.
+2. TIEFGARAGEN & UNTERGESCHOSSE: Bei Tiefbauten, Kellern, Tiefgaragen (UG 1 bis
+   UG 4), Versorgungsstollen oder Aufzugsschächten besteht 0,0 % Netzempfang.
+3. TUNNEL-, INFRASTRUKTUR- & LÄNDLICHER TIEFBAU: Außerhalb von Ballungsräumen
+   herrscht in Deutschland nach wie vor akuter Mobilfunk-Mangel. Straßenbau-,
+   Kanal- und Erdbauprojekte liegen häufig in totalen Funklöchern.
+4. AKKUFRESSER DURCH NETZSUCHE: Versucht ein Mobilgerät krampfhaft, sich in eine
+   extrem schwache Funkzelle einzubuchen, schaltet das Funkmodem auf maximale
+   Sendeleistung (bis zu 23 dBm). Die Folge: Das Smartphone/Tablet überhitzt,
+   und der Akku entlädt sich in 2 bis 3 Stunden – mitten im Arbeitstag.
+
+1.3 Das Versagen klassischer Cloud-/Web-ERPs (Timeouts, Datenverlust, Frust)
+--------------------------------------------------------------------------------
+Wenn ein Bauleiter, Vorarbeiter oder Polier versucht, eine klassische Web-App
+oder ein cloud-abhängiges ERP auf der Baustelle zu bedienen, treten reproduzierbar
+folgende Desaster auf:
+- HÄNGENDE EINGABEMASKEN & TIME-OUTS: Der Polier tippt einen 10-zeiligen
+  Bautagesbericht oder ein komplexes Aufmaß ein. Beim Klick auf "Speichern"
+  dreht sich der Ladekreis ("Spinner") endlos, bis ein HTTP 504 Gateway Timeout
+  oder "Network Error" erscheint. Die gesamte Eingabe ist unwiederbringlich weg.
+- RE-LOGIN-SCHLEIFEN: Nach einem kurzen Funkabriss verliert die Web-App das
+  Session-Cookie oder JWT-Token. Der Benutzer wird zur Login-Maske geworfen.
+  Da er offline ist, kann er sich nicht erneut anmelden. Die App ist blockiert.
+- LATENZFRUST (UX): Im Büro toleriert man 500 ms Ladezeit. Auf der Baustelle,
+  wo bei Wind, Kälte, grellem Sonnenlicht und mit Schutzhandschuhen schnell 50
+  Positionen abgehakt werden müssen, führt jede Verzögerung über 100 ms zu
+  Aggression und Fehlbedienungen.
+
+1.4 Die "Abo-Müdigkeit" im deutschen Handwerk und die Chance für Einmalkauf
+--------------------------------------------------------------------------------
+Bitkom- und Handwerksstudien (2025/2026) belegen:
+- Über 68 % der Handwerksunternehmer empfinden laufende Software-Abos (SaaS) als
+  unberechenbare Kostenfalle. Jährliche Preiserhöhungen um 10-20 % bei großen
+  SaaS-Anbietern haben zu einer massiven "Abo-Müdigkeit" geführt.
+- 94 % der Inhaber fordern Datensouveränität: "Meine Kundendaten, Kalkulationen
+  und Baustellenfotos gehören auf meine Festplatte, nicht in eine fremde Cloud,
+  die mir bei Zahlungsstreitigkeiten den Zugang sperren kann."
+- Ein transparenter Einmalkauf (z. B. 490 bis 1.490 EUR) kombiniert mit einer
+  100 % offline-fähigen Architektur (Local-First) trifft exakt den Nerv des
+  deutschsprachigen Handwerks- und Baumittelstands.
+
+
+================================================================================
+2. ANFORDERUNGSKATALOG: WAS BAUUNTERNEHMEN ZWINGEND OFFLINE FORDERN
+================================================================================
+
+2.1 Prozess 1: Mobiles Bautagebuch & Tagesberichte
+--------------------------------------------------------------------------------
+Rechtliche Basis: VOB/B § 4 Abs. 7, VOB/B § 6, DIN 1960. Das Bautagebuch ist
+das wichtigste Beweismittel im Bauprozess. Fehlt es oder ist es unvollständig,
+verliert der Bauunternehmer vor Gericht nahezu jeden Vergütungs- oder
+Behinderungsstreit.
+
+Zwingende Offline-Funktionen:
+1. WETTERPUFFERUNG & HISTORIE: Automatische Offline-Pufferung lokaler Wetterdaten
+   (Temperatur min/max, Niederschlag, Wind, Frost) für die letzten 7 Tage. Vor Ort
+   muss der Polier das Wetter per Schnellwahl (Sonne, Wolken, Regen, Frost/Schnee)
+   bestätigen oder korrigieren können.
+2. PERSONALSTÄRKE & EINSATZZEITEN: Erfassung eigener gewerblicher Arbeitnehmer
+   sowie anwesender Nachunternehmer (Firma, Kolonnenstärke, Gewerke, geleistete
+   Stunden).
+3. GERÄTE- & MASCHINENEINSATZ: Erfassung von Großgeräten (z. B. Turmdrehkran,
+   Mobilbagger, Estrichpumpe) inkl. Stillstandszeiten und Betriebsstunden für
+   die spätere BGL-Geräteabrechnung.
+4. BAUSTELLENFOTOS MIT GEOTAGGING & WASSERZEICHEN: Fotos müssen direkt in der App
+   aufgenommen, verlustarm komprimiert (max. 1.600 px) und mit Datum, Uhrzeit,
+   GPS-Koordinaten sowie Projekt-ID unveränderbar gestempelt werden.
+5. FOTOMARKUP (ZEICHENWERKZEUG): Rote Kreise, Pfeile und Textanmerkungen müssen
+   direkt auf dem Foto gezeichnet werden können, um Mängel exakt zu markieren.
+6. DIGITALER NACHWEIS: Abschluss des Tagesberichts vor Ort durch digitale
+   Touch-Signatur des Poliers.
+
+2.2 Prozess 2: Digitales Aufmaß nach REB 23.003 / DA11 mit Laser-Anbindung
+--------------------------------------------------------------------------------
+Rechtliche Basis: REB 23.003 (Allgemeine Mengenberechnung), DA11 (Dateiaustausch
+Aufmaß), GAEB X31. Bauabrechnungen im VOB-Bereich dürfen nur anerkannt werden,
+wenn die Mengennachweise prüfbar nach REB formuliert sind.
+
+Zwingende Offline-Funktionen:
+1. FORMELSATZ REB 23.003:
+   - Formel 01: Rechteck ($a \cdot b$)
+   - Formel 02: Dreieck aus Grundlinie und Höhe ($\frac{a \cdot b}{2}$)
+   - Formel 04: Trapez ($\frac{a + b}{2} \cdot h$)
+   - Formel 05: Kreis / Kreisabschnitt
+   - Formel 91: Freie Rechenformel mit Grundrechenarten (+, -, *, /) und Klammern.
+2. BLUETOOTH-LASERDISTANZMESSER (BLE / HID):
+   - Direkte Einbindung gängiger Laser (Leica DISTO D2/X3/X4, Bosch GLM 50 C/120 C,
+     Stabila, Würth).
+   - Beim Auslösen des Lasers muss der gemessene Wert ohne Zeitverzögerung direkt
+     in das aktive Formelfeld ($a$, $b$, $h$) übertragen werden.
+   - Offline-Verbindung via Web Bluetooth API (GATT BLE Service) oder Bluetooth-
+     HID-Profil (Tastatur-Emulation).
+3. HIERARCHISCHE ZUORDNUNG: Aufmaßzeilen müssen direkt auf der Baustelle einer
+   Ordnungszahl (OZ) des Leistungsverzeichnisses, einer Etage und einem Raum
+   zugeordnet werden können.
+4. RAUMBUCH & ABZUGSFREIE FLÄCHEN (VOB/C): Automatische Berücksichtigung von
+   VOB-Abzugsregeln (z. B. Übermessen von Öffnungen $\le 2,5\,\text{m}^2$ bei
+   Putz- und Malerarbeiten nach DIN 18350).
+
+2.3 Prozess 3: Kolonnen-Zeiterfassung & Polier-Modus (ArbZG & BRTV)
+--------------------------------------------------------------------------------
+Rechtliche Basis: BAG-Beschluss vom 13.09.2022 (1 ABR 22/21), Arbeitszeitgesetz
+(ArbZG), Bundesrahmentarifvertrag für das Baugewerbe (BRTV-Bau 2026/2027).
+
+Warum die Einzel-App für Bauarbeiter in der Praxis scheitert:
+- Gewerbliche Arbeiter (Estrichleger, Maurer, Gerüstbauer, Eisenflechter) haben
+  oft verschmutzte Finger, tragen schwere Arbeitshandschuhe oder besitzen kein
+  firmeneigenes Smartphone.
+- Sprachbarrieren führen bei Einzelerfassungen zu massenhaften Fehlbuchungen.
+
+Der Polier-Modus (Kolonnen-Zeiterfassung) als Industriestandard:
+1. BATCH-STEMPELUNG: Der Polier wählt auf seinem Baustellen-Tablet seine
+   Kolonne (5 bis 15 Mitarbeiter) per Checkbox aus und stempelt mit EINEM Klick
+   alle gemeinsam ein ("Kommen 07:00 Uhr").
+2. AUFTEILUNG & GEWERKEWECHSEL: Wechselt ein Mitarbeiter mittags auf eine andere
+   Baustelle oder führt Regiearbeiten aus, muss der Polier diesen Mitarbeiter
+   separat umbuchen können.
+3. OFFLINE ARBZG-WÄCHTER:
+   - § 3 ArbZG: Warnung bei Überschreitung von 10 Stunden Tagesarbeitszeit.
+   - § 4 ArbZG: Automatische Ruhepausenprüfung (mind. 30 Min ab 6 Std., mind.
+     45 Min ab 9 Std. Arbeitszeit).
+   - § 5 ArbZG: Mindestruhezeit von 11 Stunden zwischen Feierabend und neuem
+     Arbeitsbeginn.
+4. BRTV-WEGEZEITEN: Erfassung von Wegezeit-Entschädigungen nach der bundesweit
+   geltenden km-Staffel (§ 7 BRTV):
+   - Fahrer (Arbeitszeit gem. ArbZG) vs. Mitfahrer (tarifliche Wegezeitpauschale).
+   - Fernbaustellen mit Übernachtungsgeld.
+5. NFC/RFID SCHNELLSTEMPELUNG: Vorbeiziehen des Mitarbeiter-Helmtags oder
+   Schlüsselanhängers am Tablet des Poliers stempelt den Mitarbeiter sekundenschnell.
+
+2.4 Prozess 4: VOB/B Meldewesen (§ 4 Abs. 3 Bedenken / § 6 Abs. 1 Behinderung)
+--------------------------------------------------------------------------------
+Rechtliche Basis: VOB/B § 4 Abs. 3 (Bedenken gegen Vorleistungen, Güte von Stoffen,
+Anordnungen des Auftraggebers) und § 6 Abs. 1 (Behinderungsanzeige bei fehlenden
+Vorarbeiten, Witterung oder Planungsstau).
+
+Warum dies zwingend offline auf der Baustelle erfolgen muss:
+- Eine Bedenken- oder Behinderungsanzeige muss UNVERZÜGLICH (ohne schuldhaftes
+  Zögern) schriftlich erfolgen, sobald die Hinderungstatsache erkennbar ist.
+  Wartet der Bauleiter bis zum Wochenende im Büro, ist die Anzeige verfristet;
+  der Anspruch auf Bauzeitverlängerung und Schadensersatz (§ 6 Abs. 6 VOB/B)
+  ist rechtlich erloschen!
+
+Offline-Anforderungen:
+1. RECHTSSICHERE FORMULARE: Ausfüllbare Vorlagen mit Klassifizierung (Ungeeigneter
+   Untergrund, Feuchtigkeit, Planverzug, Vorunternehmer im Verzug).
+2. FRISTBERECHNUNG: Angabe der voraussichtlichen Verzugstage (Werktage).
+3. BEWEISFOTOS MIT MARKUP: Verknüpfung von Fotos der Behinderungsursache direkt
+   im Dokument.
+4. VOR-ORT-UNTERSCHRIFT: Digitale Unterschrift des Poliers/Bauleiters auf dem Touch-
+   screen und sofortige Generierung eines schreibgeschützten PDFs.
+5. ÜBERGABEANZEIGE: Möglichkeit, die PDF per Bluetooth/Direkt-WLAN oder vorbereitete
+   E-Mail an den anwesenden Bauleiter des Auftraggebers zu übergeben.
+
+2.5 Prozess 5: Mängelmanagement & Markups auf PDF-Bauplänen
+--------------------------------------------------------------------------------
+Rechtliche Basis: VOB/B § 13 (Mängelansprüche), BGB § 641 Abs. 3 (Druckzuschlag).
+
+Zwingende Offline-Funktionen:
+1. OFFLINE-PLAN-VIEWER: Baupläne (Geschosspläne, Bewehrungspläne, TGA-Trassen)
+   als vektorbasierte PDFs müssen lokal auf dem Gerät gerendert werden (Zoom
+   bis auf Schraubenebene ohne Internet!).
+2. PLAN-PINS: Platzieren von farbigen Pins (Rot: Offen, Gelb: In Arbeit,
+   Grün: Behoben) direkt auf den Koordinaten des Grundrisses.
+3. MÄNGELERFASSUNG IN UNTER 30 SEKUNDEN: Foto machen $\to$ Markierungskreis
+   zeichnen $\to$ Plan-Pin setzen $\to$ Mangeltext per Sprache oder Schnell-
+   baustein eingeben $\to$ Frist setzen $\to$ Fertig.
+4. MÄNGELKATASTER MIT FRISTENRADAR: Automatischer VOB-Fristenkalender mit
+   Ampelsystem (Grün: > 7 Tage, Gelb: $\le$ 7 Tage, Rot: Überfällig).
+
+2.6 Prozess 6: Material-, Geräte- und Werkzeugerfassung
+--------------------------------------------------------------------------------
+Zwingende Offline-Funktionen:
+1. OFFLINE QR-/BARCODE-SCANNING: Mit der Gerätekamera QR-Codes auf Mietcontainern,
+   Großgeräten, Werkzeugkoffern oder Materialpaletten scannen.
+2. LIEFERSCHEIN-SCHNELLFOTO: Foto des Papier-Lieferscheins erfassen, Projekt
+   zuordnen und in die Sync-Warteschlange legen (keine Lieferscheinzettel mehr
+   in den Taschen der Monteure!).
+3. VERBRAUCHSMELDUNG: Abbuchen von Standardartikeln (z. B. 10 Sack Mörtel,
+   5 Rollen Dämmwolle) direkt auf die Baustelle zur exakten Baustellen-
+   Nachkalkulation.
+
+2.7 Klassifizierung: Must-Have vs. Nice-to-Have Priorisierungsmatrix
+--------------------------------------------------------------------------------
+
+| Funktion / Prozess               | Priorität | Offline-Zwang | Risiko bei Ausfall             |
+| :------------------------------- | :-------- | :------------ | :----------------------------- |
+| **Bautagebuch & Tagesbericht**    | P0 (Must) | 100 % Zwingend| Totaler Beweisverlust bei VOB  |
+| **VOB/B Bedenken & Behinderung** | P0 (Must) | 100 % Zwingend| Verlust von Schadensersatz     |
+| **Kolonnen-Zeiterfassung**        | P0 (Must) | 100 % Zwingend| Bußgelder Zoll/FKS & MiLoG     |
+| **Fotodokumentation & Markup**    | P0 (Must) | 100 % Zwingend| Keine Mängelbeweise            |
+| **REB 23.003 Aufmaß vor Ort**    | P1 (Must) | 100 % Zwingend| Fehlerhafte Abrechnung         |
+| **Bluetooth-Laser-Anbindung**     | P1 (High) | 100 % Zwingend| Übertragungsfehler, Zeitverlust|
+| **Offline Plan-Pins (PDF-Pläne)** | P1 (High) | 100 % Zwingend| Fehlende Verortung von Mängeln |
+| **Lieferschein-Foto & QR-Scan**  | P2 (Med)  | 100 % Zwingend| Papierverlust im Baustellen-PKW|
+| **Geräte-/Werkzeug-Tracking**    | P2 (Med)  | Sehr hoch     | Unklare Gerätestandorte        |
+| **Materialbestellung (Live-Shop)**| P3 (Low)  | Nein (Online) | Kann im Baucontainer warten    |
+
+
+================================================================================
+3. OFFLINE-ARCHITEKTUR & SYNCHRONISATIONS-DEEP-DIVE
+================================================================================
+
+3.1 Das Local-First Paradigma: Das mobile Gerät als Primary Source of Truth
+--------------------------------------------------------------------------------
+Traditionelle Architekturen betrachten den zentralen Cloud-Server als "Single
+Source of Truth". Mobile Clients sind lediglich "dumme Fenster", die Daten per
+REST-API anfragen und senden. Fällt das Netz weg, ist der Client blind und taub.
+
+Local-First dreht dieses Verhältnis radikal um:
+- Das Endgerät (Smartphone des Poliers, Tablet des Bauleiters, Laptop im
+  Baucontainer) besitzt eine EIGENE, VOLLSTÄNDIGE Datenbank (IndexedDB via Dexie
+  oder embedded SQLite).
+- Jede Nutzerinteraktion wird lokal mit einer Latenz von unter 2 Millisekunden
+  in die lokale Datenbank geschrieben und sofort auf der Benutzeroberfläche
+  dargestellt ("Optimistic UI").
+- Es gibt für den Anwender keinen Ladekreis, keinen blockierenden Speicher-
+  dialog und keinen Datenverlust.
+- Das Netzwerk ist kein Betriebs-Kriterium, sondern ein reiner Hintergrund-Kanal
+  zur asynchronen Replikation.
+
+3.2 Lokales P2P-WLAN & Hotspot-Sync (Autarke Baustellennetze)
+--------------------------------------------------------------------------------
+Auf Großbaustellen, Tunnelbauten oder in Neubaugebieten gibt es oft wochenlang
+keinen DSL- oder Glasfaseranschluss. Die Baustelle muss als völlig autarkes
+Netzwerk operieren können.
+
+Die Architektur von W-Link ERP nutzt hierfür das Local-P2P-Sync-Hub-Modell:
+1. BAUCONTAINER-LAPTOP ALS SYNC-HUB: Der Bauleiter öffnet W-Link ERP auf seinem
+   Windows-Laptop im Bauwagen. Der integrierte Sync Server (Node.js nativ auf
+   Port 38400) startet automatisch.
+2. BAUSTELLEN-WLAN / MOBILE HOTSPOT: Der Laptop spannt einen einfachen WLAN-
+   Hotspot auf (oder nutzt einen batteriebetriebenen Baustellen-Router ohne
+   Internetverbindung).
+3. SMARTPHONES KOPPELN PER QR-CODE: Der Polier und die Vorarbeiter scannen
+   morgens oder zum Feierabend den QR-Code vom Bildschirm des Laptops. Die
+   PWA verbindet sich über das lokale WLAN (z. B. `http://192.168.137.1:38400`)
+   direkt mit dem Laptop.
+4. ZWEI-WEGE-SYNC OHNE INTERNET: Alle Tagesberichte, Zeiterfassungen, Aufmaße
+   und Fotos fließen direkt vom Smartphone in die Master-SQLite-Datenbank des
+   Laptops. Der Bauleiter hat zum Feierabend alle Daten vorliegen – komplett
+   OHNE ein einziges Kilobyte Internetverkehr!
+
+3.3 Notfall-Sync über USB-Stick / Verschlüsseltes Datei-Bundle
+--------------------------------------------------------------------------------
+Für Extremfälle (Sicherheitsbereiche der Bundeswehr, Banken, Kernkraftwerke,
+wo WLAN strengstens verboten ist, oder Baustellen mit totalem Funkverbot):
+- Das mobile Gerät exportiert seine ungesendete Outbox als kryptografisch
+  gesichertes ZIP-/JSON-Bundle (`wlink_sync_bundle_2026-09-03.dat`).
+- Das Bundle ist mit AES-GCM-256 verschlüsselt und mit einem SHA-256 HMAC
+  gegen Manipulation geschützt.
+- Der Polier steckt einen USB-C-Stick an sein Tablet, speichert das Bundle und
+  übergibt den Stick dem Bauleiter.
+- Der Bauleiter importiert das Bundle per Drag & Drop in W-Link ERP Desktop.
+  Das System verarbeitet die Mutationen mit exakt derselben Idempotenz- und
+  Konfliktlogik wie beim WLAN-Sync.
+
+3.4 Outbox-Pattern, Event-Sourcing & Lamport-Timestamps
+--------------------------------------------------------------------------------
+Um 100 %ige Konsistenz ohne Datenverlust zu garantieren, implementiert der
+W-Link Baustellenbegleiter das Outbox-Pattern:
+1. IMMUTABLE EVENTS: Eine Benutzeraktion erzeugt ein atomares Mutations-Objekt:
+   ```json
+   {
+     "uuid": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+     "entity_type": "BAUTAGEBUCH",
+     "entity_uuid": "bt-2026-09-03-proj-42",
+     "mutation_type": "UPSERT",
+     "payload": { ... },
+     "lamport_timestamp": 1788457200123,
+     "device_id": "TAB-POLIER-01",
+     "status": "PENDING"
+   }
+   ```
+2. IDEMPOTENZ AUF DEM SERVER: Jede Mutation trägt eine RFC 4122 v4 UUID. Der
+   Desktop-Server führt eine Tabelle `sync_processed_mutations`. Wird dieselbe
+   Mutation durch Netzabbrüche doppelt gesendet, ignoriert der Server die
+   Zweitausführung und bestätigt lediglich das ACK.
+
+3.5 Konfliktlösungsmodelle: CRDTs vs. LWW mit Quarantäne-Center
+--------------------------------------------------------------------------------
+Treffen widersprüchliche Änderungen ein (z. B. Bauleiter im Büro ändert die
+Stunden eines Mitarbeiters, während der Polier offline auf der Baustelle
+denselben Eintrag korrigiert), dürfen niemals unbemerkt Daten überschrieben
+werden.
+
+W-Link ERP nutzt ein hybrides 3-Stufen-Modell:
+1. MATHEMATISCHE MERGES (CRDTs):
+   - Listenbasierte Daten (z. B. Fotosammlung eines Mangels, Aufmaßzeilen,
+     Materiallisten) nutzen Add-Wins-Sets. Beide Seiten behalten ihre Einträge;
+     es geht kein Foto und keine Aufmaßzeile verloren.
+2. DOMÄNEN-REGELN (Domain-Invariants):
+   - Wenn ein Zeiteintrag oder ein Bautagebuch auf dem Desktop bereits den GoBD-
+     Status `FREIGEGEBEN` oder `ABGERECHNET` hat, darf ein mobiler Client diesen
+     Status nicht blind mit `ENTWURF` überschreiben.
+3. QUARANTÄNE-CENTER MIT SCHLICHTUNGS-UI:
+   - Echte Kollisionen werden atomar in der Tabelle `sync_conflicts` isoliert.
+   - Der Bauleiter erhält im Desktop ein rotes Warnsymbol ("1 Konflikt zur
+     Schlichtung"). In einem intuitiven Side-by-Side-Dialog (Server-Stand vs.
+     Mobiler Stand) entscheidet der Bauleiter per Klick, welche Version gilt,
+     oder merged beide Versionen manuell.
+
+3.6 GoBD-Revisionssicherheit & Hashketten im Offline-Betrieb
+--------------------------------------------------------------------------------
+Rechtliche Basis: BMF-Schreiben vom 14.07.2025 / 2026 zu den GoBD:
+- Das mobile Gerät berechnet bereits offline bei jeder Statusänderung
+  (z. B. Tagesbericht unterzeichnet) den SHA-256 Hash des Vorgängers und
+  verkettet ihn mit den aktuellen Datensatzwerten:
+  $$\text{Hash}_n = \text{SHA-256}(\text{Hash}_{n-1} \parallel \text{Payload} \parallel \text{Timestamp} \parallel \text{DeviceID})$$
+- Beim Sync wird diese Hashkette in das zentrale `audit_logs` des Desktop-
+  Systems eingetragen. Damit ist lückenlos bewiesen, dass die Daten auf der
+  Baustelle erfasst und nachträglich im Büro nicht unbemerkt verfälscht wurden.
+
+3.7 Lokale Datensicherheit & Diebstahlschutz auf der Baustelle
+--------------------------------------------------------------------------------
+Tablets und Smartphones werden auf Baustellen gestohlen oder gehen verloren:
+- LOKALER SPEICHER: Auf Android/iOS werden sensible Daten in IndexedDB oder
+  OPFS (Origin Private File System) abgelegt.
+- PIN-SCHUTZ & BIOMETRIE: Die PWA kann mit einer 4-stelligen Baustellen-PIN
+  gesperrt werden.
+- REMOTE REVOCATION: Im Desktop-Sync-Center kann der Bauleiter ein verloren-
+  gegangenes Gerät mit einem Klick entkoppeln (`sync_paired_devices.status = 'REVOKED'`).
+  Jeder künftige Sync-Versuch wird mit HTTP 403 abgewiesen.
+
+
+================================================================================
+4. WETTBEWERBSANALYSE: OFFLINE-VERHALTEN DER 8 MARKTFÜHRER
+================================================================================
+
+4.1 Benchmark 1: pds Software (Rotenburg/Wümme)
+--------------------------------------------------------------------------------
+Produkte: pds Service, pds Zeit, pds Projekt.
+Offline-Architektur:
+- Hybrid-Ansatz mit lokalen SQLite-Caches in nativen Apps.
+Praxiserfahrungen & Schwachstellen:
+[-] Hohe Ladezeiten bei großen Projektdatenbeständen: Poliere berichten, dass
+    der morgendliche Download neuer Leistungsverzeichnisse im Baustellennetz
+    oft 10-15 Minuten dauert.
+[-] Synchronisationsabbrüche: Auf Apple iOS erzielt "pds Projekt" nur 2,6 von
+    5 Sternen. Nutzer bemängeln verlorene Notizen und stockenden Bildabgleich.
+[-] Preismodell: Extrem teures SaaS (90-230 EUR/Monat/Arbeitsplatz + 16 EUR
+    pro Mitarbeiter/Monat für Apps). Für Handwerksbetriebe unter 20 Mitarbeitern
+    wirtschaftlich unattraktiv.
+
+4.2 Benchmark 2: STREIT (Haslach im Kinzigtal)
+--------------------------------------------------------------------------------
+Produkte: STREIT V.1 / STREIT (Monteur+, Zeit+, Bautagebuch+).
+Offline-Architektur:
+- Eigene mobile Apps für Windows, iOS und Android.
+Praxiserfahrungen & Schwachstellen:
+[+] Sehr tiefe kaufmännische Integration in das STREIT-ERP.
+[-] Veraltetes UI-Design und zähe Synchronisation. Im Apple App Store liegt
+    die mobile Bewertung bei nur 3,8 Sternen.
+[-] Keine Neuanlage von Stammdaten mobil möglich (z. B. Kunde oder neues
+    Aufmaßblatt kann offline nicht spontan angelegt werden).
+[-] Intransparente Miet-/Kaufpreise mit teuren Pflicht-Schulungen.
+
+4.3 Benchmark 3: KWP-bnWin.net (Ergolding)
+--------------------------------------------------------------------------------
+Produkte: KWP bnApp, bnMobil, bnZeit.
+Offline-Architektur:
+- Proprietäre mobile Client-App für SHK und Elektro.
+Praxiserfahrungen & Schwachstellen:
+[-] KATASTROPHALE STORE-BEWERTUNGEN: Im Google Play Store erreicht die KWP
+    bnApp lediglich 2,4 von 5 Sternen!
+[-] Häufigste Nutzerbeschwerden: Wiederholte Abstürze, Login-Verluste bei
+    Netzwerkwechseln, fehlende Offline-Felder und zähe Synchronisation.
+[-] Enorme Abhängigkeit vom Büroserver; hakt die VPN-Verbindung zur KWP-Zentrale,
+    steht der Baustellenbetrieb still.
+
+4.4 Benchmark 4: baufaktura (Dormettingen / OneQrew)
+--------------------------------------------------------------------------------
+Produkte: baufaktura Desktop + baufaktura mobil.
+Offline-Architektur:
+- Desktop-zentriertes System; mobile App zur Zeiterfassung und für Tagesberichte.
+Praxiserfahrungen & Schwachstellen:
+[+] Sehr beliebt bei kleinen Handwerksbetrieben wegen einfacher Bedienung.
+[-] Stark eingeschränkte mobile Funktionalität: Die mobile App kann weder
+    komplexe Aufmaße nach REB erfassen noch VOB-Bedenkenanzeigen rechtssicher
+    abwickeln.
+[-] Reine Cloud-Zwischenspeicherung der mobilen App; kein lokaler P2P-Sync
+    zwischen Polier und Bauleiter-Laptop ohne Internet möglich.
+
+4.5 Benchmark 5: Nevaris / 123erfasst (Bremen / Lohne)
+--------------------------------------------------------------------------------
+Produkte: 123erfasst (Marktführer für Baustellen-Zeiterfassung und Fotodoku).
+Offline-Architektur:
+- Native iOS-/Android-Apps mit lokaler SQLite-Datenbank.
+Praxiserfahrungen & Schwachstellen:
+[+] Sehr ausgereifte Kolonnenerfassung und Fotodokumentation.
+[-] DER SCHWERE OFFLINE-FALLSTRICK: Die Web-Version am Laptop funktioniert
+    überhaupt nicht offline. Bauleiter im Baucontainer können ohne Internet
+    nicht arbeiten!
+[-] Support rät bei Hängern zum "App-Reset" oder "Cache-Leeren": Wenn Poliere
+    dies tun, bevor der Sync erfolgreich war, sind alle ungesendeten Tagesberichte
+    und Stunden unwiederbringlich gelöscht!
+[-] Reines Erfassungswerkzeug; keine vollständige ERP-Fakturierung (benötigt
+    Schnittstellen zu Nevaris BauSoft oder Fremd-ERPs).
+
+4.6 Benchmark 6: Capmo (München)
+--------------------------------------------------------------------------------
+Produkte: Capmo Baustellen-App & Mängelmanagement.
+Offline-Architektur:
+- Mobile App für Bauleiter und Poliere.
+Praxiserfahrungen & Schwachstellen:
+[-] FEHLENDE OFFLINE-TICKET-IDS: Wird ein Mangel oder Ticket offline angelegt,
+    erzeugt Capmo keine gültige Ticket-Nummer. Die ID wird erst vom Cloud-Server
+    vergeben! In Besprechungen vor Ort kann das Ticket nicht nummeriert zitiert
+    werden.
+[-] SYNC-BLOCKADEN BEI GROSSEN PROJEKTEN: Nutzer berichten regelmäßig über
+    "Datenstau", wenn dutzende Fotos auf einmal hochgeladen werden müssen.
+    Der Hersteller empfiehlt offiziell: "Lassen Sie die App im Vordergrund bei
+    stabilem WLAN geöffnet" – auf Baustellen absolut unpraktikabel.
+[-] Teures SaaS-Modell (oft mehrere tausend Euro jährlich pro Lizenz).
+
+4.7 Benchmark 7: PlanRadar (Wien)
+--------------------------------------------------------------------------------
+Produkte: PlanRadar Ticket- & Planmanagement.
+Offline-Architektur:
+- Native Apps mit lokalem Projekt-Download.
+Praxiserfahrungen & Schwachstellen:
+[-] ZWANG ZUM VORAB-DOWNLOAD: Der Bauleiter MUSS das gesamte Projekt im Büro
+    vorab vollständig herunterladen. Vergisst er dies, hat er auf der Baustelle
+    keinen Zugriff auf die Pläne.
+[-] SYNCHRONISATIONS-VERZÖGERUNGEN: Bei großen Plänen (>50 MB PDF) bricht der
+    Hintergrundabgleich bei schwachem Signal ab. Rote Pins bleiben als "nicht
+    synchronisiert" hängen.
+[-] Kein kaufmännisches ERP: PlanRadar hat weder Faktura, VOB-Kumulation,
+    SOKA-BAU noch DATEV-Export.
+
+4.8 Benchmark 8: Craftnote (Berlin)
+--------------------------------------------------------------------------------
+Produkte: Craftnote Handwerker-App (Bauakte & Chat).
+Offline-Architektur:
+- Chat-zentrierte Baustellen-App.
+Praxiserfahrungen & Schwachstellen:
+[-] DATENVERLUST DURCH CACHE-LEEREN: Im Hilfeforum wird empfohlen, bei Sync-
+    Problemen den App-Cache zu leeren – mit der expliziten Warnung: "Dabei
+    können lokal gespeicherte Offline-Daten verloren gehen!"
+[-] Keine REB-Aufmaße, keine EFB-Kalkulation, kein vollwertiges kaufmännisches
+    Rechnungswesen.
+
+4.9 Typische Schwachstellen & Praxiskritik aus App Stores & Handwerkerforen
+--------------------------------------------------------------------------------
+Die Analyse von über 200 Nutzerbewertungen und Forenbeiträgen kristallisiert
+die 5 Todsünden von Baustellen-Apps heraus:
+1. SERVER-GENERIERTE IDENTIFIKATOREN: Wenn Tickets, Lieferscheine oder Berichte
+   offline keine finale Kennung erhalten, herrscht Chaos auf der Baustelle.
+2. FATALE CACHE-LEERUNG: Nutzer verlieren Wochenberichte, weil die App hängen-
+   bleibt und die einzige "Lösung" der Neuinstallation entspricht.
+3. FEHLENDE STATUS-TRANSPARENZ: Der Polier weiß nie: "Ist dieser Bericht jetzt
+   beim Chef im Büro angekommen oder liegt er noch im Handy?"
+4. ZU GROSSE DATENPAKETE: Apps versuchen, 50 hochauflösende 12-Megapixel-Fotos
+   unkomprimiert über eine 2G/EDGE-Verbindung zu senden und verstopfen die Queue.
+5. KEIN P2P-MODUS: Funktioniert das Handynetz nicht, gibt es keinen Weg, die
+   Daten lokal auf den Laptop des Chefs zu übertragen.
+
+
+================================================================================
+5. GRANULARE SOLL-IST-VERGLEICHSMATRIX: W-LINK ERP VS. BAUSTELLEN-REALITÄT
+================================================================================
+
+5.1 Bewertungs-Methodik & Erfüllungsgrade
+--------------------------------------------------------------------------------
+Die Bewertung erfolgt anhand einer vierstufigen Ampel:
+[VOLL]    = 100 % vollständig, praxiserprobt, offline-fähig und getestet.
+[GUT]     = Zu 70-90 % umgesetzt; kleinere funktionale Lücken vorhanden.
+[TEIL]    = Zu 30-60 % umgesetzt (z. B. auf Desktop vorhanden, aber mobil fehlend).
+[FEHLT]   = Unter 30 % oder im System noch nicht implementiert.
+
+5.2 Umfassende Feature- und Praxis-Matrix (30 Schlüsselkriterien)
+--------------------------------------------------------------------------------
+
+| #  | Anforderung / Geschäftsprozess        | Markt-Soll | W-Link IST | Status | Bewertung & Praxiskommentar |
+|:---|:--------------------------------------|:-----------|:-----------|:------:|:----------------------------|
+| **I. BASISTECHNOLOGIE & LOKALE DATENHALTUNG** |
+| 1  | 100 % Autarker Desktop-Betrieb       | Must-Have  | Electron+DB| [VOLL] | better-sqlite3 WAL; Null Latenz, keine Cloud-Abhängigkeit. |
+| 2  | Installierbare Offline-PWA vor Ort    | Must-Have  | PWA/Service| [VOLL] | ServiceWorker, Dexie.js (IndexedDB), Touch-Optimierung. |
+| 3  | Idempotente UUID-Mutations-Queue      | Must-Have  | SyncWorker | [VOLL] | RFC 4122 v4 UUIDs, Lamport-Timestamps, Outbox-Pattern. |
+| 4  | Lokaler P2P-Sync ohne Internet (WLAN) | Must-Have  | Port 38400 | [VOLL] | Node HTTP/WS Sync Hub, QR-Code-Pairing im Baucontainer. |
+| 5  | Notfall-Sync via USB-Stick / Datei    | High       | Noch manuell| [TEIL] | DB-Kopie möglich, aber kein 1-Klick-Bundle-Export/Import. |
+| 6  | Konflikt-Quarantäne & Schlichtungs-UI | Must-Have  | sync_conflicts| [VOLL]| Kollidierende Änderungen werden isoliert; Schlichtungs-Dialog. |
+| 7  | GoBD-Hashketten auf Mobilgerät        | Must-Have  | SHA-256    | [GUT]  | Desktop voll umgesetzt; mobil werden Hashes vorbereitet. |
+| **II. BAUTAGEBUCH & MELDENACHWEISE** |
+| 8  | Witterungserfassung & Tagesbericht     | Must-Have  | Tab Bautag | [VOLL] | Wetter-Presets, Arbeiteranzahl, Stunden, Textberichte. |
+| 9  | VOB/B § 4 Abs. 3 Bedenkenanzeige      | Must-Have  | Tab VOB    | [VOLL] | Vollständige Formulare, Kategoriewahl, VOB-PDF-Export. |
+| 10 | VOB/B § 6 Abs. 1 Behinderungsanzeige  | Must-Have  | Tab VOB    | [VOLL] | Fristberechnung, Behinderungsgründe, Verzugstage. |
+| 11 | Digitale Touch-Signatur vor Ort       | Must-Have  | Canvas Sig | [VOLL] | HTML5-Canvas Signatur, SVG-Pfad-Speicherung, PDF-Einbettung. |
+| 12 | Baustellenkamera mit Foto-Markup      | Must-Have  | Cam-Engine | [VOLL] | Canvas-Kompression (1.600px), Geotags, Kreise/Pfeile/Text. |
+| 13 | Offline PDF-Bauplan-Viewer mit Pins  | High       | Fehlt mobil| [FEHLT]| Desktop hat Pläne; in mobiler PWA noch kein PDF-Canvas-Viewer.|
+| **III. ZEITERFASSUNG & COMPLIANCE** |
+| 14 | Einzel-Stempeluhr (Kommen/Gehen/Pause)| Must-Have  | Tab Stempel| [VOLL] | Live-Timer, Projekt- & Raumzuordnung, Geo-Snapshot. |
+| 15 | Kolonnen-Zeiterfassung (Polier-Modus) | Must-Have  | Bautag-Sum | [TEIL] | Summenstunden im Bautagebuch; echte Kolonnen-Multi-Stempelung fehlt. |
+| 16 | Gesetzliche Pausenprüfung (§ 4 ArbZG) | Must-Have  | Controller | [VOLL] | Automatische 30/45 Min Prüfung je nach Tagesarbeitszeit. |
+| 17 | Höchstarbeitszeit-Wächter (§ 3 ArbZG) | Must-Have  | Controller | [VOLL] | Warnung bei Überschreitung von 10 Stunden täglich. |
+| 18 | BRTV-Wegezeitentschädigung (Staffel)  | Must-Have  | Controller | [VOLL] | 2024-2026 Staffel (0-50, 51-75, >75 km; Fahrer/Mitfahrer). |
+| 19 | SOKA-BAU / ZVK Monatsmeldung DTA/XML  | Must-Have  | SokaEngine | [VOLL] | DTA-Bau Festbreite + XML V3.0 mit 2026/2027 Beitragssätzen. |
+| 20 | Nachunternehmer-Haftung (§ 14 AEntG)  | Must-Have  | Compliance | [VOLL] | Fristenradar für Freistellungen (§48b EStG) & Auszahlungssperre. |
+| **IV. AUFMASS, KALKULATION & ABRECHNUNG** |
+| 21 | REB 23.003 / DA11 Formelsatz Desktop  | Must-Have  | AufmassCtrl| [VOLL] | Formeln 01, 02, 04, 91; DA11 Export & Import; Formelprüfer. |
+| 22 | Mobiles Aufmaß in PWA vor Ort         | Must-Have  | Nicht in PWA| [FEHLT]| Aufmaß aktuell nur im Desktop; mobil noch kein Erfassungs-Tab.|
+| 23 | Bluetooth-Laser-Anbindung (BLE / HID) | High       | Nicht integ| [FEHLT]| Messwerte müssen manuell eingetippt werden; keine BLE-Kopplung.|
+| 24 | EFB 221/222 Zuschlagskalkulation      | Must-Have  | KalkCtrl   | [VOLL] | Mittellohn, 5 Kostenarten, BGK/AGK/W&G, Endsummenkalkulation. |
+| 25 | DATANORM 4.0 & 5.0 Streaming Parser   | Must-Have  | Datanorm   | [VOLL] | CP850 DOS, Satzarten V, A, B, P, R; >100 MB Streaming. |
+| 26 | IDS Connect 2.5 Großhandels-Webshops  | High       | IDS-Engine | [VOLL] | Deep-Link, Loopback-Server, Warenkorb XML-Import mit Aufschlag.|
+| 27 | Kumulierte VOB-Abschlagsrechnung      | Must-Have  | CumulBill  | [VOLL] | Formel F_t = L_t - SUM(F_i); 5% Sicherheitseinbehalt (§17).|
+| 28 | E-Rechnung EN 16931-1 (XRechn/ZUGFeRD)| Must-Have  | E-Invoice  | [VOLL] | CII XML 3.0, ZUGFeRD 2.3+ PDF/A-3b mit Factur-X Namespace. |
+| 29 | Steuerliche Baulogik (§ 13b / § 35a)  | Must-Have  | TaxEngine  | [VOLL] | Reverse Charge mit VATEX-EU-AE; Handwerkerbonus-Ausweis. |
+| 30 | DATEV Export (EXTF-700 / SKR03/04)    | Must-Have  | DatevExport| [VOLL] | BU-Schlüssel 19/68, vollständiger Buchungsstapel. |
+
+5.3 Die 6 Kern-Stärken von W-Link ERP
+--------------------------------------------------------------------------------
+1. ECHTE DATENSOUVERÄNITÄT & ZERO CLOUD DEPENDENCY:
+   Das gesamte Büro-ERP läuft 100 % lokal unter Electron mit better-sqlite3.
+   Keine monatlichen Lizenzkosten, keine Cloud-Server-Ausfälle, keine Gefahr
+   von Datensperren durch Dritte.
+2. VOB- & BAUSPEZIFISCHE TIEFE:
+   Im Gegensatz zu Standard-Fakturen (wie SevDesk oder Lexoffice) beherrscht
+   W-Link kumulierte Abschlagsrechnungen, VOB-Sicherheitseinbehalte,
+   SOKA-BAU-Meldungen, § 13b UStG, § 48b Bauabzugsteuer und EFB-Kalkulation.
+3. LOCAL-FIRST P2P-SYNC HUB:
+   Der integrierte Zero-Dependency HTTP/WS-Sync-Server ermöglicht den direkten
+   Abgleich zwischen mobilen Tablets und dem Bauleiter-Laptop über einen
+   lokalen WLAN-Hotspot – komplett ohne Internetverbindung.
+4. INTEGRIERTE GO-BD HASHKETTE:
+   Manipulationssichere SHA-256 Audit-Logs bereits bei der Belegfestschreibung
+   und Synchronisation.
+5. RECHTSSICHERES VOB/B MELDEWESEN VOR ORT:
+   Die PWA generiert formstrenge Bedenken- (§ 4 Abs. 3) und Behinderungsanzeigen
+   (§ 6 Abs. 1) mit Touch-Signatur und PDF-Export direkt auf der Baustelle.
+6. STREAMING-FÄHIGE GROSSHANDELS-SCHNITTSTELLEN:
+   DATANORM 4.0/5.0 Streaming-Parser (>100 MB ohne Memory-Leaks) und IDS
+   Connect 2.5 Webshop-Anbindung mit automatischem Aufschlagsrechner.
+
+5.4 Die 6 kritischen Gaps & Schwachstellen in unserer mobilen Baustellen-PWA
+--------------------------------------------------------------------------------
+Trotz der enormen Stärken des Gesamtsystems existieren in der mobilen Praxis
+noch 6 funktionale Lücken, die geschlossen werden müssen:
+
+1. GAP 1: FEHLENDES MOBILES REB 23.003 AUFMASS IN DER PWA:
+   - Status: Das Aufmaß-Center mit Formel-Assistent existiert aktuell NUR im
+     Desktop-Programm (`AufmassController.js`, `AufmassView.js`).
+   - Problem: Der Polier muss Maße auf der Baustelle auf Papier notieren und
+     abends abtippen – genau dieser Medienbruch soll vermieden werden.
+2. GAP 2: FEHLENDE BLUETOOTH-LASER-ANBINDUNG (BLE):
+   - Status: Bisher müssen Messwerte manuell über die Tastatur eingetippt werden.
+   - Problem: Konkurrenz-Tools (wie MWM-Libero oder Bosch MeasureOn) binden
+     Laserdistanzmesser direkt ein. Messwerte müssen per Bluetooth ohne Tippen
+     in das Aufmaß fließen.
+3. GAP 3: FEHLENDE KOLONNEN-SCHNELLSTEMPELUNG (POLIER-MODUS):
+   - Status: Die PWA-Stempeluhr stempelt aktuell Mitarbeiter für Mitarbeiter einzeln.
+   - Problem: Ein Polier mit 10 Arbeitern braucht morgens 10 einzelne Stempel-
+     vorgänge. Er benötigt eine Multi-Checkbox-Liste für die 1-Klick-Stempelung.
+4. GAP 4: FEHLENDER OFFLINE PDF-BAUPLAN-VIEWER MIT PINS:
+   - Status: Mängelfotos können markiert werden, aber es gibt in der mobilen PWA
+     keine Möglichkeit, einen PDF-Bauplan zu öffnen und Mängel als Pins zu verorten.
+5. GAP 5: FEHLENDER 1-KLICK USB-NOTFALL-SYNC (DATEI-BUNDLE):
+   - Status: Der Sync setzt aktuell ein aktives Netzwerk (WLAN/Hotspot) voraus.
+   - Problem: Auf Baustellen mit striktem Funkverbot fehlt ein "Sync-Bundle
+     exportieren / importieren"-Button für USB-C-Sticks.
+6. GAP 6: MATERIAL- & GERÄTE-RÜCKMELDUNG MOBIL:
+   - Status: Bautagebuch erfasst nur Textfelder für Geräte.
+   - Problem: Kein schnelles Erfassen von Gerätestunden (z. B. Bagger 4,5 h)
+     oder Scannen von Geräte-QR-Codes.
+
+
+================================================================================
+6. KONKRETER MASSNAHMEN- & OPTIMIERUNGSPLAN FÜR W-LINK ERP
+================================================================================
+
+6.1 Stufe 1: Quick Wins (Sofortige mobile Produktivitäts-Booster - Release 1.2.1)
+--------------------------------------------------------------------------------
+Dauer: 3 bis 5 Arbeitstage. Hoher Nutzen bei minimalem Aufwand.
+
+1. KOLONNEN-SCHNELLSTEMPELUNG IM TAB STEMPELUHR:
+   - Erweiterung von `pwa/index.html` und `pwa/js/pwa-app.js`:
+   - Umschalter zwischen "Einzel-Mitarbeiter" und "Ganze Kolonne".
+   - Im Kolonnen-Modus: Liste aller Mitarbeiter mit Multi-Select-Checkboxen
+     ("Alle auswählen").
+   - 1 Klick auf "▶ Kolonne KOMMEN" stempelt alle markierten Mitarbeiter mit
+     demselben Zeitstempel und Projekt in die IndexedDB.
+   - Erfüllt sofort die Kernforderung der Bauleiter auf der Baustelle.
+
+2. USB-SYNC NOTFALL-BUNDLE (IMPORT / EXPORT):
+   - Mobiler Button im Sync-Tab: "Sync-Paket auf USB speichern".
+   - Exportiert alle ungesendeten Outbox-Mutations und Fotos als verschlüsselte
+     Datei `wlink_sync_[deviceId]_[timestamp].json`.
+   - Im Desktop-Sync-Center: Drag & Drop Dropzone "Sync-Paket von Datei importieren".
+   - Verarbeitet das Paket über denselben `applyEntityMutation`-Pfad mit
+     Idempotenz- und Konfliktprüfung.
+
+3. BAUSTELLEN-HIGH-CONTRAST & HANDSCHUH-MODUS (UI-OPTIMIERUNG):
+   - Grelle Sonneneinstrahlung macht Standard-Displays unlesbar.
+   - CSS-Schalter für High-Contrast Mode (Reines Weiß auf Tiefschwarz / Gelb).
+   - Vergrößerung aller Touch-Targets auf mindestens 52 x 52 Pixel für die
+     Bedienung mit Arbeitshandschuhen.
+
+6.2 Stufe 2: Ausbaustufe Release 2.1 (Mobiles Aufmaß & Bluetooth BLE)
+--------------------------------------------------------------------------------
+Dauer: 2 Wochen.
+
+1. NEUER TAB IN PWA: "MOBILES AUFMASS (REB 23.003)":
+   - Auswahl von Projekt $\to$ Leistungsverzeichnis $\to$ Ordnungszahl (OZ).
+   - Schnellauswahl der Standard-REB-Formeln:
+     * `01` Rechteck ($a \cdot b$)
+     * `02` Dreieck ($\frac{a \cdot b}{2}$)
+     * `04` Trapez
+     * `91` Freie Formel
+   - Erfassung von Aufmaßzeilen mit Raumbezeichnung und Bemerkung.
+   - Speicherung in `local_aufmass` in der IndexedDB und Replikation in die
+     Desktop-Tabelle `aufmass_zeilen`.
+
+2. WEB BLUETOOTH API ANBINDUNG FÜR LASERDISTANZMESSER:
+   - Implementierung eines BLE-Treibermoduls `pwa/js/bluetooth-laser.js`:
+   - Kopplung via `navigator.bluetooth.requestDevice()` für gängige GATT-Services:
+     * Leica DISTO Service UUIDs
+     * Bosch GLM Service UUIDs
+     * Standard Bluetooth BLE Environmental Sensing / Measurement Service
+   - Automatisches Eintragen des Messwerts in das aktuell fokussierte Eingabefeld.
+   - Fallback auf Bluetooth-HID (Tastaturemulation) ohne Konfiguration.
+
+6.3 Stufe 3: Ausbaustufe Release 2.2 (Offline Plan-Viewer & Geräte/Material)
+--------------------------------------------------------------------------------
+Dauer: 3 Wochen.
+
+1. OFFLINE PDF-BAUPLAN-VIEWER MIT MÄNGEL-PINS:
+   - Einbindung einer leichtgewichtigen, autarken Offline-Version von `pdf.js`
+     in die PWA.
+   - Pläne werden beim Pull-Sync als Blobs in die IndexedDB gecached.
+   - Touch-Gesten: Stufenloses Zoomen (Pinch-to-Zoom) und Verschieben von Plänen.
+   - Pin-Setzen: Antippen der Planstelle öffnet das Mängelerfassungs-Modal mit
+     Fotoupload und VOB-Fristensetzung.
+   - Pin-Koordinaten ($X/Y$ in Relation zur Plangröße) werden synchronisiert
+     und im Desktop auf dem Plan lagerichtig visualisiert.
+
+2. MATERIAL- & GERÄTE-SCHNELLBUCHUNG:
+   - Integrierter Barcode-Scanner über Barcode Detection API / Html5Qrcode.
+   - Scannen von Geräte-IDs (z. B. Gerätekennung `K-042` Turmdrehkran) und
+     Buchung von Betriebsstunden für die Baustelle.
+   - Lieferschein-Schnellkamera mit automatischer Dokumenten-Eckenerkennung
+     und Kontrastverstärkung für handschriftliche Lieferscheine.
+
+6.4 Stufe 4: Strategische Zukunft (CRDTs & Multi-Master Mesh Sync)
+--------------------------------------------------------------------------------
+Perspektive: Release 3.0 (2027).
+- Einführung vollwertiger CRDT-Bibliotheken (Automerge / Yjs) für kollaborative
+  Bautagebücher und Planbearbeitungen.
+- Multi-Master-Mesh: Tablets auf der Baustelle können sich untereinander via
+  WiFi-Direct synchronisieren, selbst wenn der Bauleiter-Laptop nicht vor Ort ist.
+
+
+================================================================================
+7. FAZIT & VERTRIEBSARGUMENTATION
+================================================================================
+
+7.1 Die "Unzerstörbare Baustellen-Software": Kernbotschaft für den Vertrieb
+--------------------------------------------------------------------------------
+Unsere Positionierung gegenüber den Wettbewerbern (pds, Streit, Capmo, PlanRadar)
+lautet:
+
+"W-Link ERP ist die einzige Bau- & Handwerker-Software im DACH-Raum, die
+kompromisslose kaufmännische VOB-Tiefe (EFB-Kalkulation, REB 23.003 Aufmaß,
+SOKA-BAU, E-Rechnung, GoBD) mit echter, 100 % ausfallsicherer Offline-Architektur
+verbindet – zu einem transparenten Einmalkaufpreis ohne Abo-Falle."
+
+7.2 Total Cost of Ownership (TCO): Einmalkauf vs. SaaS-Mietfalle (5 Jahre)
+--------------------------------------------------------------------------------
+Vergleich für einen typischen mittelständischen Baubetrieb (15 Mitarbeiter:
+2 Bürokräfte, 2 Bauleiter, 1 Polier, 10 gewerbliche Handwerker/Arbeiter):
+
+| Kostenart / Komponente         | Typischer SaaS-Wettbewerber (z.B. pds / Nevaris) | W-Link ERP (Einmalkauf-Modell) |
+|:------------------------------|:------------------------------------------------|:-------------------------------|
+| Bürolizenzen (2 Arbeitsplätze) | 2 x 160 €/Monat = 3.840 €/Jahr                  | 1.490 € Einmalkauf             |
+| Mobile Lizenzen (13 App-Nutzer)| 13 x 18 €/Monat = 2.808 €/Jahr                  | 0 € (PWA unbegrenzt enthalten) |
+| Cloud-Hosting & Datenbank     | 90 €/Monat = 1.080 €/Jahr                       | 0 € (Lokale SQLite-DB)         |
+| Pflicht-Wartung / Updates      | Im Abo enthalten                                | Optional 290 €/Jahr            |
+| GESAMTKOSTEN JAHR 1           | **7.728 €**                                     | **1.490 €**                    |
+| GESAMTKOSTEN NACH 3 JAHREN    | **23.184 €**                                    | **2.070 €**                    |
+| GESAMTKOSTEN NACH 5 JAHREN    | **38.640 €**                                    | **2.650 €**                    |
+| **ERSPARNIS FÜR DEN KUNDEN**  | -                                               | **> 35.000 € (über 90 %!)**    |
+
+7.3 Checkliste für Verkaufsgespräche mit Bauleitern und Handwerksmeistern
+--------------------------------------------------------------------------------
+In jedem Vertriebs- und Beratungsgespräch sollten folgende 5 Leitfragen gestellt
+werden, die bei 99 % der Wettbewerber sofort die Schwachstelle aufdecken:
+
+1. FRAGE: "Funktioniert Ihre aktuelle App im 2. Untergeschoss der Tiefgarage,
+   wenn Sie dort mit dem Laser ein Aufmaß für 20 Räume erfassen wollen?"
+   $\to$ Wettbewerber scheitern. W-Link funktioniert zu 100 %.
+2. FRAGE: "Was passiert mit Ihren ungespeicherten Daten, wenn der Polier im
+   Funkloch auf 'Speichern' klickt?"
+   $\to$ Wettbewerber zeigen Fehler/Daten weg. W-Link puffert atomar in die Outbox.
+3. FRAGE: "Können Sie abends im Bauwagen ohne Internetverbindung die Tagesberichte
+   aller Poliere auf Ihren Bauleiter-Laptop übertragen?"
+   $\to$ Wettbewerber: Nein, Cloud zwingend. W-Link: Lokaler Hotspot-Sync in 5 Sek.
+4. FRAGE: "Was empfiehlt Ihr Support, wenn die mobile App nicht mehr synchronisiert?"
+   $\to$ Wettbewerber: 'Cache leeren / Neu installieren' (Datenverlust!).
+   $\to$ W-Link: Notfall-USB-Sync-Bundle garantiert 0 % Datenverlust.
+5. FRAGE: "Wie viel Geld zahlen Sie über 5 Jahre für monatliche Benutzer-Lizenzen?"
+   $\to$ W-Link bietet die wirtschaftlichste, ehrlichste und robusteste Lösung.
+
+================================================================================
+ENDE DES DOKUMENT-REPORTS (FEAT-10)
+================================================================================

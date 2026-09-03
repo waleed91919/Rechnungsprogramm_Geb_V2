@@ -116,16 +116,16 @@ class SyncView {
         } else {
             await window.api.stopSyncServer();
         }
-        if (window.navigation) {
-            window.navigation.navigateTo('sync');
+        if (typeof switchView === 'function') {
+            switchView('sync');
         }
     }
 
     static async resolveConflict(conflictId, strategy) {
         await window.api.resolveSyncConflict(conflictId, strategy);
         alert(`Konflikt #${conflictId} gelöst mit Strategie: ${strategy}`);
-        if (window.navigation) {
-            window.navigation.navigateTo('sync');
+        if (typeof switchView === 'function') {
+            switchView('sync');
         }
     }
 

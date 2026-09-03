@@ -18,3 +18,19 @@ test('Full System Modules 1-8 Full-Stack Integration Test', () => {
     assert.ok(report.passCount >= 10, 'At least 10 module checks must pass');
     assert.strictEqual(report.failCount, 0, 'Fail count must be 0');
 });
+
+test('All JavaScript files must be syntactically valid (node -c check)', () => {
+    const globDirs = ['js', 'controllers', 'views', 'models', 'main'];
+    for (const dir of globDirs) {
+        const fullDir = path.join(__dirname, '..', dir);
+        if (!fs.existsSync(fullDir)) continue;
+        const files = fs.readdirSync(fullDir).filter(f => f.endsWith('.js'));
+        for (const file of files) {
+            const filePath = path.join(fullDir, file);
+            assert.doesNotThrow(() => {
+                execSync(`node -c "${filePath}"`, { stdio: 'pipe' });
+            }, `Syntax error in ${dir}/${file}`);
+        }
+    }
+});
+
