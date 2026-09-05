@@ -37,7 +37,58 @@ function sanitize(str) {
 }
 
 
-// --- Feiertagsberechnung (Holiday Engine) ---
+// --- Datums- & Feiertagsberechnung (Deutsches System & Arbeitstage) ---
+
+function formatDateISO(d) {
+    if (!d) return '';
+    if (typeof d === 'string') {
+        const s = d.trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+        const deMatch = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+        if (deMatch) {
+            const day = deMatch[1].padStart(2, '0');
+            const month = deMatch[2].padStart(2, '0');
+            const year = deMatch[3];
+            return `${year}-${month}-${day}`;
+        }
+        const parsed = new Date(s);
+        if (!isNaN(parsed.getTime())) {
+            const y = parsed.getFullYear();
+            const m = String(parsed.getMonth() + 1).padStart(2, '0');
+            const day = String(parsed.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        }
+    }
+    if (d instanceof Date && !isNaN(d.getTime())) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    }
+    return '';
+}
+
+function formatDateDE(d) {
+    const iso = formatDateISO(d);
+    if (!iso) return '';
+    const parts = iso.split('-');
+    return `${parts[2]}.${parts[1]}.${parts[0]}`;
+}
+
+function formatDateDEWithWeekday(d) {
+    const iso = formatDateISO(d);
+    if (!iso) return '';
+    const parts = iso.split('-');
+    const dt = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
+    const wochentage = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+    const wochentag = wochentage[dt.getDay()];
+    return `${parts[2]}.${parts[1]}.${parts[0]} (${wochentag})`;
+}
+
+function parseDateDE(str) {
+    return formatDateISO(str);
+}
+
 function getOstersonntag(year) {
     // Gauss algorithm for Easter Sunday
     const a = year % 19;
@@ -59,73 +110,121 @@ function getOstersonntag(year) {
         if (day === 26) day = 19;
         if (day === 25 && d === 28 && e === 6 && a > 10) day = 18;
     }
-    return new Date(year, month - 1, day);
+    return new Date(year, month - 1, day, 12, 0, 0);
+}
+
+function getGermanHolidaysMap(year) {
+    if (typeof InvoiceController !== 'undefined' && InvoiceController.getGermanHolidaysMap) {
+        return InvoiceController.getGermanHolidaysMap(year);
+    }
+    const y = parseInt(year, 10);
+    const map = new Map();
+    map.set(`${y}-01-01`, 'Neujahr');
+    map.set(`${y}-05-01`, 'Tag der Arbeit');
+    map.set(`${y}-10-03`, 'Tag der Deutschen Einheit');
+    map.set(`${y}-12-25`, '1. Weihnachtsfeiertag');
+    map.set(`${y}-12-26`, '2. Weihnachtsfeiertag');
+
+    const ostern = getOstersonntag(y);
+    const addOffset = (days) => {
+        const dt = new Date(ostern);
+        dt.setDate(dt.getDate() + days);
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const d = String(dt.getDate()).padStart(2, '0');
+        return `${dt.getFullYear()}-${m}-${d}`;
+    };
+
+    map.set(addOffset(-2), 'Karfreitag');
+    map.set(addOffset(1), 'Ostermontag');
+    map.set(addOffset(39), 'Christi Himmelfahrt');
+    map.set(addOffset(50), 'Pfingstmontag');
+    return map;
 }
 
 function getGermanHolidays(year) {
     const holidays = [];
-    // Fixed
-    holidays.push(new Date(year, 0, 1).getTime()); // Neujahr
-    holidays.push(new Date(year, 4, 1).getTime()); // Tag der Arbeit
-    holidays.push(new Date(year, 9, 3).getTime()); // Tag der Deutschen Einheit
-    holidays.push(new Date(year, 11, 25).getTime()); // 1. Weihnachtsfeiertag
-    holidays.push(new Date(year, 11, 26).getTime()); // 2. Weihnachtsfeiertag
-
-    // Dynamic (Easter based)
-    const ostern = getOstersonntag(year);
-
-    const karfreitag = new Date(ostern);
-    karfreitag.setDate(ostern.getDate() - 2);
-    holidays.push(karfreitag.getTime());
-
-    const ostermontag = new Date(ostern);
-    ostermontag.setDate(ostern.getDate() + 1);
-    holidays.push(ostermontag.getTime());
-
-    const himmelfahrt = new Date(ostern);
-    himmelfahrt.setDate(ostern.getDate() + 39);
-    holidays.push(himmelfahrt.getTime());
-
-    const pfingstmontag = new Date(ostern);
-    pfingstmontag.setDate(ostern.getDate() + 50);
-    holidays.push(pfingstmontag.getTime());
-
+    const map = getGermanHolidaysMap(year);
+    for (const iso of map.keys()) {
+        const parts = iso.split('-');
+        holidays.push(new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0).getTime());
+    }
     return holidays;
 }
 
-function calculateDeliveryDate() {
-    const startInput = document.getElementById('rechnung-datum').value;
-    const daysInput = parseInt(document.getElementById('rechnung-werktage').value) || 0;
+function isGermanPublicHoliday(d) {
+    const iso = formatDateISO(d);
+    if (!iso) return { isHoliday: false, name: null };
+    const y = parseInt(iso.substring(0, 4), 10);
+    const holidays = getGermanHolidaysMap(y);
+    if (holidays.has(iso)) {
+        return { isHoliday: true, name: holidays.get(iso) };
+    }
+    return { isHoliday: false, name: null };
+}
 
-    if (!startInput || daysInput <= 0) return;
+function isArbeitstag(d) {
+    const iso = formatDateISO(d);
+    if (!iso) return false;
+    const parts = iso.split('-');
+    const dt = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
+    const dayOfWeek = dt.getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) return false; // Sa / So
+    return !isGermanPublicHoliday(iso).isHoliday;
+}
 
-    let current = new Date(startInput);
-    let addedDays = 0;
+function calculateDueDateWorkingDays(startDate, workingDays = 14) {
+    const cleanStart = formatDateISO(startDate) || formatDateISO(new Date());
+    const parts = cleanStart.split('-');
+    let current = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
+    let needed = Math.max(0, parseInt(workingDays, 10) || 0);
+    let added = 0;
 
-    let currentYear = current.getFullYear();
-    let holidays = getGermanHolidays(currentYear);
-
-    while (addedDays < daysInput) {
+    while (added < needed) {
         current.setDate(current.getDate() + 1);
-
-        if (current.getFullYear() !== currentYear) {
-            currentYear = current.getFullYear();
-            holidays = getGermanHolidays(currentYear);
-        }
-
-        // Check if weekend (0=Sun, 6=Sat)
         const dayOfWeek = current.getDay();
         if (dayOfWeek === 0 || dayOfWeek === 6) continue;
-
-        // Check if holiday
-        const currentMidnight = new Date(current.getFullYear(), current.getMonth(), current.getDate()).getTime();
-        if (holidays.includes(currentMidnight)) continue;
-
-        addedDays++;
+        const iso = formatDateISO(current);
+        if (isGermanPublicHoliday(iso).isHoliday) continue;
+        added++;
     }
+    return formatDateISO(current);
+}
 
-    const resultStr = current.toISOString().split('T')[0];
-    document.getElementById('rechnung-faellig').value = resultStr;
+function countWorkingDaysBetween(startDate, endDate) {
+    const startIso = formatDateISO(startDate);
+    const endIso = formatDateISO(endDate);
+    if (!startIso || !endIso || startIso >= endIso) return 0;
+
+    const startParts = startIso.split('-');
+    const endParts = endIso.split('-');
+    let current = new Date(parseInt(startParts[0], 10), parseInt(startParts[1], 10) - 1, parseInt(startParts[2], 10), 12, 0, 0);
+    const target = new Date(parseInt(endParts[0], 10), parseInt(endParts[1], 10) - 1, parseInt(endParts[2], 10), 12, 0, 0);
+
+    let workingDays = 0;
+    while (current < target) {
+        current.setDate(current.getDate() + 1);
+        const dayOfWeek = current.getDay();
+        if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+        const iso = formatDateISO(current);
+        if (isGermanPublicHoliday(iso).isHoliday) continue;
+        workingDays++;
+    }
+    return workingDays;
+}
+
+function calculateDeliveryDate() {
+    const startInput = document.getElementById('rechnung-datum')?.value;
+    const daysInput = parseInt(document.getElementById('rechnung-werktage')?.value, 10);
+    const days = (!isNaN(daysInput) && daysInput >= 0) ? daysInput : (parseInt(state?.einstellungen?.zahlungsziel, 10) || 14);
+
+    const resultStr = calculateDueDateWorkingDays(startInput || new Date(), days);
+    const faelligEl = document.getElementById('rechnung-faellig');
+    if (faelligEl) {
+        faelligEl.value = resultStr;
+    }
+    if (typeof updateRechnungDatePreviews === 'function') {
+        updateRechnungDatePreviews();
+    }
 }
 
 // Toast notification to replace native window.alert that can cause focus locks
@@ -276,8 +375,17 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         formatCurrency,
         sanitize,
+        formatDateISO,
+        formatDateDE,
+        formatDateDEWithWeekday,
+        parseDateDE,
         getOstersonntag,
+        getGermanHolidaysMap,
         getGermanHolidays,
+        isGermanPublicHoliday,
+        isArbeitstag,
+        calculateDueDateWorkingDays,
+        countWorkingDaysBetween,
         calculateDeliveryDate,
         showToast,
         safeConfirm,

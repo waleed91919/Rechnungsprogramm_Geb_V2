@@ -95,6 +95,8 @@ function setupRechnungModalUI() {
     document.getElementById('rechnungsdetails-title').innerText = 'Rechnungsdetails';
     document.getElementById('rechnung-nr-label').innerText = 'Rechnungsnummer';
     document.getElementById('rechnung-datum-label').innerText = 'Rechnungsdatum';
+    const faelligLabel = document.getElementById('rechnung-faellig-label');
+    if (faelligLabel) faelligLabel.innerText = 'Fälligkeitsdatum';
     document.getElementById('rechnung-modal-submit-text').innerText = 'Rechnung Speichern';
 
     // Update Status Label and Options for Rechnung
@@ -131,13 +133,21 @@ function setupRechnungModalUI() {
     if (document.getElementById('rechnung-skonto-tage')) document.getElementById('rechnung-skonto-tage').value = '';
     if (document.getElementById('rechnung-skonto-prozent')) document.getElementById('rechnung-skonto-prozent').value = '';
 
-    // Defaults
-    const today = new Date();
-    document.getElementById('rechnung-datum').value = today.toISOString().split('T')[0];
-    const later = new Date(today);
-    const zZiel = parseInt(state.einstellungen.zahlungsziel) || 14;
-    later.setDate(today.getDate() + zZiel);
-    document.getElementById('rechnung-faellig').value = later.toISOString().split('T')[0];
+    // Defaults: Deutsches System (DD.MM.YYYY & Arbeitstage-Zahlungsziel)
+    const todayIso = typeof formatDateISO === 'function' ? formatDateISO(new Date()) : new Date().toISOString().split('T')[0];
+    document.getElementById('rechnung-datum').value = todayIso;
+    const zZiel = parseInt(state.einstellungen?.zahlungsziel, 10) || 14;
+    const werktageInput = document.getElementById('rechnung-werktage');
+    if (werktageInput) {
+        werktageInput.value = zZiel;
+        werktageInput.disabled = false;
+    }
+    const faelligIso = typeof calculateDueDateWorkingDays === 'function'
+        ? calculateDueDateWorkingDays(todayIso, zZiel)
+        : (() => { const d = new Date(); d.setDate(d.getDate() + zZiel); return d.toISOString().split('T')[0]; })();
+    document.getElementById('rechnung-faellig').value = faelligIso;
+    if (typeof initRechnungDateHandlers === 'function') initRechnungDateHandlers();
+    if (typeof updateRechnungDatePreviews === 'function') updateRechnungDatePreviews();
 
     // Generate next NR (dynamically finding the highest to prevent 'undefined')
     const currentMaxRechnung = state.rechnungen.reduce((max, r) => Math.max(max, extractLaufendeNummer(r.nr)), 0);
@@ -205,8 +215,16 @@ function applyRechnungReadOnlyMode(existing, form, submitBtn) {
     // Fill data
     document.getElementById('rechnung-kunde').value = existing.kundeId;
     document.getElementById('rechnung-nr').value = existing.nr;
-    document.getElementById('rechnung-datum').value = existing.datum;
-    document.getElementById('rechnung-faellig').value = existing.faellig;
+    document.getElementById('rechnung-datum').value = typeof formatDateISO === 'function' ? formatDateISO(existing.datum) : existing.datum;
+    document.getElementById('rechnung-faellig').value = typeof formatDateISO === 'function' ? formatDateISO(existing.faellig) : existing.faellig;
+    const wTageReadOnly = document.getElementById('rechnung-werktage');
+    if (wTageReadOnly) {
+        wTageReadOnly.disabled = true;
+        if (existing.datum && existing.faellig && typeof countWorkingDaysBetween === 'function') {
+            wTageReadOnly.value = countWorkingDaysBetween(existing.datum, existing.faellig);
+        }
+    }
+    if (typeof updateRechnungDatePreviews === 'function') updateRechnungDatePreviews();
     document.getElementById('rechnung-status').value = existing.status;
     if (document.getElementById('rechnung-skonto-tage')) document.getElementById('rechnung-skonto-tage').value = existing.skonto_tage || '';
     if (document.getElementById('rechnung-skonto-prozent')) document.getElementById('rechnung-skonto-prozent').value = existing.skonto_prozent || '';
@@ -284,8 +302,17 @@ function applyRechnungEditMode(existing, form, submitBtn) {
     document.getElementById('rechnung-projekt').value = existing.projektId || '';
     setzeRechnungObjektSelect(existing);
     document.getElementById('rechnung-nr').value = existing.nr;
-    document.getElementById('rechnung-datum').value = existing.datum;
-    document.getElementById('rechnung-faellig').value = existing.faellig;
+    document.getElementById('rechnung-datum').value = typeof formatDateISO === 'function' ? formatDateISO(existing.datum) : existing.datum;
+    document.getElementById('rechnung-faellig').value = typeof formatDateISO === 'function' ? formatDateISO(existing.faellig) : existing.faellig;
+    const wTageEdit = document.getElementById('rechnung-werktage');
+    if (wTageEdit) {
+        wTageEdit.disabled = false;
+        if (existing.datum && existing.faellig && typeof countWorkingDaysBetween === 'function') {
+            wTageEdit.value = countWorkingDaysBetween(existing.datum, existing.faellig);
+        }
+    }
+    if (typeof initRechnungDateHandlers === 'function') initRechnungDateHandlers();
+    if (typeof updateRechnungDatePreviews === 'function') updateRechnungDatePreviews();
     document.getElementById('rechnung-status').value = existing.status;
     if (document.getElementById('rechnung-skonto-tage')) document.getElementById('rechnung-skonto-tage').value = existing.skonto_tage || '';
     if (document.getElementById('rechnung-skonto-prozent')) document.getElementById('rechnung-skonto-prozent').value = existing.skonto_prozent || '';
@@ -475,6 +502,7 @@ function setRechnungCustomerType(type, options = {}) {
 
         applyUnternehmensartVisibility();
         if (b2gSection) {
+            b2gSection.classList.add('hidden');
             b2gSection.classList.remove('ring-2', 'ring-blue-400/40');
         }
     } else {
@@ -596,6 +624,8 @@ function setupAngebotModalUI() {
     document.getElementById('rechnungsdetails-title').innerText = 'Angebotsdetails';
     document.getElementById('rechnung-nr-label').innerText = 'Angebotsnummer';
     document.getElementById('rechnung-datum-label').innerText = 'Angebotsdatum';
+    const faelligLabel = document.getElementById('rechnung-faellig-label');
+    if (faelligLabel) faelligLabel.innerText = 'Gültig bis';
     document.getElementById('rechnung-modal-submit-text').innerText = 'Angebot Speichern';
 
     // Update Status Label and Options for Angebot
@@ -650,8 +680,17 @@ function applyAngebotEditMode(existing, form, submitBtn) {
     document.getElementById('rechnung-projekt').value = existing.projektId || '';
     setzeRechnungObjektSelect(existing);
     document.getElementById('rechnung-nr').value = existing.nr;
-    document.getElementById('rechnung-datum').value = existing.datum;
-    document.getElementById('rechnung-faellig').value = existing.faellig;
+    document.getElementById('rechnung-datum').value = typeof formatDateISO === 'function' ? formatDateISO(existing.datum) : existing.datum;
+    document.getElementById('rechnung-faellig').value = typeof formatDateISO === 'function' ? formatDateISO(existing.faellig) : existing.faellig;
+    const wTageAng = document.getElementById('rechnung-werktage');
+    if (wTageAng) {
+        wTageAng.disabled = false;
+        if (existing.datum && existing.faellig && typeof countWorkingDaysBetween === 'function') {
+            wTageAng.value = countWorkingDaysBetween(existing.datum, existing.faellig);
+        }
+    }
+    if (typeof initRechnungDateHandlers === 'function') initRechnungDateHandlers();
+    if (typeof updateRechnungDatePreviews === 'function') updateRechnungDatePreviews();
     document.getElementById('rechnung-status').value = existing.status;
     if (existing.eingabemodus) {
         setEingabeModus(existing.eingabemodus);
@@ -672,10 +711,20 @@ function applyAngebotEditMode(existing, form, submitBtn) {
 
 function applyAngebotNewMode() {
     const today = new Date();
-    document.getElementById('rechnung-datum').value = today.toISOString().split('T')[0];
-    const later = new Date(today);
-    later.setDate(today.getDate() + 30); // 30 days valid
-    document.getElementById('rechnung-faellig').value = later.toISOString().split('T')[0];
+    const todayIso = typeof formatDateISO === 'function' ? formatDateISO(today) : today.toISOString().split('T')[0];
+    document.getElementById('rechnung-datum').value = todayIso;
+    const zZiel = 30; // 30 Arbeitstage Angebots-Bindefrist
+    const werktageInput = document.getElementById('rechnung-werktage');
+    if (werktageInput) {
+        werktageInput.value = zZiel;
+        werktageInput.disabled = false;
+    }
+    const faelligIso = typeof calculateDueDateWorkingDays === 'function'
+        ? calculateDueDateWorkingDays(todayIso, zZiel)
+        : (() => { const d = new Date(); d.setDate(d.getDate() + zZiel); return d.toISOString().split('T')[0]; })();
+    document.getElementById('rechnung-faellig').value = faelligIso;
+    if (typeof initRechnungDateHandlers === 'function') initRechnungDateHandlers();
+    if (typeof updateRechnungDatePreviews === 'function') updateRechnungDatePreviews();
 
     // Generate next NR dynamically
     const currentMaxAngebot = state.angebote.reduce((max, a) => Math.max(max, extractLaufendeNummer(a.nr)), 0);
@@ -1410,8 +1459,10 @@ async function saveRechnung() {
     const projektId = document.getElementById('rechnung-projekt').value;
     const objektWert = document.getElementById('rechnung-objekt') ? document.getElementById('rechnung-objekt').value : '';
     const [objektTyp, objektIdStr] = objektWert ? objektWert.split(':') : [null, null];
-    const datum = document.getElementById('rechnung-datum').value;
-    const faellig = document.getElementById('rechnung-faellig').value;
+    const rawDatum = document.getElementById('rechnung-datum').value;
+    const rawFaellig = document.getElementById('rechnung-faellig').value;
+    const datum = typeof formatDateISO === 'function' ? (formatDateISO(rawDatum) || formatDateISO(new Date())) : rawDatum;
+    const faellig = typeof formatDateISO === 'function' ? (formatDateISO(rawFaellig) || datum) : rawFaellig;
     const status = document.getElementById('rechnung-status').value || 'Ausstehend';
     const nr = document.getElementById('rechnung-nr').value;
     const existingIdVal = document.getElementById('rechnung-id').value;
@@ -1738,8 +1789,116 @@ document.addEventListener('DOMContentLoaded', () => {
     const projektSelect = document.getElementById('rechnung-projekt');
     if (artSelect) artSelect.addEventListener('change', toggleAbschlagsKumulationUI);
     if (projektSelect) projektSelect.addEventListener('change', populateVerrechnungSelect);
+    initRechnungDateHandlers();
     applyUnternehmensartVisibility();
 });
+
+// --- Deutsches Datumsformat & Arbeitstage UI-Reaktivität ---
+
+function updateRechnungDatePreviews() {
+    const datumEl = document.getElementById('rechnung-datum');
+    const faelligEl = document.getElementById('rechnung-faellig');
+    const datumPreviewText = document.getElementById('rechnung-datum-preview-text');
+    const faelligPreviewText = document.getElementById('rechnung-faellig-preview-text');
+    const werktageInput = document.getElementById('rechnung-werktage');
+
+    if (datumEl && datumPreviewText) {
+        const dVal = datumEl.value;
+        if (dVal) {
+            const formatted = typeof formatDateDEWithWeekday === 'function' ? formatDateDEWithWeekday(dVal) : dVal;
+            datumPreviewText.textContent = formatted;
+        } else {
+            datumPreviewText.textContent = '--.--.----';
+        }
+    }
+
+    if (faelligEl && faelligPreviewText) {
+        const fVal = faelligEl.value;
+        if (fVal) {
+            const formatted = typeof formatDateDEWithWeekday === 'function' ? formatDateDEWithWeekday(fVal) : fVal;
+            const at = werktageInput ? (parseInt(werktageInput.value, 10) || 0) : 0;
+
+            const holidayCheck = typeof isGermanPublicHoliday === 'function' ? isGermanPublicHoliday(fVal) : { isHoliday: false, name: null };
+            const cleanIso = typeof formatDateISO === 'function' ? formatDateISO(fVal) : fVal;
+            const parts = cleanIso.split('-');
+            const dObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
+            const dayOfWeek = dObj.getDay();
+
+            if (dayOfWeek === 6 || dayOfWeek === 0) {
+                const wName = dayOfWeek === 6 ? 'Samstag' : 'Sonntag';
+                faelligPreviewText.innerHTML = `<span class="text-amber-600 font-semibold">⚠️ ${formatted} (${wName} – kein Arbeitstag gem. § 193 BGB)</span>`;
+            } else if (holidayCheck && holidayCheck.isHoliday) {
+                faelligPreviewText.innerHTML = `<span class="text-amber-600 font-semibold">⚠️ ${formatted} (Feiertag: ${holidayCheck.name || 'Gesetzlicher Feiertag'})</span>`;
+            } else {
+                faelligPreviewText.textContent = `Fällig am: ${formatted} • ${at} Arbeitstage`;
+            }
+        } else {
+            faelligPreviewText.textContent = '--.--.----';
+        }
+    }
+}
+
+function initRechnungDateHandlers() {
+    const datumEl = document.getElementById('rechnung-datum');
+    const faelligEl = document.getElementById('rechnung-faellig');
+    const werktageInput = document.getElementById('rechnung-werktage');
+
+    if (datumEl && !datumEl.dataset.hasDateHandler) {
+        datumEl.dataset.hasDateHandler = 'true';
+        const onDatumChange = () => {
+            const raw = datumEl.value;
+            if (!raw) return;
+            const iso = typeof formatDateISO === 'function' ? formatDateISO(raw) : raw;
+            if (iso && iso !== raw) {
+                datumEl.value = iso;
+            }
+            const at = parseInt(werktageInput?.value, 10) || parseInt(state?.einstellungen?.zahlungsziel, 10) || 14;
+            if (typeof calculateDueDateWorkingDays === 'function') {
+                const newFaellig = calculateDueDateWorkingDays(datumEl.value, at);
+                if (faelligEl) faelligEl.value = newFaellig;
+            }
+            updateRechnungDatePreviews();
+        };
+        datumEl.addEventListener('change', onDatumChange);
+        datumEl.addEventListener('input', onDatumChange);
+    }
+
+    if (werktageInput && !werktageInput.dataset.hasDateHandler) {
+        werktageInput.dataset.hasDateHandler = 'true';
+        const onWerktageChange = () => {
+            const at = parseInt(werktageInput.value, 10);
+            if (isNaN(at) || at < 0) return;
+            const baseDatum = datumEl?.value || (typeof formatDateISO === 'function' ? formatDateISO(new Date()) : new Date().toISOString().split('T')[0]);
+            if (typeof calculateDueDateWorkingDays === 'function') {
+                const newFaellig = calculateDueDateWorkingDays(baseDatum, at);
+                if (faelligEl) faelligEl.value = newFaellig;
+            }
+            updateRechnungDatePreviews();
+        };
+        werktageInput.addEventListener('input', onWerktageChange);
+        werktageInput.addEventListener('change', onWerktageChange);
+    }
+
+    if (faelligEl && !faelligEl.dataset.hasDateHandler) {
+        faelligEl.dataset.hasDateHandler = 'true';
+        const onFaelligChange = () => {
+            const raw = faelligEl.value;
+            if (!raw) return;
+            const iso = typeof formatDateISO === 'function' ? formatDateISO(raw) : raw;
+            if (iso && iso !== raw) {
+                faelligEl.value = iso;
+            }
+            const baseDatum = datumEl?.value;
+            if (baseDatum && typeof countWorkingDaysBetween === 'function') {
+                const at = countWorkingDaysBetween(baseDatum, faelligEl.value);
+                if (werktageInput) werktageInput.value = at >= 0 ? at : 0;
+            }
+            updateRechnungDatePreviews();
+        };
+        faelligEl.addEventListener('change', onFaelligChange);
+        faelligEl.addEventListener('input', onFaelligChange);
+    }
+}
 
 function applyUnternehmensartVisibility() {
     const art = state.einstellungen.unternehmensart || 'handwerk';
@@ -1767,10 +1926,6 @@ function applyUnternehmensartVisibility() {
 
     if (b2gSection) {
         if (currentCustomerType === 'B2G') {
-            b2gSection.classList.remove('hidden');
-        } else if (currentCustomerType === 'B2C') {
-            b2gSection.classList.add('hidden');
-        } else if (isHandwerkOrBau || isB2GSpezialist) {
             b2gSection.classList.remove('hidden');
         } else {
             b2gSection.classList.add('hidden');

@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-03T23:20:10.883Z",
+  "timestamp": "2026-09-05T12:00:44.514Z",
   "modulesTested": [
     {
       "moduleName": "Dashboard",
@@ -23,7 +23,7 @@
       "moduleName": "Invoices",
       "testName": "XRechnung XML Generation",
       "isSuccess": true,
-      "details": "File: F:\\server\\Rechnungsprogramm_Geb_V2\\output\\invoices\\b2g_xrechnung\\RE-2026-B2G-002.xml"
+      "details": "File: C:\\Users\\walee\\Desktop\\server\\Rechnungsprogramm_Geb_V2\\output\\invoices\\b2g_xrechnung\\RE-2026-B2G-002.xml"
     },
     {
       "moduleName": "Invoices",
@@ -83,21 +83,21 @@
       "moduleName": "Settings",
       "testName": "Database Backup Generator",
       "isSuccess": true,
-      "details": "Backup file: F:\\server\\Rechnungsprogramm_Geb_V2\\tests\\test_results\\db_backup_test.json"
+      "details": "Backup file: C:\\Users\\walee\\Desktop\\server\\Rechnungsprogramm_Geb_V2\\tests\\test_results\\db_backup_test.json"
     }
   ],
   "passCount": 14,
   "failCount": 0,
   "generatedFiles": [
-    "F:\\server\\Rechnungsprogramm_Geb_V2\\output\\invoices\\b2g_xrechnung\\RE-2026-B2G-002.xml",
-    "F:\\server\\Rechnungsprogramm_Geb_V2\\output\\invoices\\datev_exports\\EXTF_FULL_SYSTEM.csv",
-    "F:\\server\\Rechnungsprogramm_Geb_V2\\tests\\test_results\\db_backup_test.json"
+    "C:\\Users\\walee\\Desktop\\server\\Rechnungsprogramm_Geb_V2\\output\\invoices\\b2g_xrechnung\\RE-2026-B2G-002.xml",
+    "C:\\Users\\walee\\Desktop\\server\\Rechnungsprogramm_Geb_V2\\output\\invoices\\datev_exports\\EXTF_FULL_SYSTEM.csv",
+    "C:\\Users\\walee\\Desktop\\server\\Rechnungsprogramm_Geb_V2\\tests\\test_results\\db_backup_test.json"
   ],
   "gobdAuditTrail": [
     {
       "docNr": "RE-2026-B2G-002",
       "hash": "0b538f0d21a001b1a3e366e9949b209a40337ca726720a6ef5d79d464fddff58",
-      "timestamp": "2026-09-03T23:20:10.888Z"
+      "timestamp": "2026-09-05T12:00:44.524Z"
     }
   ]
 }

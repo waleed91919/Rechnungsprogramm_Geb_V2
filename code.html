@@ -5125,36 +5125,51 @@
                                                 class="w-full px-4 py-2.5 bg-slate-100 border border-slate-300 rounded-lg text-sm text-slate-500 font-mono focus:outline-none cursor-not-allowed">
                                         </div>
                                         <div>
-                                            <label id="rechnung-datum-label"
-                                                class="block text-sm font-medium text-slate-700 mb-1.5">Rechnungsdatum</label>
+                                            <div class="flex items-center justify-between mb-1.5">
+                                                <label id="rechnung-datum-label"
+                                                    class="block text-sm font-medium text-slate-700">Rechnungsdatum</label>
+                                                <span class="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded">DD.MM.YYYY</span>
+                                            </div>
                                             <input type="date" id="rechnung-datum" required
                                                 class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                            <div id="rechnung-datum-preview" class="text-xs text-slate-500 mt-1 font-medium flex items-center gap-1">
+                                                <span class="material-symbols-outlined text-[14px] text-slate-400">calendar_month</span>
+                                                <span id="rechnung-datum-preview-text">--.--.----</span>
+                                            </div>
                                         </div>
                                     </div>
                                     <div>
                                         <div class="flex items-center justify-between mb-1.5">
-                                            <label class="block text-sm font-medium text-slate-700">Fällig am /
-                                                Lieferdatum</label>
+                                            <label id="rechnung-faellig-label" class="block text-sm font-medium text-slate-700">Fälligkeitsdatum</label>
+                                            <span class="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">Arbeitstage-System</span>
                                         </div>
                                         <div class="flex gap-2">
                                             <input type="date" id="rechnung-faellig" required
                                                 class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
 
-                                            <!-- Delivery Calculator -->
+                                            <!-- Delivery / Payment Calculator -->
                                             <div class="flex items-center gap-1 bg-slate-100 border border-slate-300 rounded-lg px-2 shadow-inner"
-                                                title="Wochenenden & Feiertage ausschließen">
-                                                <input type="number" id="rechnung-werktage" placeholder="Werktage"
-                                                    min="1"
-                                                    class="w-20 bg-transparent border-none text-sm focus:ring-0 p-1 text-center font-medium text-slate-700">
+                                                title="Zahlungsziel in Arbeitstagen (Wochenenden & Feiertage ausschließen)">
+                                                <input type="number" id="rechnung-werktage" placeholder="Arbeitstage"
+                                                    min="0"
+                                                    class="w-20 bg-transparent border-none text-sm focus:ring-0 p-1 text-center font-semibold text-slate-700">
+                                                <span class="text-xs text-slate-400 font-medium mr-1">AT</span>
                                                 <button type="button" onclick="calculateDeliveryDate()"
+                                                    title="Fälligkeitsdatum anhand Arbeitstagen neu berechnen"
                                                     class="text-primary hover:text-primary-dark p-1 rounded transition-colors flex items-center justify-center bg-white border border-slate-200 shadow-sm">
                                                     <span class="material-symbols-outlined text-[18px]">calculate</span>
                                                 </button>
                                             </div>
                                         </div>
-                                        <p class="text-[10px] text-slate-400 mt-1 italic text-right">
-                                            Feiertagsberechnung
-                                            (ohne Sa/So).</p>
+                                        <div class="flex items-center justify-between mt-1">
+                                            <div id="rechnung-faellig-preview" class="text-xs text-emerald-700 font-medium flex items-center gap-1">
+                                                <span class="material-symbols-outlined text-[14px]">event_available</span>
+                                                <span id="rechnung-faellig-preview-text">--.--.----</span>
+                                            </div>
+                                            <p class="text-[10px] text-slate-400 italic">
+                                                § 193 BGB Werktage (Mo–Fr, ohne Feiertage).
+                                            </p>
+                                        </div>
                                     </div>
                                     <div>
                                         <div class="flex items-center justify-between mb-1.5">
@@ -5222,7 +5237,7 @@
                             </div>
 
                             <!-- B2G E-Rechnungs-Sektion (Öffentliche Auftraggeber) -->
-                            <div id="rechnung-b2g-section" class="bg-blue-50/70 border border-blue-200 rounded-lg p-6 shadow-sm">
+                            <div id="rechnung-b2g-section" class="hidden bg-blue-50/70 border border-blue-200 rounded-lg p-6 shadow-sm">
                                 <h4 class="text-sm font-semibold text-blue-900 uppercase tracking-wider mb-4 flex items-center justify-between">
                                     <span class="flex items-center gap-2">
                                         <span class="material-symbols-outlined text-[20px] text-blue-600">account_balance</span>

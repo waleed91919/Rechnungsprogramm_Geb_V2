@@ -227,7 +227,197 @@ class InvoiceController {
         if (doc.customer_type === 'B2G' && !doc.leitweg_id && !doc.buyer_reference) {
             return { valid: false, message: 'Rechnungen an öffentliche Auftraggeber (B2G) erfordern zwingend eine Leitweg-ID oder Buyer-Reference.' };
         }
+
+        // Datum-Normalisierung auf ISO YYYY-MM-DD
+        if (doc.datum) {
+            doc.datum = this.normalizeDateISO(doc.datum);
+        }
+        if (doc.faellig) {
+            doc.faellig = this.normalizeDateISO(doc.faellig);
+        }
+
         return { valid: true };
+    }
+
+    /**
+     * Normalisiert ein beliebiges Datum (Date-Objekt, DD.MM.YYYY, YYYY-MM-DD) in ein sauberes ISO-Format YYYY-MM-DD.
+     */
+    static normalizeDateISO(d) {
+        if (!d) return '';
+        if (typeof d === 'string') {
+            const s = d.trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+            const deMatch = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+            if (deMatch) {
+                const day = deMatch[1].padStart(2, '0');
+                const month = deMatch[2].padStart(2, '0');
+                const year = deMatch[3];
+                return `${year}-${month}-${day}`;
+            }
+            const parsed = new Date(s);
+            if (!isNaN(parsed.getTime())) {
+                const y = parsed.getFullYear();
+                const m = String(parsed.getMonth() + 1).padStart(2, '0');
+                const day = String(parsed.getDate()).padStart(2, '0');
+                return `${y}-${m}-${day}`;
+            }
+        }
+        if (d instanceof Date && !isNaN(d.getTime())) {
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${y}-${m}-${day}`;
+        }
+        return '';
+    }
+
+    /**
+     * Formatiert ein ISO-Datum oder Date-Objekt in das deutsche Standardformat DD.MM.YYYY.
+     */
+    static formatDateDE(d) {
+        const iso = this.normalizeDateISO(d);
+        if (!iso) return '';
+        const parts = iso.split('-');
+        return `${parts[2]}.${parts[1]}.${parts[0]}`;
+    }
+
+    /**
+     * Formatiert ein Datum inklusive ausgeschriebenem deutschem Wochentag.
+     * Beispiel: "05.09.2026 (Samstag)"
+     */
+    static formatDateDEWithWeekday(d) {
+        const iso = this.normalizeDateISO(d);
+        if (!iso) return '';
+        const parts = iso.split('-');
+        const dateObj = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
+        const wochentage = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+        const weekday = wochentage[dateObj.getDay()];
+        return `${parts[2]}.${parts[1]}.${parts[0]} (${weekday})`;
+    }
+
+    /**
+     * Berechnet den Ostersonntag für ein beliebiges Kalenderjahr (Gaußsche Osterformel / Computus).
+     */
+    static getEasterSunday(year) {
+        const y = parseInt(year, 10);
+        const a = y % 19;
+        const b = Math.floor(y / 100);
+        const c = y % 100;
+        const d = Math.floor(b / 4);
+        const e = b % 4;
+        const f = Math.floor((b + 8) / 25);
+        const g = Math.floor((b - f + 1) / 3);
+        const h = (19 * a + b - d - g + 15) % 30;
+        const i = Math.floor(c / 4);
+        const k = c % 4;
+        const l = (32 + 2 * e + 2 * i - h - k) % 7;
+        const m = Math.floor((a + 11 * h + 22 * l) / 451);
+        const month = Math.floor((h + l - 7 * m + 114) / 31);
+        const day = ((h + l - 7 * m + 114) % 31) + 1;
+        return new Date(y, month - 1, day, 12, 0, 0);
+    }
+
+    /**
+     * Ermittelt die 9 bundeseinheitlichen gesetzlichen Feiertage in Deutschland für ein Jahr.
+     * Rückgabe: Map von YYYY-MM-DD -> Feiertagsname
+     */
+    static getGermanHolidaysMap(year) {
+        const y = parseInt(year, 10);
+        const map = new Map();
+        map.set(`${y}-01-01`, 'Neujahr');
+        map.set(`${y}-05-01`, 'Tag der Arbeit');
+        map.set(`${y}-10-03`, 'Tag der Deutschen Einheit');
+        map.set(`${y}-12-25`, '1. Weihnachtsfeiertag');
+        map.set(`${y}-12-26`, '2. Weihnachtsfeiertag');
+
+        const easter = this.getEasterSunday(y);
+        const addDaysToEaster = (offsetDays) => {
+            const dt = new Date(easter);
+            dt.setDate(dt.getDate() + offsetDays);
+            const m = String(dt.getMonth() + 1).padStart(2, '0');
+            const d = String(dt.getDate()).padStart(2, '0');
+            return `${dt.getFullYear()}-${m}-${d}`;
+        };
+
+        map.set(addDaysToEaster(-2), 'Karfreitag');
+        map.set(addDaysToEaster(1), 'Ostermontag');
+        map.set(addDaysToEaster(39), 'Christi Himmelfahrt');
+        map.set(addDaysToEaster(50), 'Pfingstmontag');
+
+        return map;
+    }
+
+    /**
+     * Prüft, ob ein Datum ein bundesweiter gesetzlicher Feiertag ist.
+     */
+    static isGermanPublicHoliday(d) {
+        const iso = this.normalizeDateISO(d);
+        if (!iso) return { isHoliday: false, name: null };
+        const y = parseInt(iso.substring(0, 4), 10);
+        const holidays = this.getGermanHolidaysMap(y);
+        if (holidays.has(iso)) {
+            return { isHoliday: true, name: holidays.get(iso) };
+        }
+        return { isHoliday: false, name: null };
+    }
+
+    /**
+     * Prüft, ob ein Tag ein echter deutscher Arbeitstag (Werktag Mo–Fr ohne Feiertage) ist.
+     */
+    static isArbeitstag(d) {
+        const iso = this.normalizeDateISO(d);
+        if (!iso) return false;
+        const parts = iso.split('-');
+        const dt = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
+        const dayOfWeek = dt.getDay();
+        if (dayOfWeek === 0 || dayOfWeek === 6) return false; // Sa / So
+        return !this.isGermanPublicHoliday(iso).isHoliday;
+    }
+
+    /**
+     * Berechnet das Fälligkeitsdatum durch Addition von Netto-Arbeitstagen (ohne Sa/So und gesetzl. Feiertage).
+     */
+    static calculateDueDateWorkingDays(startDate, workingDays = 14) {
+        const startIso = this.normalizeDateISO(startDate) || this.normalizeDateISO(new Date());
+        const parts = startIso.split('-');
+        let current = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
+        let needed = Math.max(0, parseInt(workingDays, 10) || 0);
+        let added = 0;
+
+        while (added < needed) {
+            current.setDate(current.getDate() + 1);
+            const dayOfWeek = current.getDay();
+            if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+            const iso = this.normalizeDateISO(current);
+            if (this.isGermanPublicHoliday(iso).isHoliday) continue;
+            added++;
+        }
+        return this.normalizeDateISO(current);
+    }
+
+    /**
+     * Zählt die Anzahl der Arbeitstage zwischen Startdatum und Fälligkeitsdatum.
+     */
+    static countWorkingDaysBetween(startDate, endDate) {
+        const startIso = this.normalizeDateISO(startDate);
+        const endIso = this.normalizeDateISO(endDate);
+        if (!startIso || !endIso || startIso >= endIso) return 0;
+
+        const startParts = startIso.split('-');
+        const endParts = endIso.split('-');
+        let current = new Date(parseInt(startParts[0], 10), parseInt(startParts[1], 10) - 1, parseInt(startParts[2], 10), 12, 0, 0);
+        const target = new Date(parseInt(endParts[0], 10), parseInt(endParts[1], 10) - 1, parseInt(endParts[2], 10), 12, 0, 0);
+
+        let workingDays = 0;
+        while (current < target) {
+            current.setDate(current.getDate() + 1);
+            const dayOfWeek = current.getDay();
+            if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+            const iso = this.normalizeDateISO(current);
+            if (this.isGermanPublicHoliday(iso).isHoliday) continue;
+            workingDays++;
+        }
+        return workingDays;
     }
 
     /**

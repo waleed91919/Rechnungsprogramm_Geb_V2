@@ -4,6 +4,12 @@ const path = require('path');
 const SyncServer = require('./main/sync-server');
 let syncServerInstance = null;
 
+// Deutsches Lokalsystem erzwingen (DD.MM.YYYY und de-DE Chromium-Datumsformat/Kalender)
+if (app && app.commandLine) {
+    app.commandLine.appendSwitch('lang', 'de-DE');
+    app.commandLine.appendSwitch('accept-languages', 'de-DE,de');
+}
+
 function createWindow() {
     const mainWindow = new BrowserWindow({
         width: 1400,
