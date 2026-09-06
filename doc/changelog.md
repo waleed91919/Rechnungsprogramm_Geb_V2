@@ -1,5 +1,20 @@
 # Changelog / Fortschritt
 
+## 07.09.2026 (Rechnungs-Layoutoptimierung: Behebung von Leerraum & Formular-Verankerung nach DIN 5008)
+- **Problembehebung Leerraum auf Rechnungen (Formular-Layout):**
+  - [`code.html`](../code.html): Druck-CSS (`@media print`) überarbeitet. Entfernung von `min-height: 0; display: block;` zugunsten von `min-height: calc(297mm - 24mm); display: flex; flex-direction: column; justify-content: space-between;`. Paginierung und Ränder auf normierte A4-Druckmaße (`12mm 15mm`) angepasst.
+  - [`code.html`](../code.html): Vorschau-Container `#pdf-preview-container` auf `flex flex-col` synchronisiert, um 100% WYSIWYG-Deckungsgleichheit mit dem Druckausdruck zu gewährleisten.
+  - [`js/einstellungen.js`](../js/einstellungen.js): Dokumentvorlagen (`modern`, `minimalistisch`, `klassisch`) und Mahnwesen (`generateMahnungHtml`) strukturiert:
+    * Kopf- und Tabellenbereich in flexiblen Inhaltsblock gekapselt.
+    * Flex-Spacer (`flex-1 min-h-[16px]`) eingefügt, der Freiraum natürlich unter der Tabelle belässt.
+    * Abschlussblock (Zahlungsbedingungen, Skonto, GiroCode, Summenblock) per `mt-auto` nach unten über die Fußzeile gedockt.
+    * Dreispaltige DIN 5008 Fußzeile (`.pdf-footer`) fest an den unteren Seitenrand verankert (`margin-top: auto`).
+  - [`js/einstellungen.js`](../js/einstellungen.js): Drucksynchronisation in `executePrint` für nativen Electron-PDF-Export (`window.api.savePdf` / `printToPDF`) und Browserdruck vereinheitlicht.
+- **Dokumentation:**
+  - [`doc/session_summary_2026-09-07_rechnung_layout_optimierung_leerraum.md`](session_summary_2026-09-07_rechnung_layout_optimierung_leerraum.md): Vollständiges Sitzungsprotokoll mit Ursachenanalyse, DIN 5008 Branchenstandards und Verifikationsergebnissen.
+- **Verifikation:**
+  - 226 von 226 automatisierten Tests bestanden (`cmd /c npm test`). Echte PDF-Generierung über Chromium Electron Engine verifiziert.
+
 ## 04.09.2026 (UI-Klickreparatur, Gesamtsystem-Audit & Tiefenanalyse Modul „Rechnung“)
 - **UI-Auswahl & Klickreparatur:**
   - [`js/navigation.js`](../js/navigation.js): Schließende Klammer `}` für `switchView(viewName)` ergänzt. Behebt `SyntaxError: Unexpected end of input` und stellt globale Navigation wieder her.

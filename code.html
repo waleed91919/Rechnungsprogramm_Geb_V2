@@ -59,16 +59,18 @@
         @media print {
             @page {
                 size: A4 portrait;
-                margin: 10mm 12mm 10mm 12mm;
+                margin: 12mm 15mm 12mm 15mm;
             }
             html, body {
                 background-color: #ffffff !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
                 height: auto !important;
+                margin: 0 !important;
+                padding: 0 !important;
                 overflow: visible !important;
                 font-size: 9pt !important;
-                line-height: 1.3 !important;
+                line-height: 1.35 !important;
             }
             body > *:not(#print-template) {
                 display: none !important;
@@ -78,8 +80,30 @@
                 position: relative !important;
                 width: 100% !important;
                 height: auto !important;
+                margin: 0 !important;
+                padding: 0 !important;
                 overflow: visible !important;
                 background: white !important;
+            }
+            #print-template .invoice-paper {
+                width: 100% !important;
+                max-width: 100% !important;
+                min-height: calc(297mm - 24mm) !important;
+                height: auto !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                box-shadow: none !important;
+                border: none !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+                box-sizing: border-box !important;
+            }
+            #print-template .pdf-footer {
+                margin-top: auto !important;
+                padding-top: 0.75rem !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
             }
         }
 
@@ -5690,7 +5714,7 @@
 
         <div id="pdf-preview-scroll-wrapper" class="flex-1 overflow-y-auto max-h-[calc(100vh-4rem)] p-8 flex justify-center items-start bg-slate-100">
             <!-- This container holds the exact print layout logic so user can verify -->
-            <div id="pdf-preview-container" class="bg-white shadow-2xl relative my-4"
+            <div id="pdf-preview-container" class="bg-white shadow-2xl relative my-4 p-[12mm_15mm] box-border flex flex-col"
                 style="width: 210mm; min-height: 297mm;">
                 <!-- Content injected here by JS instead of the hidden template -->
             </div>

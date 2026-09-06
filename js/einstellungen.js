@@ -375,14 +375,51 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// // --- Hilfsfunktionen für DIN 5008 konforme Formatierung ---
+function formatGermanDate(d) {
+    if (!d) return '';
+    const date = new Date(d);
+    if (isNaN(date.getTime())) return String(d);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}.${month}.${year}`;
+}
+
+function formatIban(iban) {
+    if (!iban) return '';
+    return iban.replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim();
+}
+
 // PDF Generation
 // Baut die vollständige Sichtseiten-HTML (alle Vorlagen) aus einem explizit übergebenen
 // Dokumentobjekt. Bewusst von window.generatePdf entkoppelt, damit der ZUGFeRD-Export
 // Sichtseite und CII-XML aus DEMSELBEN doc-Objekt erzeugen kann.
 async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
-    const logoHtml = state.einstellungen.logo ? `<img src="${state.einstellungen.logo}" class="h-16 object-contain">` : '';
-    const datumStr = new Date(rech.datum).toLocaleDateString('de-DE');
-    const faelligStr = new Date(rech.faellig).toLocaleDateString('de-DE');
+    const logoHtml = state.einstellungen.logo ? `<img src="${state.einstellungen.logo}" class="max-h-14 max-w-[220px] object-contain" alt="Firmenlogo">` : '';
+    const datumStr = formatGermanDate(rech.datum);
+    const faelligStr = formatGermanDate(rech.faellig);
+
+    let leistungsdatumStr = datumStr;
+    if (rech.leistungszeitraum_von && rech.leistungszeitraum_bis) {
+        leistungsdatumStr = `${formatGermanDate(rech.leistungszeitraum_von)} – ${formatGermanDate(rech.leistungszeitraum_bis)}`;
+    } else if (rech.leistungsdatum) {
+        leistungsdatumStr = formatGermanDate(rech.leistungsdatum);
+    }
+
+    const kundenNr = (kunde && kunde.kundennummer) || (kunde && kunde.id ? `KD-${String(kunde.id).padStart(5, '0')}` : '-');
+
+    let projektName = '';
+    if (rech.projekt_name) {
+        projektName = rech.projekt_name;
+    } else if (rech.projekt_id && state.projekte) {
+        const p = state.projekte.find(prj => prj.id == rech.projekt_id);
+        if (p) projektName = p.name;
+    }
+
+    const empfaengerName = sanitize((kunde && kunde.name) || 'Sehr geehrte Damen und Herren');
+    const empfaengerAdresse = sanitize((kunde && kunde.adresse) || '').replace(/[\r\n]+/g, '<br>');
+    const empfaengerPlzOrt = `${sanitize((kunde && kunde.plz) || '')} ${sanitize((kunde && kunde.ort) || '')}`.trim();
 
     let itemsHtml = '';
     rech.positionen.forEach((pos, i) => {
@@ -391,51 +428,60 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
         const rabatt = parseFloat(pos.rabatt) || 0;
         const gesamt = (pos.menge * pos.preis) * (1 - rabatt / 100);
 
+        const isPos13b = (rech.unterliegt_13b && pos.is13b) || pos.is13b;
+        const descText = pos.beschreibung || pos.text || art.beschreibung || '';
+
         const tr = document.createElement('tr');
-        tr.className = 'border-b border-slate-200 text-sm avoid-break pdf-no-break';
+        tr.className = 'border-b border-slate-100 text-xs avoid-break pdf-no-break';
         tr.style.pageBreakInside = 'avoid';
         tr.style.breakInside = 'avoid';
 
         const tdIdx = document.createElement('td');
-        tdIdx.className = 'py-3 pl-4 text-slate-500';
+        tdIdx.className = 'py-2 pl-2 text-center text-slate-400 font-mono text-[11px]';
         tdIdx.textContent = i + 1;
         tr.appendChild(tdIdx);
 
         const tdName = document.createElement('td');
-        tdName.className = 'py-3 font-medium';
-        tdName.textContent = art.name || pos.name || 'Unbekannt';
+        tdName.className = 'py-2 px-2';
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'font-semibold text-slate-900';
+        nameDiv.textContent = pos.name || art.name || 'Position';
+        tdName.appendChild(nameDiv);
+        if (descText) {
+            const descDiv = document.createElement('div');
+            descDiv.className = 'text-[11px] text-slate-500 leading-snug mt-0.5 whitespace-pre-line';
+            descDiv.textContent = descText;
+            tdName.appendChild(descDiv);
+        }
         tr.appendChild(tdName);
 
         const tdMenge = document.createElement('td');
-        tdMenge.className = 'py-3 text-center';
+        tdMenge.className = 'py-2 px-2 text-center tabular-nums text-slate-700';
         tdMenge.textContent = `${pos.menge} ${pos.einheit || 'Stk.'}`;
         tr.appendChild(tdMenge);
 
         const tdPreis = document.createElement('td');
-        tdPreis.className = 'py-3 text-right';
+        tdPreis.className = 'py-2 px-2 text-right tabular-nums text-slate-700';
         tdPreis.textContent = formatCurrency(pos.preis);
         tr.appendChild(tdPreis);
 
-        const isPos13b = (rech.unterliegt_13b && pos.is13b) || pos.is13b;
-
         const tdMwst = document.createElement('td');
-        tdMwst.className = 'py-3 text-right text-slate-500';
+        tdMwst.className = 'py-2 px-2 text-right tabular-nums text-slate-500';
         tdMwst.textContent = isPos13b ? '0%' : `${pos.mwst}%`;
         tr.appendChild(tdMwst);
 
         const tdRabatt = document.createElement('td');
-        tdRabatt.className = 'py-3 text-right ' + (rabatt > 0 ? 'text-emerald-600' : 'text-slate-300');
+        tdRabatt.className = 'py-2 px-2 text-right tabular-nums ' + (rabatt > 0 ? 'text-emerald-600 font-medium' : 'text-slate-300');
         tdRabatt.textContent = rabatt > 0 ? `-${rabatt}%` : '-';
         tr.appendChild(tdRabatt);
 
         const tdGesamt = document.createElement('td');
-        tdGesamt.className = 'py-3 pr-4 text-right font-medium';
+        tdGesamt.className = 'py-2 pr-2 text-right tabular-nums font-semibold text-slate-900';
         tdGesamt.textContent = formatCurrency(gesamt);
         tr.appendChild(tdGesamt);
 
         itemsHtml += tr.outerHTML;
     });
-
 
     let taxes = {
         '13b_netto': 0,
@@ -490,29 +536,23 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
 
     const leistungsstandNetto = rech.kumulierte_leistung_netto || ((mode === 'netto' ? positionenNetto : positionenBrutto - Object.keys(taxes).filter(k => k !== '13b_netto' && k !== 'normal_netto').map(k => taxes[k]).reduce((a,b)=>a+b,0)) - globalRabattAbzug);
     
-    // Taxable Netto is rech.netto which already has deductions subtracted
     const steuerpflichtigesNetto = rech.netto;
     const taxableRatio = leistungsstandNetto > 0 ? (steuerpflichtigesNetto / leistungsstandNetto) : (steuerpflichtigesNetto === 0 ? 0 : 1);
 
     let taxHtml = '';
     
-    // If we have a mixed invoice or 13b items, display the split explicitly
     if (rech.unterliegt_13b && taxes['13b_netto'] > 0 && taxes['normal_netto'] > 0) {
         const netto13b = taxes['13b_netto'] * rabattFaktor * taxableRatio;
         const nettoNormal = taxes['normal_netto'] * rabattFaktor * taxableRatio;
         
-        // Show Netto (regulär)
         taxHtml += `
-            <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px; color: #64748b;">
-                <span>Netto (regulär)</span>
-                <span>${formatCurrency(nettoNormal)}</span>
+            <div class="flex justify-between text-xs text-slate-500 py-0.5">
+                <span>Netto (regulär):</span>
+                <span class="tabular-nums font-mono">${formatCurrency(nettoNormal)}</span>
             </div>
-        `;
-        // Show Netto (13b)
-        taxHtml += `
-            <div style="display: flex; justify-content: space-between; font-size: 14px; margin-bottom: 4px; color: #64748b;">
-                <span>Netto (§ 13b ohne Steuer)</span>
-                <span>${formatCurrency(netto13b)}</span>
+            <div class="flex justify-between text-xs text-slate-500 py-0.5">
+                <span>Netto (§ 13b steuerfrei):</span>
+                <span class="tabular-nums font-mono">${formatCurrency(netto13b)}</span>
             </div>
         `;
     }
@@ -521,20 +561,15 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
         if (rate === '13b_netto' || rate === 'normal_netto') return;
         const baseTax = taxes[rate] * rabattFaktor;
         const taxVal = baseTax * taxableRatio;
-        if (taxVal > 0.005) { // Show only if it's more than half a cent
-            const div = document.createElement('div');
-            div.className = 'flex justify-between text-sm text-slate-600 mt-1';
-
+        if (taxVal > 0.005) {
             const adjustedLabel = taxableRatio < 0.999 ? ' (angepasst)' : '';
-            const spanLbl = document.createElement('span');
-            spanLbl.textContent = mode === 'netto' ? `zzgl. ${rate}% MwSt${adjustedLabel}` : `darin enthaltene ${rate}% MwSt${adjustedLabel}`;
-
-            const spanVal = document.createElement('span');
-            spanVal.textContent = formatCurrency(taxVal);
-
-            div.appendChild(spanLbl);
-            div.appendChild(spanVal);
-            taxHtml += div.outerHTML;
+            const taxLbl = mode === 'netto' ? `zzgl. ${rate}% MwSt${adjustedLabel}:` : `inkl. ${rate}% MwSt${adjustedLabel}:`;
+            taxHtml += `
+                <div class="flex justify-between text-xs text-slate-600 py-0.5">
+                    <span>${taxLbl}</span>
+                    <span class="tabular-nums font-mono">${formatCurrency(taxVal)}</span>
+                </div>
+            `;
         }
     });
 
@@ -543,17 +578,17 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
     
     if (hatKumulationOderSicherheit) {
         deductionsHtml += `
-            <div class="flex justify-between text-sm text-slate-700 font-medium mb-2">
-                <span>Leistungsstand (Netto)</span>
-                <span>${formatCurrency(leistungsstandNetto)}</span>
+            <div class="flex justify-between text-xs text-slate-700 font-medium py-0.5">
+                <span>Leistungsstand (Netto):</span>
+                <span class="tabular-nums font-mono">${formatCurrency(leistungsstandNetto)}</span>
             </div>
         `;
 
         if (rech.sicherheitseinbehalt > 0) {
             deductionsHtml += `
-                <div class="flex justify-between text-sm text-amber-600 mb-1">
-                    <span>Abzug Sicherheitseinbehalt</span>
-                    <span>-${formatCurrency(rech.sicherheitseinbehalt)}</span>
+                <div class="flex justify-between text-xs text-amber-600 py-0.5">
+                    <span>Abzug Sicherheitseinbehalt:</span>
+                    <span class="tabular-nums font-mono">-${formatCurrency(rech.sicherheitseinbehalt)}</span>
                 </div>
             `;
         }
@@ -561,29 +596,65 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
         if (rech.verrechnungen && rech.verrechnungen.length > 0) {
             rech.verrechnungen.forEach(v => {
                 const vRech = state.rechnungen.find(r => r.id === v.vorherige_rechnung_id);
-                const infoStr = vRech ? `Rechnung ${vRech.nr} vom ${new Date(vRech.datum).toLocaleDateString('de-DE')}` : 'Vorherige Abschlagsrechnung';
+                const infoStr = vRech ? `Abzug Rech. ${vRech.nr}:` : 'Abzug Abschlagsrech.:';
                 deductionsHtml += `
-                    <div class="flex justify-between text-[13px] text-indigo-600 mb-1">
-                        <span>Abzug ${infoStr}</span>
-                        <span>-${formatCurrency(v.abzugsbetrag_netto)}</span>
+                    <div class="flex justify-between text-xs text-indigo-600 py-0.5">
+                        <span>${infoStr}</span>
+                        <span class="tabular-nums font-mono">-${formatCurrency(v.abzugsbetrag_netto)}</span>
                     </div>
                 `;
             });
         }
         
-        deductionsHtml += `<div class="border-b border-slate-200 my-3"></div>`;
+        deductionsHtml += `<div class="border-b border-slate-200 my-1"></div>`;
     }
 
+    const zahlbetragNumerical = rech.zahlbetrag || rech.brutto;
+
+    let totalsHtml = `
+        ${rech.globalRabattAbzug > 0 ? `
+            <div class="flex justify-between text-slate-500 py-0.5">
+                <span>Zwischensumme:</span>
+                <span class="tabular-nums font-mono">${formatCurrency(rech.netto + rech.globalRabattAbzug)}</span>
+            </div>
+            <div class="flex justify-between text-emerald-600 py-0.5 pb-1 border-b border-slate-200">
+                <span>Gesamtrabatt:</span>
+                <span class="tabular-nums font-mono">-${formatCurrency(rech.globalRabattAbzug)}</span>
+            </div>
+        ` : ''}
+
+        ${deductionsHtml}
+
+        <div class="flex justify-between font-medium text-slate-700 py-0.5">
+            <span>${hatKumulationOderSicherheit ? 'Steuerpflichtig (Netto):' : 'Nettobetrag:'}</span>
+            <span class="tabular-nums font-mono">${formatCurrency(rech.netto)}</span>
+        </div>
+
+        ${taxHtml}
+
+        <div class="flex justify-between font-bold text-slate-900 pt-1 mt-1 border-t border-slate-200">
+            <span>Gesamtbetrag (Brutto):</span>
+            <span class="tabular-nums font-mono">${formatCurrency(rech.brutto)}</span>
+        </div>
+
+        ${rech.anzahlung > 0 ? `
+            <div class="flex justify-between text-slate-600 pt-1">
+                <span>Abzüglich Anzahlung:</span>
+                <span class="tabular-nums font-mono text-emerald-700">-${formatCurrency(rech.anzahlung)}</span>
+            </div>
+        ` : ''}
+    `;
+
     // --- Custom Texts & Legal Information ---
-    let vortextHtml = rech.vortext ? `<div class="mb-6 whitespace-pre-wrap text-sm text-slate-700">${sanitize(rech.vortext)}</div>` : '';
-    let fusstextHtml = rech.fusstext ? `<div class="mt-8 whitespace-pre-wrap text-sm text-slate-700">${sanitize(rech.fusstext)}</div>` : '';
+    let vortextHtml = rech.vortext ? `<div class="mb-3 whitespace-pre-wrap text-xs text-slate-700 leading-relaxed">${sanitize(rech.vortext)}</div>` : '';
+    let fusstextHtml = rech.fusstext ? `<div class="mt-3 whitespace-pre-wrap text-xs text-slate-700 leading-relaxed">${sanitize(rech.fusstext)}</div>` : '';
     
-    let legalTextsHtml = '<div class="space-y-2 text-[11px] text-slate-500 mt-6 max-w-2xl leading-relaxed">';
+    let legalTextsHtml = '<div class="space-y-1 text-[10px] text-slate-500 leading-relaxed">';
     
     if (rech.leistungszeitraum_von && rech.leistungszeitraum_bis) {
-        legalTextsHtml += `<p><strong>Leistungszeitraum:</strong> ${new Date(rech.leistungszeitraum_von).toLocaleDateString('de-DE')} bis ${new Date(rech.leistungszeitraum_bis).toLocaleDateString('de-DE')}.</p>`;
+        legalTextsHtml += `<p><strong>Leistungszeitraum:</strong> ${formatGermanDate(rech.leistungszeitraum_von)} bis ${formatGermanDate(rech.leistungszeitraum_bis)}.</p>`;
     } else {
-        legalTextsHtml += `<p><em>Das Liefer-/Leistungsdatum entspricht dem Rechnungsdatum, sofern nicht anders angegeben.</em></p>`;
+        legalTextsHtml += `<p class="italic">Das Liefer- und Leistungsdatum entspricht, sofern nicht anders angegeben, dem Rechnungsdatum.</p>`;
     }
     
     const isReverseCharge = rech.unterliegt_13b || (Object.keys(taxes).length === 0 && positionenNetto > 0 && kunde.ist_bauleistender_13b);
@@ -617,450 +688,463 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
 
     // Generate GiroCode (EPC-QR) for Invoices
     let qrHtml = '';
-    const zahlbetragNumerical = rech.zahlbetrag || rech.brutto;
     if (!isAngebot && state.einstellungen.iban && state.einstellungen.firmenname && zahlbetragNumerical > 0) {
-        // EPC069-12 Format
         const bic = state.einstellungen.bic ? state.einstellungen.bic.trim() : '';
         const name = state.einstellungen.firmenname.substring(0, 70).trim();
         const iban = state.einstellungen.iban.replace(/\s+/g, '').trim();
-        // strict amount formatting: EUR12.34 or EUR12 (no trailing .00 if whole number, up to 9 digits)
         let amountStr = zahlbetragNumerical.toFixed(2);
         if (amountStr.endsWith('.00')) {
             amountStr = parseInt(zahlbetragNumerical, 10).toString();
         }
 
-        // Clean ref string from any weird characters
         const refStr = `Rechnung ${rech.nr}`.substring(0, 35).replace(/[^a-zA-Z0-9.\- ]/g, '');
 
         const epcLines = [
-            "BCD",               // 1. Service Tag (Must be BCD)
-            "002",               // 2. Version (002 is safest for VR Bank)
-            "1",                 // 3. Character Set (1 = UTF-8)
-            "SCT",               // 4. Identification (SEPA Credit Transfer)
-            bic,                 // 5. BIC (Can be empty in 002 within EEA)
-            name,                // 6. Beneficiary Name (max 70 chars)
-            iban,                // 7. IBAN
-            `EUR${amountStr}`,   // 8. Currency & Amount
-            "",                  // 9. Purpose (empty)
-            "",                  // 10. Remittance Information (Structured / Creditor Ref)
-            refStr,              // 11. Remittance Information (Unstructured Ref, max 140)
-            ""                   // 12. Beneficiary to Originator Info (empty)
+            "BCD", "002", "1", "SCT", bic, name, iban, `EUR${amountStr}`, "", "", refStr, ""
         ];
-
-        // Use strict LF (\n) without CR
         const epcString = epcLines.join('\n');
 
         const qrDataUrl = await window.api.generateQrCode(epcString);
         if (qrDataUrl) {
             qrHtml = `
-                                            <div class="mt-6 flex items-start gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 w-full">
-                                                <img src="${qrDataUrl}" class="w-20 h-20 rounded shadow-sm bg-white" alt="GiroCode">
-                                                <div class="text-xs text-slate-500 flex-1 pt-1">
-                                                    <p class="font-bold text-slate-700 mb-1 flex items-center gap-1">
-                                                        <span class="material-symbols-outlined text-[14px]">qr_code_scanner</span>
-                                                        GiroCode / QR-Rechnung
-                                                    </p>
-                                                    <p class="leading-relaxed">Einfach mit der Banking-App scannen (Zahlen per Code) und Überweisungsdaten automatisch ausfüllen lassen.</p>
-                                                </div>
-                                            </div>
+                <div class="flex items-center gap-3 p-2 bg-slate-50 rounded-lg border border-slate-200/70 w-full">
+                    <img src="${qrDataUrl}" class="w-14 h-14 rounded bg-white p-0.5 border border-slate-200 shrink-0" alt="GiroCode">
+                    <div class="text-[10px] text-slate-600 flex-1 leading-tight">
+                        <p class="font-bold text-slate-800 mb-0.5 flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[13px] text-primary">qr_code_scanner</span>
+                            GiroCode / QR-Rechnung
+                        </p>
+                        <p class="text-slate-500">Mit Banking-App scannen &amp; Überweisungsdaten automatisch übernehmen.</p>
+                    </div>
+                </div>
             `;
         }
     }
 
     const absenderInline = state.einstellungen.adresse ?
-        (sanitize(state.einstellungen.firmenname) + " - " + sanitize(state.einstellungen.adresse).replace(/\n/g, ', ')) :
+        (sanitize(state.einstellungen.firmenname) + " • " + sanitize(state.einstellungen.adresse).replace(/[\r\n]+/g, ' • ')) :
         sanitize(state.einstellungen.firmenname);
 
+    const formattedIban = formatIban(state.einstellungen.iban);
     const vorlage = state.einstellungen.rechnungsvorlage || 'klassisch';
     
     let templateHtml = '';
 
     if (vorlage === 'modern') {
         templateHtml = `
-                        <div id="invoice-paper" class="invoice-paper max-w-4xl mx-auto bg-white min-h-[297mm] font-sans flex flex-col justify-between relative">
-                            <!-- Header Block -->
-                            <div class="bg-slate-900 text-white px-12 py-12 flex justify-between items-center rounded-b-xl shadow-lg mb-8 mx-4">
-                                <div class="flex items-center gap-6">
-                                    ${logoHtml ? `<div class="bg-white p-2 rounded-lg">${logoHtml}</div>` : ''}
-                                    <div>
-                                        <h1 class="text-3xl font-extrabold tracking-tight">${sanitize(state.einstellungen.firmenname)}</h1>
-                                        ${state.einstellungen.adresse ? `<p class="text-sm text-slate-300 mt-1">${sanitize(state.einstellungen.adresse).replace(/\n/g, ' &middot; ')}</p>` : ''}
-                                    </div>
+            <div id="invoice-paper" class="invoice-paper max-w-4xl mx-auto bg-white text-slate-800 font-sans flex flex-col justify-between relative" style="min-height: calc(297mm - 24mm);">
+                <div class="flex-1 flex flex-col">
+                    <!-- Accent bar -->
+                    <div class="h-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full mb-4"></div>
+
+                    <!-- Briefkopf: Logo links, Firmendaten rechts -->
+                    <div class="flex justify-between items-start pb-3 border-b border-slate-100 mb-5">
+                        <div class="max-w-[45%]">
+                            ${logoHtml ? logoHtml : `<h1 class="text-xl font-extrabold tracking-tight text-blue-600">${sanitize(state.einstellungen.firmenname)}</h1>`}
+                        </div>
+                        <div class="text-right text-xs text-slate-600 space-y-0.5 leading-tight">
+                            <p class="font-bold text-slate-900 text-sm">${sanitize(state.einstellungen.firmenname)}</p>
+                            ${state.einstellungen.adresse ? `<p>${sanitize(state.einstellungen.adresse).replace(/\n/g, '<br>')}</p>` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Anschriftenfeld & Infoblock (DIN 5008) -->
+                    <div class="flex justify-between items-start mb-5 gap-6">
+                        <!-- Anschrift Empfänger -->
+                        <div class="w-1/2 pt-1">
+                            <p class="text-[9px] text-blue-600 font-semibold tracking-wider uppercase border-b border-blue-100 pb-1 mb-2">${absenderInline}</p>
+                            <div class="text-slate-800 leading-snug text-xs">
+                                <p class="font-bold text-sm text-slate-900 mb-1">${empfaengerName}</p>
+                                ${empfaengerAdresse ? `<p class="text-slate-700">${empfaengerAdresse}</p>` : ''}
+                                ${empfaengerPlzOrt ? `<p class="text-slate-700 font-medium">${empfaengerPlzOrt}</p>` : ''}
+                            </div>
+                        </div>
+
+                        <!-- Infoblock -->
+                        <div class="w-64 bg-slate-50 p-3 rounded-xl border border-slate-200/80 border-l-4 border-l-blue-600 text-xs text-slate-600 space-y-1.5 shadow-sm">
+                            <div class="flex justify-between border-b border-slate-200/60 pb-1">
+                                <span class="text-slate-500 font-medium">${isAngebot ? 'Angebots-Nr.:' : 'Rechnungs-Nr.:'}</span>
+                                <span class="font-bold text-blue-600 font-mono">${sanitize(rech.nr)}</span>
+                            </div>
+                            <div class="flex justify-between border-b border-slate-200/60 pb-1">
+                                <span class="text-slate-500">Rechnungsdatum:</span>
+                                <span class="font-medium text-slate-800">${datumStr}</span>
+                            </div>
+                            <div class="flex justify-between border-b border-slate-200/60 pb-1">
+                                <span class="text-slate-500">Leistungsdatum:</span>
+                                <span class="font-medium text-slate-800">${leistungsdatumStr}</span>
+                            </div>
+                            <div class="flex justify-between border-b border-slate-200/60 pb-1">
+                                <span class="text-slate-500">Kundennummer:</span>
+                                <span class="font-medium text-slate-800 font-mono">${kundenNr}</span>
+                            </div>
+                            <div class="flex justify-between border-b border-slate-200/60 pb-1">
+                                <span class="text-slate-500">${isAngebot ? 'Gültig bis:' : 'Fällig am:'}</span>
+                                <span class="font-bold text-slate-900">${faelligStr}</span>
+                            </div>
+                            ${kunde.ustId ? `
+                            <div class="flex justify-between border-b border-slate-200/60 pb-1">
+                                <span class="text-slate-500">Ihre USt-IdNr.:</span>
+                                <span class="font-medium text-slate-800 font-mono">${sanitize(kunde.ustId)}</span>
+                            </div>` : ''}
+                            ${projektName ? `
+                            <div class="flex justify-between pt-0.5">
+                                <span class="text-slate-500">Projekt:</span>
+                                <span class="font-medium text-slate-800 truncate max-w-[120px]" title="${sanitize(projektName)}">${sanitize(projektName)}</span>
+                            </div>` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Titel & Betreffzeile -->
+                    <div class="mb-3 flex items-center justify-between">
+                        <div>
+                            <h2 class="text-xl font-bold text-slate-900 tracking-tight">
+                                ${isAngebot ? 'Angebot' : 'Rechnung'} <span class="text-blue-600 font-medium">#${sanitize(rech.nr)}</span>
+                            </h2>
+                            ${projektName ? `<p class="text-xs text-slate-600 mt-0.5 font-medium">Bauvorhaben / Projekt: ${sanitize(projektName)}</p>` : ''}
+                        </div>
+                        <span class="px-2.5 py-1 text-[11px] font-semibold rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                            ${isAngebot ? 'Angebot' : 'Rechnung'}
+                        </span>
+                    </div>
+
+                    ${vortextHtml ? `<div class="mb-3 text-xs text-slate-700 leading-relaxed">${vortextHtml}</div>` : ''}
+
+                    <!-- Positionstabelle -->
+                    <div class="overflow-hidden rounded-lg border border-slate-200 mb-4 shadow-sm">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-700 font-semibold uppercase tracking-wider text-[10px] border-b border-slate-200">
+                                    <th class="py-2.5 pl-2 text-center w-8">Pos.</th>
+                                    <th class="py-2.5 px-2">Bezeichnung</th>
+                                    <th class="py-2.5 px-2 text-center w-20">Menge</th>
+                                    <th class="py-2.5 px-2 text-right w-24">${einzelpreisLabel}</th>
+                                    <th class="py-2.5 px-2 text-right w-16">MwSt</th>
+                                    <th class="py-2.5 px-2 text-right w-16">Rabatt</th>
+                                    <th class="py-2.5 pr-2 text-right w-24">${gesamtLabel}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 text-slate-700">
+                                ${itemsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Flex Spacer: Füllt den Leerraum dynamisch aus und schiebt den Abschlussblock nach unten -->
+                    <div class="flex-1 min-h-[16px]"></div>
+
+                    <!-- Abschlussbereich: Zahlungsbedingungen, Hinweise & Summenblock -->
+                    <div class="mt-auto">
+                        <div class="flex justify-between items-start gap-6 mb-4 avoid-break pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">
+                            <div class="flex-1 space-y-2.5">
+                                <div class="text-xs text-slate-600 bg-blue-50/50 p-2.5 rounded-xl border border-blue-100 leading-relaxed">
+                                    <p class="font-semibold text-blue-900 mb-0.5">Zahlungsbedingungen:</p>
+                                    <p>Bitte überweisen Sie den Betrag bis zum <strong class="text-slate-900">${faelligStr}</strong> auf das unten angegebene Bankkonto unter Angabe der Rechnungsnummer <strong class="text-slate-900 font-mono">${sanitize(rech.nr)}</strong>.</p>
                                 </div>
-                                <div class="text-right">
-                                    <h2 class="text-2xl font-semibold tracking-wider text-primary-400 uppercase">${isAngebot ? 'Angebot' : 'Rechnung'}</h2>
-                                    <div class="mt-2 text-sm text-slate-300">
-                                        <p>Nr. <span class="text-white font-medium">${sanitize(rech.nr)}</span></p>
-                                        <p>${datumStr}</p>
-                                    </div>
-                                </div>
+
+                                ${legalTextsHtml}
+
+                                ${qrHtml}
                             </div>
 
-                            <div class="px-12 py-4">
-                                <!-- Address Block -->
-                                <div class="flex justify-between items-start mb-12">
-                                    <div class="bg-slate-50 p-6 rounded-xl border border-slate-100 w-1/2">
-                                        <p class="text-[10px] text-slate-500 font-semibold uppercase tracking-widest mb-3">${absenderInline}</p>
-                                        <div class="text-slate-800 leading-relaxed text-sm">
-                                            <p class="font-bold text-lg text-slate-900">${sanitize(kunde.name || '')}</p>
-                                            <p>${sanitize(kunde.adresse || '').replace(/\n/g, '<br>')}</p>
-                                            <p>${sanitize(kunde.plz || '')} ${sanitize(kunde.ort || '')}</p>
-                                        </div>
-                                    </div>
-                                    <div class="text-right text-sm text-slate-600 bg-slate-50 p-6 rounded-xl border border-slate-100">
-                                        <p class="mb-1"><span class="font-semibold text-slate-800">Datum:</span> ${datumStr}</p>
-                                        <p class="mb-1"><span class="font-semibold text-slate-800">${isAngebot ? 'Gültig bis:' : 'Fällig am:'}</span> ${faelligStr}</p>
-                                        <p><span class="font-semibold text-slate-800">Kundennummer:</span> ${kunde.id}</p>
-                                    </div>
-                                </div>
-
-                                ${vortextHtml}
-
-                                <!-- Table -->
-                                <div class="overflow-hidden rounded-xl border border-slate-200 mb-10 shadow-sm">
-                                    <table class="w-full">
-                                        <thead>
-                                            <tr class="text-left text-xs uppercase tracking-wider text-slate-600 bg-slate-100 border-b border-slate-200">
-                                                <th class="py-4 pl-4 font-semibold w-12">Pos.</th>
-                                                <th class="py-4 font-semibold">Bezeichnung</th>
-                                                <th class="py-4 font-semibold text-center w-24">Menge</th>
-                                                <th class="py-4 font-semibold text-right w-32">${einzelpreisLabel}</th>
-                                                <th class="py-4 font-semibold text-right w-20">MwSt</th>
-                                                <th class="py-4 font-semibold text-right w-24">Rabatt</th>
-                                                <th class="py-4 pr-4 font-semibold text-right w-32">${gesamtLabel}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="text-slate-700 bg-white">
-                                            ${itemsHtml}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                
-                                <!-- Totals & QR -->
-                                <div class="flex justify-between items-start mb-16 gap-12 summenblock avoid-break pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">
-                                    <div class="flex-1">
-                                        ${legalTextsHtml}
-                                        ${qrHtml}
-                                    </div>
-                                    <div class="w-80 bg-slate-50 rounded-xl p-6 border border-slate-100 shadow-sm">
-                                        
-                                        ${rech.globalRabattAbzug > 0 ? `
-                                            <div class="flex justify-between text-sm text-slate-500 mb-2">
-                                                <span>Zwischensumme</span>
-                                                <span>${formatCurrency(rech.netto + rech.globalRabattAbzug)}</span>
-                                            </div>
-                                            <div class="flex justify-between text-sm text-emerald-600 mb-4 pb-4 border-b border-slate-200">
-                                                <span>Gesamtrabatt</span>
-                                                <span>-${formatCurrency(rech.globalRabattAbzug)}</span>
-                                            </div>
-                                        ` : ''}
-
-                                        ${deductionsHtml}
-                                        <div class="flex justify-between text-sm font-medium text-slate-700 mb-2">
-                                            <span>${hatKumulationOderSicherheit ? 'Steuerpflichtig (Netto)' : 'Nettobetrag'}</span>
-                                            <span>${formatCurrency(rech.netto)}</span>
-                                        </div>
-                                        
-                                        <div class="mb-4 pb-4 border-b border-slate-200">
-                                            ${taxHtml}
-                                        </div>
-                                        
-                                        <div class="flex justify-between font-bold text-lg text-slate-900 mb-2">
-                                            <span>Bruttobetrag</span>
-                                            <span>${formatCurrency(rech.brutto)}</span>
-                                        </div>
-
-                                        ${rech.anzahlung > 0 ? `
-                                            <div class="flex justify-between text-sm text-slate-600 mb-4 pb-4 border-b border-slate-200">
-                                                <span>Abzüglich Anzahlung</span>
-                                                <span>-${formatCurrency(rech.anzahlung)}</span>
-                                            </div>
-                                        ` : ''}
-
-                                        <div class="mt-4 pt-4 border-t-2 border-slate-900">
-                                            <div class="flex justify-between font-black text-2xl text-slate-900">
-                                                <span>Zahlbetrag</span>
-                                                <span>${formatCurrency(zahlbetragNumerical)}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                ${fusstextHtml ? `<div class="mb-8 pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">${fusstextHtml}</div>` : ''}
-
-                                <!-- Footer -->
-                                <div class="mt-24 pt-8 border-t border-slate-200 text-xs text-slate-500 grid grid-cols-3 gap-8 text-left pb-12 pdf-footer avoid-break" style="break-inside: avoid; page-break-inside: avoid; position: static !important;">
-                                    <div>
-                                        <p class="font-bold text-slate-800 mb-2 uppercase tracking-wider text-[10px]">Unternehmen</p>
-                                        <p>${sanitize(state.einstellungen.firmenname)}</p>
-                                        ${state.einstellungen.adresse ? `<p class="mt-1">${sanitize(state.einstellungen.adresse).replace(/\n/g, '<br>')}</p>` : ''}
-                                    </div>
-                                    <div>
-                                        <p class="font-bold text-slate-800 mb-2 uppercase tracking-wider text-[10px]">Bankverbindung</p>
-                                        <p>${sanitize(state.einstellungen.bankname)}</p>
-                                        <p>IBAN: ${sanitize(state.einstellungen.iban)}</p>
-                                        <p>BIC: ${sanitize(state.einstellungen.bic)}</p>
-                                    </div>
-                                    <div>
-                                        <p class="font-bold text-slate-800 mb-2 uppercase tracking-wider text-[10px]">Rechtliches</p>
-                                        <p>Steuernummer / USt-IdNr:</p>
-                                        <p>${sanitize(state.einstellungen.steuer)}</p>
-                                    </div>
+                            <!-- Rechts: Summenblock -->
+                            <div class="w-72 flex-shrink-0 bg-slate-50 rounded-xl p-3.5 border border-slate-200/80 shadow-sm text-xs">
+                                ${totalsHtml}
+                                <div class="mt-2.5 p-2.5 bg-blue-600 text-white rounded-lg flex justify-between items-baseline shadow-sm">
+                                    <span class="font-bold text-xs uppercase tracking-wider text-blue-100">Zahlbetrag</span>
+                                    <span class="font-black text-lg font-mono">${formatCurrency(zahlbetragNumerical)}</span>
                                 </div>
                             </div>
                         </div>
+
+                        ${fusstextHtml ? `<div class="mb-3 text-xs text-slate-700 leading-relaxed pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">${fusstextHtml}</div>` : ''}
+                    </div>
+                </div>
+
+                <!-- Fußzeile -->
+                <div class="pt-3 border-t border-slate-200 text-[10px] text-slate-500 grid grid-cols-3 gap-6 leading-snug pdf-footer avoid-break mt-auto" style="break-inside: avoid; page-break-inside: avoid;">
+                    <div>
+                        <p class="font-bold text-blue-700 uppercase tracking-wider text-[9px] mb-0.5">Unternehmen</p>
+                        <p class="font-medium text-slate-800">${sanitize(state.einstellungen.firmenname)}</p>
+                        ${state.einstellungen.adresse ? `<p class="text-slate-600 mt-0.5">${sanitize(state.einstellungen.adresse).replace(/\n/g, '<br>')}</p>` : ''}
+                    </div>
+                    <div>
+                        <p class="font-bold text-blue-700 uppercase tracking-wider text-[9px] mb-0.5">Bankverbindung</p>
+                        <p class="font-medium text-slate-800">${sanitize(state.einstellungen.bankname)}</p>
+                        <p class="font-mono text-slate-700">IBAN: ${formattedIban}</p>
+                        <p class="font-mono text-slate-700">BIC: ${sanitize(state.einstellungen.bic)}</p>
+                    </div>
+                    <div>
+                        <p class="font-bold text-blue-700 uppercase tracking-wider text-[9px] mb-0.5">Rechtliches & Steuer</p>
+                        <p>Steuernummer / USt-IdNr.:</p>
+                        <p class="font-medium text-slate-800 font-mono">${sanitize(state.einstellungen.steuer)}</p>
+                    </div>
+                </div>
+            </div>
         `;
     } else if (vorlage === 'minimalistisch') {
         templateHtml = `
-                        <div id="invoice-paper" class="invoice-paper max-w-4xl mx-auto bg-white min-h-[297mm] font-serif flex flex-col justify-between relative">
-                            <div class="px-16 py-16">
-                                <!-- Header -->
-                                <div class="flex justify-between items-end mb-16 border-b-2 border-black pb-8">
-                                    <div>
-                                        ${logoHtml ? `<div class="mb-4 grayscale opacity-90">${logoHtml}</div>` : ''}
-                                        <h1 class="text-xl font-bold tracking-widest uppercase text-black">${sanitize(state.einstellungen.firmenname)}</h1>
-                                    </div>
-                                    <div class="text-right">
-                                        <h2 class="text-3xl font-light tracking-widest text-black uppercase mb-2">${isAngebot ? 'Angebot' : 'Rechnung'}</h2>
-                                        <p class="text-sm font-medium">${sanitize(rech.nr)}</p>
-                                    </div>
-                                </div>
+            <div id="invoice-paper" class="invoice-paper max-w-4xl mx-auto bg-white text-black font-sans flex flex-col justify-between relative" style="min-height: calc(297mm - 24mm);">
+                <div class="flex-1 flex flex-col">
+                    <!-- Briefkopf: Minimalistisch -->
+                    <div class="flex justify-between items-end pb-3 border-b-2 border-black mb-5">
+                        <div>
+                            ${logoHtml ? `<div class="grayscale opacity-90">${logoHtml}</div>` : `<h1 class="text-lg font-bold tracking-widest uppercase text-black">${sanitize(state.einstellungen.firmenname)}</h1>`}
+                        </div>
+                        <div class="text-right">
+                            <h2 class="text-xl font-light tracking-widest text-black uppercase">${isAngebot ? 'Angebot' : 'Rechnung'}</h2>
+                            <p class="text-xs font-mono font-bold">${sanitize(rech.nr)}</p>
+                        </div>
+                    </div>
 
-                                <!-- Info Grid -->
-                                <div class="grid grid-cols-2 gap-16 mb-16">
-                                    <div>
-                                        <p class="text-[9px] text-gray-500 font-bold uppercase tracking-widest mb-4">${absenderInline}</p>
-                                        <div class="text-black text-sm">
-                                            <p class="font-bold mb-1">${sanitize(kunde.name || '')}</p>
-                                            <p class="leading-relaxed">${sanitize(kunde.adresse || '').replace(/\n/g, '<br>')}</p>
-                                            <p>${sanitize(kunde.plz || '')} ${sanitize(kunde.ort || '')}</p>
-                                        </div>
-                                    </div>
-                                    <div class="text-sm text-black space-y-2 border-l border-gray-200 pl-8">
-                                        <div class="flex justify-between"><span class="text-gray-500">Datum</span> <span class="font-medium">${datumStr}</span></div>
-                                        <div class="flex justify-between"><span class="text-gray-500">${isAngebot ? 'Gültig bis' : 'Fällig am'}</span> <span class="font-medium">${faelligStr}</span></div>
-                                        <div class="flex justify-between"><span class="text-gray-500">Kundennummer</span> <span class="font-medium">${kunde.id}</span></div>
-                                    </div>
-                                </div>
-
-                                ${vortextHtml}
-
-                                <!-- Table -->
-                                <table class="w-full mb-12">
-                                    <thead>
-                                        <tr class="text-left text-[10px] uppercase tracking-widest text-gray-500 border-b border-black">
-                                            <th class="py-3 font-normal pl-4">Pos.</th>
-                                            <th class="py-3 font-normal">Bezeichnung</th>
-                                            <th class="py-3 font-normal text-center">Menge</th>
-                                            <th class="py-3 font-normal text-right">${einzelpreisLabel}</th>
-                                            <th class="py-3 font-normal text-right">MwSt</th>
-                                            <th class="py-3 font-normal text-right">Rabatt</th>
-                                            <th class="py-3 font-normal text-right pr-4">${gesamtLabel}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="text-black border-b border-gray-200">
-                                        ${itemsHtml}
-                                    </tbody>
-                                </table>
-
-                                <!-- Totals & QR -->
-                                <div class="flex justify-between items-start mb-16 gap-12 summenblock avoid-break pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">
-                                    <div class="flex-1">
-                                        ${legalTextsHtml}
-                                        ${qrHtml ? `<div class="grayscale opacity-90">${qrHtml}</div>` : ''}
-                                    </div>
-                                    <div class="w-72">
-                                        ${rech.globalRabattAbzug > 0 ? `
-                                            <div class="flex justify-between text-sm mb-2 text-gray-600">
-                                                <span>Zwischensumme</span>
-                                                <span>${formatCurrency(rech.netto + rech.globalRabattAbzug)}</span>
-                                            </div>
-                                            <div class="flex justify-between text-sm mb-4 pb-2 border-b border-gray-200 text-gray-900">
-                                                <span>Gesamtrabatt</span>
-                                                <span>-${formatCurrency(rech.globalRabattAbzug)}</span>
-                                            </div>
-                                        ` : ''}
-
-                                        ${deductionsHtml}
-                                        <div class="flex justify-between text-sm mb-2">
-                                            <span class="text-gray-600">${hatKumulationOderSicherheit ? 'Steuerpflichtig (Netto)' : 'Nettobetrag'}</span>
-                                            <span>${formatCurrency(rech.netto)}</span>
-                                        </div>
-                                        
-                                        <div class="mb-4 pb-4 border-b border-gray-200">
-                                            ${taxHtml}
-                                        </div>
-                                        
-                                        <div class="flex justify-between font-bold text-sm mb-2">
-                                            <span>Bruttobetrag</span>
-                                            <span>${formatCurrency(rech.brutto)}</span>
-                                        </div>
-
-                                        ${rech.anzahlung > 0 ? `
-                                            <div class="flex justify-between text-sm mb-4 pb-4 border-b border-gray-200 text-gray-600">
-                                                <span>Abzüglich Anzahlung</span>
-                                                <span>-${formatCurrency(rech.anzahlung)}</span>
-                                            </div>
-                                        ` : ''}
-
-                                        <div class="mt-2 pt-4 border-t-2 border-black flex justify-between font-bold text-xl">
-                                            <span>Zahlbetrag</span>
-                                            <span>${formatCurrency(zahlbetragNumerical)}</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                ${fusstextHtml ? `<div class="mb-8 pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">${fusstextHtml}</div>` : ''}
-
-                                <!-- Footer -->
-                                <div class="mt-32 pt-8 border-t border-gray-200 text-[10px] text-gray-500 grid grid-cols-3 gap-8 uppercase tracking-wider leading-relaxed pdf-footer avoid-break" style="break-inside: avoid; page-break-inside: avoid; position: static !important;">
-                                    <div>
-                                        <p class="text-black font-bold mb-2">Unternehmen</p>
-                                        <p>${sanitize(state.einstellungen.firmenname)}</p>
-                                        ${state.einstellungen.adresse ? `<p>${sanitize(state.einstellungen.adresse).replace(/\n/g, '<br>')}</p>` : ''}
-                                    </div>
-                                    <div>
-                                        <p class="text-black font-bold mb-2">Bankverbindung</p>
-                                        <p>${sanitize(state.einstellungen.bankname)}</p>
-                                        <p>IBAN: ${sanitize(state.einstellungen.iban)}</p>
-                                        <p>BIC: ${sanitize(state.einstellungen.bic)}</p>
-                                    </div>
-                                    <div>
-                                        <p class="text-black font-bold mb-2">Rechtliches</p>
-                                        <p>Steuernummer / USt-IdNr:</p>
-                                        <p>${sanitize(state.einstellungen.steuer)}</p>
-                                    </div>
-                                </div>
+                    <!-- Anschriftenfeld & Infoblock (DIN 5008) -->
+                    <div class="flex justify-between items-start mb-5 gap-6">
+                        <div class="w-1/2 pt-1">
+                            <p class="text-[9px] text-gray-500 font-bold uppercase tracking-widest border-b border-gray-300 pb-1 mb-2">${absenderInline}</p>
+                            <div class="text-black leading-snug text-xs">
+                                <p class="font-bold text-sm mb-1">${empfaengerName}</p>
+                                ${empfaengerAdresse ? `<p class="text-gray-800">${empfaengerAdresse}</p>` : ''}
+                                ${empfaengerPlzOrt ? `<p class="text-gray-800 font-medium">${empfaengerPlzOrt}</p>` : ''}
                             </div>
                         </div>
-        `;
-    } else {
-        templateHtml = `
-                        <div id="invoice-paper" class="invoice-paper max-w-4xl mx-auto bg-white min-h-[297mm] flex flex-col justify-between relative">
-                            <!-- Header Block -->
-                            <div class="bg-slate-50 px-12 py-10 flex justify-between items-start border-b border-slate-200">
-                                <div>
-                                    ${logoHtml}
-                                    <h1 class="text-2xl font-bold tracking-tight text-slate-800 mt-4">${sanitize(state.einstellungen.firmenname)}</h1>
-                                    ${state.einstellungen.adresse ? `<p class="text-sm text-slate-600 mt-1">${sanitize(state.einstellungen.adresse).replace(/\n/g, '<br>')}</p>` : ''}
-                                </div>
-                                <div class="text-right">
-                                    <h2 class="text-4xl font-light tracking-tight text-slate-400 uppercase tracking-widest mb-4">${isAngebot ? 'Angebot' : 'Rechnung'}</h2>
-                                    <div class="text-sm space-y-1 text-slate-600">
-                                        <p><span class="font-semibold text-slate-800">${isAngebot ? 'Angebots-Nr:' : 'Rechnungs-Nr:'}</span> ${sanitize(rech.nr)}</p>
-                                        <p><span class="font-semibold text-slate-800">Datum:</span> ${datumStr}</p>
-                                        <p><span class="font-semibold text-slate-800">${isAngebot ? 'Gültig bis:' : 'Fällig am:'}</span> ${faelligStr}</p>
-                                    </div>
-                                </div>
-                            </div>
 
-                            <div class="px-12 py-8">
-                                <!-- Address Block -->
-                                <div class="mb-12">
-                                    <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mb-2 border-b-2 border-primary inline-block pb-1">${absenderInline}</p>
-                                    <div class="text-slate-800 leading-relaxed text-sm mt-2">
-                                        <p class="font-bold text-base">${sanitize(kunde.name || '')}</p>
-                                        <p>${sanitize(kunde.adresse || '').replace(/\n/g, '<br>')}</p>
-                                        <p>${sanitize(kunde.plz || '')} ${sanitize(kunde.ort || '')}</p>
-                                    </div>
+                        <div class="w-60 border-l border-gray-300 pl-4 text-xs text-gray-700 space-y-1">
+                            <div class="flex justify-between"><span class="text-gray-500">Datum:</span> <span class="font-medium">${datumStr}</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">Leistungsdatum:</span> <span class="font-medium">${leistungsdatumStr}</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">Kundennummer:</span> <span class="font-medium font-mono">${kundenNr}</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">${isAngebot ? 'Gültig bis:' : 'Fällig am:'}</span> <span class="font-bold">${faelligStr}</span></div>
+                            ${kunde.ustId ? `<div class="flex justify-between"><span class="text-gray-500">USt-IdNr.:</span> <span class="font-mono">${sanitize(kunde.ustId)}</span></div>` : ''}
+                            ${projektName ? `<div class="flex justify-between"><span class="text-gray-500">Projekt:</span> <span class="font-medium truncate max-w-[110px]">${sanitize(projektName)}</span></div>` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Titel -->
+                    <div class="mb-3">
+                        <h2 class="text-base font-bold text-black uppercase tracking-wider">
+                            ${isAngebot ? 'Angebot' : 'Rechnung'} ${sanitize(rech.nr)}
+                        </h2>
+                        ${projektName ? `<p class="text-xs text-gray-600 mt-0.5">Projekt: ${sanitize(projektName)}</p>` : ''}
+                    </div>
+
+                    ${vortextHtml ? `<div class="mb-3 text-xs text-gray-800 leading-relaxed">${vortextHtml}</div>` : ''}
+
+                    <!-- Positionstabelle -->
+                    <div class="mb-4">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="border-y border-black text-[10px] uppercase tracking-widest text-gray-600">
+                                    <th class="py-2 pl-2 text-center w-8">Pos.</th>
+                                    <th class="py-2 px-2">Bezeichnung</th>
+                                    <th class="py-2 px-2 text-center w-20">Menge</th>
+                                    <th class="py-2 px-2 text-right w-24">${einzelpreisLabel}</th>
+                                    <th class="py-2 px-2 text-right w-16">MwSt</th>
+                                    <th class="py-2 px-2 text-right w-16">Rabatt</th>
+                                    <th class="py-2 pr-2 text-right w-24">${gesamtLabel}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 text-black">
+                                ${itemsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Flex Spacer: Füllt den Leerraum dynamisch aus und schiebt den Abschlussblock nach unten -->
+                    <div class="flex-1 min-h-[16px]"></div>
+
+                    <!-- Abschlussbereich: Zahlungsbedingungen, Hinweise & Summenblock -->
+                    <div class="mt-auto">
+                        <div class="flex justify-between items-start gap-6 mb-4 avoid-break pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">
+                            <div class="flex-1 space-y-2.5">
+                                <div class="text-xs text-gray-700 border-l-2 border-black pl-3 leading-relaxed">
+                                    <p class="font-bold text-black mb-0.5">Zahlungsbedingungen:</p>
+                                    <p>Zahlbar bis zum <strong>${faelligStr}</strong> ohne Abzug auf unten genanntes Konto unter Angabe der Rechnungs-Nr. <strong>${sanitize(rech.nr)}</strong>.</p>
                                 </div>
 
-                                ${vortextHtml}
-
-                                <!-- Table -->
-                                <table class="w-full mb-10">
-                                    <thead>
-                                        <tr class="text-left text-xs uppercase tracking-wider text-slate-500 bg-slate-50">
-                                            <th class="py-4 pl-4 font-semibold w-12 rounded-l-lg">Pos.</th>
-                                            <th class="py-4 font-semibold">Bezeichnung</th>
-                                            <th class="py-4 font-semibold text-center w-24">Menge</th>
-                                            <th class="py-4 font-semibold text-right w-32">${einzelpreisLabel}</th>
-                                            <th class="py-4 font-semibold text-right w-20">MwSt</th>
-                                            <th class="py-4 font-semibold text-right w-24">Rabatt</th>
-                                            <th class="py-4 pr-4 font-semibold text-right w-32 rounded-r-lg">${gesamtLabel}</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="text-slate-700">
-                                        ${itemsHtml}
-                                    </tbody>
-                                </table>
-                                
-                                <!-- Lieferdatum Hinweis (UStG) & Legal -->
                                 ${legalTextsHtml}
 
-                                <!-- Totals & QR -->
-                                <div class="flex justify-between items-end mb-16 gap-8 summenblock avoid-break pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">
-                                    <div class="flex-1 max-w-sm">
-                                        ${qrHtml}
-                                    </div>
-                                    <div class="w-80 flex-shrink-0">
-                                        
-                                        ${rech.globalRabattAbzug > 0 ? `
-                                            <div class="flex justify-between text-sm text-slate-500 mb-1 px-4">
-                                                <span>Zwischensumme Positionen</span>
-                                                <span>${formatCurrency(rech.netto + rech.globalRabattAbzug)}</span>
-                                            </div>
-                                            <div class="flex justify-between text-sm text-emerald-600 mb-3 px-4 border-b border-slate-100 pb-2">
-                                                <span>Abzug Gesamtrabatt</span>
-                                                <span>-${formatCurrency(rech.globalRabattAbzug)}</span>
-                                            </div>
-                                        ` : ''}
+                                ${qrHtml ? `<div class="grayscale opacity-90">${qrHtml}</div>` : ''}
+                            </div>
 
-                                        ${deductionsHtml}
-                                        <div class="flex justify-between text-sm font-medium text-slate-700 px-4 py-1">
-                                            <span>${hatKumulationOderSicherheit ? 'Steuerpflichtig (Netto)' : 'Nettobetrag'}</span>
-                                            <span>${formatCurrency(rech.netto)}</span>
-                                        </div>
-                                        
-                                        <div class="px-4">
-                                            ${taxHtml}
-                                        </div>
-                                        
-                                        <div class="flex justify-between font-bold text-lg text-slate-900 mt-3 pt-3 px-4 border-t border-slate-200">
-                                            <span>Bruttobetrag</span>
-                                            <span>${formatCurrency(rech.brutto)}</span>
-                                        </div>
-
-                                        ${rech.anzahlung > 0 ? `
-                                            <div class="flex justify-between text-sm text-slate-600 mt-2 px-4 pb-3">
-                                                <span>Abzüglich Anzahlung</span>
-                                                <span>-${formatCurrency(rech.anzahlung)}</span>
-                                            </div>
-                                        ` : ''}
-
-                                        <!-- Highlighted Total Box -->
-                                        <div class="mt-4 p-4 bg-primary/5 border-l-4 border-primary rounded-r-lg">
-                                            <div class="flex justify-between font-bold text-2xl text-primary">
-                                                <span>Zahlbetrag</span>
-                                                <span>${formatCurrency(zahlbetragNumerical)}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                ${fusstextHtml ? `<div class="mb-8 pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">${fusstextHtml}</div>` : ''}
-
-                                <!-- Footer -->
-                                <div class="mt-24 pt-8 border-t border-slate-200 text-xs text-slate-500 grid grid-cols-3 gap-8 text-left pdf-footer avoid-break" style="break-inside: avoid; page-break-inside: avoid; position: static !important;">
-                                    <div>
-                                        <p class="font-semibold text-slate-700 mb-1">Unternehmen</p>
-                                        <p>${sanitize(state.einstellungen.firmenname)}</p>
-                                        ${state.einstellungen.adresse ? `<p class="mt-1">${sanitize(state.einstellungen.adresse).replace(/\n/g, '<br>')}</p>` : ''}
-                                    </div>
-                                    <div>
-                                        <p class="font-semibold text-slate-700 mb-1">Bankverbindung</p>
-                                        <p>${sanitize(state.einstellungen.bankname)}</p>
-                                        <p>IBAN: ${sanitize(state.einstellungen.iban)}</p>
-                                        <p>BIC: ${sanitize(state.einstellungen.bic)}</p>
-                                    </div>
-                                    <div>
-                                        <p class="font-semibold text-slate-700 mb-1">Rechtliches</p>
-                                        <p>Steuernummer / USt-IdNr:</p>
-                                        <p>${sanitize(state.einstellungen.steuer)}</p>
-                                    </div>
+                            <!-- Rechts: Summenblock -->
+                            <div class="w-72 flex-shrink-0 text-xs">
+                                ${totalsHtml}
+                                <div class="mt-2.5 pt-2 border-t-2 border-black flex justify-between items-baseline font-bold text-base">
+                                    <span>Zahlbetrag</span>
+                                    <span class="font-mono text-lg">${formatCurrency(zahlbetragNumerical)}</span>
                                 </div>
                             </div>
                         </div>
+
+                        ${fusstextHtml ? `<div class="mb-3 text-xs text-gray-800 leading-relaxed pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">${fusstextHtml}</div>` : ''}
+                    </div>
+                </div>
+
+                <!-- Fußzeile -->
+                <div class="pt-3 border-t border-gray-300 text-[9px] text-gray-500 grid grid-cols-3 gap-6 uppercase tracking-wider leading-relaxed pdf-footer avoid-break mt-auto" style="break-inside: avoid; page-break-inside: avoid;">
+                    <div>
+                        <p class="text-black font-bold mb-0.5">Unternehmen</p>
+                        <p>${sanitize(state.einstellungen.firmenname)}</p>
+                        ${state.einstellungen.adresse ? `<p class="mt-0.5">${sanitize(state.einstellungen.adresse).replace(/\n/g, '<br>')}</p>` : ''}
+                    </div>
+                    <div>
+                        <p class="text-black font-bold mb-0.5">Bankverbindung</p>
+                        <p>${sanitize(state.einstellungen.bankname)}</p>
+                        <p class="font-mono">IBAN: ${formattedIban}</p>
+                        <p class="font-mono">BIC: ${sanitize(state.einstellungen.bic)}</p>
+                    </div>
+                    <div>
+                        <p class="text-black font-bold mb-0.5">Rechtliches</p>
+                        <p>Steuernummer / USt-IdNr:</p>
+                        <p class="font-mono">${sanitize(state.einstellungen.steuer)}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        // Standard / Klassisch (DIN 5008 konform)
+        templateHtml = `
+            <div id="invoice-paper" class="invoice-paper max-w-4xl mx-auto bg-white text-slate-800 font-sans flex flex-col justify-between relative" style="min-height: calc(297mm - 24mm);">
+                <div class="flex-1 flex flex-col">
+                    <!-- Briefkopf DIN 5008: Logo links, Firmendaten rechts -->
+                    <div class="flex justify-between items-start pb-3 border-b border-slate-200 mb-5">
+                        <div class="max-w-[45%]">
+                            ${logoHtml ? logoHtml : `<h1 class="text-xl font-black tracking-tight text-slate-900 uppercase">${sanitize(state.einstellungen.firmenname)}</h1>`}
+                        </div>
+                        <div class="text-right text-xs text-slate-600 space-y-0.5 leading-tight">
+                            <p class="font-bold text-slate-800 text-sm">${sanitize(state.einstellungen.firmenname)}</p>
+                            ${state.einstellungen.adresse ? `<p>${sanitize(state.einstellungen.adresse).replace(/\n/g, '<br>')}</p>` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Anschriftenfeld & Infoblock (DIN 5008) -->
+                    <div class="flex justify-between items-start mb-5 gap-6">
+                        <!-- Anschrift Empfänger -->
+                        <div class="w-1/2 pt-1">
+                            <p class="text-[9px] text-slate-400 font-medium tracking-wide border-b border-slate-200/80 pb-1 mb-2">${absenderInline}</p>
+                            <div class="text-slate-800 leading-snug text-xs">
+                                <p class="font-bold text-sm text-slate-900 mb-1">${empfaengerName}</p>
+                                ${empfaengerAdresse ? `<p class="text-slate-700">${empfaengerAdresse}</p>` : ''}
+                                ${empfaengerPlzOrt ? `<p class="text-slate-700 font-medium">${empfaengerPlzOrt}</p>` : ''}
+                            </div>
+                        </div>
+
+                        <!-- Infoblock nach DIN 5008 -->
+                        <div class="w-64 bg-slate-50/90 p-3 rounded-lg border border-slate-200/70 text-xs text-slate-600 space-y-1.5 shadow-sm">
+                            <div class="flex justify-between border-b border-slate-200/50 pb-1">
+                                <span class="text-slate-500 font-medium">${isAngebot ? 'Angebots-Nr.:' : 'Rechnungs-Nr.:'}</span>
+                                <span class="font-bold text-slate-900 font-mono">${sanitize(rech.nr)}</span>
+                            </div>
+                            <div class="flex justify-between border-b border-slate-200/50 pb-1">
+                                <span class="text-slate-500">Rechnungsdatum:</span>
+                                <span class="font-medium text-slate-800">${datumStr}</span>
+                            </div>
+                            <div class="flex justify-between border-b border-slate-200/50 pb-1">
+                                <span class="text-slate-500">Leistungsdatum:</span>
+                                <span class="font-medium text-slate-800">${leistungsdatumStr}</span>
+                            </div>
+                            <div class="flex justify-between border-b border-slate-200/50 pb-1">
+                                <span class="text-slate-500">Kundennummer:</span>
+                                <span class="font-medium text-slate-800 font-mono">${kundenNr}</span>
+                            </div>
+                            <div class="flex justify-between border-b border-slate-200/50 pb-1">
+                                <span class="text-slate-500">${isAngebot ? 'Gültig bis:' : 'Fällig am:'}</span>
+                                <span class="font-bold text-slate-900">${faelligStr}</span>
+                            </div>
+                            ${kunde.ustId ? `
+                            <div class="flex justify-between border-b border-slate-200/50 pb-1">
+                                <span class="text-slate-500">Ihre USt-IdNr.:</span>
+                                <span class="font-medium text-slate-800 font-mono">${sanitize(kunde.ustId)}</span>
+                            </div>` : ''}
+                            ${projektName ? `
+                            <div class="flex justify-between pt-0.5">
+                                <span class="text-slate-500">Projekt:</span>
+                                <span class="font-medium text-slate-800 truncate max-w-[120px]" title="${sanitize(projektName)}">${sanitize(projektName)}</span>
+                            </div>` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Titel & Betreffzeile -->
+                    <div class="mb-3">
+                        <h2 class="text-lg font-bold text-slate-900 tracking-tight">
+                            ${isAngebot ? 'Angebot' : 'Rechnung'} <span class="text-slate-500 font-normal">#${sanitize(rech.nr)}</span>
+                        </h2>
+                        ${projektName ? `<p class="text-xs text-slate-600 mt-0.5 font-medium">Bauvorhaben / Projekt: ${sanitize(projektName)}</p>` : ''}
+                    </div>
+
+                    ${vortextHtml ? `<div class="mb-3 text-xs text-slate-700 leading-relaxed">${vortextHtml}</div>` : ''}
+
+                    <!-- Positionstabelle -->
+                    <div class="overflow-hidden mb-4">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="border-y border-slate-700 text-slate-700 font-semibold uppercase tracking-wider text-[10px] bg-slate-50/50">
+                                    <th class="py-2 pl-2 text-center w-8">Pos.</th>
+                                    <th class="py-2 px-2">Bezeichnung</th>
+                                    <th class="py-2 px-2 text-center w-20">Menge</th>
+                                    <th class="py-2 px-2 text-right w-24">${einzelpreisLabel}</th>
+                                    <th class="py-2 px-2 text-right w-16">MwSt</th>
+                                    <th class="py-2 px-2 text-right w-16">Rabatt</th>
+                                    <th class="py-2 pr-2 text-right w-24">${gesamtLabel}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 text-slate-700">
+                                ${itemsHtml}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Flex Spacer: Füllt den Leerraum dynamisch aus und schiebt den Abschlussblock nach unten -->
+                    <div class="flex-1 min-h-[16px]"></div>
+
+                    <!-- Abschlussbereich: Zahlungsbedingungen, Hinweise & Summenblock -->
+                    <div class="mt-auto">
+                        <div class="flex justify-between items-start gap-6 mb-4 avoid-break pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">
+                            <!-- Links: Zahlungsbedingungen, Gesetzliche Hinweise & GiroCode -->
+                            <div class="flex-1 space-y-2.5">
+                                <div class="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-200/70 leading-relaxed">
+                                    <p class="font-semibold text-slate-800 mb-0.5">Zahlungsbedingungen:</p>
+                                    <p>Bitte überweisen Sie den Betrag bis zum <strong class="text-slate-900">${faelligStr}</strong> auf das unten angegebene Bankkonto unter Angabe der Rechnungsnummer <strong class="text-slate-900 font-mono">${sanitize(rech.nr)}</strong>.</p>
+                                </div>
+
+                                ${legalTextsHtml}
+
+                                ${qrHtml}
+                            </div>
+
+                            <!-- Rechts: Summenblock -->
+                            <div class="w-72 flex-shrink-0 bg-slate-50/90 rounded-xl p-3 border border-slate-200/70 shadow-sm text-xs">
+                                ${totalsHtml}
+                                <div class="mt-2.5 pt-2 border-t-2 border-slate-800 flex justify-between items-baseline">
+                                    <span class="font-bold text-xs text-slate-900 uppercase tracking-wider">Zahlbetrag</span>
+                                    <span class="font-black text-lg text-slate-900 font-mono">${formatCurrency(zahlbetragNumerical)}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        ${fusstextHtml ? `<div class="mb-3 text-xs text-slate-700 leading-relaxed pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">${fusstextHtml}</div>` : ''}
+                    </div>
+                </div>
+
+                <!-- Fußzeile (DIN 5008 3-Spalten) -->
+                <div class="pt-3 border-t border-slate-200 text-[10px] text-slate-500 grid grid-cols-3 gap-6 leading-snug pdf-footer avoid-break mt-auto" style="break-inside: avoid; page-break-inside: avoid;">
+                    <div>
+                        <p class="font-bold text-slate-700 uppercase tracking-wider text-[9px] mb-0.5">Unternehmen</p>
+                        <p class="font-medium text-slate-800">${sanitize(state.einstellungen.firmenname)}</p>
+                        ${state.einstellungen.adresse ? `<p class="text-slate-600 mt-0.5">${sanitize(state.einstellungen.adresse).replace(/\n/g, '<br>')}</p>` : ''}
+                    </div>
+                    <div>
+                        <p class="font-bold text-slate-700 uppercase tracking-wider text-[9px] mb-0.5">Bankverbindung</p>
+                        <p class="font-medium text-slate-800">${sanitize(state.einstellungen.bankname)}</p>
+                        <p class="font-mono text-slate-700">IBAN: ${formattedIban}</p>
+                        <p class="font-mono text-slate-700">BIC: ${sanitize(state.einstellungen.bic)}</p>
+                    </div>
+                    <div>
+                        <p class="font-bold text-slate-700 uppercase tracking-wider text-[9px] mb-0.5">Rechtliches & Steuer</p>
+                        <p>Steuernummer / USt-IdNr.:</p>
+                        <p class="font-medium text-slate-800 font-mono">${sanitize(state.einstellungen.steuer)}</p>
+                    </div>
+                </div>
+            </div>
         `;
     }
 
@@ -1251,16 +1335,16 @@ window.confirmMahnungLevel = async function() {
             const qrDataUrl = await window.api.generateQrCode(epcString);
             if (qrDataUrl) {
                 qrHtml = `
-                                            <div class="mt-6 flex items-start gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 w-full">
-                                                <img src="${qrDataUrl}" class="w-20 h-20 rounded shadow-sm bg-white" alt="GiroCode">
-                                                <div class="text-xs text-slate-500 flex-1 pt-1">
-                                                    <p class="font-bold text-slate-700 mb-1 flex items-center gap-1">
-                                                        <span class="material-symbols-outlined text-[14px]">qr_code_scanner</span>
-                                                        GiroCode / Mahnung
-                                                    </p>
-                                                    <p class="leading-relaxed">Einfach mit der Banking-App scannen und den Mahnbetrag von <strong>${formatCurrency(newZahlbetrag)}</strong> direkt überweisen.</p>
-                                                </div>
-                                            </div>
+                    <div class="flex items-center gap-3 p-2 bg-slate-50 rounded-lg border border-slate-200/70 w-full">
+                        <img src="${qrDataUrl}" class="w-14 h-14 rounded bg-white p-0.5 border border-slate-200 shrink-0" alt="GiroCode">
+                        <div class="text-[10px] text-slate-600 flex-1 leading-tight">
+                            <p class="font-bold text-slate-800 mb-0.5 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[13px] text-primary">qr_code_scanner</span>
+                                GiroCode / Überweisung
+                            </p>
+                            <p class="text-slate-500">Mit Banking-App scannen &amp; ${formatCurrency(newZahlbetrag)} überweisen.</p>
+                        </div>
+                    </div>
                 `;
             }
         }
@@ -1276,7 +1360,7 @@ window.confirmMahnungLevel = async function() {
         }
 
         const absenderInline = state.einstellungen.adresse ?
-            (sanitize(state.einstellungen.firmenname) + " - " + sanitize(state.einstellungen.adresse).replace(/\n/g, ', ')) :
+            (sanitize(state.einstellungen.firmenname) + " • " + sanitize(state.einstellungen.adresse).replace(/[\r\n]+/g, ' • ')) :
             sanitize(state.einstellungen.firmenname);
 
         template.innerHTML = buildMahnungHtmlTemplate({
@@ -1323,42 +1407,44 @@ function generateMahnungItemsHtml(rech, MAHNGEBUHR) {
         const gesamt = (pos.menge * pos.preis) * (1 - rabatt / 100);
 
         const tr = document.createElement('tr');
-        tr.className = 'border-b border-slate-200 text-sm';
+        tr.className = 'border-b border-slate-100 text-xs avoid-break pdf-no-break';
+        tr.style.pageBreakInside = 'avoid';
+        tr.style.breakInside = 'avoid';
 
         const tdIdx = document.createElement('td');
-        tdIdx.className = 'py-3 pl-4 text-slate-500';
+        tdIdx.className = 'py-2 pl-2 text-center text-slate-400 font-mono text-[11px]';
         tdIdx.textContent = i + 1;
         tr.appendChild(tdIdx);
 
         const tdName = document.createElement('td');
-        tdName.className = 'py-3 font-medium';
-        tdName.textContent = art.name || pos.name || 'Unbekannt';
+        tdName.className = 'py-2 px-2 font-medium text-slate-900';
+        tdName.textContent = art.name || pos.name || 'Position';
         tr.appendChild(tdName);
 
         const tdMenge = document.createElement('td');
-        tdMenge.className = 'py-3 text-center';
+        tdMenge.className = 'py-2 px-2 text-center tabular-nums text-slate-700';
         tdMenge.textContent = `${pos.menge} ${pos.einheit || 'Stk.'}`;
         tr.appendChild(tdMenge);
 
         const tdPreis = document.createElement('td');
-        tdPreis.className = 'py-3 text-right';
+        tdPreis.className = 'py-2 px-2 text-right tabular-nums text-slate-700 font-mono';
         tdPreis.textContent = formatCurrency(pos.preis);
         tr.appendChild(tdPreis);
 
         const isPos13b = (rech.unterliegt_13b && pos.is13b) || pos.is13b;
 
         const tdMwst = document.createElement('td');
-        tdMwst.className = 'py-3 text-right text-slate-500';
+        tdMwst.className = 'py-2 px-2 text-right tabular-nums text-slate-500 font-mono';
         tdMwst.textContent = isPos13b ? '0%' : `${pos.mwst}%`;
         tr.appendChild(tdMwst);
 
         const tdRabatt = document.createElement('td');
-        tdRabatt.className = 'py-3 text-right ' + (rabatt > 0 ? 'text-emerald-600' : 'text-slate-300');
+        tdRabatt.className = 'py-2 px-2 text-right tabular-nums font-mono ' + (rabatt > 0 ? 'text-emerald-600 font-medium' : 'text-slate-300');
         tdRabatt.textContent = rabatt > 0 ? `-${rabatt}%` : '-';
         tr.appendChild(tdRabatt);
 
         const tdGesamt = document.createElement('td');
-        tdGesamt.className = 'py-3 pr-4 text-right font-medium';
+        tdGesamt.className = 'py-2 pr-2 text-right tabular-nums font-medium text-slate-900 font-mono';
         tdGesamt.textContent = formatCurrency(gesamt);
         tr.appendChild(tdGesamt);
 
@@ -1368,14 +1454,14 @@ function generateMahnungItemsHtml(rech, MAHNGEBUHR) {
     // Add Mahngebühr as a line item
     if (MAHNGEBUHR > 0) {
         itemsHtml += `
-            <tr class="border-b-2 border-slate-800 text-sm bg-amber-50/50">
-                <td class="py-3 pl-4 text-amber-500 font-bold">*</td>
-                <td class="py-3 font-bold text-slate-800">Mahngebühr / Verzugsschaden</td>
-                <td class="py-3 text-center">1</td>
-                <td class="py-3 text-right">${formatCurrency(MAHNGEBUHR)}</td>
-                <td class="py-3 text-right text-slate-500">0%</td>
-                <td class="py-3 text-right text-slate-300">-</td>
-                <td class="py-3 pr-4 text-right font-medium text-slate-800">${formatCurrency(MAHNGEBUHR)}</td>
+            <tr class="border-b border-amber-200 text-xs bg-amber-50/60 font-semibold text-amber-900 avoid-break pdf-no-break" style="page-break-inside: avoid; break-inside: avoid;">
+                <td class="py-2 pl-2 text-center text-amber-600 font-mono">*</td>
+                <td class="py-2 px-2 text-amber-950">Mahngebühr / Verzugspauschale</td>
+                <td class="py-2 px-2 text-center tabular-nums">1 Stk.</td>
+                <td class="py-2 px-2 text-right tabular-nums font-mono">${formatCurrency(MAHNGEBUHR)}</td>
+                <td class="py-2 px-2 text-right tabular-nums font-mono text-slate-500">0%</td>
+                <td class="py-2 px-2 text-right tabular-nums font-mono text-slate-300">-</td>
+                <td class="py-2 pr-2 text-right tabular-nums font-mono font-bold text-amber-900">${formatCurrency(MAHNGEBUHR)}</td>
             </tr>
         `;
     }
@@ -1402,143 +1488,185 @@ function buildMahnungHtmlTemplate(data) {
     let origFaelligStr = "unbekannt";
     try {
         if (rech.faellig) {
-            origFaelligStr = new Date(rech.faellig).toLocaleDateString('de-DE');
+            origFaelligStr = formatGermanDate(rech.faellig);
         } else {
             const tempDate = new Date(rech.datum);
             tempDate.setDate(tempDate.getDate() + 14);
-            origFaelligStr = tempDate.toLocaleDateString('de-DE');
+            origFaelligStr = formatGermanDate(tempDate);
         }
     } catch (e) {
         console.warn("Konnte Fälligkeitsdatum nicht parsen", e);
     }
 
-    let title = "1. Zahlungserinnerung";
+    let title = "1. Mahnung (Zahlungserinnerung)";
     let textHeader = "Zahlungserinnerung";
-    let textBody = `leider konnten wir bis zum heutigen Datum keinen Zahlungseingang für die o.g. Rechnung verzeichnen. Vielleicht haben Sie es in der Hektik des Alltags einfach vergessen? Der Betrag war ursprünglich zum <strong>${origFaelligStr}</strong> fällig.`;
+    let textBody = `bisher konnten wir leider keinen Zahlungseingang für die unten aufgeführte Rechnung verzeichnen. Sicherlich handelt es sich hierbei nur um ein Versehen. Der Betrag war ursprünglich zum <strong>${origFaelligStr}</strong> fällig.`;
     let colorClass = "amber";
 
     if (level === 2) {
         title = "2. Mahnung";
-        textHeader = "Mahnung";
-        textBody = `wir stellen fest, dass Sie trotz unserer ersten Zahlungserinnerung die o.g. Rechnung noch nicht beglichen haben. Der Betrag war ursprünglich zum <strong>${origFaelligStr}</strong> fällig. Wir berechnen daher eine Mahngebühr von <strong>${formatCurrency(MAHNGEBUHR)}</strong>.`;
+        textHeader = "Ausdrückliche Mahnung";
+        textBody = `trotz unserer ersten Zahlungserinnerung konnten wir bisher keinen Zahlungseingang für die unten aufgeführte Rechnung feststellen. Der Rechnungsbetrag war am <strong>${origFaelligStr}</strong> fällig. Gemäß unseren Zahlungsbedingungen berechnen wir eine Mahngebühr in Höhe von <strong>${formatCurrency(MAHNGEBUHR)}</strong>.`;
         colorClass = "orange";
     } else if (level === 3) {
-        title = "3. & LETZTE MAHNUNG";
-        textHeader = "Letzte Mahnung vor Inkasso";
-        textBody = `auf unsere bisherigen Mahnungen haben Sie leider nicht reagiert. Wir fordern Sie hiermit letztmalig auf, den fälligen Betrag inklusive Mahngebühren zu begleichen. Sollte die Zahlung nicht fristgerecht eingehen, werden wir die Forderung ohne weitere Ankündigung an ein Inkassobüro übergeben, was für Sie mit erheblichen Mehrkosten verbunden ist.`;
+        title = "3. & letzte Mahnung";
+        textHeader = "Letzte Mahnung vor Übergabe an Inkasso";
+        textBody = `auf unsere bisherigen Zahlungserinnerungen und Mahnungen haben Sie leider nicht reagiert. Wir fordern Sie hiermit letztmalig auf, den offenen Gesamtbetrag einschließlich Mahngebühren unverzüglich zu begleichen. Sollte bis zum unten angegebenen Datum kein Zahlungseingang erfolgen, werden wir das gerichtliche Mahnverfahren bzw. ein Inkassobüro beauftragen. Hierdurch entstehen erhebliche Zusatzkosten.`;
         colorClass = "red";
     }
 
-    const colorHex = colorClass === "amber" ? "#f59e0b" : (colorClass === "orange" ? "#f97316" : "#ef4444");
+    const colorHex = colorClass === "amber" ? "#d97706" : (colorClass === "orange" ? "#ea580c" : "#dc2626");
     const mahnungsNr = `${rech.nr}-M${level}`;
+    const formattedIban = formatIban(state.einstellungen.iban);
+
+    const empfaengerName = sanitize((kunde && kunde.name) || 'Sehr geehrte Damen und Herren');
+    const empfaengerAdresse = sanitize((kunde && kunde.adresse) || '').replace(/[\r\n]+/g, '<br>');
+    const empfaengerPlzOrt = `${sanitize((kunde && kunde.plz) || '')} ${sanitize((kunde && kunde.ort) || '')}`.trim();
+    const kundenNr = (kunde && kunde.kundennummer) || (kunde && kunde.id ? `KD-${String(kunde.id).padStart(5, '0')}` : '-');
 
     return `
-                        <div id="invoice-paper" class="invoice-paper max-w-4xl mx-auto bg-white min-h-[297mm] flex flex-col justify-between relative">
-                            <!-- Header Block -->
-                            <div class="bg-slate-50 px-12 py-8 flex justify-between items-start border-b border-slate-200">
-                                <div>
-                                    ${logoHtml}
-                                    <h1 class="text-2xl font-bold tracking-tight text-slate-800 mt-4">${sanitize(state.einstellungen.firmenname)}</h1>
-                                    ${state.einstellungen.adresse ? `<p class="text-sm text-slate-600 mt-1">${sanitize(state.einstellungen.adresse).replace(/\n/g, '<br>')}</p>` : ''}
-                                </div>
-                                <div class="text-right">
-                                    <h2 class="text-4xl font-light tracking-tight uppercase tracking-widest mb-4" style="color: ${colorHex}">${title}</h2>
-                                    <div class="text-sm space-y-1 text-slate-600">
-                                        <p><span class="font-semibold text-slate-800">Bezug:</span> Rechnung ${sanitize(rech.nr)}</p>
-                                        <p><span class="font-semibold text-slate-800">Mahn-Nr:</span> ${mahnungsNr}</p>
-                                        <p><span class="font-semibold text-slate-800">Rechnungsdatum:</span> ${origRechDatum}</p>
-                                        <p><span class="font-semibold text-slate-800">Mahndatum:</span> ${datumStr}</p>
-                                    </div>
-                                </div>
+        <div id="invoice-paper" class="invoice-paper max-w-4xl mx-auto bg-white text-slate-800 font-sans flex flex-col justify-between relative" style="min-height: calc(297mm - 24mm);">
+            <div class="flex-1 flex flex-col">
+                <!-- Briefkopf: Logo links, Firmendaten rechts -->
+                <div class="flex justify-between items-start pb-3 border-b border-slate-200 mb-5">
+                    <div class="max-w-[45%]">
+                        ${logoHtml ? logoHtml : `<h1 class="text-xl font-bold tracking-tight text-slate-900">${sanitize(state.einstellungen.firmenname)}</h1>`}
+                    </div>
+                    <div class="text-right text-xs text-slate-600 space-y-0.5 leading-tight">
+                        <p class="font-bold text-slate-900 text-sm">${sanitize(state.einstellungen.firmenname)}</p>
+                        ${state.einstellungen.adresse ? `<p>${sanitize(state.einstellungen.adresse).replace(/\n/g, '<br>')}</p>` : ''}
+                        ${state.einstellungen.telefon ? `<p><span class="text-slate-400">Tel:</span> ${sanitize(state.einstellungen.telefon)}</p>` : ''}
+                        ${state.einstellungen.email ? `<p><span class="text-slate-400">E-Mail:</span> ${sanitize(state.einstellungen.email)}</p>` : ''}
+                    </div>
+                </div>
+
+                <!-- Anschriftenfeld & Infoblock (DIN 5008) -->
+                <div class="flex justify-between items-start mb-5 gap-6">
+                    <!-- Anschrift Empfänger (85mm x 45mm Zone) -->
+                    <div class="w-1/2 pt-1">
+                        <p class="text-[9px] text-slate-400 font-semibold tracking-wider uppercase border-b border-slate-300 pb-1 mb-2 truncate" title="${absenderInline}">${absenderInline}</p>
+                        <div class="text-slate-800 leading-snug text-xs">
+                            <p class="font-bold text-sm text-slate-900 mb-1">${empfaengerName}</p>
+                            ${empfaengerAdresse ? `<p class="text-slate-700">${empfaengerAdresse}</p>` : ''}
+                            ${empfaengerPlzOrt ? `<p class="text-slate-700 font-medium">${empfaengerPlzOrt}</p>` : ''}
+                            ${kunde && kunde.land && kunde.land !== 'Deutschland' ? `<p class="font-semibold uppercase text-[10px] text-slate-600 mt-0.5">${sanitize(kunde.land)}</p>` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Infoblock -->
+                    <div class="w-64 bg-slate-50 rounded-lg p-3 border border-slate-200/80 text-xs space-y-1.5 flex-shrink-0">
+                        <div class="flex justify-between border-b border-slate-200/60 pb-1">
+                            <span class="text-slate-500">Mahn-Nr.:</span>
+                            <span class="font-bold text-slate-900 font-mono">${mahnungsNr}</span>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-200/60 pb-1">
+                            <span class="text-slate-500">Mahndatum:</span>
+                            <span class="font-medium text-slate-800">${datumStr}</span>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-200/60 pb-1">
+                            <span class="text-slate-500">Rechnungs-Nr.:</span>
+                            <span class="font-bold text-slate-900 font-mono">${sanitize(rech.nr)}</span>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-200/60 pb-1">
+                            <span class="text-slate-500">Rechnungsdatum:</span>
+                            <span class="font-medium text-slate-800">${origRechDatum}</span>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-200/60 pb-1">
+                            <span class="text-slate-500">Kundennummer:</span>
+                            <span class="font-medium text-slate-800 font-mono">${kundenNr}</span>
+                        </div>
+                        <div class="flex justify-between pt-0.5">
+                            <span class="text-slate-500 font-semibold">Neues Zahlungsziel:</span>
+                            <span class="font-bold" style="color: ${colorHex}">${faelligStr}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Titel & Betreffzeile -->
+                <div class="mb-3">
+                    <h2 class="text-lg font-bold tracking-tight" style="color: ${colorHex}">
+                        ${title} <span class="text-slate-500 font-normal">zu Rechnung #${sanitize(rech.nr)}</span>
+                    </h2>
+                </div>
+
+                <!-- Mahnschreiben Textblock -->
+                <div class="mb-4 p-3 rounded-lg text-slate-800 text-xs leading-relaxed border-l-4 shadow-sm" style="background-color: ${colorHex}0c; border-color: ${colorHex}">
+                    <p class="font-bold mb-1" style="color: ${colorHex}">${textHeader}</p>
+                    <p>Sehr geehrte Damen und Herren,</p>
+                    <p class="mt-1">${textBody}</p>
+                    <p class="mt-1.5 font-medium">Bitte überweisen Sie den neuen Gesamtbetrag von <strong>${formatCurrency(newZahlbetrag)}</strong> bis spätestens zum <strong style="color: ${colorHex}">${faelligStr}</strong> auf das unten aufgeführte Bankkonto.</p>
+                </div>
+
+                <!-- Positionstabelle -->
+                <div class="overflow-hidden mb-4">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead>
+                            <tr class="border-y border-slate-700 text-slate-700 font-semibold uppercase tracking-wider text-[10px] bg-slate-50/50">
+                                <th class="py-2 pl-2 text-center w-8">Pos.</th>
+                                <th class="py-2 px-2">Bezeichnung</th>
+                                <th class="py-2 px-2 text-center w-20">Menge</th>
+                                <th class="py-2 px-2 text-right w-24">Einzelpreis</th>
+                                <th class="py-2 px-2 text-right w-16">MwSt</th>
+                                <th class="py-2 px-2 text-right w-16">Rabatt</th>
+                                <th class="py-2 pr-2 text-right w-24">Gesamt</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-slate-700">
+                            ${itemsHtml}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Flex Spacer: Füllt den Leerraum dynamisch aus und schiebt den Abschlussblock nach unten -->
+                <div class="flex-1 min-h-[16px]"></div>
+
+                <!-- Abschlussbereich: Zahlungsbedingungen, Hinweise & Summenblock -->
+                <div class="mt-auto">
+                    <div class="flex justify-between items-start gap-6 mb-4 avoid-break pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">
+                        <div class="flex-1">
+                            ${qrHtml}
+                        </div>
+
+                        <div class="w-72 flex-shrink-0 bg-slate-50/90 rounded-xl p-3 border border-slate-200/70 shadow-sm text-xs space-y-1.5">
+                            <div class="flex justify-between text-slate-600">
+                                <span>Offener Rechnungsbetrag:</span>
+                                <span class="tabular-nums font-mono">${formatCurrency(currentZahlbetrag)}</span>
                             </div>
-
-                            <div class="px-12 py-6 flex-grow flex flex-col">
-                                <!-- Address Block -->
-                                <div class="mb-6">
-                                    <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-widest mb-2 border-b-2 inline-block pb-1" style="border-color: ${colorHex}">${absenderInline}</p>
-                                    <div class="text-slate-800 leading-relaxed text-sm mt-2">
-                                        <p class="font-bold text-base">${sanitize(kunde.name || '')}</p>
-                                        <p>${sanitize(kunde.adresse || '').replace(/\n/g, '<br>')}</p>
-                                        <p>${sanitize(kunde.plz || '')} ${sanitize(kunde.ort || '')}</p>
-                                    </div>
-                                </div>
-                                
-                                <!-- Mahnung Text -->
-                                <div class="mb-6 p-4 rounded-r-lg text-slate-800 text-sm shadow-sm" style="background-color: ${colorHex}10; border-left: 4px solid ${colorHex}">
-                                    <p class="font-bold text-lg mb-1 tracking-tight" style="color: ${colorHex}">${textHeader}</p>
-                                    <p class="leading-relaxed">Sehr geehrte Damen und Herren,</p>
-                                    <p class="mt-1 leading-relaxed">${textBody}</p>
-                                    <p class="mt-2 leading-relaxed">Bitte überweisen Sie den neuen <strong>Gesamtbetrag von ${formatCurrency(newZahlbetrag)}</strong> bis spätestens zum <strong class="px-1 py-0.5 rounded" style="background-color: ${colorHex}20; color: ${colorHex}">${faelligStr}</strong>.</p>
-                                </div>
-
-                                <!-- Table -->
-                                <table class="w-full mb-6">
-                                    <thead>
-                                        <tr class="text-left text-xs uppercase tracking-wider text-slate-500 bg-slate-50">
-                                            <th class="py-3 pl-4 font-semibold w-12 rounded-l-lg">Pos.</th>
-                                            <th class="py-3 font-semibold">Bezeichnung</th>
-                                            <th class="py-3 font-semibold text-center w-24">Menge</th>
-                                            <th class="py-3 font-semibold text-right w-32">Einzelpreis</th>
-                                            <th class="py-3 font-semibold text-right w-20">MwSt</th>
-                                            <th class="py-3 font-semibold text-right w-24">Rabatt</th>
-                                            <th class="py-3 pr-4 font-semibold text-right w-32 rounded-r-lg">Gesamt</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="text-slate-700">
-                                        ${itemsHtml}
-                                    </tbody>
-                                </table>
-
-                                <!-- Totals & QR -->
-                                <div class="flex justify-between items-end mb-6 gap-8">
-                                    <div class="flex-1 max-w-sm">
-                                        ${qrHtml}
-                                    </div>
-                                    <div class="w-80 flex-shrink-0">
-                                        <div class="flex justify-between text-sm font-medium text-slate-600 mb-1 px-4">
-                                            <span>Offener Rechnungsbetrag</span>
-                                            <span>${formatCurrency(currentZahlbetrag)}</span>
-                                        </div>
-                                        ${MAHNGEBUHR > 0 ? `
-                                        <div class="flex justify-between text-sm font-medium px-4 pb-1" style="color: ${colorHex}">
-                                            <span>+ Zzgl. Mahngebühr</span>
-                                            <span>${formatCurrency(MAHNGEBUHR)}</span>
-                                        </div>
-                                        <div class="mx-4 border-b border-slate-200 mb-1"></div>
-                                        ` : ''}
-                                                                            
-                                        <!-- Highlighted Total Box -->
-                                        <div class="mt-2 p-4 rounded-r-lg shadow-sm" style="background-color: ${colorHex}10; border-left: 4px solid ${colorHex}">
-                                            <div class="flex justify-between font-bold text-xl" style="color: ${colorHex}">
-                                                <span>Zu zahlender Betrag</span>
-                                                <span>${formatCurrency(newZahlbetrag)}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Footer -->
-                                <div class="mt-auto pt-6 border-t border-slate-200 text-xs text-slate-500 grid grid-cols-3 gap-8 text-left pdf-footer avoid-break" style="break-inside: avoid; page-break-inside: avoid; position: static !important;">
-                                    <div>
-                                        <p class="font-semibold text-slate-700 mb-1">Unternehmen</p>
-                                        <p>${sanitize(state.einstellungen.firmenname)}</p>
-                                        ${state.einstellungen.adresse ? `<p class="mt-1">${sanitize(state.einstellungen.adresse).replace(/\n/g, '<br>')}</p>` : ''}
-                                    </div>
-                                    <div>
-                                        <p class="font-semibold text-slate-700 mb-1">Bankverbindung</p>
-                                        <p>${sanitize(state.einstellungen.bankname)}</p>
-                                        <p>IBAN: ${sanitize(state.einstellungen.iban)}</p>
-                                        <p>BIC: ${sanitize(state.einstellungen.bic)}</p>
-                                    </div>
-                                    <div>
-                                        <p class="font-semibold text-slate-700 mb-1">Rechtliches</p>
-                                        <p>Steuernummer / USt-IdNr:</p>
-                                        <p>${sanitize(state.einstellungen.steuer)}</p>
-                                    </div>
-                                </div>
+                            ${MAHNGEBUHR > 0 ? `
+                            <div class="flex justify-between" style="color: ${colorHex}">
+                                <span>+ Mahngebühr:</span>
+                                <span class="tabular-nums font-mono font-medium">${formatCurrency(MAHNGEBUHR)}</span>
+                            </div>` : ''}
+                            <div class="mt-2 pt-2 border-t-2 border-slate-800 flex justify-between items-baseline">
+                                <span class="font-bold text-xs uppercase tracking-wider text-slate-900">Zu zahlender Betrag</span>
+                                <span class="font-black text-lg font-mono" style="color: ${colorHex}">${formatCurrency(newZahlbetrag)}</span>
                             </div>
                         </div>
-                    `;
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fußzeile (DIN 5008 3-Spalten) -->
+            <div class="pt-3 border-t border-slate-200 text-[10px] text-slate-500 grid grid-cols-3 gap-6 leading-snug pdf-footer avoid-break mt-auto" style="break-inside: avoid; page-break-inside: avoid;">
+                <div>
+                    <p class="font-bold text-slate-700 uppercase tracking-wider text-[9px] mb-0.5">Unternehmen</p>
+                    <p class="font-medium text-slate-800">${sanitize(state.einstellungen.firmenname)}</p>
+                    ${state.einstellungen.adresse ? `<p class="text-slate-600 mt-0.5">${sanitize(state.einstellungen.adresse).replace(/\n/g, '<br>')}</p>` : ''}
+                </div>
+                <div>
+                    <p class="font-bold text-slate-700 uppercase tracking-wider text-[9px] mb-0.5">Bankverbindung</p>
+                    <p class="font-medium text-slate-800">${sanitize(state.einstellungen.bankname)}</p>
+                    <p class="font-mono text-slate-700">IBAN: ${formattedIban}</p>
+                    <p class="font-mono text-slate-700">BIC: ${sanitize(state.einstellungen.bic)}</p>
+                </div>
+                <div>
+                    <p class="font-bold text-slate-700 uppercase tracking-wider text-[9px] mb-0.5">Rechtliches & Steuer</p>
+                    <p>Steuernummer / USt-IdNr.:</p>
+                    <p class="font-medium text-slate-800 font-mono">${sanitize(state.einstellungen.steuer)}</p>
+                </div>
+            </div>
+        </div>
+    `;
 }
 
 // --- PDF Preview Logic ---
@@ -1615,6 +1743,12 @@ async function executePrint(mode = 'print') {
         const invoiceElement = document.getElementById('invoice-paper') || previewContainer.querySelector('#invoice-paper') || previewContainer.firstElementChild || previewContainer;
         const filename = previewContainer.dataset.filename || 'Rechnung.pdf';
 
+        // Synchronisiere #print-template für Nativ-Electron printToPDF und Browserdruck
+        if (printTemplate) {
+            printTemplate.innerHTML = invoiceElement.outerHTML || previewContainer.innerHTML;
+        }
+        await new Promise(resolve => setTimeout(resolve, 60));
+
         if (mode === 'save') {
             if (window.api && typeof window.api.savePdf === 'function') {
                 // 100% Nativ Electron - Absolut Freeze-sicher (Bypass html2pdf & html2canvas)
@@ -1629,7 +1763,7 @@ async function executePrint(mode = 'print') {
                 // Fallback nur für normale Webbrowser (ohne Electron window.api)
                 if (typeof html2pdf !== 'undefined') {
                     const opt = {
-                        margin: [10, 10, 10, 10],
+                        margin: [12, 15, 12, 15],
                         filename: filename,
                         image: { type: 'jpeg', quality: 0.98 },
                         html2canvas: { scale: 2, useCORS: true, allowTaint: true, windowWidth: 1024, logging: false },
@@ -1646,9 +1780,6 @@ async function executePrint(mode = 'print') {
             }
         } else {
             // Druck-Modus
-            if (printTemplate) printTemplate.innerHTML = invoiceElement.outerHTML || previewContainer.innerHTML;
-            await new Promise(resolve => setTimeout(resolve, 150));
-
             if (window.api && typeof window.api.printDocument === 'function') {
                 const printRes = await window.api.printDocument();
                 if (printRes && printRes.success) {
