@@ -585,9 +585,13 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
         `;
 
         if (rech.sicherheitseinbehalt > 0) {
+            const sichPct = (rech.sicherheitseinbehalt_prozent !== undefined && rech.sicherheitseinbehalt_prozent !== null && rech.sicherheitseinbehalt_prozent !== 0)
+                ? rech.sicherheitseinbehalt_prozent
+                : (leistungsstandNetto > 0 ? (Math.round((rech.sicherheitseinbehalt / leistungsstandNetto) * 1000) / 10) : null);
+            const sichLabel = `Abzug Sicherheitseinbehalt${sichPct ? ` (${sichPct}%)` : ''}:`;
             deductionsHtml += `
                 <div class="flex justify-between text-xs text-amber-600 py-0.5">
-                    <span>Abzug Sicherheitseinbehalt:</span>
+                    <span>${sichLabel}</span>
                     <span class="tabular-nums font-mono">-${formatCurrency(rech.sicherheitseinbehalt)}</span>
                 </div>
             `;
@@ -707,14 +711,19 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
         const qrDataUrl = await window.api.generateQrCode(epcString);
         if (qrDataUrl) {
             qrHtml = `
-                <div class="flex items-center gap-3 p-2 bg-slate-50 rounded-lg border border-slate-200/70 w-full">
-                    <img src="${qrDataUrl}" class="w-14 h-14 rounded bg-white p-0.5 border border-slate-200 shrink-0" alt="GiroCode">
-                    <div class="text-[10px] text-slate-600 flex-1 leading-tight">
-                        <p class="font-bold text-slate-800 mb-0.5 flex items-center gap-1">
-                            <span class="material-symbols-outlined text-[13px] text-primary">qr_code_scanner</span>
+                <div class="flex items-center gap-3.5 p-2.5 bg-slate-50 rounded-lg border border-slate-200/80 w-full">
+                    <img src="${qrDataUrl}" class="w-28 h-28 rounded bg-white p-1 border border-slate-200 shrink-0" style="width: 28mm; height: 28mm;" alt="GiroCode">
+                    <div class="text-xs text-slate-600 flex-1 leading-snug">
+                        <p class="font-bold text-slate-800 mb-1 flex items-center gap-1.5 text-xs">
+                            <span class="material-symbols-outlined text-[15px] text-primary">qr_code_scanner</span>
                             GiroCode / QR-Rechnung
                         </p>
-                        <p class="text-slate-500">Mit Banking-App scannen &amp; Überweisungsdaten automatisch übernehmen.</p>
+                        <p class="text-[11px] text-slate-600 leading-snug mb-1">
+                            Mit Banking-App scannen, um Betrag &amp; Überweisungsdaten automatisch und fehlerfrei zu übernehmen.
+                        </p>
+                        <p class="text-[10px] text-slate-400">
+                            Empfänger, IBAN &amp; Rechnungsnummer werden direkt ausgefüllt.
+                        </p>
                     </div>
                 </div>
             `;
@@ -1335,14 +1344,19 @@ window.confirmMahnungLevel = async function() {
             const qrDataUrl = await window.api.generateQrCode(epcString);
             if (qrDataUrl) {
                 qrHtml = `
-                    <div class="flex items-center gap-3 p-2 bg-slate-50 rounded-lg border border-slate-200/70 w-full">
-                        <img src="${qrDataUrl}" class="w-14 h-14 rounded bg-white p-0.5 border border-slate-200 shrink-0" alt="GiroCode">
-                        <div class="text-[10px] text-slate-600 flex-1 leading-tight">
-                            <p class="font-bold text-slate-800 mb-0.5 flex items-center gap-1">
-                                <span class="material-symbols-outlined text-[13px] text-primary">qr_code_scanner</span>
+                    <div class="flex items-center gap-3.5 p-2.5 bg-slate-50 rounded-lg border border-slate-200/70 w-full">
+                        <img src="${qrDataUrl}" class="w-28 h-28 rounded bg-white p-1 border border-slate-200 shrink-0" style="width: 28mm; height: 28mm;" alt="GiroCode">
+                        <div class="text-xs text-slate-600 flex-1 leading-snug">
+                            <p class="font-bold text-slate-800 mb-1 flex items-center gap-1.5 text-xs">
+                                <span class="material-symbols-outlined text-[15px] text-primary">qr_code_scanner</span>
                                 GiroCode / Überweisung
                             </p>
-                            <p class="text-slate-500">Mit Banking-App scannen &amp; ${formatCurrency(newZahlbetrag)} überweisen.</p>
+                            <p class="text-[11px] text-slate-600 leading-snug mb-1">
+                                Mit Banking-App scannen &amp; ${formatCurrency(newZahlbetrag)} direkt überweisen.
+                            </p>
+                            <p class="text-[10px] text-slate-400">
+                                Rechnungsnummer &amp; Mahnbetrag werden direkt übernommen.
+                            </p>
                         </div>
                     </div>
                 `;

@@ -130,11 +130,16 @@ function setupRechnungModalUI() {
     document.getElementById('rechnung-global-rabatt').value = '';
     setRabattType('%');
     document.getElementById('rechnung-anzahlung').value = '';
+    const sichProzentInput = document.getElementById('rechnung-sicherheitseinbehalt-prozent');
+    const sichHandwerkInput = document.getElementById('rechnung-handwerk-sicherheitseinbehalt');
+    if (sichProzentInput) sichProzentInput.value = '';
+    if (sichHandwerkInput) sichHandwerkInput.value = '';
     if (document.getElementById('rechnung-skonto-tage')) document.getElementById('rechnung-skonto-tage').value = '';
     if (document.getElementById('rechnung-skonto-prozent')) document.getElementById('rechnung-skonto-prozent').value = '';
 
     // Defaults: Deutsches System (DD.MM.YYYY & Arbeitstage-Zahlungsziel)
-    const todayIso = typeof formatDateISO === 'function' ? formatDateISO(new Date()) : new Date().toISOString().split('T')[0];
+    const today = new Date();
+    const todayIso = typeof formatDateISO === 'function' ? formatDateISO(today) : today.toISOString().split('T')[0];
     document.getElementById('rechnung-datum').value = todayIso;
     const zZiel = parseInt(state.einstellungen?.zahlungsziel, 10) || 14;
     const werktageInput = document.getElementById('rechnung-werktage');
@@ -228,6 +233,22 @@ function applyRechnungReadOnlyMode(existing, form, submitBtn) {
     document.getElementById('rechnung-status').value = existing.status;
     if (document.getElementById('rechnung-skonto-tage')) document.getElementById('rechnung-skonto-tage').value = existing.skonto_tage || '';
     if (document.getElementById('rechnung-skonto-prozent')) document.getElementById('rechnung-skonto-prozent').value = existing.skonto_prozent || '';
+
+    if (existing.eingabemodus) {
+        setEingabeModus(existing.eingabemodus);
+    }
+    const rabattValRO = (existing.globalRabattValue !== undefined && existing.globalRabattValue !== null && existing.globalRabattValue !== 0) ? existing.globalRabattValue : '';
+    if (document.getElementById('rechnung-global-rabatt')) document.getElementById('rechnung-global-rabatt').value = rabattValRO;
+    if (typeof setRabattType === 'function') setRabattType(existing.globalRabattType || '%');
+    if (document.getElementById('rechnung-anzahlung')) document.getElementById('rechnung-anzahlung').value = existing.anzahlung || '';
+
+    const sichValRO = (existing.sicherheitseinbehalt_prozent !== undefined && existing.sicherheitseinbehalt_prozent !== null && existing.sicherheitseinbehalt_prozent !== 0)
+        ? existing.sicherheitseinbehalt_prozent
+        : ((existing.sicherheitseinbehalt && existing.netto) ? (Math.round((existing.sicherheitseinbehalt / existing.netto) * 1000) / 10) : '');
+    const sichEl1RO = document.getElementById('rechnung-sicherheitseinbehalt-prozent');
+    const sichEl2RO = document.getElementById('rechnung-handwerk-sicherheitseinbehalt');
+    if (sichEl1RO) sichEl1RO.value = sichValRO;
+    if (sichEl2RO) sichEl2RO.value = sichValRO;
 
     document.getElementById('rechnung-art').value = existing.rechnungsart || 'REGULAER';
     document.getElementById('rechnung-leistungszeitraum-von').value = existing.leistungszeitraum_von || '';
@@ -339,6 +360,14 @@ function applyRechnungEditMode(existing, form, submitBtn) {
     setRabattType(existing.globalRabattType || '%');
     document.getElementById('rechnung-anzahlung').value = existing.anzahlung || '';
 
+    const sichValEdit = (existing.sicherheitseinbehalt_prozent !== undefined && existing.sicherheitseinbehalt_prozent !== null && existing.sicherheitseinbehalt_prozent !== 0)
+        ? existing.sicherheitseinbehalt_prozent
+        : ((existing.sicherheitseinbehalt && existing.netto) ? (Math.round((existing.sicherheitseinbehalt / existing.netto) * 1000) / 10) : '');
+    const sichEl1Edit = document.getElementById('rechnung-sicherheitseinbehalt-prozent');
+    const sichEl2Edit = document.getElementById('rechnung-handwerk-sicherheitseinbehalt');
+    if (sichEl1Edit) sichEl1Edit.value = sichValEdit;
+    if (sichEl2Edit) sichEl2Edit.value = sichValEdit;
+
     state.currentRechnungPositionen = JSON.parse(JSON.stringify(existing.positionen || []));
     state.currentRechnungVerrechnungen = JSON.parse(JSON.stringify(existing.verrechnungen || []));
     
@@ -370,6 +399,10 @@ function applyRechnungNewMode(form, submitBtn) {
     handleRechtlicheCheckboxes();
     document.getElementById('rechnung-vortext').value = '';
     document.getElementById('rechnung-fusstext').value = '';
+    const sichEl1New = document.getElementById('rechnung-sicherheitseinbehalt-prozent');
+    const sichEl2New = document.getElementById('rechnung-handwerk-sicherheitseinbehalt');
+    if (sichEl1New) sichEl1New.value = '';
+    if (sichEl2New) sichEl2New.value = '';
 
     const inputs = form.querySelectorAll('input, select, textarea');
     inputs.forEach(el => el.disabled = false);
@@ -423,8 +456,6 @@ function setRechnungCustomerType(type, options = {}) {
     if (btnB2G) btnB2G.className = (selectedType === 'B2G') ? activeClass : inactiveClass;
 
     const pKunde = document.getElementById('rechnung-ist-privatkunde');
-    const bauabzug = document.getElementById('rechnung-unterliegt-bauabzugsteuer');
-    const ustg13b = document.getElementById('rechnung-13b-ustg');
 
     if (selectedType === 'B2G') {
         if (typeBadge) {
@@ -455,10 +486,7 @@ function setRechnungCustomerType(type, options = {}) {
 
         if (pKunde) {
             pKunde.checked = false;
-            pKunde.disabled = true;
         }
-        if (bauabzug) bauabzug.disabled = false;
-        if (ustg13b) ustg13b.disabled = false;
 
         if (b2gSection) {
             b2gSection.classList.remove('hidden');
@@ -495,10 +523,7 @@ function setRechnungCustomerType(type, options = {}) {
 
         if (pKunde) {
             pKunde.checked = false;
-            pKunde.disabled = false;
         }
-        if (bauabzug) bauabzug.disabled = false;
-        if (ustg13b) ustg13b.disabled = false;
 
         applyUnternehmensartVisibility();
         if (b2gSection) {
@@ -528,19 +553,8 @@ function setRechnungCustomerType(type, options = {}) {
         }
         setEingabeModus('brutto', { force: true });
 
-        if (pKunde) {
+        if (pKunde && !options.preserveMode) {
             pKunde.checked = true;
-            pKunde.disabled = false;
-        }
-        if (bauabzug) {
-            bauabzug.checked = false;
-            bauabzug.disabled = true;
-            bauabzug.title = 'Bauabzugsteuer nach § 48b EStG gilt nur im gewerblichen Bereich (B2B/B2G).';
-        }
-        if (ustg13b) {
-            ustg13b.checked = false;
-            ustg13b.disabled = true;
-            ustg13b.title = 'Reverse Charge nach § 13b UStG ist für Privatkunden (B2C) gesetzlich unzulässig.';
         }
 
         if (b2gSection) {
@@ -548,6 +562,8 @@ function setRechnungCustomerType(type, options = {}) {
             b2gSection.classList.remove('ring-2', 'ring-blue-400/40');
         }
     }
+
+    handleRechtlicheCheckboxes();
 }
 
 function setEingabeModus(mode, options = {}) {
@@ -651,6 +667,10 @@ function setupAngebotModalUI() {
     state.currentRechnungPositionen = [];
     document.getElementById('rechnung-form').reset();
     document.getElementById('rechnung-id').value = '';
+    const sichEl1Ang = document.getElementById('rechnung-sicherheitseinbehalt-prozent');
+    const sichEl2Ang = document.getElementById('rechnung-handwerk-sicherheitseinbehalt');
+    if (sichEl1Ang) sichEl1Ang.value = '';
+    if (sichEl2Ang) sichEl2Ang.value = '';
     document.getElementById('rechnung-modal').classList.remove('hidden');
 
     // Reset specific UI
@@ -892,14 +912,17 @@ function handleKundeSelect(event) {
         }
 
         // Checkbox defaults for B2C/B2B
+        const privCb = document.getElementById('rechnung-ist-privatkunde');
         if (cType === 'B2C' || kunde.ist_privatkunde) {
-            const privCb = document.getElementById('rechnung-ist-privatkunde');
             if (privCb) privCb.checked = true;
+        } else {
+            if (privCb) privCb.checked = false;
         }
         if (cType === 'B2B' && kunde.ist_bauleistender_13b) {
             const cb13b = document.getElementById('rechnung-13b-ustg');
             if (cb13b) cb13b.checked = true;
         }
+        handleRechtlicheCheckboxes();
 
         // § 48b Subunternehmer Warning Check
         if (typeof SubcontractorController !== 'undefined') {
@@ -950,6 +973,9 @@ function collectERechnungExportData() {
         globalRabattAbzug: state.currentRechnungTotals ? state.currentRechnungTotals.rabattAbzug : 0,
         anzahlung: state.currentRechnungTotals ? state.currentRechnungTotals.anzahlung : 0,
         sicherheitseinbehalt: state.currentRechnungTotals ? state.currentRechnungTotals.sicherheitseinbehalt : 0,
+        sicherheitseinbehalt_prozent: (state.currentRechnungTotals && state.currentRechnungTotals.sicherheitseinbehalt_prozent !== undefined)
+            ? state.currentRechnungTotals.sicherheitseinbehalt_prozent
+            : (parseFloat(document.getElementById('rechnung-sicherheitseinbehalt-prozent')?.value || document.getElementById('rechnung-handwerk-sicherheitseinbehalt')?.value) || 0),
         zahlbetrag: state.currentRechnungTotals ? state.currentRechnungTotals.zahlbetrag : 0,
         verrechnungen: [...(state.currentRechnungVerrechnungen || [])],
         positionen: [...(state.currentRechnungPositionen || [])],
@@ -957,8 +983,8 @@ function collectERechnungExportData() {
         leistungszeitraum_von: document.getElementById('rechnung-leistungszeitraum-von')?.value || '',
         leistungszeitraum_bis: document.getElementById('rechnung-leistungszeitraum-bis')?.value || '',
         vob_vereinbart: document.getElementById('rechnung-vob-vereinbart')?.checked ? 1 : 0,
-        ist_privatkunde: document.getElementById('rechnung-ist-privatkunde')?.checked ? 1 : 0,
-        unterliegt_bauabzugsteuer: document.getElementById('rechnung-unterliegt-bauabzugsteuer')?.checked ? 1 : 0,
+        ist_privatkunde: (customer_type === 'B2C' && document.getElementById('rechnung-ist-privatkunde')?.checked) ? 1 : 0,
+        unterliegt_bauabzugsteuer: (customer_type !== 'B2C' && document.getElementById('rechnung-unterliegt-bauabzugsteuer')?.checked) ? 1 : 0,
         vortext: document.getElementById('rechnung-vortext')?.value || '',
         fusstext: document.getElementById('rechnung-fusstext')?.value || '',
         kumulierte_leistung_netto: state.currentRechnungTotals ? state.currentRechnungTotals.kumulierte_leistung_netto : 0
@@ -968,12 +994,13 @@ function collectERechnungExportData() {
 }
 
 function validateERechnungForB2G(currentDoc, customer) {
-    if (typeof EInvoiceEngine === 'undefined') {
+    const engine = (typeof EInvoiceEngine !== 'undefined') ? EInvoiceEngine : (window.EInvoiceEngine || null);
+    if (!engine) {
         showToast('E-Rechnungs-Engine nicht verfügbar.', 'error');
         return false;
     }
     // Echtes Gate: Kundentyp bleibt unverändert, B2G-Pflichten greifen nur bei echten B2G-Kunden
-    const validation = EInvoiceEngine.validateForEN16931(currentDoc, customer, state.einstellungen);
+    const validation = engine.validateForEN16931(currentDoc, customer, state.einstellungen);
     if (!validation.isValid) {
         showToast('E-Rechnungs-Export blockiert - Validierungsfehler: ' + validation.errors.join(' '), 'error');
         return false;
@@ -1034,16 +1061,47 @@ async function exportXRechnungXMLFromModal() {
     const { currentDoc, customer, nr } = collectERechnungExportData();
     if (!validateERechnungForB2G(currentDoc, customer)) return;
 
-    const xml = EInvoiceEngine.generateXRechnungXML(currentDoc, customer, state.einstellungen);
-    const blob = new Blob([xml], { type: 'application/xml;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `XRechnung_${nr}.xml`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast(`XRechnung XML für ${nr} heruntergeladen.`, 'success');
+    if (window.api && typeof window.api.exportXRechnungXml === 'function') {
+        try {
+            const res = await window.api.exportXRechnungXml({
+                doc: currentDoc,
+                customer,
+                fileNameHint: `XRechnung_${nr}.xml`
+            });
+            if (res && res.success) {
+                showToast(`XRechnung XML gespeichert: ${res.path}`, 'success');
+                return;
+            } else if (res && res.cancelled) {
+                showToast('XRechnung-Export abgebrochen.', 'info');
+                return;
+            } else if (res && res.validationErrors) {
+                showToast('XRechnung-Export blockiert - Validierungsfehler: ' + res.validationErrors.join(' '), 'error');
+                return;
+            } else if (res && res.error) {
+                showToast('XRechnung-Export fehlgeschlagen: ' + res.error, 'error');
+                return;
+            }
+        } catch (ipcErr) {
+            console.warn('IPC exportXRechnungXml fehlgeschlagen, nutze Fallback:', ipcErr);
+        }
+    }
+
+    const engine = (typeof EInvoiceEngine !== 'undefined') ? EInvoiceEngine : (window.EInvoiceEngine || null);
+    if (engine) {
+        const xml = engine.generateXRechnungXML(currentDoc, customer, state.einstellungen);
+        const blob = new Blob([xml], { type: 'application/xml;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `XRechnung_${nr}.xml`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        showToast(`XRechnung XML für ${nr} heruntergeladen.`, 'success');
+    } else {
+        showToast('E-Rechnungs-Engine nicht bereit.', 'error');
+    }
 }
 
 // Line Items
@@ -1092,7 +1150,7 @@ function handleArtikelAutocomplete(posId, query) {
         pos.artikelId = art.id;
         pos.preis = art.vk;
         pos.ek = art.ek; // Snapshot current purchase price
-        pos.name = '';
+        pos.name = art.name;
         pos.mwst = art.mwst !== undefined ? art.mwst : 19;
         pos.kostenart = art.kostenart || 'MATERIAL';
         pos.lohnanteil_prozent = art.lohnanteil_prozent || 0;
@@ -1119,6 +1177,7 @@ function handlePositionChange(id, field, value) {
         const art = state.artikel.find(a => a.id === parseInt(value));
         pos.artikelId = parseInt(value);
         if (art) {
+            pos.name = art.name;
             pos.preis = art.vk;
             pos.ek = art.ek; // Snapshot current purchase price
             pos.mwst = art.mwst !== undefined ? art.mwst : 19;
@@ -1388,6 +1447,23 @@ function setRabattType(type) {
     calculateRechnungTotals();
 }
 
+function syncSicherheitseinbehalt(sourceId) {
+    const src = document.getElementById(sourceId);
+    if (!src) return;
+    const val = src.value;
+    const targetId = sourceId === 'rechnung-sicherheitseinbehalt-prozent'
+        ? 'rechnung-handwerk-sicherheitseinbehalt'
+        : 'rechnung-sicherheitseinbehalt-prozent';
+    const target = document.getElementById(targetId);
+    if (target && target.value !== val) {
+        target.value = val;
+    }
+    if (typeof calculateRechnungTotals === 'function') {
+        calculateRechnungTotals();
+    }
+}
+window.syncSicherheitseinbehalt = syncSicherheitseinbehalt;
+
 
 function calculateRechnungTotals() {
     if (!window.invoiceView && window.InvoiceView) {
@@ -1429,6 +1505,7 @@ function calculateRechnungTotals() {
         rabattAbzug: calculated.abzug,
         anzahlung: calculated.anzahlung,
         sicherheitseinbehalt: calculated.sicherheitseinbehaltNetto,
+        sicherheitseinbehalt_prozent: calculated.sicherheitseinbehaltProzent,
         kumulierte_leistung_netto: calculated.nettoNachRabatt,
         zahlbetrag: calculated.zahlbetrag,
         netto13b: calculated.totals13bNetto,
@@ -1498,12 +1575,15 @@ async function saveRechnung() {
         leistungszeitraum_bis: document.getElementById('rechnung-leistungszeitraum-bis') ? document.getElementById('rechnung-leistungszeitraum-bis').value : '',
         baustellen_adresse: document.getElementById('rechnung-baustellen-adresse') ? document.getElementById('rechnung-baustellen-adresse').value : '',
         vob_vereinbart: document.getElementById('rechnung-vob-vereinbart')?.checked ? 1 : 0,
-        ist_privatkunde: document.getElementById('rechnung-ist-privatkunde')?.checked ? 1 : 0,
-        unterliegt_bauabzugsteuer: document.getElementById('rechnung-unterliegt-bauabzugsteuer')?.checked ? 1 : 0,
-        unterliegt_13b: document.getElementById('rechnung-13b-ustg')?.checked ? 1 : 0,
+        ist_privatkunde: (customer_type === 'B2C' && document.getElementById('rechnung-ist-privatkunde')?.checked) ? 1 : 0,
+        unterliegt_bauabzugsteuer: (customer_type !== 'B2C' && document.getElementById('rechnung-unterliegt-bauabzugsteuer')?.checked) ? 1 : 0,
+        unterliegt_13b: (customer_type !== 'B2C' && document.getElementById('rechnung-13b-ustg')?.checked) ? 1 : 0,
         vortext: document.getElementById('rechnung-vortext') ? document.getElementById('rechnung-vortext').value : '',
         fusstext: document.getElementById('rechnung-fusstext') ? document.getElementById('rechnung-fusstext').value : '',
         sicherheitseinbehalt: state.currentRechnungTotals ? state.currentRechnungTotals.sicherheitseinbehalt : 0,
+        sicherheitseinbehalt_prozent: (state.currentRechnungTotals && state.currentRechnungTotals.sicherheitseinbehalt_prozent !== undefined)
+            ? state.currentRechnungTotals.sicherheitseinbehalt_prozent
+            : (parseFloat(document.getElementById('rechnung-sicherheitseinbehalt-prozent')?.value || document.getElementById('rechnung-handwerk-sicherheitseinbehalt')?.value) || 0),
         kumulierte_leistung_netto: state.currentRechnungTotals ? state.currentRechnungTotals.kumulierte_leistung_netto : 0,
         skonto_tage: document.getElementById('rechnung-skonto-tage')?.value ? parseInt(document.getElementById('rechnung-skonto-tage').value, 10) : null,
         skonto_prozent: document.getElementById('rechnung-skonto-prozent')?.value ? parseFloat(document.getElementById('rechnung-skonto-prozent').value) : null,
@@ -1517,6 +1597,9 @@ async function saveRechnung() {
         let art = null;
         if (pos.artikelId) {
             art = state.artikel ? state.artikel.find(a => a.id === pos.artikelId) : null;
+        }
+        if (!pos.name && art && art.name) {
+            pos.name = art.name;
         }
         const kostenart = pos.kostenart || (art ? art.kostenart : 'MATERIAL');
         const lohnanteilPct = pos.lohnanteil_prozent !== undefined ? pos.lohnanteil_prozent : (art ? art.lohnanteil_prozent : 0);
@@ -1788,7 +1871,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const artSelect = document.getElementById('rechnung-art');
     const projektSelect = document.getElementById('rechnung-projekt');
     if (artSelect) artSelect.addEventListener('change', toggleAbschlagsKumulationUI);
-    if (projektSelect) projektSelect.addEventListener('change', populateVerrechnungSelect);
+    if (projektSelect) {
+        projektSelect.addEventListener('change', () => {
+            populateVerrechnungSelect();
+            if (projektSelect.value && state.projekte) {
+                const proj = state.projekte.find(p => parseInt(p.id) === parseInt(projektSelect.value));
+                if (proj && proj.sicherheitseinbehalt_prozent > 0) {
+                    const sichEl1 = document.getElementById('rechnung-sicherheitseinbehalt-prozent');
+                    const sichEl2 = document.getElementById('rechnung-handwerk-sicherheitseinbehalt');
+                    if ((!sichEl1 || !sichEl1.value) && (!sichEl2 || !sichEl2.value)) {
+                        const val = proj.sicherheitseinbehalt_prozent.toString();
+                        if (sichEl1) sichEl1.value = val;
+                        if (sichEl2) sichEl2.value = val;
+                        if (typeof calculateRechnungTotals === 'function') calculateRechnungTotals();
+                    }
+                }
+            }
+        });
+    }
+    const vobCheckbox = document.getElementById('rechnung-vob-vereinbart');
+    if (vobCheckbox) {
+        vobCheckbox.addEventListener('change', () => {
+            if (vobCheckbox.checked) {
+                const sichEl1 = document.getElementById('rechnung-sicherheitseinbehalt-prozent');
+                const sichEl2 = document.getElementById('rechnung-handwerk-sicherheitseinbehalt');
+                if ((!sichEl1 || !sichEl1.value) && (!sichEl2 || !sichEl2.value)) {
+                    if (sichEl1) sichEl1.value = '5.0';
+                    if (sichEl2) sichEl2.value = '5.0';
+                    if (typeof calculateRechnungTotals === 'function') calculateRechnungTotals();
+                }
+            }
+        });
+    }
     initRechnungDateHandlers();
     applyUnternehmensartVisibility();
 });
@@ -1934,28 +2048,62 @@ function applyUnternehmensartVisibility() {
 }
 
 function handleRechtlicheCheckboxes(triggeredById) {
+    const vob = document.getElementById('rechnung-vob-vereinbart');
     const pKunde = document.getElementById('rechnung-ist-privatkunde');
     const bauabzug = document.getElementById('rechnung-unterliegt-bauabzugsteuer');
     const ustg13b = document.getElementById('rechnung-13b-ustg');
 
     if (!pKunde || !bauabzug || !ustg13b) return;
 
-    if (pKunde.checked) {
-        bauabzug.checked = false;
-        bauabzug.disabled = true;
-        ustg13b.checked = false;
-        ustg13b.disabled = true;
-    } else {
-        bauabzug.disabled = false;
-        ustg13b.disabled = false;
-        
-        if (bauabzug.checked || ustg13b.checked) {
-            pKunde.checked = false;
-            pKunde.disabled = true;
+    const currentType = document.getElementById('rechnung-customer-type')?.value || 'B2B';
+    const isReadOnly = document.getElementById('rechnung-modal-submit')?.classList.contains('hidden');
+
+    function applyCheckboxRule(inputEl, allowed, forbiddenReason) {
+        if (!inputEl) return;
+        const label = inputEl.closest('label');
+        if (isReadOnly) {
+            inputEl.disabled = true;
+            if (label) {
+                label.classList.add('cursor-default');
+                label.classList.remove('cursor-pointer');
+            }
+            return;
+        }
+
+        if (!allowed) {
+            inputEl.checked = false;
+            inputEl.disabled = true;
+            if (forbiddenReason) inputEl.title = forbiddenReason;
+            if (label) {
+                label.classList.add('opacity-40', 'cursor-not-allowed');
+                label.classList.remove('cursor-pointer');
+                if (forbiddenReason) label.title = forbiddenReason;
+            }
         } else {
-            pKunde.disabled = false;
+            inputEl.disabled = false;
+            inputEl.removeAttribute('title');
+            if (label) {
+                label.classList.remove('opacity-40', 'cursor-not-allowed');
+                label.classList.add('cursor-pointer');
+                label.removeAttribute('title');
+            }
         }
     }
+
+    if (currentType === 'B2C') {
+        // B2C: nur 1. (VOB/B) und 2. (Privatkunde) können gewählt werden, Rest kann nicht
+        applyCheckboxRule(vob, true);
+        applyCheckboxRule(pKunde, true);
+        applyCheckboxRule(bauabzug, false, 'Bauabzugsteuer nach § 48 EStG gilt nur im gewerblichen Bereich (B2B/B2G).');
+        applyCheckboxRule(ustg13b, false, 'Reverse Charge nach § 13b UStG ist für Privatkunden (B2C) gesetzlich unzulässig.');
+    } else {
+        // B2B & B2G: können 1. (VOB/B), 3. (Bauabzugsteuer) und 4./letzte (§ 13b) wählen. 2. (Privatkunde) kann nicht
+        applyCheckboxRule(vob, true);
+        applyCheckboxRule(pKunde, false, 'Privatkunde kann bei Geschäftskunden oder Behörden (B2B/B2G) nicht gewählt werden.');
+        applyCheckboxRule(bauabzug, true);
+        applyCheckboxRule(ustg13b, true);
+    }
+
     if (typeof renderRechnungPositionen === 'function') {
         renderRechnungPositionen();
     } else if (typeof calculateRechnungTotals === 'function') {

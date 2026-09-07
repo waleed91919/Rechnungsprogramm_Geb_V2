@@ -1,5 +1,26 @@
 # Changelog / Fortschritt
 
+## 08.09.2026 (Rechnungsmodal-Bereinigung & Integration von „Sicherheitseinbehalt in %“)
+- **Bereinigung des Rechnungsmodals (Download-Optionen):**
+  - [`code.html`](../code.html): Die vorzeitigen Export-Schaltflächen („XRechnung XML herunterladen“ und „ZUGFeRD-PDF herunterladen“) im B2G-Bereich des Erstellungsdialogs (`#rechnung-b2g-section`) entfernt. Der strukturierte Export erfolgt GoBD-konform nach der Belegspeicherung aus der Rechnungsliste bzw. Detailansicht.
+- **Integration von „Sicherheitseinbehalt in %“:**
+  - [`schema.js`](../schema.js): Migration hinzugefügt (`ALTER TABLE dokumente ADD COLUMN sicherheitseinbehalt_prozent REAL DEFAULT 0`).
+  - [`db.js`](../db.js): `saveDocument` und `bulkSaveDocuments` um die Persistenz von `sicherheitseinbehalt_prozent` erweitert.
+  - [`code.html`](../code.html): Zwei synchronisierte Eingabefelder mit `%`-Symbol integriert (Handwerks-/Baustellenbereich `#rechnung-handwerk-sicherheitseinbehalt` und Modifiers-Bereich der Summenbox `#rechnung-sicherheitseinbehalt-prozent`).
+  - [`views/InvoiceView.js`](../views/InvoiceView.js): `getFormData()` liest vorrangig die Modal-Eingaben aus (mit Fallback auf das ausgewählte Projekt). Dynamische Einbehalt-Zeile (`Sicherheitseinbehalt Netto (X%)`) in `updateTotalsUI()` integriert.
+  - [`controllers/InvoiceController.js`](../controllers/InvoiceController.js): Cent-genaue Berechnung des Sicherheitseinbehalts auf Netto-Ebene nach VOB/B § 17. Die Umsatzsteuer nach § 13 UStG bleibt unberührt; der Zahlbetrag wird gemindert.
+  - [`js/editor.js`](../js/editor.js):
+    * `syncSicherheitseinbehalt(sourceId)` für bidirektionale UI-Synchronisation bereitgestellt.
+    * `calculateRechnungTotals()` und `saveRechnung()` auf `sicherheitseinbehalt_prozent` synchronisiert.
+    * Wiederherstellung in `applyRechnungReadOnlyMode()` und `applyRechnungEditMode()` sichergestellt.
+    * Auto-Vorschlag (5,0 %) bei VOB/B-Checkbox-Aktivierung oder Projekt-Standardwerten angebunden.
+  - [`js/einstellungen.js`](../js/einstellungen.js): Ausweisung des Einbehalts mit Prozentangabe im PDF-Druck (`Abzug Sicherheitseinbehalt (X%): -Y,YY €`).
+  - [`tests/invoice_controller.test.js`](../tests/invoice_controller.test.js): Neuer automatisierter Testfall für prozentuale Einbehalte hinzugefügt.
+- **Dokumentation:**
+  - [`doc/session_summary_2026-09-08_sicherheitseinbehalt_und_rechnungsmodal_anpassungen.md`](session_summary_2026-09-08_sicherheitseinbehalt_und_rechnungsmodal_anpassungen.md): Ausführliches Protokoll der Implementierung, Rechtsgrundlagen und Testergebnisse.
+- **Verifikation:**
+  - 233 von 233 automatisierten Tests bestanden (`node --test tests/*.test.js`, 100% Pass).
+
 ## 07.09.2026 (Rechnungs-Layoutoptimierung: Behebung von Leerraum & Formular-Verankerung nach DIN 5008)
 - **Problembehebung Leerraum auf Rechnungen (Formular-Layout):**
   - [`code.html`](../code.html): Druck-CSS (`@media print`) überarbeitet. Entfernung von `min-height: 0; display: block;` zugunsten von `min-height: calc(297mm - 24mm); display: flex; flex-direction: column; justify-content: space-between;`. Paginierung und Ränder auf normierte A4-Druckmaße (`12mm 15mm`) angepasst.

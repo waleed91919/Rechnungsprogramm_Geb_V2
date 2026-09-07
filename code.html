@@ -5288,16 +5288,6 @@
                                         </select>
                                     </div>
                                 </div>
-                                <div class="mt-4 pt-3 border-t border-blue-200 flex justify-end gap-3">
-                                    <button type="button" onclick="exportXRechnungXMLFromModal()" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-bold transition-all shadow-sm flex items-center gap-1.5">
-                                        <span class="material-symbols-outlined text-[16px]">download</span>
-                                        XRechnung XML herunterladen
-                                    </button>
-                                    <button type="button" onclick="exportZugferdPdfFromModal()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md text-xs font-bold transition-all shadow-sm flex items-center gap-1.5">
-                                        <span class="material-symbols-outlined text-[16px]">receipt_long</span>
-                                        ZUGFeRD-PDF (PDF/A-3) herunterladen
-                                    </button>
-                                </div>
                             </div>
 
                             <!-- Erweiterte Angaben (Handwerksmodul) -->
@@ -5335,10 +5325,21 @@
                                             <input type="text" id="rechnung-baustellen-adresse" placeholder="Straße, PLZ Ort..."
                                                 class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
                                         </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Sicherheitseinbehalt (%)</label>
+                                            <div class="relative">
+                                                <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                                    <span class="text-slate-400 font-medium text-sm">%</span>
+                                                </div>
+                                                <input type="number" id="rechnung-handwerk-sicherheitseinbehalt" min="0" max="100" step="0.1"
+                                                    placeholder="z. B. 5.0" oninput="syncSicherheitseinbehalt('rechnung-handwerk-sicherheitseinbehalt')"
+                                                    class="w-full pl-4 pr-8 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                            </div>
+                                        </div>
                                     </div>
                                     <div class="space-y-4">
                                         <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer pt-2">
-                                            <input type="checkbox" id="rechnung-vob-vereinbart" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                            <input type="checkbox" id="rechnung-vob-vereinbart" onchange="handleRechtlicheCheckboxes()" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
                                             <span>VOB/B vereinbart</span>
                                         </label>
                                         <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer pt-2">
@@ -5500,6 +5501,18 @@
                                             <input type="number" id="rechnung-anzahlung" min="0" step="0.01"
                                                 placeholder="0.00" oninput="calculateRechnungTotals()"
                                                 class="w-full pl-8 pr-4 py-1.5 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-primary focus:border-primary">
+                                        </div>
+                                    </div>
+
+                                    <div class="bg-slate-50 border border-slate-200 p-4 rounded-lg shadow-sm">
+                                        <label class="block text-sm font-semibold text-slate-800 mb-2">Sicherheitseinbehalt (%)</label>
+                                        <div class="relative">
+                                            <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                                <span class="text-slate-400 font-medium text-sm">%</span>
+                                            </div>
+                                            <input type="number" id="rechnung-sicherheitseinbehalt-prozent" min="0" max="100" step="0.1"
+                                                placeholder="z. B. 5.0" oninput="syncSicherheitseinbehalt('rechnung-sicherheitseinbehalt-prozent')"
+                                                class="w-full pl-3 pr-8 py-1.5 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-primary focus:border-primary">
                                         </div>
                                     </div>
                                 </div>
@@ -6030,6 +6043,7 @@
     <script src="js/utils.js"></script>
     <script src="js/da11.js"></script>
     <script src="js/gaeb-x31.js"></script>
+    <script src="js/einvoice.js"></script>
     <script src="models/InvoiceModel.js"></script>
     <script src="controllers/InvoiceController.js"></script>
     <script src="views/InvoiceView.js"></script>

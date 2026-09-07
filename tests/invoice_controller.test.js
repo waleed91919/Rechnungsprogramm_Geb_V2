@@ -323,3 +323,19 @@ test('calculateTotals - keine Geister-Steuerzeilen bei reinen 19%-Rechnungen ode
     assert.strictEqual(res0.taxBreakdown[0].amount, 0);
     assert.strictEqual(res0.totalTax, 0);
 });
+
+test('calculateTotals - sicherheitseinbehaltProzent calculation with custom percentage', () => {
+    const params = {
+        mode: 'netto',
+        positionen: [
+            { menge: 1, preis: 2000, rabatt: 0, mwst: 19 } // 2000 netto, 380 mwst, 2380 brutto
+        ],
+        sicherheitseinbehaltProzent: 10
+    };
+    const res = InvoiceController.calculateTotals(params);
+    assert.strictEqual(res.sicherheitseinbehaltProzent, 10);
+    assert.strictEqual(res.sicherheitseinbehaltNetto, 200); // 10% of 2000 netto
+    assert.strictEqual(res.totalTax, 380); // MwSt remains unaffected
+    assert.strictEqual(res.bruttoNachRabatt, 2380);
+    assert.strictEqual(res.zahlbetrag, 2180); // 2380 brutto - 200 sicherheitseinbehalt
+});

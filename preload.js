@@ -160,6 +160,7 @@ contextBridge.exposeInMainWorld('api', {
 
     savePdf: (buffer, defaultName) => ipcRenderer.invoke('save:pdf', buffer, defaultName),
     exportZugferdPdf: (payload) => ipcRenderer.invoke('invoice:exportZugferdPdf', payload),
+    exportXRechnungXml: (payload) => ipcRenderer.invoke('invoice:exportXRechnungXml', payload),
     printDocument: () => ipcRenderer.invoke('app:printDocument'),
 
     generateQrCode: (text) => ipcRenderer.invoke('qr:generate', text),

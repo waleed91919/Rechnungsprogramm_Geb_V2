@@ -936,8 +936,8 @@ function setupIpc() {
         const QRCode = require('qrcode');
         return await QRCode.toDataURL(text, {
             errorCorrectionLevel: 'M',
-            margin: 1,
-            width: 150
+            margin: 2,
+            width: 400
         });
     }));
 
@@ -1053,7 +1053,8 @@ function setupIpc() {
             const { ZugferdBuilder } = require('./main/zugferd-builder');
             const profileInfo = EInvoiceEngine.getZUGFeRDProfileInfo(profile);
 
-            const seller = (await dbAPI.getFullState()).einstellungen;
+            const fullState = await dbAPI.getFullState();
+            const seller = { ...(fullState.einstellungen || {}), artikel: fullState.artikel || [] };
             const xmlString = EInvoiceEngine.generateZUGFeRDXML(doc, customer, seller, { profile });
 
             // Echte menschenlesbare Sichtseite: bevorzugt vom Renderer mitgeliefert,
@@ -1127,6 +1128,66 @@ function setupIpc() {
             return { success: true, path: filePath };
         } catch (err) {
             console.error('IPC invoice:exportZugferdPdf error:', err);
+            if (win && !win.isDestroyed()) focusWin(win);
+            return { success: false, error: err.message || String(err) };
+        }
+    }));
+
+    // XRechnung XML Export (EN 16931-1 / CII)
+    ipcMain.handle('invoice:exportXRechnungXml', wrapHandler(async (event, payload = {}) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        try {
+            const doc = payload.doc;
+            const customer = payload.customer || null;
+            if (!doc || typeof doc !== 'object' || !doc.nr) {
+                throw new Error('Ungültige Rechnungsdaten für den XRechnung-Export.');
+            }
+
+            const EInvoiceEngine = require('./js/einvoice');
+            const fullState = await dbAPI.getFullState();
+            const seller = { ...(fullState.einstellungen || {}), artikel: fullState.artikel || [] };
+
+            const validation = EInvoiceEngine.validateForEN16931(doc, customer, seller);
+            if (!validation.isValid) {
+                focusWin(win);
+                return { success: false, validationErrors: validation.errors, error: validation.errors.join(' ') };
+            }
+
+            const xmlString = EInvoiceEngine.generateXRechnungXML(doc, customer, seller);
+            const { dialog } = require('electron');
+            const fileNameHint = String(payload.fileNameHint || `XRechnung_${doc.nr}.xml`).replace(/[\\/:*?"<>|]/g, '_');
+
+            const { filePath } = await dialog.showSaveDialog(win, {
+                title: 'XRechnung XML (EN 16931) speichern',
+                defaultPath: path.join(app.getPath('documents'), fileNameHint),
+                filters: [
+                    { name: 'XRechnung XML (*.xml)', extensions: ['xml'] },
+                    { name: 'Alle Dateien (*.*)', extensions: ['*'] }
+                ]
+            });
+
+            if (!filePath) {
+                focusWin(win);
+                return { success: false, cancelled: true };
+            }
+
+            appendAuditLog({
+                entityType: 'DOCUMENT',
+                entityId: typeof doc.id === 'number' ? doc.id : 0,
+                action: 'XRECHNUNG_EXPORT',
+                details: {
+                    nr: doc.nr,
+                    fileName: path.basename(filePath),
+                    bytes: Buffer.byteLength(xmlString, 'utf-8'),
+                    sha256: require('crypto').createHash('sha256').update(xmlString, 'utf-8').digest('hex')
+                }
+            });
+
+            fs.writeFileSync(filePath, xmlString, 'utf-8');
+            focusWin(win);
+            return { success: true, path: filePath };
+        } catch (err) {
+            console.error('IPC invoice:exportXRechnungXml error:', err);
             if (win && !win.isDestroyed()) focusWin(win);
             return { success: false, error: err.message || String(err) };
         }

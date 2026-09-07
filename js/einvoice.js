@@ -180,6 +180,37 @@ class EInvoiceEngine {
     }
 
     /**
+     * Ermittelt den Artikel-/Positionsnamen (BT-153) für EN 16931.
+     * Prüft direkte Felder (name, bezeichnung, titel, beschreibung, text)
+     * sowie Artikel-Lookup über artikelId / artikel_id aus dem globalen State oder übergebenen Artikeln.
+     */
+    static resolveItemName(pos, fallbackIdx = 1, extraArticles = null) {
+        if (!pos) return `Position ${fallbackIdx}`;
+        const direct = String(pos.name || pos.bezeichnung || pos.titel || pos.beschreibung || pos.text || '').trim();
+        if (direct) return direct;
+
+        const artId = pos.artikelId !== undefined && pos.artikelId !== null && pos.artikelId !== ''
+            ? pos.artikelId
+            : pos.artikel_id;
+        if (artId !== undefined && artId !== null && artId !== '') {
+            const numId = parseInt(artId, 10);
+            if (Array.isArray(extraArticles)) {
+                const found = extraArticles.find(a => parseInt(a.id, 10) === numId);
+                if (found && (found.name || found.bezeichnung)) return String(found.name || found.bezeichnung).trim();
+            }
+            if (typeof state !== 'undefined' && Array.isArray(state.artikel)) {
+                const found = state.artikel.find(a => parseInt(a.id, 10) === numId);
+                if (found && (found.name || found.bezeichnung)) return String(found.name || found.bezeichnung).trim();
+            }
+            if (typeof window !== 'undefined' && window.state && Array.isArray(window.state.artikel)) {
+                const found = window.state.artikel.find(a => parseInt(a.id, 10) === numId);
+                if (found && (found.name || found.bezeichnung)) return String(found.name || found.bezeichnung).trim();
+            }
+        }
+        return '';
+    }
+
+    /**
      * Validiert ein Rechnungsdokument als Export-Gate nach EN 16931 / B2G Vorgaben (Leitweg-ID).
      * Gibt eine strukturierte Fehlerliste zurück; bei isValid=false darf kein Export erfolgen.
      */
@@ -207,7 +238,8 @@ class EInvoiceEngine {
                 if (!Number.isFinite(preis)) {
                     errors.push(`Position ${i + 1}: Einheitspreis fehlt oder ist ungültig.`);
                 }
-                if (!pos.name && !pos.beschreibung) {
+                const itemName = this.resolveItemName(pos, i + 1, seller && seller.artikel);
+                if (!itemName) {
                     errors.push(`Position ${i + 1}: Bezeichnung (BT-153) fehlt.`);
                 }
             });
@@ -356,7 +388,7 @@ class EInvoiceEngine {
         let lineItemsXML = '';
         t.lines.forEach((line, idx) => {
             const pos = invoice.positionen[idx] || {};
-            const name = this.escapeXML(pos.name || pos.beschreibung || `Position ${idx + 1}`);
+            const name = this.escapeXML(this.resolveItemName(pos, idx + 1, s && s.artikel) || `Position ${idx + 1}`);
             const unitCode = this.mapUnitToUNECERec20(pos.einheit);
             lineItemsXML += `
     <ram:IncludedSupplyChainTradeLineItem>
@@ -518,8 +550,13 @@ class EInvoiceEngine {
     }
 }
 
+// Isomorpher Export (Node.js & Browser/Renderer)
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = EInvoiceEngine;
-} else {
+}
+if (typeof window !== 'undefined') {
     window.EInvoiceEngine = EInvoiceEngine;
+}
+if (typeof globalThis !== 'undefined' && !globalThis.EInvoiceEngine) {
+    globalThis.EInvoiceEngine = EInvoiceEngine;
 }

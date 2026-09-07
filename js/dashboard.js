@@ -821,7 +821,7 @@ function renderAngebote(searchQuery = '') {
     document.getElementById('kpi-angebote-offen').innerText = offeneAngebote;
 }
 
-window.downloadXRechnungXML = function(invoiceId) {
+window.downloadXRechnungXML = async function(invoiceId) {
     const idNum = parseInt(invoiceId);
     const rech = state.rechnungen.find(r => parseInt(r.id) === idNum);
     if (!rech) {
@@ -832,13 +832,42 @@ window.downloadXRechnungXML = function(invoiceId) {
     const kundeId = parseInt(rech.kundeId);
     const kunde = state.kunden.find(k => parseInt(k.id) === kundeId) || { name: 'Empfänger' };
 
-    if (typeof EInvoiceEngine !== 'undefined') {
-        const validation = EInvoiceEngine.validateForEN16931(rech, kunde, state.einstellungen);
+    const engine = (typeof EInvoiceEngine !== 'undefined') ? EInvoiceEngine : (window.EInvoiceEngine || null);
+
+    // 1. Präferierter nativer Electron-Export mit GoBD-Audit & Speichern-Dialog
+    if (window.api && typeof window.api.exportXRechnungXml === 'function') {
+        try {
+            const res = await window.api.exportXRechnungXml({
+                doc: rech,
+                customer: kunde,
+                fileNameHint: `XRechnung_${rech.nr}.xml`
+            });
+            if (res && res.success) {
+                showToast(`XRechnung XML erfolgreich gespeichert: ${res.path}`, 'success');
+                return;
+            } else if (res && res.cancelled) {
+                showToast('XRechnung-Export abgebrochen.', 'info');
+                return;
+            } else if (res && res.validationErrors) {
+                showToast('XRechnung-Export blockiert - Validierungsfehler: ' + res.validationErrors.join(' '), 'error');
+                return;
+            } else if (res && res.error) {
+                showToast('XRechnung-Export fehlgeschlagen: ' + res.error, 'error');
+                return;
+            }
+        } catch (ipcErr) {
+            console.warn('IPC exportXRechnungXml fehlgeschlagen, nutze Fallback:', ipcErr);
+        }
+    }
+
+    // 2. Browser-/In-Memory-Fallback
+    if (engine) {
+        const validation = engine.validateForEN16931(rech, kunde, state.einstellungen);
         if (!validation.isValid) {
             showToast('XRechnung-Export blockiert - Validierungsfehler: ' + validation.errors.join(' '), 'error');
             return;
         }
-        const xml = EInvoiceEngine.generateXRechnungXML(rech, kunde, state.einstellungen);
+        const xml = engine.generateXRechnungXML(rech, kunde, state.einstellungen);
         const blob = new Blob([xml], { type: 'application/xml;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -847,6 +876,7 @@ window.downloadXRechnungXML = function(invoiceId) {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
         showToast(`XRechnung XML für ${rech.nr} heruntergeladen.`, 'success');
     } else {
         showToast('E-Rechnungs-Engine nicht bereit.', 'error');
@@ -864,8 +894,9 @@ window.downloadZugferdPdf = async function(invoiceId) {
     const kundeId = parseInt(rech.kundeId);
     const kunde = state.kunden.find(k => parseInt(k.id) === kundeId) || { name: 'Empfänger' };
 
-    if (typeof EInvoiceEngine !== 'undefined') {
-        const validation = EInvoiceEngine.validateForEN16931(rech, kunde, state.einstellungen);
+    const engine = (typeof EInvoiceEngine !== 'undefined') ? EInvoiceEngine : (window.EInvoiceEngine || null);
+    if (engine) {
+        const validation = engine.validateForEN16931(rech, kunde, state.einstellungen);
         if (!validation.isValid) {
             showToast('ZUGFeRD-Export blockiert - Validierungsfehler: ' + validation.errors.join(' '), 'error');
             return;

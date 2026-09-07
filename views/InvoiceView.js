@@ -145,6 +145,16 @@ window.InvoiceView = class InvoiceView {
         const rabattValEl = document.getElementById('rechnung-global-rabatt');
         const rabattTypeEl = document.getElementById('rechnung-global-rabatt-type');
         const anzahlungEl = document.getElementById('rechnung-anzahlung');
+        const sichEl1 = document.getElementById('rechnung-sicherheitseinbehalt-prozent');
+        const sichEl2 = document.getElementById('rechnung-handwerk-sicherheitseinbehalt');
+        const valStr = (sichEl1 && sichEl1.value !== '') ? sichEl1.value : (sichEl2 && sichEl2.value !== '' ? sichEl2.value : '');
+
+        let sichProzent = 0;
+        if (valStr !== '') {
+            sichProzent = parseFloat(valStr) || 0;
+        } else if (currentProjekt && currentProjekt.sicherheitseinbehalt_prozent) {
+            sichProzent = parseFloat(currentProjekt.sicherheitseinbehalt_prozent) || 0;
+        }
 
         return {
             positionen: currentPositions,
@@ -155,7 +165,7 @@ window.InvoiceView = class InvoiceView {
                 value: parseFloat(rabattValEl?.value) || 0,
                 type: rabattTypeEl?.value || '%'
             },
-            sicherheitseinbehaltProzent: currentProjekt?.sicherheitseinbehalt_prozent || 0,
+            sicherheitseinbehaltProzent: sichProzent,
             anzahlung: parseFloat(anzahlungEl?.value) || 0
         };
     }
