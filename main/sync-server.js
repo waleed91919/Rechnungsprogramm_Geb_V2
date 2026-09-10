@@ -10,6 +10,45 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const os = require('os');
+const net = require('net');
+
+const SAFE_ID = /^[A-Za-z0-9_-]{1,80}$/;
+const TOKEN = /^[A-Za-z0-9_-]{43}$/;
+const PAIRING_TTL_MS = 5 * 60 * 1000;
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+const MAX_SESSIONS = 100;
+const MAX_PAIRING_TOKENS = 32;
+const PUBLIC_CONTROLLERS = new Set([
+    '/controllers/ZeiterfassungController.js',
+    '/controllers/BautagebuchMobileController.js',
+    '/controllers/MaengelController.js'
+]);
+
+function httpError(statusCode, message) {
+    return Object.assign(new Error(message), { statusCode });
+}
+
+function positiveLimit(value, fallback) {
+    return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+}
+
+function hashToken(token) {
+    return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function isLoopback(host) {
+    if (net.isIP(host) === 4) return host.startsWith('127.');
+    return net.isIP(host) === 6 && new URL(`http://[${host}]`).hostname === '[::1]';
+}
+
+function urlHost(host) {
+    return net.isIP(host) === 6 ? `[${host}]` : host;
+}
+
+function isContained(root, candidate) {
+    const relative = path.relative(root, candidate);
+    return relative !== '' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
 
 const ZeiterfassungController = require('../controllers/ZeiterfassungController');
 const BautagebuchMobileController = require('../controllers/BautagebuchMobileController');
@@ -18,30 +57,38 @@ class SyncServer {
     /**
      * @param {Object} db - Aktive better-sqlite3 Instanz
      * @param {Object} auditLogger - Audit-Logger Instanz
-     * @param {Object} options - { port: 38400, pwaDir, uploadsDir, sslKeyPath, sslCertPath, useTls }
+     * @param {Object} options - { port, host, pwaDir, uploadsDir, sslKeyPath, sslCertPath, useTls,
+     *                            allowedOrigins, sessionTtlMs, maxJsonBytes, maxPhotoBytes }
      */
     constructor(db, auditLogger = null, options = {}) {
         this.db = db;
         this.auditLogger = auditLogger;
-        this.basePort = options.port || 38400;
+        this.basePort = options.port ?? 38400;
         this.port = this.basePort;
+        this.host = options.host ?? '127.0.0.1';
         this.pwaDir = options.pwaDir || path.join(__dirname, '..', 'pwa');
         this.uploadsDir = options.uploadsDir || path.join(process.cwd(), 'uploads', 'photos');
         this.useTls = Boolean(options.useTls);
         this.sslKeyPath = options.sslKeyPath || null;
         this.sslCertPath = options.sslCertPath || null;
+        this.sessionTtlMs = Math.min(positiveLimit(options.sessionTtlMs, SESSION_TTL_MS), SESSION_TTL_MS);
+        this.maxJsonBytes = positiveLimit(options.maxJsonBytes, 1024 * 1024);
+        this.maxPhotoBytes = positiveLimit(options.maxPhotoBytes, 10 * 1024 * 1024);
+        this.allowedOrigins = new Set(Array.isArray(options.allowedOrigins)
+            ? options.allowedOrigins.filter(origin => typeof origin === 'string' && origin !== 'null' && /^https?:\/\//.test(origin))
+            : []);
 
         this.server = null;
         this.isRunning = false;
         this.activeSockets = new Set(); // WebSocket Sockets
         this.sseClients = new Set();    // SSE Response Streams
-        this.pairingTokens = new Map(); // token -> { createdAt, validUntil, deviceId }
-
-        if (!fs.existsSync(this.uploadsDir)) {
-            try {
-                fs.mkdirSync(this.uploadsDir, { recursive: true });
-            } catch (_e) { /* ignore */ }
-        }
+        this.httpSockets = new Set();
+        this.pairingTokens = new Map(); // SHA-256 token -> { validUntil }
+        this.sessions = new Map();      // SHA-256 token -> identity, expiry, channels
+        this.pairAttempts = new Map();
+        this.globalPairAttempts = { startedAt: Date.now(), count: 0 };
+        this.pendingUploads = new Set();
+        this.advertisedHost = null;
     }
 
     /**
@@ -63,15 +110,30 @@ class SyncServer {
      * Startet den internen HTTP/HTTPS und WebSocket-Server mit Port-Fallback (38400-38410).
      */
     async start() {
-        if (this.isRunning) return { success: true, port: this.port, ip: SyncServer.getLocalIpAddress() };
+        if (this.isRunning) return { success: true, ...this.getServerInfo() };
+        if (!Number.isInteger(this.basePort) || this.basePort < 0 || this.basePort > 65535) {
+            throw new Error('Ungültiger Sync-Port.');
+        }
+        if (typeof this.host !== 'string' || (!net.isIP(this.host) && !/^[A-Za-z0-9.-]+$/.test(this.host))) {
+            throw new Error('Ungültiger Sync-Host.');
+        }
+        if (!this.useTls && !isLoopback(this.host)) {
+            throw new Error('HTTP ist nur an einer literalen Loopback-Adresse erlaubt; LAN benötigt TLS.');
+        }
+        if (this.useTls && (!this.sslKeyPath || !this.sslCertPath)) {
+            throw new Error('TLS benötigt einen gültigen Schlüssel und ein Zertifikat; kein HTTP-Fallback.');
+        }
 
         let currentPort = this.basePort;
-        const maxPort = this.basePort + 10;
+        const maxPort = this.basePort === 0 ? 0 : Math.min(this.basePort + 10, 65535);
 
         while (currentPort <= maxPort) {
             try {
                 await this._listenOnPort(currentPort);
-                this.port = currentPort;
+                this.port = this.server.address().port;
+                const address = this.server.address().address;
+                this.advertisedHost = address === '0.0.0.0' || address === '::'
+                    ? SyncServer.getLocalIpAddress() : address;
                 this.isRunning = true;
                 break;
             } catch (err) {
@@ -88,27 +150,40 @@ class SyncServer {
             throw new Error(`[SyncServer] Kein freier Port im Bereich ${this.basePort}-${maxPort} gefunden.`);
         }
 
-        const localIp = SyncServer.getLocalIpAddress();
-        const protocol = this.useTls ? 'https' : 'http';
-        console.log(`[SyncServer] W-Link Sync Hub läuft auf ${protocol}://${localIp}:${this.port}`);
+        console.log(`[SyncServer] W-Link Sync Hub läuft auf ${this.getServerInfo().serverUrl}`);
+        return { success: true, ...this.getServerInfo() };
+    }
 
+    getServerInfo() {
+        const localIp = this.advertisedHost || ((this.host === '0.0.0.0' || this.host === '::')
+            ? SyncServer.getLocalIpAddress() : this.host);
+        const authority = `${urlHost(localIp)}:${this.port}`;
         return {
-            success: true,
+            isRunning: this.isRunning,
             port: this.port,
+            serverUrl: `${this.useTls ? 'https' : 'http'}://${authority}`,
+            wsUrl: `${this.useTls ? 'wss' : 'ws'}://${authority}/ws`,
             localIp,
-            serverUrl: `${protocol}://${localIp}:${this.port}`,
-            wsUrl: `${this.useTls ? 'wss' : 'ws'}://${localIp}:${this.port}/ws`
+            host: this.host,
+            useTls: this.useTls
         };
     }
 
     _listenOnPort(portToTry) {
         return new Promise((resolve, reject) => {
             let s;
-            if (this.useTls && this.sslKeyPath && this.sslCertPath && fs.existsSync(this.sslKeyPath) && fs.existsSync(this.sslCertPath)) {
+            if (this.useTls) {
                 const options = {
                     key: fs.readFileSync(this.sslKeyPath),
-                    cert: fs.readFileSync(this.sslCertPath)
+                    cert: fs.readFileSync(this.sslCertPath),
+                    minVersion: 'TLSv1.2'
                 };
+                const certificate = new crypto.X509Certificate(options.cert);
+                const now = Date.now();
+                if (Date.parse(certificate.validFrom) > now || Date.parse(certificate.validTo) <= now
+                    || !certificate.checkPrivateKey(crypto.createPrivateKey(options.key))) {
+                    throw new Error('TLS-Zertifikat ist abgelaufen, noch nicht gültig oder passt nicht zum Schlüssel.');
+                }
                 s = https.createServer(options, (req, res) => this.handleHttpRequest(req, res));
             } else {
                 s = http.createServer((req, res) => this.handleHttpRequest(req, res));
@@ -118,12 +193,20 @@ class SyncServer {
             s.on('upgrade', (req, socket, head) => {
                 this.handleWsUpgrade(req, socket, head);
             });
+            s.on('connection', socket => {
+                this.httpSockets.add(socket);
+                socket.on('close', () => this.httpSockets.delete(socket));
+            });
+            s.requestTimeout = 30000;
+            s.headersTimeout = 15000;
+            s.keepAliveTimeout = 5000;
+            s.maxHeadersCount = 100;
 
             s.once('error', (err) => {
                 reject(err);
             });
 
-            s.listen(portToTry, '0.0.0.0', () => {
+            s.listen(portToTry, this.host, () => {
                 this.server = s;
                 resolve();
             });
@@ -134,44 +217,34 @@ class SyncServer {
      * Beendet den Server und trennt alle Verbindungen.
      */
     async stop() {
-        if (!this.isRunning) return { success: true };
-
-        return new Promise((resolve) => {
-            // Sockets trennen
-            for (const socket of this.activeSockets) {
-                try { socket.destroy(); } catch (_e) { }
-            }
-            this.activeSockets.clear();
-
-            for (const sse of this.sseClients) {
-                try { sse.end(); } catch (_e) { }
-            }
-            this.sseClients.clear();
-
-            if (this.server) {
-                this.server.close(() => {
-                    this.server = null;
-                    this.isRunning = false;
-                    console.log('[SyncServer] Server gestoppt.');
-                    resolve({ success: true });
-                });
-            } else {
-                this.isRunning = false;
-                resolve({ success: true });
-            }
-        });
+        this.isRunning = false;
+        this.pairingTokens.clear();
+        this.pairAttempts.clear();
+        this.globalPairAttempts = { startedAt: Date.now(), count: 0 };
+        for (const key of this.sessions.keys()) this.revokeSession(key);
+        for (const socket of this.activeSockets) socket.destroy();
+        for (const res of this.sseClients) res.end();
+        this.activeSockets.clear();
+        this.sseClients.clear();
+        const server = this.server;
+        this.server = null;
+        const closed = server ? new Promise(resolve => server.close(resolve)) : Promise.resolve();
+        for (const socket of this.httpSockets) socket.destroy();
+        this.httpSockets.clear();
+        await Promise.all([closed, ...this.pendingUploads]);
+        return { success: true };
     }
 
     /**
      * Generiert einen flüchtigen Pairing-Token für den QR-Code.
      */
-    createPairingToken(ttlMinutes = 30) {
-        const token = crypto.randomBytes(20).toString('hex');
-        const validUntil = Date.now() + ttlMinutes * 60 * 1000;
-        this.pairingTokens.set(token, {
-            createdAt: Date.now(),
-            validUntil
-        });
+    createPairingToken() {
+        this.pruneSecurityState();
+        while (this.pairingTokens.size >= MAX_PAIRING_TOKENS) {
+            this.pairingTokens.delete(this.pairingTokens.keys().next().value);
+        }
+        const token = crypto.randomBytes(32).toString('base64url');
+        this.pairingTokens.set(hashToken(token), { validUntil: Date.now() + PAIRING_TTL_MS });
         return token;
     }
 
@@ -180,28 +253,173 @@ class SyncServer {
      */
     getPairingPayload() {
         const token = this.createPairingToken();
-        const localIp = SyncServer.getLocalIpAddress();
-        const protocol = this.useTls ? 'https' : 'http';
-        const wsProtocol = this.useTls ? 'wss' : 'ws';
+        const info = this.getServerInfo();
 
         return {
             app: 'W-LINK-ERP',
             version: '1.2.0',
-            server_url: `${protocol}://${localIp}:${this.port}`,
-            ws_url: `${wsProtocol}://${localIp}:${this.port}/ws`,
+            server_url: info.serverUrl,
+            ws_url: info.wsUrl,
             hub_name: 'W-Link ERP Hauptzentrale',
             pairing_token: token,
-            valid_until: new Date(Date.now() + 30 * 60 * 1000).toISOString()
+            valid_until: new Date(this.pairingTokens.get(hashToken(token)).validUntil).toISOString()
         };
+    }
+
+    pruneSecurityState() {
+        const now = Date.now();
+        for (const [key, value] of this.pairingTokens) {
+            if (value.validUntil <= now) this.pairingTokens.delete(key);
+        }
+        for (const [key, session] of this.sessions) {
+            if (session.expiresAt <= now) this.revokeSession(key);
+        }
+        for (const [key, attempt] of this.pairAttempts) {
+            if (now - attempt.startedAt >= 60000) this.pairAttempts.delete(key);
+        }
+    }
+
+    revokeSession(key) {
+        const session = this.sessions.get(key);
+        if (!session) return;
+        this.sessions.delete(key);
+        clearTimeout(session.timer);
+        for (const channel of session.channels) {
+            this.activeSockets.delete(channel);
+            this.sseClients.delete(channel);
+            if (typeof channel.destroy === 'function') channel.destroy();
+            else channel.end();
+        }
+        session.channels.clear();
+    }
+
+    assertSession(session) {
+        if (!session || this.sessions.get(session.key) !== session || session.expiresAt <= Date.now()) {
+            if (session) this.revokeSession(session.key);
+            throw httpError(401, 'Sitzung ungültig oder abgelaufen.');
+        }
+    }
+
+    authenticate(req) {
+        this.pruneSecurityState();
+        const authorization = req.headers.authorization;
+        const deviceId = req.headers['x-device-id'];
+        const match = typeof authorization === 'string' && /^Bearer ([A-Za-z0-9_-]{43})$/.exec(authorization);
+        if (!match || typeof deviceId !== 'string' || !SAFE_ID.test(deviceId)) {
+            throw httpError(401, 'Bearer-Token und X-Device-Id erforderlich.');
+        }
+        const session = this.sessions.get(hashToken(match[1]));
+        this.assertSession(session);
+        if (session.deviceId !== deviceId) throw httpError(403, 'Geräteidentität stimmt nicht überein.');
+        return session;
+    }
+
+    checkPairRate(req) {
+        this.pruneSecurityState();
+        const now = Date.now();
+        if (now - this.globalPairAttempts.startedAt >= 60000) {
+            this.globalPairAttempts = { startedAt: now, count: 0 };
+        }
+        // Bound both per-address storage and aggregate requests; forwarded IP headers are not trusted.
+        if (++this.globalPairAttempts.count > 100) throw httpError(429, 'Zu viele Pairing-Versuche.');
+        const address = req.socket.remoteAddress || 'unknown';
+        let attempt = this.pairAttempts.get(address);
+        if (!attempt) {
+            if (this.pairAttempts.size >= 256) throw httpError(429, 'Zu viele Pairing-Versuche.');
+            attempt = { startedAt: now, count: 0 };
+            this.pairAttempts.set(address, attempt);
+        }
+        if (++attempt.count > 10) throw httpError(429, 'Zu viele Pairing-Versuche.');
+    }
+
+    validateRequestBoundary(req, res = null) {
+        const info = this.getServerInfo();
+        const hosts = new Set([new URL(info.serverUrl).host.toLowerCase()]);
+        if (this.host !== '0.0.0.0' && this.host !== '::') hosts.add(`${urlHost(this.host)}:${this.port}`.toLowerCase());
+        if (isLoopback(this.advertisedHost || this.host)) {
+            hosts.add(`localhost:${this.port}`);
+            hosts.add(`127.0.0.1:${this.port}`);
+            hosts.add(`[::1]:${this.port}`);
+        }
+        const host = req.headers.host;
+        if (typeof host !== 'string' || !hosts.has(host.toLowerCase())) {
+            throw httpError(403, 'Host nicht erlaubt.');
+        }
+        const origin = req.headers.origin;
+        const sameOrigins = new Set([...hosts].map(validHost => `${this.useTls ? 'https' : 'http'}://${validHost}`));
+        if (origin !== undefined && (origin === 'null' || (!sameOrigins.has(origin) && !this.allowedOrigins.has(origin)))) {
+            throw httpError(403, 'Origin nicht erlaubt.');
+        }
+        if (res) {
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+            res.setHeader('Referrer-Policy', 'no-referrer');
+            res.setHeader('Cache-Control', 'no-store');
+            res.setHeader('Vary', 'Origin');
+            if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
+            res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS');
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Device-Id, X-Photo-Uuid, X-Entity-Type, X-Entity-Uuid, X-Sha256');
+        }
+        // Do not let URL normalization hide traversal or credentials in query strings.
+        if (!req.url.startsWith('/') || req.url.startsWith('//')) throw httpError(400, 'Ungültiger Request-Pfad.');
+        let pathname;
+        try { pathname = decodeURIComponent(req.url.split('?')[0]); }
+        catch (_e) { throw httpError(400, 'Ungültiger Request-Pfad.'); }
+        if (pathname.includes('\\') || /[\x00-\x1f\x7f]/.test(pathname) || pathname.split('/').some(part => part === '..' || part === '.')) {
+            throw httpError(403, 'Request-Pfad nicht erlaubt.');
+        }
+        const url = new URL(req.url, info.serverUrl);
+        for (const key of url.searchParams.keys()) {
+            if (/token|authorization/i.test(key)) throw httpError(400, 'Tokens in URLs sind nicht erlaubt.');
+        }
+        return pathname;
+    }
+
+    bindBodyIdentity(body, session) {
+        this.assertSession(session);
+        if (body.device_id !== undefined && body.device_id !== session.deviceId) {
+            throw httpError(403, 'Geräteidentität stimmt nicht überein.');
+        }
+        body.device_id = session.deviceId;
+        if (body.mutations !== undefined) {
+            if (!Array.isArray(body.mutations)) throw httpError(400, 'Mutations array required');
+            if (body.mutations.length > 50) throw httpError(413, 'Maximal 50 Mutationen pro Batch.');
+            // Validate the entire batch before any database side effects.
+            for (const mutation of body.mutations) {
+                if (!mutation || typeof mutation !== 'object' || Array.isArray(mutation)) throw httpError(400, 'Ungültige Mutation.');
+                let payload = mutation.payload ?? {};
+                if (typeof payload === 'string') {
+                    try { payload = JSON.parse(payload); }
+                    catch (_e) { throw httpError(400, 'Ungültiges Mutations-JSON.'); }
+                }
+                if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw httpError(400, 'Ungültige Mutation.');
+                // Older offline controllers used their own IDs. Normalize these to the session;
+                // the explicit batch device_id still has to match and cannot impersonate a peer.
+                mutation.device_id = session.deviceId;
+                mutation.payload = { ...payload, device_id: session.deviceId };
+            }
+        }
+        return body;
     }
 
     /**
      * Behandelt nativen RFC 6455 WebSocket-Handshake ohne externe Abhängigkeiten.
      */
     handleWsUpgrade(req, socket, head) {
+        let session;
+        try {
+            const pathname = this.validateRequestBoundary(req);
+            session = this.authenticate(req);
+            if (pathname !== '/ws' || req.method !== 'GET') throw httpError(404, 'WebSocket-Pfad nicht gefunden.');
+            if (session.channels.size >= 8) throw httpError(429, 'Zu viele offene Streams.');
+        } catch (err) {
+            const status = err.statusCode || 400;
+            socket.end(`HTTP/1.1 ${status} ${http.STATUS_CODES[status]}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
+            return;
+        }
         const key = req.headers['sec-websocket-key'];
-        if (!key) {
-            socket.destroy();
+        if (typeof key !== 'string' || !/^[A-Za-z0-9+/]{22}==$/.test(key)
+            || req.headers['sec-websocket-version'] !== '13' || req.headers.upgrade?.toLowerCase() !== 'websocket') {
+            socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
             return;
         }
 
@@ -216,7 +434,10 @@ class SyncServer {
         ];
 
         socket.write(headers.concat('\r\n').join('\r\n'));
+        socket.syncSession = session;
+        socket.syncBuffer = Buffer.alloc(0);
         this.activeSockets.add(socket);
+        session.channels.add(socket);
 
         socket.on('data', (buffer) => {
             this.handleWsFrame(socket, buffer);
@@ -224,10 +445,12 @@ class SyncServer {
 
         socket.on('close', () => {
             this.activeSockets.delete(socket);
+            session.channels.delete(socket);
         });
 
         socket.on('error', () => {
             this.activeSockets.delete(socket);
+            session.channels.delete(socket);
         });
 
         // Begrüßungsnachricht senden
@@ -236,61 +459,55 @@ class SyncServer {
             app: 'W-Link ERP Sync Hub',
             serverTime: new Date().toISOString()
         });
+        if (head.length) this.handleWsFrame(socket, head);
     }
 
     /**
      * Parst eingehende RFC 6455 Frames.
      */
     handleWsFrame(socket, buffer) {
-        if (buffer.length < 2) return;
-        const opcode = buffer[0] & 0x0f;
-
-        // Ping -> Pong
-        if (opcode === 0x9) {
-            socket.write(Buffer.from([0x8a, 0x00])); // Pong Frame
+        try { this.assertSession(socket.syncSession); }
+        catch (_e) { socket.destroy(); return; }
+        if (socket.syncBuffer.length + buffer.length > 65536) {
+            socket.destroy();
             return;
         }
-        // Close
-        if (opcode === 0x8) {
-            this.activeSockets.delete(socket);
-            socket.end();
-            return;
-        }
-
-        // Text Frame
-        if (opcode === 0x1) {
-            const isMasked = Boolean(buffer[1] & 0x80);
+        buffer = Buffer.concat([socket.syncBuffer, buffer]);
+        while (buffer.length >= 2) {
+            const opcode = buffer[0] & 0x0f;
+            // Only complete masked text/control frames are supported, with a bounded accumulator.
+            if (!(buffer[0] & 0x80) || (buffer[0] & 0x70) || !(buffer[1] & 0x80) || ![1, 8, 9, 10].includes(opcode)) {
+                socket.destroy();
+                return;
+            }
             let length = buffer[1] & 0x7f;
             let offset = 2;
-
+            if ((opcode >= 8 && length > 125) || length === 127) { socket.destroy(); return; }
             if (length === 126) {
+                if (buffer.length < 4) break;
                 length = buffer.readUInt16BE(2);
                 offset = 4;
-            } else if (length === 127) {
-                length = Number(buffer.readBigUInt64BE(2));
-                offset = 10;
             }
-
-            let payload;
-            if (isMasked) {
-                const mask = buffer.slice(offset, offset + 4);
-                offset += 4;
-                const raw = buffer.slice(offset, offset + length);
-                payload = Buffer.alloc(raw.length);
-                for (let i = 0; i < raw.length; i++) {
-                    payload[i] = raw[i] ^ mask[i % 4];
-                }
-            } else {
-                payload = buffer.slice(offset, offset + length);
+            if (length + offset + 4 > 65536) { socket.destroy(); return; }
+            if (buffer.length < offset + 4 + length) break;
+            const mask = buffer.subarray(offset, offset + 4);
+            offset += 4;
+            const payload = Buffer.from(buffer.subarray(offset, offset + length));
+            for (let i = 0; i < length; i++) payload[i] ^= mask[i % 4];
+            buffer = buffer.subarray(offset + length);
+            if (opcode === 8) { socket.end(); return; }
+            if (opcode === 9) {
+                socket.write(Buffer.concat([Buffer.from([0x8a, length]), payload]));
+                continue;
             }
-
             try {
                 const data = JSON.parse(payload.toString('utf-8'));
-                if (data.type === 'PING') {
+                if (opcode === 1 && data.type === 'PING') {
                     this.sendWsMessage(socket, { type: 'PONG', time: new Date().toISOString() });
                 }
             } catch (_e) { /* ignore */ }
         }
+        socket.syncBuffer = Buffer.from(buffer);
     }
 
     /**
@@ -298,6 +515,11 @@ class SyncServer {
      */
     sendWsMessage(socket, obj) {
         try {
+            this.assertSession(socket.syncSession);
+            if (socket.destroyed || socket.writableLength > 1024 * 1024) {
+                socket.destroy();
+                return;
+            }
             const text = JSON.stringify(obj);
             const payload = Buffer.from(text, 'utf-8');
             let header;
@@ -322,13 +544,18 @@ class SyncServer {
      * Sendet Broadcast-Nachricht an alle verbundenen WebSockets und SSE-Streams.
      */
     broadcast(messageObj) {
+        this.pruneSecurityState();
         for (const socket of this.activeSockets) {
             this.sendWsMessage(socket, messageObj);
         }
 
         const sseData = `data: ${JSON.stringify(messageObj)}\n\n`;
         for (const res of this.sseClients) {
-            try { res.write(sseData); } catch (_e) { }
+            try {
+                this.assertSession(res.syncSession);
+                if (res.destroyed || res.writableLength > 1024 * 1024) res.destroy();
+                else res.write(sseData);
+            } catch (_e) { res.destroy(); }
         }
     }
 
@@ -336,22 +563,15 @@ class SyncServer {
      * Zentraler HTTP-Router für REST-Sync & PWA Static Files.
      */
     async handleHttpRequest(req, res) {
-        // CORS-Header für PWA & Mobile Web
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Device-Id, X-Pairing-Token, X-Photo-Uuid, X-Entity-Type, X-Entity-Uuid, X-Sha256');
-
-        if (req.method === 'OPTIONS') {
-            res.writeHead(204);
-            return res.end();
-        }
-
-        const host = req.headers.host || `localhost:${this.port}`;
-        const url = new URL(req.url, `http://${host}`);
-
         try {
+            const pathname = this.validateRequestBoundary(req, res);
+            if (req.method === 'OPTIONS') {
+                res.writeHead(204);
+                return res.end();
+            }
+            const route = pathname.replace(/^\/api\/sync\//, '/api/v1/sync/');
             // 1. Healthcheck / Discovery
-            if ((url.pathname === '/api/v1/sync/ping' || url.pathname === '/api/sync/ping' || url.pathname === '/api/sync/info') && req.method === 'GET') {
+            if ((route === '/api/v1/sync/ping' || route === '/api/v1/sync/info') && req.method === 'GET') {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 return res.end(JSON.stringify({
                     status: 'OK',
@@ -363,77 +583,115 @@ class SyncServer {
             }
 
             // 2. Pairing Endpunkt
-            if ((url.pathname === '/api/v1/sync/pair' || url.pathname === '/api/sync/pair') && req.method === 'POST') {
+            if (route === '/api/v1/sync/pair' && req.method === 'POST') {
+                this.checkPairRate(req);
                 const body = await this.readJsonBody(req);
                 return this.handlePairing(body, res);
             }
 
+            // Authenticate before reading a body, accessing the DB or opening files, for every alias/method.
+            if (route.startsWith('/api/v1/sync/')) req.syncSession = this.authenticate(req);
             // 3. Push-Sync (Outbox Mutations)
-            if ((url.pathname === '/api/v1/sync/push' || url.pathname === '/api/sync/push') && req.method === 'POST') {
-                const body = await this.readJsonBody(req);
+            if (route === '/api/v1/sync/push' && req.method === 'POST') {
+                const body = this.bindBodyIdentity(await this.readJsonBody(req), req.syncSession);
                 return this.handlePushSync(body, res);
             }
 
             // 4. Pull-Sync (Delta Data)
-            if ((url.pathname === '/api/v1/sync/pull' || url.pathname === '/api/sync/pull') && req.method === 'POST') {
-                const body = await this.readJsonBody(req);
+            if (route === '/api/v1/sync/pull' && req.method === 'POST') {
+                const body = this.bindBodyIdentity(await this.readJsonBody(req), req.syncSession);
                 return this.handlePullSync(body, res);
             }
 
+            if (route === '/api/v1/sync/unpair' && req.method === 'POST') {
+                this.bindBodyIdentity(await this.readJsonBody(req), req.syncSession);
+                this.revokeSession(req.syncSession.key);
+                return this.sendJson(res, 200, { status: 'UNPAIRED', device_id: req.syncSession.deviceId });
+            }
             // 5. Large-Blob Streaming Foto-Upload
-            if ((url.pathname === '/api/v1/sync/photo-upload' || url.pathname === '/api/v1/sync/upload-photo' || url.pathname === '/api/sync/photo-upload') && req.method === 'POST') {
-                return this.handlePhotoUpload(req, res);
+            if ((route === '/api/v1/sync/photo-upload' || route === '/api/v1/sync/upload-photo') && req.method === 'POST') {
+                const upload = this.handlePhotoUpload(req, res);
+                // Keep a non-rejecting cleanup promise so stop() waits for staged files to disappear.
+                const cleanup = upload.catch(() => {});
+                this.pendingUploads.add(cleanup);
+                try { return await upload; }
+                finally { this.pendingUploads.delete(cleanup); }
             }
 
             // 6. SSE Event Stream Fallback
-            if (url.pathname === '/api/v1/sync/events' || url.pathname === '/api/sync/events') {
+            if (route === '/api/v1/sync/events' && req.method === 'GET') {
+                if (req.syncSession.channels.size >= 8) throw httpError(429, 'Zu viele offene Streams.');
                 res.writeHead(200, {
                     'Content-Type': 'text/event-stream',
                     'Cache-Control': 'no-cache',
                     'Connection': 'keep-alive'
                 });
                 res.write('retry: 10000\n\n');
+                res.syncSession = req.syncSession;
+                req.syncSession.channels.add(res);
                 this.sseClients.add(res);
-                req.on('close', () => this.sseClients.delete(res));
+                res.on('close', () => {
+                    this.sseClients.delete(res);
+                    req.syncSession.channels.delete(res);
+                });
                 return;
             }
 
             // 7. Statische PWA-Dateien ausliefern
-            return this.serveStaticPwaFile(url.pathname, res);
+            if (route.startsWith('/api/')) throw httpError(404, 'Endpunkt nicht gefunden.');
+            if (req.method !== 'GET' && req.method !== 'HEAD') throw httpError(405, 'Methode nicht erlaubt.');
+            return await this.serveStaticPwaFile(pathname, res, req.method === 'HEAD');
 
         } catch (err) {
-            console.error('[SyncServer Error]:', err);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: err.message }));
+            // Do not log request bodies, credentials, or expose internal paths/SQL to remote clients.
+            if (!res.headersSent && !req.complete) {
+                res.setHeader('Connection', 'close');
+                req.resume();
+            }
+            if (!res.headersSent && err.statusCode === 429) res.setHeader('Retry-After', '60');
+            this.sendJson(res, err.statusCode || 500, {
+                error: err.statusCode ? err.message : 'Interner Sync-Fehler.'
+            });
         }
+    }
+
+    sendJson(res, statusCode, body) {
+        if (res.destroyed || res.writableEnded) return;
+        if (res.headersSent) { res.destroy(); return; }
+        res.writeHead(statusCode, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify(body));
     }
 
     /**
      * Prüft Pairing Token und bestätigt Registrierung.
      */
     handlePairing(body = {}, res) {
-        const { pairing_token, device_id, device_name } = body;
+        if (!this.isRunning) throw httpError(503, 'Sync-Server ist gestoppt.');
+        const { pairing_token, device_id } = body;
 
-        if (!pairing_token) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ error: 'Pairing-Token fehlt.' }));
-        }
-
-        const tokenData = this.pairingTokens.get(pairing_token);
-        if (!tokenData || tokenData.validUntil < Date.now()) {
-            res.writeHead(403, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ error: 'Ungültiger oder abgelaufener Pairing-Token.' }));
-        }
-
-        tokenData.deviceId = device_id;
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
+        if (typeof device_id !== 'string' || !SAFE_ID.test(device_id)) throw httpError(400, 'Ungültige Geräte-ID.');
+        if (typeof pairing_token !== 'string' || !TOKEN.test(pairing_token)) throw httpError(400, 'Ungültiges Pairing-Token-Format.');
+        this.pruneSecurityState();
+        const tokenKey = hashToken(pairing_token);
+        const tokenData = this.pairingTokens.get(tokenKey);
+        if (!tokenData || tokenData.validUntil <= Date.now()) throw httpError(403, 'Ungültiger oder abgelaufener Pairing-Token.');
+        // Consume before creating a session: replay and concurrent redemption cannot succeed.
+        this.pairingTokens.delete(tokenKey);
+        while (this.sessions.size >= MAX_SESSIONS) this.revokeSession(this.sessions.keys().next().value);
+        const accessToken = crypto.randomBytes(32).toString('base64url');
+        const key = hashToken(accessToken);
+        const session = { key, deviceId: device_id, expiresAt: Date.now() + this.sessionTtlMs, channels: new Set() };
+        session.timer = setTimeout(() => this.revokeSession(key), this.sessionTtlMs);
+        session.timer.unref();
+        this.sessions.set(key, session);
+        this.sendJson(res, 200, {
             status: 'PAIRED',
-            device_id: device_id || 'MOBILE_PWA',
+            device_id,
+            access_token: accessToken,
+            expires_at: new Date(session.expiresAt).toISOString(),
             server_time: new Date().toISOString(),
             hub_name: 'W-Link ERP Hauptzentrale'
-        }));
+        });
     }
 
     /**
@@ -477,9 +735,8 @@ class SyncServer {
                         recordMutationStmt.run(mut.uuid, device_id, mut.entity_type, mut.entity_uuid);
                         ackedUuids.push(mut.uuid);
                     }
-                } catch (mutationErr) {
-                    console.warn(`[SyncServer] Fehler bei Mutation ${mut.uuid}:`, mutationErr.message);
-                    conflicts.push({ uuid: mut.uuid, error: mutationErr.message });
+                } catch (_mutationErr) {
+                    conflicts.push({ uuid: mut.uuid, error: 'Mutation konnte nicht verarbeitet werden.' });
                 }
             }
         });
@@ -511,7 +768,7 @@ class SyncServer {
         const { entity_type, mutation_type, entity_uuid, payload, lamport_timestamp } = mut;
         const data = typeof payload === 'string' ? JSON.parse(payload) : (payload || {});
         data.uuid = data.uuid || entity_uuid || mut.uuid;
-        data.device_id = data.device_id || deviceId;
+        data.device_id = deviceId;
 
         if (entity_type === 'ZEITERFASSUNG') {
             const serverRecord = this.db.prepare('SELECT * FROM zeiterfassung WHERE uuid = ?').get(data.uuid);
@@ -694,7 +951,7 @@ class SyncServer {
     handlePullSync(body = {}, res) {
         const projekte = this.db.prepare("SELECT id, name, start, ende, status FROM projekte WHERE status != 'ARCHIVIERT'").all();
         const liegenschaften = this.db.prepare('SELECT id, objekt_nr, name, ort FROM liegenschaften WHERE aktiv = 1').all();
-        const mitarbeiter = this.db.prepare('SELECT id, personalnummer, vorname, nachname, lohngruppe_id, tarif_stundensatz FROM mitarbeiter WHERE aktiv = 1').all();
+        const mitarbeiter = this.db.prepare('SELECT id, personalnummer, vorname, nachname FROM mitarbeiter WHERE aktiv = 1').all();
         const lvPositionen = this.db.prepare('SELECT id, bereich_id, positionsnr, bezeichnung, menge, menge_einheit FROM lv_positionen').all();
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -712,28 +969,61 @@ class SyncServer {
     /**
      * Large-Blob Streaming Foto-Upload mit SHA-256 Validierung & Dateispeicherung.
      */
-    handlePhotoUpload(req, res) {
+    async handlePhotoUpload(req, res) {
         const photoUuid = req.headers['x-photo-uuid'] || crypto.randomUUID();
         const entityType = req.headers['x-entity-type'] || 'MANGEL';
         const entityUuid = req.headers['x-entity-uuid'] || '';
         const clientSha = req.headers['x-sha256'] || '';
-
+        if (!SAFE_ID.test(photoUuid)) throw httpError(400, 'Ungültige Foto-UUID.');
+        if (clientSha && !/^[a-fA-F0-9]{64}$/.test(clientSha)) throw httpError(400, 'Ungültiger SHA-256 Hash.');
+        if (!SAFE_ID.test(entityType) || (entityUuid && !SAFE_ID.test(entityUuid))) throw httpError(400, 'Ungültige Foto-Metadaten.');
+        if (Number(req.headers['content-length']) > this.maxPhotoBytes) throw httpError(413, 'Foto zu groß.');
+        this.assertSession(req.syncSession);
+        const configuredRoot = path.resolve(this.uploadsDir);
+        await fs.promises.mkdir(configuredRoot, { recursive: true, mode: 0o700 });
+        if ((await fs.promises.lstat(configuredRoot)).isSymbolicLink()) throw httpError(403, 'Upload-Verzeichnis nicht erlaubt.');
+        const root = await fs.promises.realpath(configuredRoot);
         const fileName = `${photoUuid}.webp`;
-        const targetPath = path.join(this.uploadsDir, fileName);
-
-        const writeStream = fs.createWriteStream(targetPath);
+        const targetPath = path.join(root, fileName);
+        let stageDir;
+        let handle;
+        let published = false;
+        let completed = false;
+        let calculatedSha;
         const hash = crypto.createHash('sha256');
+        try {
+            stageDir = await fs.promises.mkdtemp(path.join(root, '.sync-upload-'));
+            const stagePath = path.join(stageDir, 'photo.part');
+            handle = await fs.promises.open(stagePath,
+                fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW || 0), 0o600);
+            let bytes = 0;
+            // Async iteration supplies backpressure; early limit rejection must not destroy the response socket.
+            for await (const chunk of req.iterator({ destroyOnReturn: false })) {
+                this.assertSession(req.syncSession);
+                bytes += chunk.length;
+                if (bytes > this.maxPhotoBytes) throw httpError(413, 'Foto zu groß.');
+                hash.update(chunk);
+                await handle.writeFile(chunk);
+            }
+            if (req.aborted || !req.complete) throw httpError(400, 'Upload abgebrochen.');
+            calculatedSha = hash.digest('hex');
+            if (clientSha && calculatedSha !== clientSha.toLowerCase()) throw httpError(422, 'SHA-256 stimmt nicht überein.');
+            await handle.sync();
+            await handle.close();
+            handle = null;
+            this.assertSession(req.syncSession);
+            if ((await fs.promises.lstat(configuredRoot)).isSymbolicLink()
+                || await fs.promises.realpath(configuredRoot) !== root
+                || await fs.promises.realpath(stageDir) !== stageDir) {
+                throw httpError(403, 'Upload-Verzeichnis wurde verändert.');
+            }
+            // Atomic publish without replacement: an existing file, hard link or symlink fails with EEXIST.
+            await fs.promises.link(stagePath, targetPath);
+            published = true;
+            this.assertSession(req.syncSession);
+            if (req.aborted || res.destroyed) throw httpError(400, 'Upload abgebrochen.');
 
-        req.on('data', chunk => {
-            writeStream.write(chunk);
-            hash.update(chunk);
-        });
-
-        req.on('end', () => {
-            writeStream.end();
-            const calculatedSha = hash.digest('hex');
-
-            // Metadaten in DB verknüpfen falls Mangel-Foto
+            // Preserve optional business linkage, only after the verified file is fully written.
             if (entityType === 'MANGEL' && entityUuid) {
                 try {
                     const mangel = this.db.prepare('SELECT id FROM maengelkataster WHERE id = ? OR mangel_nr = ?').get(entityUuid, entityUuid);
@@ -745,38 +1035,67 @@ class SyncServer {
                     }
                 } catch (_e) { /* ignore */ }
             }
-
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
+            completed = true;
+            // Cleanup finishes before acknowledgement, so neither a partial file nor an absolute path escapes.
+            await fs.promises.rm(stageDir, { recursive: true, force: true });
+            stageDir = null;
+            this.sendJson(res, 200, {
                 status: 'UPLOADED',
                 photo_uuid: photoUuid,
-                filePath: targetPath,
+                file_name: fileName,
+                filePath: fileName, // legacy property, deliberately relative
                 sha256: calculatedSha,
-                clientShaMatches: clientSha ? (clientSha === calculatedSha) : true
-            }));
-        });
-
-        req.on('error', err => {
-            writeStream.destroy();
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: err.message }));
-        });
+                clientShaMatches: true
+            });
+        } catch (err) {
+            if (err.code === 'EEXIST') {
+                let existingHandle;
+                try {
+                    const targetStat = await fs.promises.lstat(targetPath);
+                    if (!targetStat.isFile() || targetStat.isSymbolicLink()) throw httpError(409, 'Foto-UUID bereits vorhanden.');
+                    existingHandle = await fs.promises.open(targetPath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+                    const openedStat = await existingHandle.stat();
+                    if (!openedStat.isFile() || openedStat.size > this.maxPhotoBytes
+                        || openedStat.dev !== targetStat.dev || openedStat.ino !== targetStat.ino) {
+                        throw httpError(409, 'Foto-UUID bereits vorhanden.');
+                    }
+                    const existingHash = crypto.createHash('sha256');
+                    for await (const chunk of existingHandle.createReadStream({ autoClose: false })) {
+                        this.assertSession(req.syncSession);
+                        existingHash.update(chunk);
+                    }
+                    if (existingHash.digest('hex') !== calculatedSha) throw httpError(409, 'Foto-UUID bereits vorhanden.');
+                    await existingHandle.close();
+                    existingHandle = null;
+                    await fs.promises.rm(stageDir, { recursive: true, force: true });
+                    stageDir = null;
+                    this.assertSession(req.syncSession);
+                    completed = true;
+                    this.sendJson(res, 200, {
+                        status: 'UPLOADED',
+                        photo_uuid: photoUuid,
+                        file_name: fileName,
+                        filePath: fileName,
+                        sha256: calculatedSha,
+                        clientShaMatches: true
+                    });
+                    return;
+                } finally {
+                    if (existingHandle) await existingHandle.close().catch(() => {});
+                }
+            }
+            throw err;
+        } finally {
+            if (handle) await handle.close().catch(() => {});
+            if (published && !completed) await fs.promises.unlink(targetPath).catch(() => {});
+            if (stageDir) await fs.promises.rm(stageDir, { recursive: true, force: true });
+        }
     }
 
     /**
      * Liefert statische HTML/JS/CSS-Dateien der PWA an mobile Endgeräte aus.
      */
-    serveStaticPwaFile(pathname, res) {
-        let relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\//, '');
-        const safePath = path.normalize(relativePath).replace(/^(\.\.[\/\\])+/, '');
-        const fullPath = path.join(this.pwaDir, safePath);
-
-        if (!fs.existsSync(fullPath) || fs.statSync(fullPath).isDirectory()) {
-            res.writeHead(404, { 'Content-Type': 'text/plain' });
-            return res.end('404 Not Found');
-        }
-
-        const ext = path.extname(fullPath).toLowerCase();
+    async serveStaticPwaFile(pathname, res, headOnly = false) {
         const mimeTypes = {
             '.html': 'text/html; charset=utf-8',
             '.js': 'application/javascript; charset=utf-8',
@@ -788,24 +1107,70 @@ class SyncServer {
             '.webp': 'image/webp',
             '.svg': 'image/svg+xml'
         };
-
-        const contentType = mimeTypes[ext] || 'application/octet-stream';
-        res.writeHead(200, { 'Content-Type': contentType });
-        fs.createReadStream(fullPath).pipe(res);
+        const relativePath = pathname === '/' ? 'index.html' : pathname.slice(1);
+        if (relativePath.split('/').some(part => part.startsWith('.'))) throw httpError(403, 'Datei nicht erlaubt.');
+        const ext = path.extname(relativePath).toLowerCase();
+        if (!Object.hasOwn(mimeTypes, ext)) throw httpError(404, 'Datei nicht gefunden.');
+        const publicController = PUBLIC_CONTROLLERS.has(pathname);
+        if (pathname.startsWith('/controllers/') && !publicController) throw httpError(404, 'Datei nicht gefunden.');
+        let file;
+        try {
+            const repositoryRoot = publicController ? await fs.promises.realpath(path.join(__dirname, '..')) : null;
+            const controllerRoot = publicController ? path.join(repositoryRoot, 'controllers') : null;
+            const root = await fs.promises.realpath(publicController ? controllerRoot : this.pwaDir);
+            if (publicController && root !== controllerRoot) throw httpError(403, 'Datei nicht erlaubt.');
+            const candidate = path.resolve(root, publicController ? path.basename(pathname) : relativePath);
+            if (!isContained(root, candidate)) throw httpError(403, 'Datei nicht erlaubt.');
+            const fullPath = await fs.promises.realpath(candidate);
+            if (!isContained(root, fullPath) || (publicController && fullPath !== candidate)) throw httpError(403, 'Datei nicht erlaubt.');
+            file = await fs.promises.open(fullPath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
+            const stat = await file.stat();
+            if (!stat.isFile()) throw httpError(404, 'Datei nicht gefunden.');
+            res.writeHead(200, { 'Content-Type': mimeTypes[ext], 'Content-Length': stat.size });
+            if (headOnly) return res.end();
+            const stream = file.createReadStream();
+            file = null; // stream owns and closes the descriptor
+            stream.on('error', () => res.destroy());
+            res.on('close', () => stream.destroy());
+            stream.pipe(res);
+        } catch (err) {
+            if (['ENOENT', 'ENOTDIR'].includes(err.code)) throw httpError(404, 'Datei nicht gefunden.');
+            throw err;
+        } finally {
+            if (file) await file.close();
+        }
     }
 
     readJsonBody(req) {
+        if (Number(req.headers['content-length']) > this.maxJsonBytes) return Promise.reject(httpError(413, 'JSON-Body zu groß.'));
         return new Promise((resolve, reject) => {
-            let data = '';
-            req.on('data', chunk => data += chunk);
+            const chunks = [];
+            let bytes = 0;
+            let failed = false;
+            const fail = err => {
+                if (failed) return;
+                failed = true;
+                chunks.length = 0;
+                reject(err);
+            };
+            req.on('data', chunk => {
+                if (failed) return;
+                bytes += chunk.length;
+                if (bytes > this.maxJsonBytes) return fail(httpError(413, 'JSON-Body zu groß.'));
+                chunks.push(chunk);
+            });
             req.on('end', () => {
+                if (failed) return;
                 try {
-                    resolve(JSON.parse(data || '{}'));
-                } catch (e) {
-                    reject(new Error('Ungültiges JSON im Request-Body'));
+                    const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+                    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Object required');
+                    resolve(body);
+                } catch (_e) {
+                    fail(httpError(400, 'Ungültiges JSON im Request-Body.'));
                 }
             });
-            req.on('error', reject);
+            req.on('aborted', () => fail(httpError(400, 'Request abgebrochen.')));
+            req.on('error', () => fail(httpError(400, 'Request abgebrochen.')));
         });
     }
 

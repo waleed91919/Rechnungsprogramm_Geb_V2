@@ -1218,6 +1218,19 @@ function createSchema(db) {
 }
 
 function runMigrations(db) {
+    // Einmaliger Opt-in-Reset: Das alte "true" war auch ein automatisch
+    // gesetzter Standard und ist deshalb keine bewusste Netzwerk-Freigabe.
+    db.transaction(() => {
+        const migrated = db.prepare("SELECT value FROM einstellungen WHERE key = 'sync_security_v1_migrated'").get();
+        if (!migrated) {
+            const save = db.prepare('INSERT OR REPLACE INTO einstellungen (key, value) VALUES (?, ?)');
+            save.run('sync_server_auto_start', 'false');
+            save.run('sync_server_host', '127.0.0.1');
+            save.run('sync_tls_enabled', 'false');
+            save.run('sync_security_v1_migrated', 'true');
+        }
+    })();
+
     try {
         db.exec(`ALTER TABLE kunden ADD COLUMN createdAt TEXT`);
     } catch (e) {
@@ -2135,8 +2148,11 @@ function seedDefaultData(db) {
         backup_auto_on_exit: 'true',
         backup_retention_days: '7',
         sync_server_port: '38400',
-        sync_server_auto_start: 'true',
+        sync_server_auto_start: 'false',
+        sync_server_host: '127.0.0.1',
         sync_tls_enabled: 'false',
+        sync_tls_cert_path: '',
+        sync_tls_key_path: '',
         ids_callback_port: '0',
         soka_betriebsnummer: '98765432',
         soka_standard_tarifgebiet: 'WEST'

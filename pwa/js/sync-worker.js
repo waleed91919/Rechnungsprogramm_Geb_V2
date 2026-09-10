@@ -4,6 +4,33 @@
  */
 
 class MobileSyncWorker {
+    static normalizeServerUrl(value) {
+        const url = new URL(String(value || '').trim());
+        const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+        if ((url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) ||
+            url.username || url.password || url.search || url.hash || url.pathname !== '/') {
+            throw new Error('Bitte eine HTTPS-Serveradresse ohne Pfad angeben. HTTP ist nur auf diesem Gerät (localhost) erlaubt.');
+        }
+        return url.origin;
+    }
+
+    static hasValidSession(settings) {
+        return Boolean(settings && settings.device_id && settings.access_token &&
+            Number.isFinite(Date.parse(settings.expires_at)) && Date.parse(settings.expires_at) > Date.now());
+    }
+
+    static canReconnectServer(previousUrl, nextUrl) {
+        if (!previousUrl || previousUrl === nextUrl) return true;
+        try {
+            const previous = new URL(previousUrl);
+            const next = new URL(nextUrl);
+            // IndexedDB belongs to an origin, including scheme and port.
+            // Do not imply a safe migration by sending credentials from an old
+            // HTTP app into HTTPS: its old code/context is not trustworthy.
+            return previous.origin === next.origin;
+        } catch (_error) { return false; }
+    }
+
     constructor(db) {
         this.db = db;
         this.isSyncing = false;
@@ -11,6 +38,33 @@ class MobileSyncWorker {
         this.maxBackoffMs = 60000;
         this.autoSyncTimer = null;
         this.onSyncProgress = null;
+    }
+
+    async request(baseUrl, route, settings, options = {}) {
+        const response = await fetch(`${baseUrl}/api/v1/sync/${route}`, {
+            ...options,
+            headers: {
+                ...options.headers,
+                'Authorization': `Bearer ${settings.access_token}`,
+                'X-Device-Id': settings.device_id
+            },
+            redirect: 'error',
+            credentials: 'omit',
+            cache: 'no-store'
+        });
+        if (response.status === 401 || response.status === 403) {
+            // Nur die betroffene Sitzung löschen, nie Offline-Arbeit/Outbox.
+            const current = await this.db.app_settings.get('server_config');
+            if (current && current.access_token === settings.access_token) {
+                const { access_token, expires_at, ...unpaired } = current;
+                await this.db.app_settings.put(unpaired);
+            }
+            const error = new Error('Kopplung abgelaufen oder abgewiesen. Bitte am Desktop einen neuen Token erzeugen und erneut koppeln. Offline-Daten bleiben erhalten.');
+            error.code = 'AUTH_REQUIRED';
+            throw error;
+        }
+        if (!response.ok) throw new Error(`${route}: HTTP ${response.status}`);
+        return response;
     }
 
     /**
@@ -52,15 +106,18 @@ class MobileSyncWorker {
         let pushCount = 0;
         let photoCount = 0;
         let pullUpdated = false;
+        let conflictCount = 0;
 
         try {
             const settings = await this.db.app_settings.get('server_config');
-            if (!settings || !settings.server_url) {
-                return { status: 'UNPAIRED', message: 'Kein Server konfiguriert.' };
+            if (!settings || !settings.server_url || !MobileSyncWorker.hasValidSession(settings)) {
+                const result = { status: 'UNPAIRED', message: 'Bitte erneut koppeln. Offline-Daten bleiben erhalten.' };
+                if (typeof this.onSyncProgress === 'function') this.onSyncProgress(result);
+                return result;
             }
 
-            const baseUrl = settings.server_url.replace(/\/+$/, '');
-            const deviceId = settings.device_id || 'MOBILE_PWA';
+            const baseUrl = MobileSyncWorker.normalizeServerUrl(settings.server_url);
+            const deviceId = settings.device_id;
 
             // 1. PUSH: Ungesendete Outbox-Einträge sammeln
             const pendingMutations = await this.db.sync_outbox
@@ -70,7 +127,7 @@ class MobileSyncWorker {
                 .toArray();
 
             if (pendingMutations && pendingMutations.length > 0) {
-                const pushResponse = await fetch(`${baseUrl}/api/v1/sync/push`, {
+                const pushResponse = await this.request(baseUrl, 'push', settings, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -85,9 +142,15 @@ class MobileSyncWorker {
                 if (pushResponse.ok) {
                     const result = await pushResponse.json();
                     if (result.acked_uuids && result.acked_uuids.length > 0) {
-                        await this.db.sync_outbox.bulkDelete(result.acked_uuids);
-                        pushCount = result.acked_uuids.length;
+                        const submitted = new Set(pendingMutations.map(m => m.uuid));
+                        const acked = [...new Set(result.acked_uuids)].filter(uuid => submitted.has(uuid));
+                        await this.db.sync_outbox.bulkDelete(acked);
+                        pushCount = acked.length;
                     }
+                    if (pushCount !== pendingMutations.length) {
+                        throw new Error('Nicht alle Änderungen wurden bestätigt. Unbestätigte Einträge bleiben in der Offline-Warteschlange.');
+                    }
+                    conflictCount = Array.isArray(result.conflicts) ? result.conflicts.length : 0;
                     this.backoffDelayMs = 1000; // Reset Backoff
                 } else {
                     throw new Error(`Push Sync Fehler HTTP ${pushResponse.status}`);
@@ -106,7 +169,7 @@ class MobileSyncWorker {
                             bodyData = await res.blob();
                         }
 
-                        const uploadRes = await fetch(`${baseUrl}/api/v1/sync/photo-upload`, {
+                        const uploadRes = await this.request(baseUrl, 'photo-upload', settings, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/octet-stream',
@@ -124,14 +187,15 @@ class MobileSyncWorker {
                             photoCount++;
                         }
                     } catch (photoErr) {
-                        console.warn('[SyncWorker] Foto-Upload fehlgeschlagen:', photoErr.message);
+                        // Kein SUCCESS, wenn Dateien fehlen oder die Anmeldung abgewiesen wurde.
+                        throw photoErr;
                     }
                 }
             }
 
             // 3. PULL: Stammdaten-Delta vom Desktop abrufen
             const lastSync = await this.db.app_settings.get('last_sync_timestamp');
-            const pullResponse = await fetch(`${baseUrl}/api/v1/sync/pull`, {
+            const pullResponse = await this.request(baseUrl, 'pull', settings, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -149,6 +213,9 @@ class MobileSyncWorker {
                         await this.db.cache_liegenschaften.bulkPut(pullResult.data.liegenschaften);
                     }
                     if (pullResult.data.mitarbeiter && this.db.cache_mitarbeiter) {
+                        // Der Server liefert einen Vollbestand. Alte Lohndaten aus
+                        // früheren Versionen dürfen nicht in diesem Cache bleiben.
+                        await this.db.cache_mitarbeiter.clear();
                         await this.db.cache_mitarbeiter.bulkPut(pullResult.data.mitarbeiter);
                     }
                     if (pullResult.data.lv_positionen && this.db.cache_lv_positionen) {
@@ -156,28 +223,29 @@ class MobileSyncWorker {
                     }
                     await this.db.app_settings.put({ key: 'last_sync_timestamp', value: pullResult.server_time });
                     pullUpdated = true;
+                } else {
+                    throw new Error('Ungültige Stammdaten-Antwort vom Sync Hub.');
                 }
             }
 
-            if (typeof this.onSyncProgress === 'function') {
-                this.onSyncProgress({ status: 'SUCCESS', pushCount, photoCount, pullUpdated });
-            }
-
-            return {
-                status: 'SUCCESS',
+            const result = {
+                status: conflictCount ? 'CONFLICT' : 'SUCCESS',
                 pushCount,
                 photoCount,
                 pullUpdated,
+                conflictCount,
+                ...(conflictCount ? { message: `${conflictCount} Konflikt(e) im Desktop-Hub prüfen. Die übertragenen Daten liegen dort zur Schlichtung vor.` } : {}),
                 timestamp: new Date().toISOString()
             };
+            if (typeof this.onSyncProgress === 'function') this.onSyncProgress(result);
+            return result;
 
         } catch (err) {
             console.warn(`[SyncWorker] Sync fehlgeschlagen, Backoff ${(this.backoffDelayMs / 1000)}s:`, err.message);
             this.backoffDelayMs = Math.min(this.backoffDelayMs * 2, this.maxBackoffMs);
-            if (typeof this.onSyncProgress === 'function') {
-                this.onSyncProgress({ status: 'ERROR', error: err.message });
-            }
-            return { status: 'ERROR', error: err.message };
+            const result = { status: err.code === 'AUTH_REQUIRED' ? 'UNPAIRED' : 'ERROR', error: err.message };
+            if (typeof this.onSyncProgress === 'function') this.onSyncProgress(result);
+            return result;
         } finally {
             this.isSyncing = false;
         }

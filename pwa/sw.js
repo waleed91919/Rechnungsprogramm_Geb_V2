@@ -3,7 +3,7 @@
  * Gewährleistet 100% Offline-Verfügbarkeit der App-Shell und Fachmodule.
  */
 
-const CACHE_NAME = 'wlink-mobile-v1.3.0';
+const CACHE_NAME = 'wlink-mobile-v1.3.1-sync-security';
 const APP_SHELL = [
     './',
     './index.html',

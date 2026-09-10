@@ -2163,6 +2163,9 @@ async function deleteNachtragAction(nachtragId) {
 
 // --- BAUTAGEBUCH & ABNAHMEPROTOKOLL ---
 async function loadProjektBautagebuch(projectId) {
+    const text = value => String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[char]);
     if (!window.api || !window.api.getBautagebuch) return;
     try {
         const list = await window.api.getBautagebuch(projectId);
@@ -2184,10 +2187,10 @@ async function loadProjektBautagebuch(projectId) {
                         <span class="material-symbols-outlined text-[16px] text-amber-600">calendar_today</span>
                         ${new Date(item.datum).toLocaleDateString()}
                     </span>
-                    <span class="text-slate-500 font-medium">${item.wetter || 'Kein Wetter erfasst'} | ${item.personal_eigen_anzahl || 0} Arbeiter (${item.personal_eigen_stunden || 0}h)</span>
+                    <span class="text-slate-500 font-medium">${text(item.wetter || 'Kein Wetter erfasst')} | ${text(item.personal_eigen_anzahl || 0)} Arbeiter (${text(item.personal_eigen_stunden || 0)}h)</span>
                 </div>
-                <p class="text-sm text-slate-700 leading-relaxed">${item.tagesbericht || ''}</p>
-                ${item.vorkommnisse_behinderungen ? `<div class="p-2 bg-amber-100/60 rounded text-xs text-amber-900 font-medium">⚠️ Behinderung/Bedenken: ${item.vorkommnisse_behinderungen}</div>` : ''}
+                <p class="text-sm text-slate-700 leading-relaxed">${text(item.tagesbericht || '')}</p>
+                ${item.vorkommnisse_behinderungen ? `<div class="p-2 bg-amber-100/60 rounded text-xs text-amber-900 font-medium">⚠️ Behinderung/Bedenken: ${text(item.vorkommnisse_behinderungen)}</div>` : ''}
             `;
             container.appendChild(card);
         });
@@ -2603,4 +2606,3 @@ if (typeof module !== 'undefined' && module.exports) {
         switchProjektTab
     };
 }
-

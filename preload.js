@@ -182,6 +182,7 @@ contextBridge.exposeInMainWorld('api', {
 
     // --- Phase 3: Local-First P2P Sync Server & Konflikt-Schlichtung ---
     getSyncStatus: () => ipcRenderer.invoke('sync:getStatus'),
+    configureSyncServer: (config) => ipcRenderer.invoke('sync:configure', config),
     startSyncServer: () => ipcRenderer.invoke('sync:startServer'),
     stopSyncServer: () => ipcRenderer.invoke('sync:stopServer'),
     getSyncPairingPayload: () => ipcRenderer.invoke('sync:getPairingPayload'),
@@ -224,5 +225,4 @@ contextBridge.exposeInMainWorld('api', {
     confirm: (options) => ipcRenderer.invoke('dialog:confirm', options),
     alert: (options) => ipcRenderer.invoke('dialog:alert', options)
 });
-
 

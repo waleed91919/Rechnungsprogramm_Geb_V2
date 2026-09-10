@@ -16,6 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const crypto = require('crypto');
+const os = require('os');
 const { execFileSync } = require('child_process');
 
 const IS_ELECTRON_AS_NODE = !!process.versions.electron;
@@ -332,8 +333,13 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
 
     test('Phase 3 Testsuite - 6. Local-First P2P Sync Server & Quarantäne', async (t) => {
         const db = createTestDatabase();
-        const uploadsDir = path.join(__dirname, '..', 'tmp_test_uploads');
-        const syncServer = new SyncServer(db, null, { port: 38405, uploadsDir });
+        const uploadsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wlink-phase3-sync-'));
+        const syncServer = new SyncServer(db, null, { port: 0, uploadsDir });
+        t.after(async () => {
+            await syncServer.stop();
+            fs.rmSync(uploadsDir, { recursive: true, force: true });
+            db.close();
+        });
 
         const startRes = await syncServer.start();
         assert.strictEqual(startRes.success, true);
@@ -388,9 +394,14 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             });
             assert.strictEqual(pairRes.status, 200);
             assert.strictEqual(pairRes.data.status, 'PAIRED');
+            const authHeaders = {
+                Authorization: `Bearer ${pairRes.data.access_token}`,
+                'X-Device-Id': 'MOBILE_TEST_DEVICE_01'
+            };
+            const jsonHeaders = { ...authHeaders, 'Content-Type': 'application/json' };
 
             // 3. Pull-Sync Stammdaten Delta
-            const pullRes = await httpRequest('POST', '/api/v1/sync/pull', { 'Content-Type': 'application/json' }, {});
+            const pullRes = await httpRequest('POST', '/api/v1/sync/pull', jsonHeaders, {});
             assert.strictEqual(pullRes.status, 200);
             assert.ok(pullRes.data.data.mitarbeiter.length >= 3);
 
@@ -413,7 +424,7 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
                 }
             };
 
-            const pushRes1 = await httpRequest('POST', '/api/v1/sync/push', { 'Content-Type': 'application/json' }, {
+            const pushRes1 = await httpRequest('POST', '/api/v1/sync/push', jsonHeaders, {
                 device_id: 'MOBILE_TEST_DEVICE_01',
                 mutations: [pushMutation]
             });
@@ -426,7 +437,7 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             assert.strictEqual(dbZeit.mitarbeiter_id, 1);
 
             // Idempotenter Zweitaufruf: keine Duplizierung
-            const pushRes2 = await httpRequest('POST', '/api/v1/sync/push', { 'Content-Type': 'application/json' }, {
+            const pushRes2 = await httpRequest('POST', '/api/v1/sync/push', jsonHeaders, {
                 device_id: 'MOBILE_TEST_DEVICE_01',
                 mutations: [pushMutation]
             });
@@ -451,7 +462,7 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
                 }
             };
 
-            const conflictRes = await httpRequest('POST', '/api/v1/sync/push', { 'Content-Type': 'application/json' }, {
+            const conflictRes = await httpRequest('POST', '/api/v1/sync/push', jsonHeaders, {
                 device_id: 'MOBILE_TEST_DEVICE_01',
                 mutations: [conflictingPush]
             });
@@ -474,6 +485,7 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             const photoUuid = ZeiterfassungController.generateUUID();
 
             const photoRes = await httpRequest('POST', '/api/v1/sync/photo-upload', {
+                ...authHeaders,
                 'Content-Type': 'application/octet-stream',
                 'X-Photo-Uuid': photoUuid,
                 'X-Entity-Type': 'MANGEL',
@@ -484,14 +496,10 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             assert.strictEqual(photoRes.data.photo_uuid, photoUuid);
             assert.strictEqual(photoRes.data.clientShaMatches, true);
             assert.strictEqual(photoRes.data.sha256, photoSha);
-            assert.ok(fs.existsSync(photoRes.data.filePath));
+            assert.strictEqual(path.isAbsolute(photoRes.data.filePath), false);
+            assert.ok(fs.existsSync(path.join(uploadsDir, photoRes.data.file_name)));
         });
 
-        // Server stoppen & Aufräumen
-        await syncServer.stop();
-        if (fs.existsSync(uploadsDir)) {
-            try { fs.rmSync(uploadsDir, { recursive: true, force: true }); } catch (_e) { }
-        }
-        db.close();
+        // t.after also cleans up reliably when a nested assertion fails.
     });
 }

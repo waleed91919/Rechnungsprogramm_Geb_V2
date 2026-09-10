@@ -3,21 +3,23 @@
  * Erstellt und entpackt AES-GCM-256 verschlüsselte Baustellen-Sync-Pakete.
  */
 
-const CryptoSyncBundle = (typeof require !== 'undefined')
+// Distinct binding: crypto-sync-bundle.js already declares a global class with
+// the name CryptoSyncBundle when both files are loaded as classic scripts.
+const SyncBundleCrypto = (typeof require !== 'undefined')
     ? require('./crypto-sync-bundle')
     : (window.CryptoSyncBundle || null);
 
 async function createSyncBundle(password, db = null) {
     const targetDb = db || (typeof window !== 'undefined' ? window.mobileDb : null);
-    return CryptoSyncBundle.exportToBundle(targetDb, password);
+    return SyncBundleCrypto.exportToBundle(targetDb, password);
 }
 
 async function unpackSyncBundle(bundleData, password) {
-    return CryptoSyncBundle.importFromBundle(bundleData, password);
+    return SyncBundleCrypto.importFromBundle(bundleData, password);
 }
 
 function downloadSyncBundleFile(bundleJson, filename) {
-    CryptoSyncBundle.downloadBundle(bundleJson, filename);
+    SyncBundleCrypto.downloadBundle(bundleJson, filename);
 }
 
 async function readSyncBundleFile(file) {
@@ -38,7 +40,7 @@ if (typeof window !== 'undefined') {
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
-        CryptoSyncBundle,
+        CryptoSyncBundle: SyncBundleCrypto,
         createSyncBundle,
         unpackSyncBundle,
         downloadSyncBundleFile,
