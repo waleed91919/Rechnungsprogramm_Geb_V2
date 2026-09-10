@@ -2,7 +2,15 @@ const electron = require('electron');
 const { app, BrowserWindow, Menu, ipcMain } = electron;
 const path = require('path');
 const SyncServer = require('./main/sync-server');
+const { loadSyncConfig, saveSyncConfig } = require('./main/sync-config');
 let syncServerInstance = null;
+
+function createSyncServer(db) {
+    return new SyncServer(db, null, {
+        ...loadSyncConfig(db),
+        uploadsDir: path.join(app.getPath('userData'), 'sync_uploads')
+    });
+}
 
 // Deutsches Lokalsystem erzwingen (DD.MM.YYYY und de-DE Chromium-Datumsformat/Kalender)
 if (app && app.commandLine) {
@@ -1322,18 +1330,26 @@ function setupIpc() {
 
     // --- Phase 3: Local-First P2P Sync Server ---
     ipcMain.handle('sync:getStatus', wrapHandler(async () => {
-        if (!syncServerInstance) return { isRunning: false };
+        const { db } = require('./db');
         return {
-            isRunning: syncServerInstance.isRunning,
-            port: syncServerInstance.port,
-            pairingPayload: syncServerInstance.getPairingPayload()
+            ...(syncServerInstance ? syncServerInstance.getServerInfo() : { isRunning: false }),
+            config: loadSyncConfig(db)
         };
+    }));
+
+    ipcMain.handle('sync:configure', wrapHandler(async (event, config) => {
+        const { db } = require('./db');
+        // Konfiguration zuerst validieren. Speichern startet keinen Listener.
+        const saved = saveSyncConfig(db, config);
+        if (syncServerInstance) await syncServerInstance.stop();
+        syncServerInstance = null;
+        return saved;
     }));
 
     ipcMain.handle('sync:startServer', wrapHandler(async () => {
         if (!syncServerInstance) {
             const { db } = require('./db');
-            syncServerInstance = new SyncServer(db, null, { port: 38400 });
+            syncServerInstance = createSyncServer(db);
         }
         return await syncServerInstance.start();
     }));
@@ -1346,10 +1362,8 @@ function setupIpc() {
     }));
 
     ipcMain.handle('sync:getPairingPayload', wrapHandler(async () => {
-        if (!syncServerInstance) {
-            const { db } = require('./db');
-            syncServerInstance = new SyncServer(db, null, { port: 38400 });
-            await syncServerInstance.start();
+        if (!syncServerInstance || !syncServerInstance.isRunning) {
+            throw new Error('Sync Hub zuerst ausdrücklich starten.');
         }
         return syncServerInstance.getPairingPayload();
     }));
@@ -1493,9 +1507,8 @@ function setupIpc() {
 
     // Starte Sync-Server automatisch falls konfiguriert
     try {
-        const syncAutoRow = db.prepare("SELECT value FROM einstellungen WHERE key='sync_server_auto_start'").get();
-        if (!syncAutoRow || syncAutoRow.value === 'true' || syncAutoRow.value === '1') {
-            syncServerInstance = new SyncServer(db, null, { port: 38400 });
+        if (loadSyncConfig(db).autoStart) {
+            syncServerInstance = createSyncServer(db);
             syncServerInstance.start().catch(e => console.warn('[SyncServer Auto-Start] Warnung:', e.message));
         }
     } catch (syncErr) {

@@ -535,24 +535,29 @@
                 <div class="card-title">WLAN Hotspot-Sync & Pairing</div>
 
                 <div class="form-group">
-                    <label class="form-label">Server-Adresse (Desktop Hub)</label>
-                    <input type="text" id="sync-server-url" class="form-input" placeholder="http://192.168.1.100:38400"/>
+                    <label for="sync-server-url" class="form-label">Server-Adresse (Desktop Hub)</label>
+                    <input type="url" id="sync-server-url" class="form-input" placeholder="https://192.168.1.100:38400" autocomplete="url"/>
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">Pairing-Token</label>
-                    <input type="text" id="sync-pairing-token" class="form-input" placeholder="Token vom Desktop QR-Code"/>
+                    <label for="sync-pairing-token" class="form-label">Einmaliger Pairing-Token</label>
+                    <input type="password" id="sync-pairing-token" class="form-input" placeholder="Token aus dem Desktop Sync Hub" autocomplete="off"/>
                 </div>
 
                 <div style="display: flex; gap: 10px; margin-bottom: 16px;">
-                    <button class="btn" onclick="connectAndPairServer()">Koppeln & Speichern</button>
+                    <button id="sync-pair-button" class="btn" onclick="connectAndPairServer()">Koppeln & Speichern</button>
                 </div>
+                <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+                    Im Netzwerk ist ein vertrauenswürdiges HTTPS-Zertifikat nötig. Token einmalig und 5 Minuten gültig;
+                    Sitzung bis zu 8 Stunden bzw. bis zum Hub-Neustart. Offline-Arbeit bleibt bei Ablauf erhalten.
+                </p>
 
                 <div class="form-group">
                     <button class="btn btn-secondary" onclick="triggerManualSync()">
                         <span>Jetzt synchronisieren (Push/Pull)</span>
                     </button>
                 </div>
+                <button class="btn btn-secondary" onclick="disconnectSyncServer()" style="margin-bottom: 16px;">Dieses Gerät entkoppeln</button>
 
                 <div id="sync-outbox-info" style="font-size: 13px; color: var(--text-muted);">
                     Warteschlange: <strong id="outbox-count-label">0</strong> ausstehende Änderungen.
