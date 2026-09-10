@@ -38,9 +38,11 @@ window.EFBView = class EFBView {
                     .filter(r => r.projektId === projectId)
                     .flatMap(r => r.positionen || []);
                 const profile = window.EFBController.getDefaultProfile();
+                const bgkDetails = window.EFBController.getDefaultBgkDetails();
                 const efb221 = window.EFBController.calculateEFB221(project, positions, profile);
+                const efb222 = window.EFBController.calculateEFB222(project, positions, bgkDetails, profile);
                 const efb223 = window.EFBController.calculateEFB223(positions, efb221);
-                data = { efb221, efb223, profile, project, positions };
+                data = { efb221, efb222, efb223, profile, bgkDetails, project, positions };
             }
 
             if (!data) {
@@ -62,6 +64,7 @@ window.EFBView = class EFBView {
      */
     renderView(container, data) {
         const { efb221, efb223, profile } = data;
+        const efb222 = data.efb222 || (window.EFBController && window.EFBController.calculateEFB222(data.project, data.positions, data.bgkDetails, profile));
         const a1 = efb221.abschnitt1;
         const a2 = efb221.abschnitt2;
         const a3 = efb221.abschnitt3;
@@ -78,10 +81,10 @@ window.EFBView = class EFBView {
                     <div>
                         <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
                             <span class="material-symbols-outlined text-primary text-[22px]">price_change</span>
-                            EFB-Preisblätter 221 & 223 (VHB Bund)
+                            EFB-Preisblätter 221, 222 & 223 (VHB Bund)
                         </h3>
                         <p class="text-xs text-slate-500 mt-0.5">
-                            Rechtskonforme Zuschlagskalkulation & Aufgliederung der Einheitspreise für öffentliche Aufträge
+                            Rechtskonforme Zuschlags- & Endsummenkalkulation sowie Aufgliederung der Einheitspreise für öffentliche Aufträge
                         </p>
                     </div>
 
@@ -92,7 +95,11 @@ window.EFBView = class EFBView {
                         </button>
                         <button type="button" id="btn-export-efb221-pdf" class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-slate-800 hover:bg-slate-900 rounded-lg shadow-sm transition-colors">
                             <span class="material-symbols-outlined text-[16px]">picture_as_pdf</span>
-                            EFB 221 PDF (A4 Hoch)
+                            EFB 221 PDF
+                        </button>
+                        <button type="button" id="btn-export-efb222-pdf" class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg shadow-sm transition-colors">
+                            <span class="material-symbols-outlined text-[16px]">picture_as_pdf</span>
+                            EFB 222 PDF
                         </button>
                         <button type="button" id="btn-export-efb223-pdf" class="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-primary hover:bg-primary-dark rounded-lg shadow-sm transition-colors">
                             <span class="material-symbols-outlined text-[16px]">picture_as_pdf</span>
@@ -106,6 +113,10 @@ window.EFBView = class EFBView {
                     <button type="button" id="tab-btn-efb221" class="pb-3 border-b-2 ${this.activeSubTab === '221' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'} flex items-center gap-2">
                         <span class="material-symbols-outlined text-[18px]">calculate</span>
                         Formblatt EFB 221 (Zuschlagskalkulation)
+                    </button>
+                    <button type="button" id="tab-btn-efb222" class="pb-3 border-b-2 ${this.activeSubTab === '222' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'} flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[18px]">account_tree</span>
+                        Formblatt EFB 222 (Endsummenkalkulation)
                     </button>
                     <button type="button" id="tab-btn-efb223" class="pb-3 border-b-2 ${this.activeSubTab === '223' ? 'border-primary text-primary' : 'border-transparent text-slate-500 hover:text-slate-700'} flex items-center gap-2">
                         <span class="material-symbols-outlined text-[18px]">view_list</span>
@@ -237,6 +248,127 @@ window.EFBView = class EFBView {
                     </div>
                 </div>
 
+                <!-- Tab Panel: EFB 222 (Endsummenkalkulation) -->
+                <div id="panel-efb222" class="${this.activeSubTab === '222' ? 'block' : 'hidden'} space-y-6">
+                    <!-- 1. Angaben über den Verrechnungslohn (VL) -->
+                    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                        <div class="bg-slate-900 text-white px-5 py-3 font-semibold text-sm flex justify-between items-center">
+                            <span>1. Angaben über den Verrechnungslohn (VL)</span>
+                            <span class="text-xs bg-indigo-500/30 px-2.5 py-0.5 rounded text-white font-mono">VL: ${formatCur(efb222.abschnitt1.verrechnungslohn)} / h</span>
+                        </div>
+                        <div class="p-5 grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-semibold text-slate-600">1.1 Mittellohn (ML) €/h</label>
+                                <div class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono text-slate-800">${formatCur(efb222.abschnitt1.mittellohn)} / h</div>
+                            </div>
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-semibold text-slate-600">1.4 Kalkulationslohn (KL) €/h</label>
+                                <div class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono text-slate-800">${formatCur(efb222.abschnitt1.kalkulationslohn)} / h</div>
+                            </div>
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-semibold text-slate-600">1.5 Rest-Umlage Lohn % (Zuschlag)</label>
+                                <div class="px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-lg text-sm font-mono text-indigo-900 font-bold">
+                                    ${formatPct(efb222.abschnitt1.zuschlagLohnProzent)} (= ${formatCur(efb222.abschnitt1.zuschlagLohnEur)}/h)
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. Feste Sachkostenumlagen & Wagnis/Gewinn -->
+                    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                        <div class="bg-slate-900 text-white px-5 py-3 font-semibold text-sm">
+                            2. Feste Sachkostenumlagen & Wagnis-Differenzierung
+                        </div>
+                        <div class="p-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="space-y-1">
+                                <label class="block text-xs font-semibold text-slate-600">Stoffumlage %</label>
+                                <input type="number" step="0.01" id="efb222-umlage-stoff" value="${efb222.abschnitt2.festeSachkostenUmlagen.stoffe}" class="w-full px-3 py-1.5 border border-slate-300 rounded font-mono text-xs">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="block text-xs font-semibold text-slate-600">Geräteumlage %</label>
+                                <input type="number" step="0.01" id="efb222-umlage-geraet" value="${efb222.abschnitt2.festeSachkostenUmlagen.geraete}" class="w-full px-3 py-1.5 border border-slate-300 rounded font-mono text-xs">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="block text-xs font-semibold text-slate-600">Sonstige Umlage %</label>
+                                <input type="number" step="0.01" id="efb222-umlage-sonst" value="${efb222.abschnitt2.festeSachkostenUmlagen.sonstige}" class="w-full px-3 py-1.5 border border-slate-300 rounded font-mono text-xs">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="block text-xs font-semibold text-slate-600">NU-Umlage %</label>
+                                <input type="number" step="0.01" id="efb222-umlage-nu" value="${efb222.abschnitt2.festeSachkostenUmlagen.nu}" class="w-full px-3 py-1.5 border border-slate-300 rounded font-mono text-xs">
+                            </div>
+                        </div>
+                        <div class="bg-slate-50 px-5 py-2.5 border-t border-slate-200 text-xs text-slate-600 flex justify-between">
+                            <span>AGK-Satz: <strong>${formatPct(efb222.abschnitt2.agkProzent)}</strong> (${formatCur(efb222.abschnitt2.agkBetrag)})</span>
+                            <span>Betriebswagnis (fix): <strong>${formatPct(efb222.abschnitt2.wugAufteilung.betriebswagnisProzent)}</strong></span>
+                            <span>Leistungsbezogenes Wagnis: <strong>${formatPct(efb222.abschnitt2.wugAufteilung.leistungswagnisProzent)}</strong></span>
+                            <span>Kalkulatorischer Gewinn: <strong>${formatPct(efb222.abschnitt2.wugAufteilung.gewinnProzent)}</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- 3. Auftragsbezogene Baustellengemeinkosten (BGK 3.1.1 bis 3.1.5) -->
+                    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                        <div class="bg-slate-900 text-white px-5 py-3 font-semibold text-sm flex justify-between items-center">
+                            <span>3. Baustellengemeinkosten (BGK) des Auftrags</span>
+                            <span class="text-xs font-mono font-bold text-amber-300">Summe BGK: ${formatCur(efb222.abschnitt3.summeBgk)}</span>
+                        </div>
+                        <div class="p-5 space-y-3 text-xs">
+                            <div class="flex items-center justify-between gap-4">
+                                <span class="font-medium text-slate-700">3.1.1 Lohnkosten Baustelleneinrichtung (Auf-/Abbau BE, Bewachung, Winterbau)</span>
+                                <input type="number" step="0.01" id="efb222-bgk-311" value="${efb222.abschnitt3.lohnkostenBaustelleneinrichtung}" class="w-36 px-2.5 py-1.5 border border-slate-300 rounded font-mono text-right text-xs">
+                            </div>
+                            <div class="flex items-center justify-between gap-4">
+                                <span class="font-medium text-slate-700">3.1.2 Gehaltskosten Baustelle (Bauleitung, Vermessung, Poliere, Abrechnung)</span>
+                                <input type="number" step="0.01" id="efb222-bgk-312" value="${efb222.abschnitt3.gehaltskostenBaustelle}" class="w-36 px-2.5 py-1.5 border border-slate-300 rounded font-mono text-right text-xs">
+                            </div>
+                            <div class="flex items-center justify-between gap-4">
+                                <span class="font-medium text-slate-700">3.1.3 Geräte und Ausrüstungen (Vorhaltung Krane, Container, Energie, Wasser)</span>
+                                <input type="number" step="0.01" id="efb222-bgk-313" value="${efb222.abschnitt3.geraeteAusruestung}" class="w-36 px-2.5 py-1.5 border border-slate-300 rounded font-mono text-right text-xs">
+                            </div>
+                            <div class="flex items-center justify-between gap-4">
+                                <span class="font-medium text-slate-700">3.1.4 Transport- und Anfahrtskosten (An-/Abtransport von Geräten, Sondernutzung)</span>
+                                <input type="number" step="0.01" id="efb222-bgk-314" value="${efb222.abschnitt3.transporteAnfahrten}" class="w-36 px-2.5 py-1.5 border border-slate-300 rounded font-mono text-right text-xs">
+                            </div>
+                            <div class="flex items-center justify-between gap-4">
+                                <span class="font-medium text-slate-700">3.1.5 Sonderkosten der Baustelle (Bauwesenversicherung, Genehmigungen, Prüfstatik)</span>
+                                <input type="number" step="0.01" id="efb222-bgk-315" value="${efb222.abschnitt3.sonderkosten}" class="w-36 px-2.5 py-1.5 border border-slate-300 rounded font-mono text-right text-xs">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. Endsummen-Zusammenfassung -->
+                    <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
+                        <div class="bg-slate-900 text-white px-5 py-3 font-semibold text-sm">
+                            4. Umlagerechnung & Netto-Angebotssumme
+                        </div>
+                        <div class="p-5 space-y-2 text-xs">
+                            <div class="flex justify-between py-1 border-b border-slate-100">
+                                <span>4.1 Eigene Lohnkosten (${formatNum(efb222.abschnitt4.gesamtstunden, 2)} h × ${formatCur(efb222.abschnitt1.verrechnungslohn)})</span>
+                                <span class="font-mono font-bold text-slate-800">${formatCur(efb222.abschnitt4.summeLohn)}</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-slate-100">
+                                <span>4.2 Stoffkosten (${formatCur(efb222.abschnitt4.ektStoffe)} + ${formatPct(efb222.abschnitt2.festeSachkostenUmlagen.stoffe)} Umlage)</span>
+                                <span class="font-mono font-bold text-slate-800">${formatCur(efb222.abschnitt4.summeStoffe)}</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-slate-100">
+                                <span>4.3 Gerätekosten (${formatCur(efb222.abschnitt4.ektGeraete)} + ${formatPct(efb222.abschnitt2.festeSachkostenUmlagen.geraete)} Umlage)</span>
+                                <span class="font-mono font-bold text-slate-800">${formatCur(efb222.abschnitt4.summeGeraete)}</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-slate-100">
+                                <span>4.4 Sonstige Kosten (${formatCur(efb222.abschnitt4.ektSonstige)} + ${formatPct(efb222.abschnitt2.festeSachkostenUmlagen.sonstige)} Umlage)</span>
+                                <span class="font-mono font-bold text-slate-800">${formatCur(efb222.abschnitt4.summeSonstige)}</span>
+                            </div>
+                            <div class="flex justify-between py-1 border-b border-slate-100">
+                                <span>4.5 Nachunternehmer (${formatCur(efb222.abschnitt4.ektNU)} + ${formatPct(efb222.abschnitt2.festeSachkostenUmlagen.nu)} Umlage)</span>
+                                <span class="font-mono font-bold text-slate-800">${formatCur(efb222.abschnitt4.summeNU)}</span>
+                            </div>
+                            <div class="flex justify-between py-3 bg-indigo-50 px-3 rounded-lg border border-indigo-200 mt-3 text-sm">
+                                <span class="font-bold text-slate-900">4.6 Netto-Angebotssumme (EFB 222):</span>
+                                <span class="font-mono font-bold text-indigo-700 text-lg">${formatCur(efb222.abschnitt4.angebotssummeNetto)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Tab Panel: EFB 223 -->
                 <div id="panel-efb223" class="${this.activeSubTab === '223' ? 'block' : 'hidden'} space-y-4">
                     <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
@@ -302,32 +434,44 @@ window.EFBView = class EFBView {
      * Bindet Event-Listener an die EFB-Ansicht.
      */
     bindEvents(container) {
-        // Tab Umschaltung
+        // Tab Umschaltung (221 / 222 / 223)
         const btn221 = container.querySelector('#tab-btn-efb221');
+        const btn222 = container.querySelector('#tab-btn-efb222');
         const btn223 = container.querySelector('#tab-btn-efb223');
         const panel221 = container.querySelector('#panel-efb221');
+        const panel222 = container.querySelector('#panel-efb222');
         const panel223 = container.querySelector('#panel-efb223');
 
-        if (btn221 && btn223) {
-            btn221.onclick = () => {
-                this.activeSubTab = '221';
+        const setActiveTab = (tab) => {
+            this.activeSubTab = tab;
+            [btn221, btn222, btn223].forEach(b => {
+                if (b) {
+                    b.classList.remove('border-primary', 'text-primary');
+                    b.classList.add('border-transparent', 'text-slate-500');
+                }
+            });
+            [panel221, panel222, panel223].forEach(p => {
+                if (p) p.classList.add('hidden');
+            });
+
+            if (tab === '221' && btn221 && panel221) {
                 btn221.classList.add('border-primary', 'text-primary');
                 btn221.classList.remove('border-transparent', 'text-slate-500');
-                btn223.classList.remove('border-primary', 'text-primary');
-                btn223.classList.add('border-transparent', 'text-slate-500');
                 panel221.classList.remove('hidden');
-                panel223.classList.add('hidden');
-            };
-            btn223.onclick = () => {
-                this.activeSubTab = '223';
+            } else if (tab === '222' && btn222 && panel222) {
+                btn222.classList.add('border-primary', 'text-primary');
+                btn222.classList.remove('border-transparent', 'text-slate-500');
+                panel222.classList.remove('hidden');
+            } else if (tab === '223' && btn223 && panel223) {
                 btn223.classList.add('border-primary', 'text-primary');
                 btn223.classList.remove('border-transparent', 'text-slate-500');
-                btn221.classList.remove('border-primary', 'text-primary');
-                btn221.classList.add('border-transparent', 'text-slate-500');
                 panel223.classList.remove('hidden');
-                panel221.classList.add('hidden');
-            };
-        }
+            }
+        };
+
+        if (btn221) btn221.onclick = () => setActiveTab('221');
+        if (btn222) btn222.onclick = () => setActiveTab('222');
+        if (btn223) btn223.onclick = () => setActiveTab('223');
 
         // Live Re-Calculation bei Eingaben
         const liveInputs = container.querySelectorAll('input[type="number"]');
@@ -345,6 +489,10 @@ window.EFBView = class EFBView {
         const pdf221Btn = container.querySelector('#btn-export-efb221-pdf');
         if (pdf221Btn) {
             pdf221Btn.onclick = () => this.handleExportPdf('221');
+        }
+        const pdf222Btn = container.querySelector('#btn-export-efb222-pdf');
+        if (pdf222Btn) {
+            pdf222Btn.onclick = () => this.handleExportPdf('222');
         }
         const pdf223Btn = container.querySelector('#btn-export-efb223-pdf');
         if (pdf223Btn) {
@@ -380,7 +528,29 @@ window.EFBView = class EFBView {
             zuschlag_sonst_wug: getVal('efb-zuschlag-sonst-wug', 5.0),
             zuschlag_nu_bgk: getVal('efb-zuschlag-nu-bgk', 8.0),
             zuschlag_nu_agk: getVal('efb-zuschlag-nu-agk', 10.0),
-            zuschlag_nu_wug: getVal('efb-zuschlag-nu-wug', 4.0)
+            zuschlag_nu_wug: getVal('efb-zuschlag-nu-wug', 4.0),
+            umlage_stoff_prozent: getVal('efb222-umlage-stoff', 20.00),
+            umlage_geraet_prozent: getVal('efb222-umlage-geraet', 10.00),
+            umlage_sonst_prozent: getVal('efb222-umlage-sonst', 5.00),
+            umlage_nu_prozent: getVal('efb222-umlage-nu', 10.00)
+        };
+    }
+
+    /**
+     * Liest die BGK-Werte für EFB 222 aus dem DOM.
+     */
+    collectBgkFromDOM() {
+        const getVal = (id, fallback) => {
+            const el = document.getElementById(id);
+            return el ? parseFloat(el.value) || fallback : fallback;
+        };
+
+        return {
+            lohnkosten_baustelleneinrichtung: getVal('efb222-bgk-311', 1200.00),
+            gehaltskosten_baustelle: getVal('efb222-bgk-312', 2500.00),
+            geraete_ausruestung: getVal('efb222-bgk-313', 1800.00),
+            transporte_anfahrten: getVal('efb222-bgk-314', 650.00),
+            sonderkosten: getVal('efb222-bgk-315', 450.00)
         };
     }
 
@@ -390,13 +560,15 @@ window.EFBView = class EFBView {
     handleLiveRecalculate() {
         if (!this.currentKalkulation) return;
         const profile = this.collectProfileFromDOM();
+        const bgkDetails = this.collectBgkFromDOM();
         const project = this.currentKalkulation.project || {};
         const positions = this.currentKalkulation.positions || [];
 
         if (window.EFBController) {
             const efb221 = window.EFBController.calculateEFB221(project, positions, profile);
+            const efb222 = window.EFBController.calculateEFB222(project, positions, bgkDetails, profile);
             const efb223 = window.EFBController.calculateEFB223(positions, efb221);
-            this.currentKalkulation = { efb221, efb223, profile, project, positions };
+            this.currentKalkulation = { efb221, efb222, efb223, profile, bgkDetails, project, positions };
             const container = document.getElementById('pd-panel-efb');
             if (container) this.renderView(container, this.currentKalkulation);
         }
@@ -423,7 +595,7 @@ window.EFBView = class EFBView {
     }
 
     /**
-     * Startet den PDF-Export für Formblatt 221 oder 223.
+     * Startet den PDF-Export für Formblatt 221, 222 oder 223.
      */
     async handleExportPdf(formblatt = '221') {
         if (!this.currentKalkulation) return;
@@ -435,6 +607,9 @@ window.EFBView = class EFBView {
         if (formblatt === '221') {
             html = window.EFBController.generateEFB221Html(project, this.currentKalkulation.efb221, company);
             defaultName = `EFB_221_${(project.name || 'Projekt').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+        } else if (formblatt === '222') {
+            html = window.EFBController.generateEFB222Html(project, this.currentKalkulation.efb222, company);
+            defaultName = `EFB_222_${(project.name || 'Projekt').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
         } else {
             html = window.EFBController.generateEFB223Html(project, this.currentKalkulation.efb223, this.currentKalkulation.efb221, company);
             defaultName = `EFB_223_${(project.name || 'Projekt').replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;

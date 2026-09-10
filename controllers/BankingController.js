@@ -747,6 +747,135 @@ const BankingController = {
         }
 
         return matches;
+    },
+
+    /**
+     * Berechnet die gesetzlichen Verzugszinsen nach § 288 BGB und VOB/B § 16 Abs. 5.
+     * Zinsmethode: Deutsche kaufmännische Zinsmethode (act/360).
+     * B2B: Basiszinssatz + 9 Prozentpunkte (§ 288 Abs. 2 BGB)
+     * B2C: Basiszinssatz + 5 Prozentpunkte (§ 288 Abs. 1 BGB)
+     * @param {Object} params - { amount, dueDate, paymentDate, isB2B, baseRate }
+     * @returns {Object} Detailliertes Verzugszinsergebnis
+     */
+    calculateDefaultInterest({ amount = 0, dueDate, paymentDate = new Date(), isB2B = true, baseRate = 3.37 }) {
+        const principal = Math.round((parseFloat(amount) || 0) * 100) / 100;
+        if (!dueDate || principal <= 0) {
+            return {
+                amount: principal,
+                dueDate: dueDate || '',
+                paymentDate: '',
+                daysOverdue: 0,
+                isB2B,
+                baseRate: parseFloat(baseRate) || 3.37,
+                appliedInterestRate: 0,
+                interestAmount: 0.00
+            };
+        }
+
+        const dueIso = dueDate instanceof Date ? dueDate.toISOString().split('T')[0] : String(dueDate).substring(0, 10);
+        const payIso = paymentDate instanceof Date ? paymentDate.toISOString().split('T')[0] : String(paymentDate).substring(0, 10);
+
+        const dDue = new Date(dueIso + 'T00:00:00Z');
+        const dPay = new Date(payIso + 'T00:00:00Z');
+        const diffMs = dPay.getTime() - dDue.getTime();
+        const daysOverdue = Math.max(0, Math.floor(diffMs / 86400000));
+
+        const base = parseFloat(baseRate) || 3.37;
+        const premium = isB2B ? 9.00 : 5.00;
+        const appliedInterestRate = Math.round((base + premium) * 100) / 100;
+
+        let interestAmount = 0.00;
+        if (daysOverdue > 0) {
+            // Z = K * (p / 100) * (t / 360)
+            interestAmount = Math.round((principal * (appliedInterestRate / 100) * (daysOverdue / 360)) * 100) / 100;
+        }
+
+        return {
+            amount: principal,
+            dueDate: dueIso,
+            paymentDate: payIso,
+            daysOverdue,
+            isB2B,
+            baseRate: base,
+            appliedInterestRate,
+            interestAmount
+        };
+    },
+
+    /**
+     * Ermittelt die gesetzliche Verzugsschadenspauschale nach § 288 Abs. 5 BGB.
+     * Für Geschäftskunden (B2B) beträgt die Pauschale bei Verzug 40,00 Euro kraft Gesetzes.
+     * @param {boolean} isB2B - Handelt es sich um ein B2B-Rechtsgeschäft?
+     * @param {boolean} isOverdue - Befindet sich die Forderung im Verzug?
+     * @returns {number} 40.00 oder 0.00
+     */
+    calculateLatePaymentFee(isB2B = true, isOverdue = true) {
+        return (isB2B && isOverdue) ? 40.00 : 0.00;
+    },
+
+    /**
+     * Erstellt eine Gesamtaufstellung aller offenen Posten mit Verzugszinsen und 40-€-Pauschale für das Mahnwesen.
+     * @param {Object} params - { invoices, calculationDate, baseRate, mahngebuehrJeRechnung }
+     * @returns {Object} Mahnberechnungs-Zusammenfassung
+     */
+    calculateMahnungClaims({ invoices = [], calculationDate = new Date(), baseRate = 3.37, mahngebuehrJeRechnung = 0.00 }) {
+        let totalPrincipal = 0;
+        let totalInterest = 0;
+        let totalLateFee = 0;
+        let totalMahngebuehr = 0;
+
+        const calculatedInvoices = invoices.map(inv => {
+            const amount = parseFloat(inv.offen) || (parseFloat(inv.brutto) - (parseFloat(inv.bezahlt_betrag) || 0)) || 0;
+            const isB2B = inv.customer_type ? (inv.customer_type === 'B2B' || inv.customer_type === 'B2G') : (!inv.ist_privatkunde);
+            const zinsInfo = this.calculateDefaultInterest({
+                amount,
+                dueDate: inv.faellig || inv.datum,
+                paymentDate: calculationDate,
+                isB2B,
+                baseRate
+            });
+
+            const isOverdue = zinsInfo.daysOverdue > 0;
+            const lateFee = this.calculateLatePaymentFee(isB2B, isOverdue);
+            const gebuehr = isOverdue ? (parseFloat(mahngebuehrJeRechnung) || 0) : 0;
+            const gesamtRechnung = Math.round((amount + zinsInfo.interestAmount + lateFee + gebuehr) * 100) / 100;
+
+            totalPrincipal += amount;
+            totalInterest += zinsInfo.interestAmount;
+            totalLateFee += lateFee;
+            totalMahngebuehr += gebuehr;
+
+            return {
+                id: inv.id,
+                nr: inv.nr || inv.rechnungs_nr,
+                amount: Math.round(amount * 100) / 100,
+                dueDate: zinsInfo.dueDate,
+                daysOverdue: zinsInfo.daysOverdue,
+                isB2B,
+                interestRate: zinsInfo.appliedInterestRate,
+                interestAmount: zinsInfo.interestAmount,
+                lateFee,
+                mahngebuehr: gebuehr,
+                totalDue: gesamtRechnung
+            };
+        });
+
+        totalPrincipal = Math.round(totalPrincipal * 100) / 100;
+        totalInterest = Math.round(totalInterest * 100) / 100;
+        totalLateFee = Math.round(totalLateFee * 100) / 100;
+        totalMahngebuehr = Math.round(totalMahngebuehr * 100) / 100;
+        const totalClaim = Math.round((totalPrincipal + totalInterest + totalLateFee + totalMahngebuehr) * 100) / 100;
+
+        return {
+            calculationDate: calculationDate instanceof Date ? calculationDate.toISOString().split('T')[0] : String(calculationDate).substring(0, 10),
+            baseRate: parseFloat(baseRate) || 3.37,
+            invoices: calculatedInvoices,
+            totalPrincipal,
+            totalInterest,
+            totalLateFee,
+            totalMahngebuehr,
+            totalClaim
+        };
     }
 };
 

@@ -160,6 +160,119 @@ class AufmassController {
         }
         return { valid: true };
     }
+
+    /**
+     * Prüft eine Öffnung, Aussparung oder Unterbrechung anhand der gewerkespezifischen VOB/C Übermessungsregeln.
+     * Referenz: ATV DIN 18299 (Abschnitt 5) und Fach-ATVs DIN 18330 bis DIN 18363.
+     * @param {number} einzelmass - Größe der Öffnung/Aussparung (m², m³ oder m)
+     * @param {string} gewerkNorm - Gewerke-Norm (z.B. 'DIN_18350', 'PUTZ', 'TROCKENBAU', 'FLIESEN', 'ESTRICH')
+     * @param {string} massType - 'FLAECHE' (m²), 'LAENGE' (m) oder 'RAUM' (m³)
+     * @returns {Object} Übermessungs-Prüfergebnis
+     */
+    static applyUebermessungRule(einzelmass, gewerkNorm = 'DIN_18350', massType = 'FLAECHE') {
+        const mass = Math.round((parseFloat(einzelmass) || 0) * 10000) / 10000;
+        const norm = String(gewerkNorm || '').toUpperCase().replace(/[\s-]+/g, '_');
+        const type = String(massType || 'FLAECHE').toUpperCase();
+
+        let grenzwert = 2.50; // Standardgrenzwert für Wandflächen (DIN 18330 ff.)
+
+        if (type === 'LAENGE' || type === 'METER' || norm.includes('LAENGE')) {
+            // Längenmaße: Unterbrechungen <= 1,00 m Einzellänge werden übermessen (DIN 18299)
+            grenzwert = 1.00;
+        } else if (type === 'RAUM' || norm.includes('RAUM') || norm.includes('KUBIK')) {
+            // Beton-Raummaße: Aussparungen <= 0,50 m³ werden übermessen (DIN 18331)
+            grenzwert = 0.50;
+        } else if (norm.includes('18352') || norm.includes('FLIESEN') ||
+                   norm.includes('18353') || norm.includes('ESTRICH') ||
+                   norm.includes('18356') || norm.includes('BODENBELAG')) {
+            // Fliesen, Platten, Estrich, Bodenbeläge: Aussparungen <= 0,10 m² werden übermessen
+            grenzwert = 0.10;
+        } else if (norm.includes('BODEN') && (norm.includes('18330') || norm.includes('18340') || norm.includes('ROHBAU'))) {
+            // Rohbau- / Trockenbauböden: Aussparungen <= 0,50 m² werden übermessen
+            grenzwert = 0.50;
+        } else {
+            // Mauerwerk (DIN 18330), Beton Wand (DIN 18331), Trockenbau (DIN 18340), Putz (DIN 18350),
+            // WDVS (DIN 18345), Maler (DIN 18363), Tischler (DIN 18355): Öffnungen <= 2,50 m² werden übermessen
+            grenzwert = 2.50;
+        }
+
+        const isOvermeasured = mass <= grenzwert;
+        const abzug = isOvermeasured ? 0 : mass;
+        const begruendung = isOvermeasured
+            ? `Einzelmaß ${mass} <= Grenzwert ${grenzwert} gem. VOB/C: Übermessung (kein Abzug, Abrechnung als Vollfläche).`
+            : `Einzelmaß ${mass} > Grenzwert ${grenzwert} gem. VOB/C: Abzugspflichtige Minderfläche.`;
+
+        return {
+            mass,
+            gewerkNorm,
+            massType: type,
+            grenzwert,
+            isOvermeasured,
+            abzug: Math.round(abzug * 10000) / 10000,
+            begruendung
+        };
+    }
+
+    /**
+     * Berechnet die abrechenbare Nettofläche nach VOB/C unter Berücksichtigung aller Aussparungen.
+     * @param {number} bruttoFlaeche - Gesamte Bruttofläche
+     * @param {Array} aussparungen - Liste der Aussparungen (Zahlen, Formeln oder { breite, hoehe, flaeche, bezeichnung })
+     * @param {string} gewerkNorm - Gewerke-Norm
+     * @param {string} massType - 'FLAECHE' oder 'LAENGE'
+     * @returns {Object} Detaillierte Abrechnungsübersicht nach VOB/C
+     */
+    static calculateNettoAufmass(bruttoFlaeche, aussparungen = [], gewerkNorm = 'DIN_18350', massType = 'FLAECHE') {
+        const brutto = Math.round((parseFloat(bruttoFlaeche) || 0) * 10000) / 10000;
+        let summeUebermessen = 0;
+        let summeAbzuege = 0;
+
+        const gepruefteAussparungen = aussparungen.map((item, idx) => {
+            let mass = 0;
+            let bez = `Aussparung ${idx + 1}`;
+
+            if (typeof item === 'number') {
+                mass = item;
+            } else if (typeof item === 'string') {
+                mass = AufmassController.evaluateFormula(item);
+                bez = item;
+            } else if (item && typeof item === 'object') {
+                bez = item.bezeichnung || item.name || bez;
+                if (item.flaeche !== undefined) {
+                    mass = parseFloat(item.flaeche) || 0;
+                } else if (item.breite && item.hoehe) {
+                    mass = Math.round((parseFloat(item.breite) * parseFloat(item.hoehe)) * 10000) / 10000;
+                } else if (item.formel) {
+                    mass = AufmassController.evaluateFormula(item.formel);
+                }
+            }
+
+            const check = AufmassController.applyUebermessungRule(mass, gewerkNorm, massType);
+            if (check.isOvermeasured) {
+                summeUebermessen += check.mass;
+            } else {
+                summeAbzuege += check.abzug;
+            }
+
+            return {
+                bezeichnung: bez,
+                ...check
+            };
+        });
+
+        summeUebermessen = Math.round(summeUebermessen * 10000) / 10000;
+        summeAbzuege = Math.round(summeAbzuege * 10000) / 10000;
+        const nettoFlaeche = Math.max(0, Math.round((brutto - summeAbzuege) * 10000) / 10000);
+
+        return {
+            bruttoFlaeche: brutto,
+            gewerkNorm,
+            massType,
+            gepruefteAussparungen,
+            summeUebermessen,
+            summeAbzuege,
+            nettoFlaeche
+        };
+    }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

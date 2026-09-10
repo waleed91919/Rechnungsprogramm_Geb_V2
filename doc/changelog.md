@@ -291,3 +291,19 @@
   - Implementierung von [`scripts/run_full_system_test.js`](file:///C:/Users/walee/Desktop/server/Rechnungsprogramm_Geb_V2/scripts/run_full_system_test.js) & [`tests/full_system.test.js`](file:///C:/Users/walee/Desktop/server/Rechnungsprogramm_Geb_V2/tests/full_system.test.js).
   - Erzeugung aller Testbelege in `./output/invoices/` und Testberichte in `./tests/test_results/`.
   - Erfolgreiche Validierung aller 8 Bau-ERP Module (11/11 Test-Suites bestanden).
+
+## 08.09.2026
+- **Rechnungsmodal-Bereinigung & Sicherheitseinbehalt in %:**
+  - Entfernung vorzeitiger Download-Schaltflächen im B2G-Bereich des Erstellungsdialogs.
+  - Vollständige Integration von "Sicherheitseinbehalt in %" in `code.html`, `js/editor.js`, `schema.js`, `db.js` und `controllers/InvoiceController.js`.
+  - E-Rechnungsausweis (BT-20 / BT-22 / BT-113) und PDF-Abzugsausweis.
+
+## 09.09.2026 / 10.09.2026
+- **Bauprofessor.de Deep-Research & VOB/VHB-Kernbaustein-Integration (Phase 1):**
+  - **EFB 222 (Endsummenkalkulation nach VHB-Bund):** Vollständige auftragsbezogene Gliederung der Baustellengemeinkosten (BGK 3.1.1–3.1.5), Sachkostenumlagen und Restgemeinkostenumlage auf den Lohn zur Verrechnungslohnbildung ($VL$), Wagnisdifferenzierung und DIN A4-Druck-Renderer in [`controllers/EFBController.js`](../controllers/EFBController.js) und [`views/EFBView.js`](../views/EFBView.js).
+  - **Differenzierte Sicherheitseinbehalte & 5 %-Cap (VOB/B § 17 & VOB/A § 9c):** Erfüllungssicherheit mit harter 5 %-Deckelung auf die Netto-Auftragssumme, Gewährleistungssicherheit, 18-Werktage Sperrkonto-Fristenradar und VOB/A § 9c Schwellenwertprüfung in [`controllers/CumulativeBillingController.js`](../controllers/CumulativeBillingController.js) und [`controllers/InvoiceController.js`](../controllers/InvoiceController.js).
+  - **VOB/C Übermessungs- & Abzugsregeln (DIN 18299 ff.):** Automatische Bewertung von Öffnungen (2,50 m² Rohbau/Putz/Maler/Trockenbau, 0,10 m² Fliesen/Estrich, 1,00 m Längenmaße) und Nettoaufmaß-Berechnung in [`controllers/AufmassController.js`](../controllers/AufmassController.js).
+  - **B2B-Verzugszinsen & 40-€-Pauschale (§ 288 BGB & § 16 VOB/B):** Taggenaue Zinsberechnung (Basiszinssatz + 9 %) und automatische 40,00 € Verzugspauschale für Geschäftskunden in [`controllers/BankingController.js`](../controllers/BankingController.js).
+  - **VOB-Schriftverkehr-Generator:** Neues Modul [`controllers/VobCorrespondenceController.js`](../controllers/VobCorrespondenceController.js) zur Generierung von Behinderungsanzeigen (§ 6 VOB/B), Bedenkenanmeldungen (§ 4 Abs. 3 VOB/B), Bauhandwerkersicherungen (§ 650f BGB, 110 % Bürgschaftsrechner) und Abnahmeaufforderungen (§ 12 VOB/B).
+  - **Testsuite & Qualitätssicherung:** 19 neue Unittests implementiert; 252 von 252 Tests erfolgreich bestanden (100% grün).
+

@@ -27,6 +27,9 @@ class InvoiceController {
         isGlobal13b = false,
         globalRabatt = { value: 0, type: '%' },
         sicherheitseinbehaltProzent = 0,
+        retentionMode = 'WARRANTY',
+        contractTotalNet = 0,
+        maxRetentionRate = 5.0,
         verrechnungen = [],
         anzahlung = 0
     }) {
@@ -98,13 +101,35 @@ class InvoiceController {
         const taxBreakdown = [];
         let totalTax = 0;
 
+        let isCapped = false;
+        let maxRetentionCap = null;
+        let vobAHint = null;
+
+        const calcRetention = (baseNet) => {
+            if (sicherheitseinbehaltProzent <= 0) return 0;
+            const raw = this.round2(baseNet * (sicherheitseinbehaltProzent / 100));
+            if (retentionMode === 'EXECUTION') {
+                const cNet = parseFloat(contractTotalNet) || 0;
+                if (cNet > 0 && cNet < 250000) {
+                    vobAHint = 'Gemäß VOB/A § 9c Abs. 2 soll bei einem Netto-Auftragswert unter 250.000 € auf die Vereinbarung einer Vertragserfüllungssicherheit verzichtet werden.';
+                }
+                if (cNet > 0) {
+                    const mRate = parseFloat(maxRetentionRate) || 5.0;
+                    maxRetentionCap = this.round2(cNet * (mRate / 100));
+                    if (raw >= maxRetentionCap) {
+                        isCapped = true;
+                        return maxRetentionCap;
+                    }
+                }
+            }
+            return raw;
+        };
+
         if (mode === 'netto') {
             nettoNachRabatt = this.round2(Math.max(0, positionenNetto - abzug));
             const rabattFaktor = positionenNetto > 0 ? (nettoNachRabatt / positionenNetto) : 1;
 
-            if (sicherheitseinbehaltProzent > 0) {
-                sicherheitseinbehaltNetto = this.round2(nettoNachRabatt * (sicherheitseinbehaltProzent / 100));
-            }
+            sicherheitseinbehaltNetto = calcRetention(nettoNachRabatt);
 
             // VOB/B & § 13 UStG: Sicherheitseinbehalt mindert NICHT die Steuerentstehung!
             // Die Steuer bemisst sich auf das volle Netto nach Rabatt abzüglich Netto-Verrechnungen.
@@ -153,9 +178,7 @@ class InvoiceController {
             });
             nettoNachRabatt = this.round2(bruttoNachRabatt - totalTaxBase);
 
-            if (sicherheitseinbehaltProzent > 0) {
-                sicherheitseinbehaltNetto = this.round2(nettoNachRabatt * (sicherheitseinbehaltProzent / 100));
-            }
+            sicherheitseinbehaltNetto = calcRetention(nettoNachRabatt);
 
             // VOB/B & § 13 UStG: Sicherheitseinbehalt mindert NICHT die Steuerentstehung!
             const steuerpflichtigesNetto = this.round2(Math.max(
@@ -192,6 +215,11 @@ class InvoiceController {
             totalsNormalNetto,
             sicherheitseinbehaltNetto,
             sicherheitseinbehaltProzent,
+            retentionMode,
+            isCapped,
+            maxRetentionCap,
+            contractTotalNet: parseFloat(contractTotalNet) || 0,
+            vobAHint,
             verrechnungenSummeNetto,
             taxBreakdown,
             totalTax,
