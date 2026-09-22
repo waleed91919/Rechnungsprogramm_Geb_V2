@@ -23,8 +23,9 @@ if (process.env.RECHNUNGSPROGRAMM_DB_PATH) {
 console.log('Database path:', dbPath);
 const db = new Database(dbPath, { verbose: console.log });
 
-// Enable security and performance features (WAL Mode, Foreign Keys)
+// Enable security and performance features (WAL Mode, Foreign Keys, Busy Timeout)
 db.exec(`
+    PRAGMA busy_timeout = 5000;
     PRAGMA foreign_keys = ON;
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = NORMAL;
@@ -103,35 +104,54 @@ function applyDocumentWrite(d, requestedLockedInt) {
             throw new Error(`Dokument mit ID ${docId} wurde nicht gefunden.`);
         }
 
-        const existingWasLocked = !!existing.isLocked;
-        if (existingWasLocked) {
-            // GoBD-Änderungssperre: Entsperren NUR über entsperreBeleg()
+        // GOBD-1 Fix: Vollständige Erfassung aller unveränderlichen GoBD-Status
+        const GOBD_PROTECTED_STATUSES = ['Festgeschrieben', 'Bezahlt', 'Storniert'];
+        const isCurrentlyLocked = existing.isLocked === 1 || GOBD_PROTECTED_STATUSES.includes(existing.status);
+
+        if (isCurrentlyLocked) {
+            // 1. Entsperren ist nach GoBD strikt verboten (GOBD-2)
             if (requestedLockedInt === 0) {
-                throw new Error(`Beleg ${existing.nr} ist gesperrt (GoBD). Eine Freigabe ist nur über die explizite Funktion 'Beleg entsperren' mit Begründung möglich.`);
+                throw new Error(`GoBD-Schutzverletzung: Beleg ${existing.nr} ist festgeschrieben/gesperrt. Ein Aufheben der Sperre ist unzulässig. Korrekturen müssen über Storno/Gutschrift erfolgen.`);
             }
-            // GoBD-Änderungssperre: Nur Buchhaltungs-/Statusfelder änderbar
+
+            // 2. Inhaltsprüfung: Haben sich Positionen, Beträge oder Stammdaten geändert?
             const oldContentHash = calculateDocumentContentHash(existing);
             const newContentHash = calculateDocumentContentHash(d);
+
             if (oldContentHash !== newContentHash) {
-                throw new Error(`Beleg ${existing.nr} ist gesperrt (GoBD-Änderungssperre): Inhaltsfelder dürfen nicht mehr geändert werden. Bitte erstellen Sie eine Stornorechnung/Korrekturrechnung.`);
+                throw new Error(`GoBD-Änderungssperre (GOBD-1): Beleg ${existing.nr} (Status: ${existing.status}) ist revisionssicher fixiert. Inhaltliche Mutationen sind gesetzlich untersagt (§ 146 Abs. 4 AO). Bitte erstellen Sie eine Stornorechnung.`);
             }
+
+            // 3. Wenn der Inhalt identisch ist, dürfen NUR Status- & Mahnfelder aktualisiert werden!
+            const updateStatusOnlyStmt = db.prepare(`
+                UPDATE dokumente SET
+                    status=?, mahnungLevel=?, mahnungDatum=?, mahnungGebuehr=?,
+                    skonto_tage=?, skonto_prozent=?, sepa_mandat_id=?, isLocked=1
+                WHERE id=?
+            `);
+            updateStatusOnlyStmt.run(
+                d.status, d.mahnungLevel || 0, d.mahnungDatum || null, d.mahnungGebuehr || 0,
+                d.skonto_tage || 0, d.skonto_prozent || 0, d.sepa_mandat_id || null, docId
+            );
+
+            appendAuditLog({
+                entityType: 'DOCUMENT',
+                entityId: docId,
+                action: 'STATUS_GEÄNDERT',
+                details: { nr: existing.nr, oldStatus: existing.status, newStatus: d.status, reason: 'Status-Aktualisierung bei festgeschriebenem Beleg' }
+            });
+
+            return docId; // Beende hier atomar, ohne DELETE auf Positionen auszuführen!
         }
     }
 
     // Datenintegrität: Belegnummer darf nur an DIESER Beleg selbst vergeben sein
-    // (gilt für Neu-Anlage UND Update; bei gesperrten Belegen greift vorher die
-    // GoBD-Änderungssperre über den Inhalts-Hash). Der UNIQUE-Index auf dokumente(nr)
-    // greift zusätzlich als letzter Riegel; hier mit deutscher Fehlermeldung.
     const nrConflict = db.prepare('SELECT id FROM dokumente WHERE nr = ? AND id IS NOT ?').get(d.nr, docId == null ? null : docId);
     if (nrConflict) {
         throw new Error(`Die Belegnummer "${d.nr}" ist bereits vergeben (Dokument #${nrConflict.id}). Bitte verwenden Sie eine andere Nummer.`);
     }
 
     if (docId) {
-
-        const updateStmt = db.prepare('UPDATE dokumente SET type=?, nr=?, datum=?, faellig=?, kundeId=?, projektId=?, status=?, isLocked=?, netto=?, steuer=?, brutto=?, globalRabattAbzug=?, globalRabattType=?, globalRabattValue=?, anzahlung=?, mahnungLevel=?, mahnungDatum=?, mahnungGebuehr=?, eingabemodus=?, vortext=?, fusstext=?, leistungszeitraum_von=?, leistungszeitraum_bis=?, baustellen_adresse=?, vob_vereinbart=?, ist_privatkunde=?, unterliegt_bauabzugsteuer=?, bauabzugsteuer_betrag=?, ausweis_35a_erforderlich=?, summe_lohnkosten_brutto=?, rechnungsart=?, kumulierte_leistung_netto=?, sicherheitseinbehalt=?, sicherheitseinbehalt_prozent=?, unterliegt_13b=?, leitweg_id=?, buyer_reference=?, objekt_typ=?, objekt_id=?, skonto_tage=?, skonto_prozent=?, sepa_mandat_id=?, sha256_hash=? WHERE id=?');
-        updateStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt(d), d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.mahnungLevel || 0, d.mahnungDatum || null, d.mahnungGebuehr || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.sicherheitseinbehalt_prozent || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.objekt_typ || null, d.objekt_id == null ? null : d.objekt_id, d.skonto_tage || 0, d.skonto_prozent || 0, d.sepa_mandat_id == null ? null : d.sepa_mandat_id, d.sha256_hash || null, docId);
-
         action = (calculateDocumentContentHash(existing) === calculateDocumentContentHash(d)) ? 'STATUS_GEÄNDERT' : 'GEÄNDERT';
 
         if (d.type === 'rechnung') {
@@ -151,44 +171,72 @@ function applyDocumentWrite(d, requestedLockedInt) {
             }
         }
 
+        // ACHTUNG REVIEWER-AUFLAGE: Positionen und Verrechnungen VOR dem Dokumentenkopf-Update löschen und neu schreiben!
+        // Da der Beleg in der DB noch Entwurf (isLocked=0) ist, blockiert der SQLite-Trigger trg_prevent_locked_positionen_delete hier nicht!
         const deletePosStmt = db.prepare('DELETE FROM positionen WHERE dokumentId=?');
         deletePosStmt.run(docId);
         const deleteVerrechnungStmt = db.prepare('DELETE FROM rechnung_verrechnungen WHERE aktuelle_rechnung_id=?');
         deleteVerrechnungStmt.run(docId);
+
+        // Neue Positionen einfügen
+        if (d.positionen && d.positionen.length > 0) {
+            const insertPosStmt = db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            const stockDeductionMap = new Map();
+
+            for (const p of d.positionen) {
+                insertPosStmt.run(docId, p.artikelId || null, p.name || null, p.menge, p.einheit || 'Stk.', p.preis, p.ek || 0, p.mwst, p.rabatt || 0, p.steuer_schluessel || null, p.is13b ? 1 : 0, p.cost_type || 'MATERIAL', p.oz_code || null, p.is_tax_deductible_35a ? 1 : 0);
+
+                if (d.type === 'rechnung' && p.artikelId) {
+                    stockDeductionMap.set(p.artikelId, (stockDeductionMap.get(p.artikelId) || 0) + p.menge);
+                }
+            }
+
+            if (stockDeductionMap.size > 0) {
+                const deductStockStmt = db.prepare('UPDATE artikel SET bestand = bestand - ? WHERE id=?');
+                for (const [artId, qty] of stockDeductionMap.entries()) {
+                    deductStockStmt.run(qty, artId);
+                }
+            }
+        }
+
+        // Neue Verrechnungen einfügen
+        insertVerrechnungenGuarded(docId, d.verrechnungen);
+
+        // ERST JETZT Dokumentenkopf mit isLocked und neuem Status aktualisieren
+        const updateStmt = db.prepare('UPDATE dokumente SET type=?, nr=?, datum=?, faellig=?, kundeId=?, projektId=?, status=?, isLocked=?, netto=?, steuer=?, brutto=?, globalRabattAbzug=?, globalRabattType=?, globalRabattValue=?, anzahlung=?, mahnungLevel=?, mahnungDatum=?, mahnungGebuehr=?, eingabemodus=?, vortext=?, fusstext=?, leistungszeitraum_von=?, leistungszeitraum_bis=?, baustellen_adresse=?, vob_vereinbart=?, ist_privatkunde=?, unterliegt_bauabzugsteuer=?, bauabzugsteuer_betrag=?, ausweis_35a_erforderlich=?, summe_lohnkosten_brutto=?, rechnungsart=?, kumulierte_leistung_netto=?, sicherheitseinbehalt=?, sicherheitseinbehalt_prozent=?, unterliegt_13b=?, leitweg_id=?, buyer_reference=?, objekt_typ=?, objekt_id=?, skonto_tage=?, skonto_prozent=?, sepa_mandat_id=?, sha256_hash=?, zahlbetrag=? WHERE id=?');
+        updateStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, requestedLockedInt, d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.mahnungLevel || 0, d.mahnungDatum || null, d.mahnungGebuehr || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.sicherheitseinbehalt_prozent || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.objekt_typ || null, d.objekt_id == null ? null : d.objekt_id, d.skonto_tage || 0, d.skonto_prozent || 0, d.sepa_mandat_id == null ? null : d.sepa_mandat_id, d.sha256_hash || null, d.zahlbetrag !== undefined && d.zahlbetrag !== null ? d.zahlbetrag : 0, docId);
+
     } else {
-        const insertStmt = db.prepare('INSERT INTO dokumente (type, nr, datum, faellig, kundeId, projektId, status, isLocked, netto, steuer, brutto, globalRabattAbzug, globalRabattType, globalRabattValue, anzahlung, eingabemodus, vortext, fusstext, leistungszeitraum_von, leistungszeitraum_bis, baustellen_adresse, vob_vereinbart, ist_privatkunde, unterliegt_bauabzugsteuer, bauabzugsteuer_betrag, ausweis_35a_erforderlich, summe_lohnkosten_brutto, rechnungsart, kumulierte_leistung_netto, sicherheitseinbehalt, sicherheitseinbehalt_prozent, unterliegt_13b, leitweg_id, buyer_reference, objekt_typ, objekt_id, skonto_tage, skonto_prozent, sepa_mandat_id, sha256_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-        const res = insertStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt(d), d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.sicherheitseinbehalt_prozent || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.objekt_typ || null, d.objekt_id == null ? null : d.objekt_id, d.skonto_tage || 0, d.skonto_prozent || 0, d.sepa_mandat_id == null ? null : d.sepa_mandat_id, d.sha256_hash || null);
+        const insertStmt = db.prepare('INSERT INTO dokumente (type, nr, datum, faellig, kundeId, projektId, status, isLocked, netto, steuer, brutto, globalRabattAbzug, globalRabattType, globalRabattValue, anzahlung, eingabemodus, vortext, fusstext, leistungszeitraum_von, leistungszeitraum_bis, baustellen_adresse, vob_vereinbart, ist_privatkunde, unterliegt_bauabzugsteuer, bauabzugsteuer_betrag, ausweis_35a_erforderlich, summe_lohnkosten_brutto, rechnungsart, kumulierte_leistung_netto, sicherheitseinbehalt, sicherheitseinbehalt_prozent, unterliegt_13b, leitweg_id, buyer_reference, objekt_typ, objekt_id, skonto_tage, skonto_prozent, sepa_mandat_id, sha256_hash, zahlbetrag) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        const res = insertStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, requestedLockedInt, d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.sicherheitseinbehalt_prozent || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.objekt_typ || null, d.objekt_id == null ? null : d.objekt_id, d.skonto_tage || 0, d.skonto_prozent || 0, d.sepa_mandat_id == null ? null : d.sepa_mandat_id, d.sha256_hash || null, d.zahlbetrag !== undefined && d.zahlbetrag !== null ? d.zahlbetrag : 0);
         docId = res.lastInsertRowid;
-    }
 
-    // Insert new positions and deduct stock
-    if (d.positionen && d.positionen.length > 0) {
-        const insertPosStmt = db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-        const stockDeductionMap = new Map();
+        // Positionen einfügen
+        if (d.positionen && d.positionen.length > 0) {
+            const insertPosStmt = db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            const stockDeductionMap = new Map();
 
-        for (const p of d.positionen) {
-            insertPosStmt.run(docId, p.artikelId || null, p.name || null, p.menge, p.einheit || 'Stk.', p.preis, p.ek || 0, p.mwst, p.rabatt || 0, p.steuer_schluessel || null, p.is13b ? 1 : 0, p.cost_type || 'MATERIAL', p.oz_code || null, p.is_tax_deductible_35a ? 1 : 0);
+            for (const p of d.positionen) {
+                insertPosStmt.run(docId, p.artikelId || null, p.name || null, p.menge, p.einheit || 'Stk.', p.preis, p.ek || 0, p.mwst, p.rabatt || 0, p.steuer_schluessel || null, p.is13b ? 1 : 0, p.cost_type || 'MATERIAL', p.oz_code || null, p.is_tax_deductible_35a ? 1 : 0);
 
-            if (d.type === 'rechnung' && p.artikelId) {
-                stockDeductionMap.set(p.artikelId, (stockDeductionMap.get(p.artikelId) || 0) + p.menge);
+                if (d.type === 'rechnung' && p.artikelId) {
+                    stockDeductionMap.set(p.artikelId, (stockDeductionMap.get(p.artikelId) || 0) + p.menge);
+                }
+            }
+
+            if (stockDeductionMap.size > 0) {
+                const deductStockStmt = db.prepare('UPDATE artikel SET bestand = bestand - ? WHERE id=?');
+                for (const [artId, qty] of stockDeductionMap.entries()) {
+                    deductStockStmt.run(qty, artId);
+                }
             }
         }
 
-        if (stockDeductionMap.size > 0) {
-            // Optimization idea rejected: Dynamic CASE ... WHEN ... THEN SQL string approach is discouraged.
-            // Relying on a Node-level loop executing a prepared statement strictly within a single SQLite
-            // transaction is highly performant in better-sqlite3, much safer, and significantly easier to read.
-            const deductStockStmt = db.prepare('UPDATE artikel SET bestand = bestand - ? WHERE id=?');
-            for (const [artId, qty] of stockDeductionMap.entries()) {
-                deductStockStmt.run(qty, artId);
-            }
-        }
+        // Verrechnungen einfügen
+        insertVerrechnungenGuarded(docId, d.verrechnungen);
     }
 
-    insertVerrechnungenGuarded(docId, d.verrechnungen);
-
-    // GoBD: Audit-Eintrag INNERHALB derselben Transaktion - schlägt er
-    // fehl, wird die gesamte Mutation zurückgerollt.
+    // GoBD: Audit-Eintrag INNERHALB derselben Transaktion
     appendAuditLog({
         entityType: 'DOCUMENT',
         entityId: docId,
@@ -198,7 +246,7 @@ function applyDocumentWrite(d, requestedLockedInt) {
             type: d.type,
             status: d.status,
             vorherigerStatus: existing ? existing.status : null,
-            isLocked: isLockedInt(d) === 1,
+            isLocked: requestedLockedInt === 1,
             brutto: d.brutto || 0,
             sha256_hash: d.sha256_hash
         }
@@ -234,10 +282,13 @@ function insertVerrechnungenGuarded(docId, verrechnungen) {
         }
     }
 
-    const insertVerrechnungStmt = db.prepare('INSERT INTO rechnung_verrechnungen (aktuelle_rechnung_id, vorherige_rechnung_id, abzugsbetrag_netto) VALUES (?, ?, ?)');
+    const insertVerrechnungStmt = db.prepare('INSERT INTO rechnung_verrechnungen (aktuelle_rechnung_id, vorherige_rechnung_id, abzugsbetrag_netto, abzugsbetrag_brutto) VALUES (?, ?, ?, ?)');
     for (const v of verrechnungen) {
         if (!v || !v.vorherige_rechnung_id) continue;
-        insertVerrechnungStmt.run(docId, v.vorherige_rechnung_id, v.abzugsbetrag_netto || 0);
+        const bruttoVal = (v.abzugsbetrag_brutto !== undefined && v.abzugsbetrag_brutto !== null && Number.isFinite(parseFloat(v.abzugsbetrag_brutto)))
+            ? parseFloat(v.abzugsbetrag_brutto)
+            : Math.round(((parseFloat(v.abzugsbetrag_netto) || 0) * 1.19) * 100) / 100;
+        insertVerrechnungStmt.run(docId, v.vorherige_rechnung_id, v.abzugsbetrag_netto || 0, bruttoVal);
     }
 }
 
@@ -435,6 +486,11 @@ function baueObjektPfad(typ, id) {
 }
 
 const dbAPI = {
+    // GoBD B-3: Atomares Laden eines Belegs per ID direkt aus der Datenbank
+    getDocumentById(docId) {
+        return getDocumentWithChildren(docId);
+    },
+
     // --- Initial Full State Load (for init.js) ---
     async getFullState() {
         const state = {
@@ -610,8 +666,31 @@ const dbAPI = {
             return res.id;
         }
     },
-    async deleteArtikel(id) {
-        return await dbRun('DELETE FROM artikel WHERE id=?', [id]);
+    // GOBD-4 Fix: Artikel Soft-Delete mit Referenz-Integrität
+    async deleteArtikel(id, grund = 'Benutzer-Löschung') {
+        const tx = db.transaction((artId, reason) => {
+            const art = db.prepare('SELECT * FROM artikel WHERE id=?').get(artId);
+            if (!art) return { success: true };
+
+            // Referenzprüfung: Wird Artikel in Belegen verwendet?
+            const posCount = db.prepare('SELECT COUNT(*) as cnt FROM positionen WHERE artikelId=?').get(artId).cnt;
+            if (posCount > 0) {
+                // Bei Beleg-Referenzen ist physisches Löschen verboten -> Soft-Delete
+                db.prepare('UPDATE artikel SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id=?').run(artId);
+            } else {
+                // Keine Belegreferenzen: Physisches Löschen zulässig
+                db.prepare('DELETE FROM artikel WHERE id=?').run(artId);
+            }
+
+            appendAuditLog({
+                entityType: 'ARTIKEL',
+                entityId: artId,
+                action: 'GELOESCHT',
+                details: { name: art.name, artikelnummer: art.ean || art.id, grund: reason, softDelete: posCount > 0 }
+            });
+            return { success: true };
+        });
+        return tx(id, grund);
     },
 
     // --- Kunden ---
@@ -643,8 +722,33 @@ const dbAPI = {
             return res.id;
         }
     },
-    async deleteKunde(id) {
-        return await dbRun('DELETE FROM kunden WHERE id=?', [id]);
+    // GOBD-4 Fix: Kunden Soft-Delete mit Referenz-Integrität
+    async deleteKunde(id, grund = 'Benutzer-Löschung') {
+        const tx = db.transaction((kId, reason) => {
+            const kunde = db.prepare('SELECT * FROM kunden WHERE id=?').get(kId);
+            if (!kunde) return { success: true };
+
+            // Referenzprüfung: Dokumente, Projekte, Eingangsrechnungen
+            const docCount = db.prepare('SELECT COUNT(*) as cnt FROM dokumente WHERE kundeId=?').get(kId).cnt;
+            const projCount = db.prepare('SELECT COUNT(*) as cnt FROM projekte WHERE kundeId=?').get(kId).cnt;
+            const erCount = db.prepare('SELECT COUNT(*) as cnt FROM eingangsrechnungen WHERE lieferant_id=?').get(kId).cnt;
+
+            if (docCount > 0 || projCount > 0 || erCount > 0) {
+                // Kunde hat historische Belege/Projekte -> Soft-Delete
+                db.prepare('UPDATE kunden SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP WHERE id=?').run(kId);
+            } else {
+                db.prepare('DELETE FROM kunden WHERE id=?').run(kId);
+            }
+
+            appendAuditLog({
+                entityType: 'KUNDE',
+                entityId: kId,
+                action: 'GELOESCHT',
+                details: { name: kunde.name, kundennummer: kunde.kundennummer, grund: reason, softDelete: (docCount + projCount + erCount) > 0 }
+            });
+            return { success: true };
+        });
+        return tx(id, grund);
     },
 
     // --- Kunden (Bulk Save) ---
@@ -696,106 +800,10 @@ const dbAPI = {
         if (!docs || !Array.isArray(docs) || docs.length === 0) return [];
 
         const bulkTransaction = db.transaction((docsList) => {
-            const updateStmt = db.prepare('UPDATE dokumente SET type=?, nr=?, datum=?, faellig=?, kundeId=?, projektId=?, status=?, isLocked=?, netto=?, steuer=?, brutto=?, globalRabattAbzug=?, globalRabattType=?, globalRabattValue=?, anzahlung=?, mahnungLevel=?, mahnungDatum=?, mahnungGebuehr=?, eingabemodus=?, vortext=?, fusstext=?, leistungszeitraum_von=?, leistungszeitraum_bis=?, baustellen_adresse=?, vob_vereinbart=?, ist_privatkunde=?, unterliegt_bauabzugsteuer=?, bauabzugsteuer_betrag=?, ausweis_35a_erforderlich=?, summe_lohnkosten_brutto=?, rechnungsart=?, kumulierte_leistung_netto=?, sicherheitseinbehalt=?, sicherheitseinbehalt_prozent=?, unterliegt_13b=?, leitweg_id=?, buyer_reference=?, objekt_typ=?, objekt_id=?, skonto_tage=?, skonto_prozent=?, sepa_mandat_id=?, sha256_hash=? WHERE id=?');
-            const insertDocStmt = db.prepare('INSERT INTO dokumente (type, nr, datum, faellig, kundeId, projektId, status, isLocked, netto, steuer, brutto, globalRabattAbzug, globalRabattType, globalRabattValue, anzahlung, eingabemodus, vortext, fusstext, leistungszeitraum_von, leistungszeitraum_bis, baustellen_adresse, vob_vereinbart, ist_privatkunde, unterliegt_bauabzugsteuer, bauabzugsteuer_betrag, ausweis_35a_erforderlich, summe_lohnkosten_brutto, rechnungsart, kumulierte_leistung_netto, sicherheitseinbehalt, sicherheitseinbehalt_prozent, unterliegt_13b, leitweg_id, buyer_reference, objekt_typ, objekt_id, skonto_tage, skonto_prozent, sepa_mandat_id, sha256_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-            const deletePosStmt = db.prepare('DELETE FROM positionen WHERE dokumentId=?');
-            const deleteVerrechnungStmt = db.prepare('DELETE FROM rechnung_verrechnungen WHERE aktuelle_rechnung_id=?');
-            const insertPosStmt = db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-            const restoreStockStmt = db.prepare('UPDATE artikel SET bestand = bestand + ? WHERE id=?');
-            const deductStockStmt = db.prepare('UPDATE artikel SET bestand = bestand - ? WHERE id=?');
-
             const docIds = [];
-
             for (const d of docsList) {
-                let docId = d.id;
-                let existing = null;
-                let action = 'ERSTELLT';
-
-                // GoBD: Inhalts-Hash konsistent berechnen und persistieren
-                d.sha256_hash = calculateDocumentContentHash(d);
-
-                if (docId) {
-                    existing = getDocumentWithChildren(docId);
-                    if (!existing) {
-                        throw new Error(`Dokument mit ID ${docId} wurde nicht gefunden.`);
-                    }
-
-                    if (existing.isLocked) {
-                        // GoBD-Änderungssperre: Entsperren NUR über entsperreBeleg()
-                        if (!d.isLocked) {
-                            throw new Error(`Beleg ${existing.nr} ist gesperrt (GoBD). Eine Freigabe ist nur über die explizite Funktion 'Beleg entsperren' mit Begründung möglich.`);
-                        }
-                        // GoBD-Änderungssperre: Nur Buchhaltungs-/Statusfelder änderbar
-                        const oldContentHash = calculateDocumentContentHash(existing);
-                        const newContentHash = calculateDocumentContentHash(d);
-                        if (oldContentHash !== newContentHash) {
-                            throw new Error(`Beleg ${existing.nr} ist gesperrt (GoBD-Änderungssperre): Inhaltsfelder dürfen nicht mehr geändert werden. Bitte erstellen Sie eine Stornorechnung/Korrekturrechnung.`);
-                        }
-                    }
-
-                    updateStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt(d), d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.mahnungLevel || 0, d.mahnungDatum || null, d.mahnungGebuehr || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.sicherheitseinbehalt_prozent || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.objekt_typ || null, d.objekt_id == null ? null : d.objekt_id, d.skonto_tage || 0, d.skonto_prozent || 0, d.sepa_mandat_id == null ? null : d.sepa_mandat_id, d.sha256_hash || null, docId);
-
-                    action = (calculateDocumentContentHash(existing) === calculateDocumentContentHash(d)) ? 'STATUS_GEÄNDERT' : 'GEÄNDERT';
-
-                    if (d.type === 'rechnung') {
-                        // Restore stock
-                        const oldPositions = db.prepare('SELECT artikelId, menge FROM positionen WHERE dokumentId=?').all(docId);
-                        if (oldPositions.length > 0) {
-                            const restoreStockMap = new Map();
-                            for (const p of oldPositions) {
-                                if (p.artikelId) {
-                                    restoreStockMap.set(p.artikelId, (restoreStockMap.get(p.artikelId) || 0) + p.menge);
-                                }
-                            }
-                            for (const [artId, qty] of restoreStockMap.entries()) {
-                                restoreStockStmt.run(qty, artId);
-                            }
-                        }
-                    }
-
-                    deletePosStmt.run(docId);
-                    deleteVerrechnungStmt.run(docId);
-                } else {
-                    const res = insertDocStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, isLockedInt(d), d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.sicherheitseinbehalt_prozent || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.objekt_typ || null, d.objekt_id == null ? null : d.objekt_id, d.skonto_tage || 0, d.skonto_prozent || 0, d.sepa_mandat_id == null ? null : d.sepa_mandat_id, d.sha256_hash || null);
-                    docId = res.lastInsertRowid;
-                }
-
-                if (d.positionen && d.positionen.length > 0) {
-                    const stockDeductionMap = new Map();
-
-                    for (const p of d.positionen) {
-                        insertPosStmt.run(docId, p.artikelId || null, p.name || null, p.menge, p.einheit || 'Stk.', p.preis, p.ek || 0, p.mwst, p.rabatt || 0, p.steuer_schluessel || null, p.is13b ? 1 : 0, p.cost_type || 'MATERIAL', p.oz_code || null, p.is_tax_deductible_35a ? 1 : 0);
-
-                        if (d.type === 'rechnung' && p.artikelId) {
-                            stockDeductionMap.set(p.artikelId, (stockDeductionMap.get(p.artikelId) || 0) + p.menge);
-                        }
-                    }
-
-                    if (stockDeductionMap.size > 0) {
-                        for (const [artId, qty] of stockDeductionMap.entries()) {
-                            deductStockStmt.run(qty, artId);
-                        }
-                    }
-                }
-                
-                insertVerrechnungenGuarded(docId, d.verrechnungen);
-
-                // GoBD: Audit-Eintrag INNERHALB derselben Transaktion
-                appendAuditLog({
-                    entityType: 'DOCUMENT',
-                    entityId: docId,
-                    action,
-                    details: {
-                        nr: d.nr,
-                        type: d.type,
-                        status: d.status,
-                        vorherigerStatus: existing ? existing.status : null,
-                        isLocked: isLockedInt(d) === 1,
-                        brutto: d.brutto || 0,
-                        sha256_hash: d.sha256_hash
-                    }
-                });
-
+                const requestedLockedInt = isLockedInt(d);
+                const docId = applyDocumentWrite(d, requestedLockedInt);
                 docIds.push(docId);
             }
             return docIds;
@@ -892,31 +900,9 @@ const dbAPI = {
         return tx(id, patch);
     },
 
-    // --- GoBD: Expliziter Freigabe-Weg (isLocked true -> false), audit-pflichtig ---
+    // --- GOBD-2: GoBD-konformes Blockieren jeglicher Entsperr-Versuche ---
     async entsperreBeleg(id, grund) {
-        if (typeof id !== 'number') throw new Error('Ungültige Dokumenten-ID');
-        if (!grund || typeof grund !== 'string' || !grund.trim()) {
-            throw new Error('Entsperren ohne Begründung ist nicht erlaubt (GoBD-Auditpflicht).');
-        }
-
-        const tx = db.transaction((docId, begruendung) => {
-            const doc = db.prepare('SELECT id, nr, status FROM dokumente WHERE id=?').get(docId);
-            if (!doc) throw new Error(`Dokument mit ID ${docId} wurde nicht gefunden.`);
-
-            const info = db.prepare('UPDATE dokumente SET isLocked=0 WHERE id=? AND isLocked=1').run(docId);
-            if (info.changes === 0) {
-                return { success: true, id: docId, alreadyUnlocked: true };
-            }
-
-            appendAuditLog({
-                entityType: 'DOCUMENT',
-                entityId: docId,
-                action: 'ENTSPERRT',
-                details: { nr: doc.nr, status: doc.status, grund: begruendung }
-            });
-            return { success: true, id: docId, alreadyUnlocked: false };
-        });
-        return tx(id, grund.trim());
+        throw new Error('GoBD-Verstoß (GOBD-2): Das Entsperren festgeschriebener Belege ist nach § 146 Abs. 4 AO und GoBD Rz. 110 unzulässig. Korrekturen müssen zwingend über eine Stornorechnung bzw. Gutschrift erfolgen.');
     },
 
     // --- Atomares Storno: Original-Status + Gutschrift in EINER Transaktion ---
@@ -1016,16 +1002,72 @@ const dbAPI = {
         return tx(blattId);
     },
 
-    async mergeSchlussaufmass(projectId) {
-        // Aggregiert alle Aufmaßzeilen aller freigegebenen/verifizierten Blätter
-        const rows = await dbQuery(`
-            SELECT z.oz_code, z.einheit, SUM(z.ergebnis * z.vorzeichen) as summe_menge
+    async mergeSchlussaufmass(projectId, options = {}) {
+        const pId = Number(projectId);
+        const includeDrafts = options && options.includeDrafts === true;
+
+        const allowedStatuses = includeDrafts 
+            ? "('VERIFIED', 'FINALIZED', 'FREIGEGEBEN', 'SUBMITTED', 'DRAFT')"
+            : "('VERIFIED', 'FINALIZED', 'FREIGEGEBEN')";
+
+        // 1. Aggregation der Aufmaßzeilen mit Blattreferenzen (ohne unfertige DRAFTs standardmäßig)
+        const aufmassRows = await dbQuery(`
+            SELECT 
+                TRIM(z.oz_code) as oz_code,
+                COALESCE(MAX(z.einheit), 'm²') as einheit,
+                COALESCE(MAX(z.bezeichnung), '') as bezeichnung,
+                SUM(z.ergebnis * COALESCE(z.vorzeichen, 1)) as summe_menge,
+                GROUP_CONCAT(DISTINCT b.blatt_nummer) as blaetter_nrs,
+                GROUP_CONCAT(DISTINCT b.id) as blaetter_ids,
+                MIN(b.id) as primary_blatt_id
             FROM aufmass_zeilen z
             JOIN aufmass_blaetter b ON z.blatt_id = b.id
-            WHERE b.project_id = ? AND b.status IN ('VERIFIED', 'FINALIZED', 'SUBMITTED', 'DRAFT')
-            GROUP BY z.oz_code, z.einheit
-        `, [projectId]);
-        return rows;
+            WHERE b.project_id = ? AND b.status IN ${allowedStatuses}
+            GROUP BY TRIM(z.oz_code)
+            HAVING summe_menge IS NOT NULL
+            ORDER BY z.oz_code ASC
+        `, [pId]);
+
+        // 2. Vertragspositionen (Angebote / Aufträge des Projekts) zur Preisfindung laden
+        const contractPositions = await dbQuery(`
+            SELECT 
+                pos.oz_code,
+                pos.name,
+                pos.preis as einheitspreis,
+                pos.einheit,
+                pos.mwst,
+                pos.id as position_id
+            FROM positionen pos
+            JOIN dokumente d ON pos.dokumentId = d.id
+            WHERE d.projektId = ? AND d.type IN ('angebot', 'rechnung') AND d.status NOT IN ('Storniert')
+            ORDER BY d.id DESC
+        `, [pId]);
+
+        // Preiskarte nach OZ aufbauen
+        const priceMap = new Map();
+        for (const cp of contractPositions) {
+            const cleanOz = (cp.oz_code || '').trim();
+            if (cleanOz && !priceMap.has(cleanOz)) {
+                priceMap.set(cleanOz, cp);
+            }
+        }
+
+        // 3. Aufmaßzeilen mit LV-Preisen anreichern
+        return aufmassRows.map(row => {
+            const matchedPos = priceMap.get(row.oz_code);
+            return {
+                oz_code: row.oz_code,
+                summe_menge: Math.round(row.summe_menge * 1000) / 1000,
+                einheit: (matchedPos && matchedPos.einheit) || row.einheit,
+                bezeichnung: (matchedPos && matchedPos.name) || row.bezeichnung || `Position ${row.oz_code}`,
+                einheitspreis: matchedPos ? (parseFloat(matchedPos.einheitspreis) || 0) : 0,
+                mwst: matchedPos ? (matchedPos.mwst !== undefined ? matchedPos.mwst : 19) : 19,
+                blaetter_nrs: row.blaetter_nrs,
+                blaetter_ids: row.blaetter_ids,
+                blatt_id: row.primary_blatt_id,
+                position_id: matchedPos ? matchedPos.position_id : null
+            };
+        });
     },
 
     // --- Nachtragsverwaltung (VOB/B) ---
@@ -1243,8 +1285,48 @@ const dbAPI = {
         }
     },
 
-    async deleteEingangsrechnung(id) {
-        return await dbRun('DELETE FROM eingangsrechnungen WHERE id=?', [id]);
+    // GOBD-3 Fix: Soft-Delete mit Zahlungsprüfung und Audit-Trail
+    async deleteEingangsrechnung(id, grund = 'Benutzer-Löschung') {
+        const tx = db.transaction((erId, reason) => {
+            const er = db.prepare('SELECT * FROM eingangsrechnungen WHERE id=?').get(erId);
+            if (!er) return { success: true, alreadyDeleted: true };
+
+            // Bezahlte oder teilweise bezahlte Belege dürfen niemals gelöscht werden
+            if (er.zahlungs_status !== 'OFFEN') {
+                throw new Error(`Eingangsrechnung #${er.rechnungs_nr} kann nicht gelöscht werden: Status ist "${er.zahlungs_status}". Nur offene Rechnungen dürfen storniert werden.`);
+            }
+
+            // Prüfe auf vorhandene Zahlungszuordnungen
+            const zahlungen = db.prepare('SELECT COUNT(*) as cnt FROM zahlung_zuordnungen WHERE eingangsrechnung_id=? AND (storno_flag=0 OR storno_flag IS NULL)').get(erId);
+            if (zahlungen && zahlungen.cnt > 0) {
+                throw new Error(`Eingangsrechnung #${er.rechnungs_nr} besitzt aktive Zahlungsbuchungen und kann nicht gelöscht werden.`);
+            }
+
+            // GoBD Soft-Delete
+            db.prepare(`
+                UPDATE eingangsrechnungen SET
+                    is_deleted = 1,
+                    deleted_at = CURRENT_TIMESTAMP,
+                    deletion_reason = ?
+                WHERE id = ?
+            `).run(String(reason).trim(), erId);
+
+            appendAuditLog({
+                entityType: 'EINGANGSRECHNUNG',
+                entityId: erId,
+                action: 'GELOESCHT',
+                details: {
+                    rechnungs_nr: er.rechnungs_nr,
+                    lieferant_id: er.lieferant_id,
+                    betrag_brutto: er.betrag_brutto,
+                    grund: reason
+                }
+            });
+
+            return { success: true, id: erId };
+        });
+
+        return tx(id, grund);
     },
 
     // --- Projekt Controlling / Soll-Ist-Analyse ---
@@ -1309,11 +1391,30 @@ const dbAPI = {
 
         const istGesamt = istMaterial + istSub + istGeraet + istSonstiges + istLohn;
 
-        // 5. Bisher abgerechneter Umsatz (Ausgangsrechnungen)
-        const rechnungen = db.prepare("SELECT * FROM dokumente WHERE projektId = ? AND type = 'rechnung'").all(projectId);
+        // 5. Bisher abgerechneter Umsatz nach VOB/B § 16 (Ausgangsrechnungen, ohne Entwürfe & Stornos)
+        const rechnungen = db.prepare("SELECT * FROM dokumente WHERE projektId = ? AND type = 'rechnung' AND status NOT IN ('Entwurf', 'Storniert') ORDER BY id ASC").all(projectId);
+        
         let istUmsatzNetto = 0;
-        for (const r of rechnungen) {
-            istUmsatzNetto += r.netto || 0;
+        const hasCumulative = rechnungen.some(r => {
+            if (r.rechnungsart === 'SCHLUSSRECHNUNG' || r.rechnungsart === 'TEILSCHLUSSRECHNUNG' || r.rechnungsart === 'ABSCHLAG_KUMULIERT') return true;
+            if (r.typ === 'SCHLUSSRECHNUNG' || r.typ === 'TEILSCHLUSSRECHNUNG') return true;
+            try {
+                const vCheck = db.prepare('SELECT COUNT(*) as cnt FROM rechnung_verrechnungen WHERE aktuelle_rechnung_id = ?').get(r.id);
+                return vCheck && vCheck.cnt > 0;
+            } catch (_e) { return false; }
+        });
+
+        if (hasCumulative) {
+            const sr = rechnungen.find(r => r.rechnungsart === 'SCHLUSSRECHNUNG' || r.typ === 'SCHLUSSRECHNUNG');
+            if (sr) {
+                istUmsatzNetto = sr.netto || 0;
+            } else {
+                istUmsatzNetto = Math.max(0, ...rechnungen.map(r => r.kumulierte_leistung_netto || r.netto || 0));
+            }
+        } else {
+            for (const r of rechnungen) {
+                istUmsatzNetto += (r.netto || 0);
+            }
         }
 
         // 6. Kennzahlen
@@ -3221,7 +3322,10 @@ const dbAPI = {
         const xmlFormat = payload.xmlFormat || settings.sepa_xml_standard || 'pain.008.001.08';
         const schemeType = payload.sammelTyp || 'CORE';
         const sequenceType = payload.sequenzTyp || 'RCUR';
-        const executionDate = payload.ausfuehrungsDatum || SepaController.getNextTarget2BankingDay(new Date().toISOString().substring(0, 10), 1);
+        const rawExecDate = payload.ausfuehrungsDatum || SepaController.getNextTarget2BankingDay(new Date().toISOString().substring(0, 10), 1);
+        const executionDate = SepaController.assertAndNormalizeExecutionDate(rawExecDate, true);
+
+
 
         let fristVerletzungen = [];
         let gefiltertePositionen = [];
@@ -3719,43 +3823,88 @@ const dbAPI = {
         const parsed = GaebX31Service.parseX31Xml(xmlContent);
 
         const tx = db.transaction(() => {
-            const blattRes = db.prepare(`
-                INSERT INTO aufmass_blaetter (project_id, blatt_nummer, titel, status)
-                VALUES (?, ?, ?, 'DRAFT')
-            `).run(pId, 'X31-01', parsed.projectInfo.name || 'GAEB X31 Import');
-            const blattId = blattRes.lastInsertRowid;
+            // 1. Alle Ansätze nach ihrer ursprünglichen SheetNo gruppieren
+            const sheetsMap = new Map();
 
-            let zeilenCount = 0;
+            (parsed.items || []).forEach(item => {
+                (item.ansatze || []).forEach(ansatz => {
+                    const sheetNum = String(ansatz.sheetNo || '0001').trim();
+                    if (!sheetsMap.has(sheetNum)) {
+                        sheetsMap.set(sheetNum, []);
+                    }
+                    sheetsMap.get(sheetNum).push({
+                        oz_code: item.oz_code,
+                        einheit: item.einheit,
+                        item_name: item.name,
+                        ...ansatz
+                    });
+                });
+            });
+
+            // Fallback, wenn keine Zeilen enthalten waren
+            if (sheetsMap.size === 0) {
+                const emptyBlatt = db.prepare(`
+                    INSERT INTO aufmass_blaetter (project_id, blatt_nummer, titel, status)
+                    VALUES (?, 'X31-01', ?, 'DRAFT')
+                `).run(pId, parsed.projectInfo.name || 'GAEB X31 Import');
+                return {
+                    success: true,
+                    blattId: emptyBlatt.lastInsertRowid,
+                    sheetsCreated: 1,
+                    zeilenCreated: 0,
+                    importedCount: 0,
+                    itemsCount: (parsed.items || []).length
+                };
+            }
+
+            let totalZeilenCount = 0;
             const insertZeileStmt = db.prepare(`
                 INSERT INTO aufmass_zeilen (blatt_id, oz_code, zeilen_nr, bezeichnung, formel_reb, rechenansatz, ergebnis, einheit, vorzeichen)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             `);
 
-            (parsed.items || []).forEach(item => {
-                (item.ansatze || []).forEach((ansatz, aIdx) => {
-                    zeilenCount++;
+            let firstBlattId = null;
+            // 2. Jedes Originalblatt als eigenes aufmass_blaetter anlegen
+            for (const [sheetNum, zeilen] of sheetsMap.entries()) {
+                const blattRes = db.prepare(`
+                    INSERT INTO aufmass_blaetter (project_id, blatt_nummer, titel, status)
+                    VALUES (?, ?, ?, 'DRAFT')
+                `).run(pId, sheetNum, `${parsed.projectInfo.name || 'X31'} - Blatt ${sheetNum}`);
+
+                const blattId = blattRes.lastInsertRowid;
+                if (!firstBlattId) firstBlattId = blattId;
+
+                zeilen.forEach((z, zIdx) => {
+                    totalZeilenCount++;
                     insertZeileStmt.run(
                         blattId,
-                        item.oz_code || '01.01.0010',
-                        ansatz.rowNo || (aIdx + 1),
-                        ansatz.bezeichnung || item.name || '',
-                        ansatz.formulaNo || '91',
-                        ansatz.rechenansatz || '',
-                        ansatz.resultQty || 0,
-                        ansatz.einheit || item.einheit || 'm²',
-                        ansatz.sign !== undefined ? ansatz.sign : 1
+                        z.oz_code || '01.01.0010',
+                        z.rowNo || (zIdx + 1),
+                        z.bezeichnung || z.item_name || '',
+                        z.formulaNo || '91',
+                        z.rechenansatz || '',
+                        z.resultQty || 0,
+                        z.einheit || 'm²',
+                        z.sign !== undefined ? z.sign : 1
                     );
                 });
-            });
+            }
 
             appendAuditLog({
-                entityType: 'AUFMASS_BLATT',
-                entityId: Number(blattId),
+                entityType: 'PROJECT',
+                entityId: pId,
                 action: 'GAEB_X31_IMPORTED',
-                details: `GAEB X31 Import: ${zeilenCount} Zeilen aus ${parsed.items.length} Positionen importiert`
+                details: `GAEB X31 importiert: ${sheetsMap.size} Aufmaßblätter, ${totalZeilenCount} Zeilen aus ${(parsed.items || []).length} Positionen.`
             });
 
-            return { success: true, blattId, importedCount: zeilenCount, itemsCount: parsed.items.length };
+            return {
+                success: true,
+                blattId: firstBlattId,
+                sheetsCreated: sheetsMap.size,
+                zeilenCreated: totalZeilenCount,
+                importedCount: totalZeilenCount,
+                itemsCount: (parsed.items || []).length
+            };
         });
 
         return tx();
@@ -4255,8 +4404,124 @@ const dbAPI = {
         return ZeiterfassungController.saveZeiteintrag(db, data, auditLogger);
     },
 
-    deleteZeiteintrag(id) {
-        return ZeiterfassungController.deleteZeiteintrag(db, id, auditLogger);
+    deleteZeiteintrag(id, meta = {}) {
+        return ZeiterfassungController.deleteZeiteintrag(db, id, auditLogger, meta);
+    },
+
+    resolveSyncConflict(conflictId, resolutionStrategy, mergedData = null) {
+        const conflict = db.prepare('SELECT * FROM sync_conflicts WHERE id = ?').get(conflictId);
+        if (!conflict) throw new Error(`Konflikt #${conflictId} nicht gefunden.`);
+
+        const effectiveData = resolutionStrategy === 'RESOLVED_CLIENT'
+            ? JSON.parse(conflict.client_data_json || '{}')
+            : (resolutionStrategy === 'RESOLVED_MERGE' ? mergedData : null);
+
+        const tx = db.transaction(() => {
+            if (effectiveData && (resolutionStrategy === 'RESOLVED_CLIENT' || resolutionStrategy === 'RESOLVED_MERGE')) {
+                const { entity_type, entity_uuid } = conflict;
+
+                if (entity_type === 'ZEITERFASSUNG') {
+                    ZeiterfassungController.saveZeiteintrag(db, effectiveData, auditLogger);
+                } else if (entity_type === 'BAUTAGEBUCH') {
+                    const upsertBt = db.prepare(`
+                        INSERT INTO bautagebuch (
+                            uuid, project_id, datum, wetter, temperatur_min, temperatur_max,
+                            personal_eigen_anzahl, personal_eigen_stunden, personal_sub_json, geraete_json,
+                            tagesbericht, vorkommnisse_behinderungen, fotos_json, updated_at
+                        ) VALUES (
+                            @uuid, @project_id, @datum, @wetter, @temperatur_min, @temperatur_max,
+                            @personal_eigen_anzahl, @personal_eigen_stunden, @personal_sub_json, @geraete_json,
+                            @tagesbericht, @vorkommnisse_behinderungen, @fotos_json, CURRENT_TIMESTAMP
+                        ) ON CONFLICT(uuid) DO UPDATE SET
+                            tagesbericht = excluded.tagesbericht,
+                            vorkommnisse_behinderungen = excluded.vorkommnisse_behinderungen,
+                            fotos_json = excluded.fotos_json,
+                            personal_eigen_anzahl = excluded.personal_eigen_anzahl,
+                            personal_eigen_stunden = excluded.personal_eigen_stunden,
+                            personal_sub_json = excluded.personal_sub_json,
+                            geraete_json = excluded.geraete_json,
+                            updated_at = CURRENT_TIMESTAMP
+                    `);
+                    upsertBt.run({
+                        uuid: entity_uuid,
+                        project_id: parseInt(effectiveData.projekt_id || effectiveData.project_id, 10),
+                        datum: effectiveData.datum,
+                        wetter: effectiveData.wetter || 'HEITER',
+                        temperatur_min: parseFloat(effectiveData.temperatur_min) || 0.0,
+                        temperatur_max: parseFloat(effectiveData.temperatur_max) || 0.0,
+                        personal_eigen_anzahl: parseInt(effectiveData.personal_eigen_anzahl, 10) || 0,
+                        personal_eigen_stunden: parseFloat(effectiveData.personal_eigen_stunden) || 0.0,
+                        personal_sub_json: typeof effectiveData.personal_sub_json === 'string'
+                            ? effectiveData.personal_sub_json : JSON.stringify(effectiveData.personal_sub_json || []),
+                        geraete_json: typeof effectiveData.geraete_json === 'string'
+                            ? effectiveData.geraete_json : JSON.stringify(effectiveData.geraete_json || []),
+                        tagesbericht: effectiveData.tagesbericht || '',
+                        vorkommnisse_behinderungen: effectiveData.vorkommnisse || effectiveData.vorkommnisse_behinderungen || '',
+                        fotos_json: typeof effectiveData.fotos_json === 'string'
+                            ? effectiveData.fotos_json : JSON.stringify(effectiveData.fotos_json || [])
+                    });
+                } else if (entity_type === 'AUFMASS_ZEILE' || entity_type === 'AUFMASS') {
+                    const upsertAufmass = db.prepare(`
+                        INSERT INTO aufmass_zeilen (
+                            uuid, blatt_id, oz_code, zeilen_nr, bezeichnung, formel_reb, formel_code,
+                            rechenansatz, ergebnis, einheit, raum_id, version, updated_at
+                        ) VALUES (
+                            @uuid, @blatt_id, @oz_code, @zeilen_nr, @bezeichnung, @formel_code, @formel_code,
+                            @rechenansatz, @ergebnis, @einheit, @raum_id, 1, CURRENT_TIMESTAMP
+                        ) ON CONFLICT(uuid) DO UPDATE SET
+                            rechenansatz = excluded.rechenansatz,
+                            ergebnis = excluded.ergebnis,
+                            bezeichnung = excluded.bezeichnung,
+                            version = COALESCE(aufmass_zeilen.version, 1) + 1,
+                            updated_at = CURRENT_TIMESTAMP
+                    `);
+                    upsertAufmass.run({
+                        uuid: entity_uuid,
+                        blatt_id: effectiveData.blatt_id || 1,
+                        oz_code: effectiveData.oz || effectiveData.oz_code || '01.01.001',
+                        zeilen_nr: effectiveData.zeilen_nr || 1,
+                        bezeichnung: effectiveData.bezeichnung || '',
+                        formel_code: effectiveData.formel_code || '91',
+                        rechenansatz: effectiveData.rechenansatz || `${effectiveData.ergebnis || 0}=`,
+                        ergebnis: parseFloat(effectiveData.ergebnis) || 0.0,
+                        einheit: effectiveData.einheit || 'm²',
+                        raum_id: effectiveData.raum_id || null
+                    });
+                } else if (entity_type === 'MAENGEL' || entity_type === 'MANGEL') {
+                    db.prepare(`
+                        UPDATE maengel SET
+                            titel = COALESCE(@titel, titel),
+                            beschreibung = COALESCE(@beschreibung, beschreibung),
+                            status = COALESCE(@status, status),
+                            frist_datum = COALESCE(@frist_datum, frist_datum),
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE uuid = @uuid
+                    `).run({
+                        uuid: entity_uuid,
+                        titel: effectiveData.titel,
+                        beschreibung: effectiveData.beschreibung,
+                        status: effectiveData.status,
+                        frist_datum: effectiveData.frist_datum
+                    });
+                }
+
+                if (auditLogger && auditLogger.appendAuditLog) {
+                    auditLogger.appendAuditLog({
+                        entityType: entity_type,
+                        entityId: conflictId,
+                        action: 'SYNC_CONFLICT_RESOLVED',
+                        details: { strategy: resolutionStrategy, uuid: entity_uuid }
+                    });
+                }
+            }
+
+            db.prepare(`
+                UPDATE sync_conflicts SET status = ?, resolved_at = CURRENT_TIMESTAMP WHERE id = ?
+            `).run(resolutionStrategy, conflictId);
+        });
+
+        tx();
+        return { success: true, conflictId, resolutionStrategy };
     },
 
     getZeiterfassungMonatsauswertung(monat, jahr, mitarbeiterId = null) {

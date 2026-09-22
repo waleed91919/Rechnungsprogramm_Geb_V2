@@ -154,13 +154,15 @@ test('calculateTotals - Verrechnungen and Anzahlung', () => {
     const result = InvoiceController.calculateTotals(params);
 
     assert.strictEqual(result.verrechnungenSummeNetto, 300);
+    assert.strictEqual(result.verrechnungenSummeBrutto, 357);
 
-    // Steuerpflichtiges Netto = 1000 - 300 = 700
-    // Tax = 19% of 700 = 133
-    // BruttoNachRabatt = 700 + 133 = 833
-    assert.strictEqual(result.bruttoNachRabatt, 833);
+    // § 14 Abs. 5 UStG & EN 16931: Steuer bemisst sich auf das volle Netto (1000 €)!
+    // Tax = 19% of 1000 = 190 €
+    assert.strictEqual(result.totalTax, 190);
+    // BruttoNachRabatt = Netto (1000) + Steuer (190) = 1190.00
+    assert.strictEqual(result.bruttoNachRabatt, 1190);
 
-    // Zahlbetrag = BruttoNachRabatt - Anzahlung = 833 - 500 = 333
+    // Zahlbetrag = BruttoNachRabatt (1190) - Anzahlung (500) - Verrechnungen brutto (357) = 333.00
     assert.strictEqual(result.zahlbetrag, 333);
 });
 
@@ -186,24 +188,20 @@ test('calculateTotals - everything combined', () => {
     // Sicherungseinbehalt: 5% of 1800 = 90
     assert.strictEqual(result.sicherheitseinbehaltNetto, 90);
 
-    // Verrechnung: 100
-    // VOB/B & § 13 UStG: Sicherheitseinbehalt mindert nicht die Steuerentstehung!
-    // Steuerpflichtiges Netto = 1800 - 100 = 1700
-
-    // Now tax breakdown.
+    // § 14 Abs. 5 UStG: Steuer bemisst sich auf die Gesamtleistung nach Rabatt.
     // Rabattfaktor = 1800 / 2000 = 0.9.
-    // Taxable Ratio = 1700 / 1800 = 0.94444...
-    // Base taxes before any global stuff:
     // Pos 1 (13b): 0
-    // Pos 2: 19% of 1000 = 190.
-    // Adjusted tax = 190 * 0.9 * (1700 / 1800) = 161.50
-    assert.strictEqual(Math.round(result.totalTax * 100) / 100, 161.5);
+    // Pos 2: 19% of (1000 * 0.9) = 171.00
+    assert.strictEqual(result.totalTax, 171);
 
-    // BruttoNachRabatt = Steuerpflichtiges Netto (1700) + Tax (161.50) = 1861.50
-    assert.strictEqual(Math.round(result.bruttoNachRabatt * 100) / 100, 1861.5);
+    // BruttoNachRabatt = Netto (1800) + Steuer (171) = 1971.00 (Netto + Steuer == Brutto!)
+    assert.strictEqual(result.bruttoNachRabatt, 1971);
 
-    // Zahlbetrag = BruttoNachRabatt (1861.50) - Anzahlung (50) - Sicherheitseinbehalt (90) = 1721.50
-    assert.strictEqual(Math.round(result.zahlbetrag * 100) / 100, 1721.5);
+    // Verrechnungen: Da isGlobal13b=true, ist Vorrechnungs-USt 0%, brutto = 100.00
+    assert.strictEqual(result.verrechnungenSummeBrutto, 100);
+
+    // Zahlbetrag = Brutto (1971) - Anzahlung (50) - Sicherheitseinbehalt (90) - Verrechnung (100) = 1731.00
+    assert.strictEqual(result.zahlbetrag, 1731);
 });
 
 test('validateSaveDocument - valid document', () => {

@@ -106,6 +106,9 @@ test('4. EN 16931-1 XRechnung & ZUGFeRD Generator & B2G Leitweg-ID Check', () =>
     };
 
     const invoice = {
+        id: 1,
+        status: 'Festgeschrieben',
+        isLocked: 1,
         nr: 'RE-2026-001',
         datum: '2026-08-13',
         faellig: '2026-09-13',
@@ -138,16 +141,16 @@ test('4. EN 16931-1 XRechnung & ZUGFeRD Generator & B2G Leitweg-ID Check', () =>
     assert.ok(countryCount >= 2, `Seller+Buyer CountryID DE erwartet, gefunden: ${countryCount}`);
     assert.ok(/<ram:DueDateDateTime>\s*<udt:DateTimeString format="102">20260913<\/udt:DateTimeString>/s.test(xml), 'DueDate (BT-9) fehlt');
     assert.ok(xml.includes('<ram:DuePayableAmount>1190.00</ram:DuePayableAmount>'));
-    assert.ok(xml.includes('urn:xoev-de:kosit:standard:xrechnung_2.3'));
+    assert.ok(xml.includes('urn:xeinkauf.de:kosit:xrechnung_3.0'));
     assert.ok(xml.includes('RE-2026-001'));
 
     // ZUGFeRD-Profilvarianten: Guideline-URN je Profil
     const zugferdXmlEN = EInvoiceEngine.generateZUGFeRDXML(invoice, b2gCustomer, seller, { profile: 'EN16931' });
     assert.ok(zugferdXmlEN.includes('urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:en16931'));
-    assert.ok(!zugferdXmlEN.includes('xoev-de:kosit'));
+    assert.ok(!zugferdXmlEN.includes('xeinkauf.de:kosit'));
 
     const zugferdXmlX = EInvoiceEngine.generateZUGFeRDXML(invoice, b2gCustomer, seller, { profile: 'XRECHNUNG' });
-    assert.ok(zugferdXmlX.includes('urn:xoev-de:kosit:standard:xrechnung_2.3'));
+    assert.ok(zugferdXmlX.includes('urn:xeinkauf.de:kosit:xrechnung_3.0'));
 });
 
 test('5. GAEB X83 Import & X84 Export Engine', () => {

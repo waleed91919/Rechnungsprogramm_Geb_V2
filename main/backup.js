@@ -391,39 +391,56 @@ class BackupService {
                 throw new Error('Entpacktes Backup ist korrupt.');
             }
 
-            // 5. Konsistenter Datenbank-Austausch via better-sqlite3 Backup/Restore
+            // 5. DB-2 Fix: Sicherer Datenbank-Austausch mit Handle-Freigabe & Bereinigung
             const activeDbPath = this.dbPath;
+            sourceDb.close(); // Quelle sauber schließen
+
             if (!activeDbPath || !fs.existsSync(activeDbPath)) {
-                sourceDb.close();
                 throw new Error(`Aktiver Datenbankpfad nicht gefunden: ${activeDbPath}`);
             }
 
-            // Online-Wiederherstellung in activeDbPath
-            await sourceDb.backup(activeDbPath);
-            sourceDb.close();
-
-            // Checkpoint auf aktiver DB
+            // 5.1 Checkpoint auf aktiver DB erzwingen, bevor geschlossen wird
             try {
-                this.db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').run();
-            } catch (_) {}
+                if (this.db && this.db.open) {
+                    this.db.pragma('wal_checkpoint(TRUNCATE)');
+                }
+            } catch (err) {
+                console.warn('[Restore] Checkpoint Warning vor Close:', err.message);
+            }
 
-            // Temp Restore Datei aufräumen
+            // 5.2 Aktive DB-Verbindung vollständig schließen (gibt mmap & Locks frei)
+            if (this.db && this.db.open) {
+                this.db.close();
+            }
+
+            // 5.3 Veraltete WAL- und Shared-Memory-Dateien entfernen
+            const walPath = activeDbPath + '-wal';
+            const shmPath = activeDbPath + '-shm';
+            if (fs.existsSync(walPath)) {
+                try { fs.unlinkSync(walPath); } catch (_) {}
+            }
+            if (fs.existsSync(shmPath)) {
+                try { fs.unlinkSync(shmPath); } catch (_) {}
+            }
+
+            // 5.4 Atomare Dateiübertragung
+            fs.copyFileSync(tempRestoreDbPath, activeDbPath);
+
+            // 5.5 Temp-Wiederherstellungsdatei löschen
             if (fs.existsSync(tempRestoreDbPath)) {
                 try { fs.unlinkSync(tempRestoreDbPath); } catch (_) {}
             }
 
-            if (this.auditLogger && typeof this.auditLogger.appendAuditLog === 'function') {
-                this.auditLogger.appendAuditLog({
-                    entityType: 'SYSTEM_BACKUP',
-                    entityId: 0,
-                    action: 'RESTORE_COMPLETED',
-                    details: {
-                        sourceFile: path.basename(targetFilePath),
-                        preRestoreBackup: preRestoreInfo.fileName,
-                        bemerkung
-                    }
-                });
-            }
+            // 5.6 Geordneter Relaunch zur Verhinderung von Stale-Memory-Zuständen falls in Electron
+            try {
+                const { app } = require('electron');
+                if (app && typeof app.relaunch === 'function') {
+                    console.log('[Restore] Datenbank erfolgreich ersetzt. Starte ERP neu...');
+                    app.relaunch();
+                    app.exit(0);
+                    return { success: true, message: 'Restore abgeschlossen. Neustart wird ausgeführt...' };
+                }
+            } catch (_) {}
 
             return {
                 success: true,

@@ -3,6 +3,16 @@
  * Konform nach VOB/B § 13 und BGB § 641 Abs. 3.
  */
 
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 window.MaengelView = class MaengelView {
     constructor(containerId = 'view-maengel') {
         this.containerId = containerId;
@@ -187,20 +197,20 @@ window.MaengelView = class MaengelView {
 
                                 return `
                                     <tr class="hover:bg-slate-50 transition-colors">
-                                        <td class="p-3 font-mono font-bold text-slate-800">${m.mangel_nr}</td>
+                                        <td class="p-3 font-mono font-bold text-slate-800">${escapeHtml(m.mangel_nr)}</td>
                                         <td class="p-3">
-                                            <div class="font-bold text-slate-800">${m.titel}</div>
-                                            <div class="text-[11px] text-slate-400">${[m.gewerk, m.bauteil, m.ort_beschreibung].filter(Boolean).join(' &bull; ')}</div>
+                                            <div class="font-bold text-slate-800">${escapeHtml(m.titel)}</div>
+                                            <div class="text-[11px] text-slate-400">${[m.gewerk, m.bauteil, m.ort_beschreibung].filter(Boolean).map(escapeHtml).join(' &bull; ')}</div>
                                         </td>
-                                        <td class="p-3 text-slate-600 font-medium">${m.projekt_name || '-'}</td>
-                                        <td class="p-3 text-slate-600">${m.subunternehmer_name || m.verursacher_typ || 'Sub'}</td>
+                                        <td class="p-3 text-slate-600 font-medium">${escapeHtml(m.projekt_name || '-')}</td>
+                                        <td class="p-3 text-slate-600">${escapeHtml(m.subunternehmer_name || m.verursacher_typ || 'Sub')}</td>
                                         <td class="p-3">
                                             <div>${ampelBadge}</div>
                                             <div class="text-[11px] text-slate-500 mt-0.5">${ampel.text}</div>
                                         </td>
                                         <td class="p-3">
                                             <span class="px-2 py-0.5 rounded text-[11px] font-semibold ${m.status === 'ERLEDIGT' ? 'bg-slate-100 text-slate-600' : (m.status === 'MAHNUNG_STUFE_2' ? 'bg-red-100 text-red-800' : 'bg-primary/10 text-primary')}">
-                                                ${m.status}
+                                                ${escapeHtml(m.status)}
                                             </span>
                                         </td>
                                         <td class="p-3 text-right">

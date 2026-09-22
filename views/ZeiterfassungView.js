@@ -2,6 +2,16 @@
  * views/ZeiterfassungView.js - Desktop-Center für Mitarbeiter, Arbeitszeitnachweis & VOB/B
  */
 
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 class ZeiterfassungView {
     constructor() {
         this.mitarbeiter = [];
@@ -80,15 +90,15 @@ class ZeiterfassungView {
 
                 rows += `
                     <tr>
-                        <td><strong>${maName}</strong></td>
-                        <td>${z.projekt_name || '<span style="color:#94a3b8;">Allgemein</span>'}</td>
-                        <td><span class="badge" style="background:#e2e8f0; color:#334155;">${z.taetigkeit_typ}</span></td>
+                        <td><strong>${escapeHtml(maName)}</strong></td>
+                        <td>${z.projekt_name ? escapeHtml(z.projekt_name) : '<span style="color:#94a3b8;">Allgemein</span>'}</td>
+                        <td><span class="badge" style="background:#e2e8f0; color:#334155;">${escapeHtml(z.taetigkeit_typ)}</span></td>
                         <td>${von}</td>
                         <td>${bis}</td>
                         <td><strong>${dauerStd}</strong> (Pause: ${z.pause_min || 0}m)</td>
                         <td>${z.wegezeit_eur ? parseFloat(z.wegezeit_eur).toFixed(2) + ' €' : '-'}</td>
                         <td>
-                            <button class="btn-icon" onclick="ZeiterfassungView.deleteZeiteintrag('${z.uuid}')" title="Löschen">🗑️</button>
+                            <button class="btn-icon" onclick="ZeiterfassungView.deleteZeiteintrag('${escapeHtml(z.uuid)}')" title="Löschen">🗑️</button>
                         </td>
                     </tr>
                 `;
@@ -263,9 +273,25 @@ class ZeiterfassungView {
     }
 
     static async deleteZeiteintrag(uuid) {
-        if (confirm('Möchten Sie diesen Zeiteintrag wirklich löschen?')) {
-            await window.api.deleteZeiteintrag(uuid);
-            ZeiterfassungView.switchSubTab('zeiten');
+        const reason = prompt('Bitte geben Sie einen Grund für die Stornierung/Löschung des Zeiteintrags an (Pflichtfeld nach GoBD/MiLoG, mind. 5 Zeichen):');
+        if (!reason || reason.trim().length < 5) {
+            if (reason !== null) {
+                alert('Stornierung abgebrochen: Ein Löschgrund mit mindestens 5 Zeichen ist gesetzlich erforderlich.');
+            }
+            return;
+        }
+        try {
+            const res = await window.api.deleteZeiteintrag(uuid, {
+                reason: reason.trim(),
+                user: (typeof state !== 'undefined' && state.user) || 'Desktop-User'
+            });
+            if (res && res.error) {
+                alert(`Fehler beim Löschen: ${res.error}`);
+            } else {
+                ZeiterfassungView.switchSubTab('zeiten');
+            }
+        } catch (err) {
+            alert(`Fehler beim Löschen: ${err.message}`);
         }
     }
 

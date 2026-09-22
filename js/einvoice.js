@@ -2,6 +2,9 @@
  * einvoice.js - Generierung und Validierung von E-Rechnungen (EN 16931, XRechnung & ZUGFeRD 2.0.1+)
  */
 class EInvoiceEngine {
+    // XRechnung 3.0 / KoSIT-Bundle 3.0.2 (Summer 2026, Stand 31.08.2026) — P0.4.
+    static GUIDELINE_XRECHNUNG_30 = 'urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0';
+    // Veraltet, nur für Alt-Beleg-Anzeige/Tests als Alias behalten:
     static GUIDELINE_XRECHNUNG_23 = 'urn:cen.eu:en16931:2017#compliant#urn:xoev-de:kosit:standard:xrechnung_2.3';
     static GUIDELINE_FACTURX_EN16931 = 'urn:cen.eu:en16931:2017#conformant#urn:factur-x.eu:1p0:en16931';
 
@@ -160,22 +163,25 @@ class EInvoiceEngine {
         const anzahlung = Math.max(0, parseFloat(invoice.anzahlung) || 0);
         const einbehalt = Math.max(0, parseFloat(invoice.sicherheitseinbehalt) || 0);
         const verrechnungen = Array.isArray(invoice.verrechnungen) ? invoice.verrechnungen : [];
-        const verrechnungenSumme = this.round2(verrechnungen.reduce((sum, v) => {
-            const betrag = v && v.abzugsbetrag_netto !== undefined && v.abzugsbetrag_netto !== null
-                ? v.abzugsbetrag_netto
-                : (v && v.betrag);
-            return sum + (parseFloat(betrag) || 0);
+        // BT-113 Prepaid Amount: Beinhaltet Brutto-Verrechnungen vorangegangener Abschläge
+        const verrechnungenSummeBrutto = this.round2(verrechnungen.reduce((sum, v) => {
+            if (v && v.abzugsbetrag_brutto !== undefined && v.abzugsbetrag_brutto !== null && Number.isFinite(parseFloat(v.abzugsbetrag_brutto))) {
+                return sum + parseFloat(v.abzugsbetrag_brutto);
+            }
+            const net = parseFloat(v && v.abzugsbetrag_netto) || (v && parseFloat(v.betrag)) || 0;
+            const rate = invoice.unterliegt_13b ? 0 : (parseFloat(v && v.mwst) || 19.0);
+            return sum + this.round2(net * (1 + rate / 100));
         }, 0));
 
         const zahlbetrag = parseFloat(invoice.zahlbetrag);
         const duePayable = Number.isFinite(zahlbetrag)
             ? this.round2(Math.max(0, zahlbetrag))
-            : this.round2(Math.max(0, grandTotal - anzahlung - einbehalt - verrechnungenSumme));
+            : this.round2(Math.max(0, grandTotal - anzahlung - einbehalt - verrechnungenSummeBrutto));
         const prepaid = this.round2(Math.max(0, grandTotal - duePayable));
 
         return {
             lines, lineNettoSum, taxBasis, groups, taxTotal, grandTotal,
-            anzahlung, einbehalt, verrechnungenSumme, duePayable, prepaid
+            anzahlung, einbehalt, verrechnungenSumme: verrechnungenSummeBrutto, duePayable, prepaid
         };
     }
 
@@ -259,9 +265,7 @@ class EInvoiceEngine {
             errors.push(`Summenfehler (BR-CO-14/15): Netto (${netto.toFixed(2)} €) + Steuer (${steuer.toFixed(2)} €) ≠ Brutto (${brutto.toFixed(2)} €).`);
         }
 
-        const hatAbzuege = parseFloat(invoice.sicherheitseinbehalt) > 0 ||
-            (Array.isArray(invoice.verrechnungen) && invoice.verrechnungen.length > 0);
-        if (Number.isFinite(steuer) && !hatAbzuege && Math.abs(totals.taxTotal - steuer) > 0.05) {
+        if (Number.isFinite(steuer) && Math.abs(totals.taxTotal - steuer) > 0.05) {
             errors.push(`Steuer-Konsistenzfehler (BG-23): berechnete Steuer (${totals.taxTotal.toFixed(2)} €) weicht von ausgewiesener Steuer (${steuer.toFixed(2)} €) ab.`);
         }
 
@@ -314,7 +318,7 @@ class EInvoiceEngine {
             case 'XRECHNUNG':
                 return {
                     profile: 'XRECHNUNG',
-                    guidelineId: this.GUIDELINE_XRECHNUNG_23,
+                    guidelineId: this.GUIDELINE_XRECHNUNG_30,
                     fileName: 'xrechnung.xml',
                     conformanceLevel: 'XRECHNUNG'
                 };
@@ -332,8 +336,31 @@ class EInvoiceEngine {
     /**
      * Generiert eine XRechnung im CII-Format (Cross Industry Invoice XML nach EN 16931-1).
      */
-    static generateXRechnungXML(invoice, customer, seller = {}) {
-        return this.buildCII(invoice, customer, seller, this.GUIDELINE_XRECHNUNG_23);
+    static generateXRechnungXML(invoice, customer, seller = {}, options = {}) {
+        if (!options.allowDraft) {
+            this.assertExportfaehigerBeleg(invoice);
+        }
+        return this.buildCII(invoice, customer, seller, this.GUIDELINE_XRECHNUNG_30);
+    }
+
+    /**
+     * Belegfixierungs-Gate (P0.4): produktiver Export nur aus gespeichertem +
+     * festgeschriebenem Beleg. Wirft mit Feldbezug bei Verstoß.
+     * Entwurf → kein File, nur Vorschau (Aufrufer zeigt Wasserzeichen ENTWURF).
+     */
+    static assertExportfaehigerBeleg(invoice) {
+        if (!invoice || typeof invoice !== 'object') {
+            throw new Error('E-Rechnungs-Export blockiert: Feld „Beleg“ fehlt (kein Beleg geladen).');
+        }
+        if (invoice.id === null || invoice.id === undefined || (typeof invoice.id === 'number' && invoice.id <= 0)) {
+            throw new Error('E-Rechnungs-Export blockiert: Feld „Beleg-ID“ fehlt — Beleg erst speichern und festschreiben.');
+        }
+        const locked = Boolean(invoice.isLocked);
+        const isFinalStatus = ['Festgeschrieben', 'Bezahlt', 'Überfällig', 'Ausstehend'].includes(invoice.status);
+        if (!locked && !isFinalStatus) {
+            throw new Error(`E-Rechnungs-Export blockiert: Feld „Status“ ist „${invoice.status || 'Entwurf'}“ — nur festgeschriebene Belege sind versandfähig (Entwurf = Vorschau mit Wasserzeichen, keine Datei).`);
+        }
+        return true;
     }
 
     static buildPostalAddressXML(addr) {
@@ -532,9 +559,12 @@ class EInvoiceEngine {
      * options.profile: 'EN16931' (default) | 'XRECHNUNG'
      */
     static generateZUGFeRDXML(invoice, customer, seller = {}, options = {}) {
+        if (!options.allowDraft) {
+            this.assertExportfaehigerBeleg(invoice);
+        }
         const info = this.getZUGFeRDProfileInfo(options.profile);
         if (info.profile === 'XRECHNUNG') {
-            return this.generateXRechnungXML(invoice, customer, seller);
+            return this.generateXRechnungXML(invoice, customer, seller, options);
         }
         return this.buildCII(invoice, customer, seller, info.guidelineId);
     }

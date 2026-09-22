@@ -399,3 +399,46 @@ test('T-R22b: Encoding-Heuristik erkennt Mojibake (CP1252 als UTF-8 gelesen)', (
     assert.equal(BankingController.detectEncodingProblem(''), false);
     assert.equal(BankingController.detectEncodingProblem(null), false);
 });
+
+const SAMPLE_MT940 = `:20:STARTUMS
+:25:DE89370400440532013000
+:28C:00001/001
+:60F:C260801EUR10000,00
+:61:2608100810CD1500,50NTRFNONREF//TX1001
+:86:?00Rechnung INV-2026-042?20Unterhaltsreinigung August?31DE44500105175407324931?32Alpha Facility GmbH
+:61:2608150815RD250,00NCHKNONREF//TX1002
+:86:?00Materialeinkauf?20Reinigungsbedarf
+:62F:C260825EUR11250,50
+-`;
+
+test('BNK-1: SWIFT MT940 Parser extrahiert Transaktionen und ZKA-Felder', () => {
+    const stmts = BankingController.parseMt940(SAMPLE_MT940);
+    assert.equal(stmts.length, 1);
+    assert.equal(stmts[0].accountIban, 'DE89370400440532013000');
+    assert.equal(stmts[0].openingBalance, 10000.00);
+    assert.equal(stmts[0].closingBalance, 11250.50);
+
+    const txs = stmts[0].transactions;
+    assert.equal(txs.length, 2);
+
+    assert.equal(txs[0].betrag, 1500.50);
+    assert.equal(txs[0].buchungstag, '2026-08-10');
+    assert.equal(txs[0].partner_name, 'Alpha Facility GmbH');
+    assert.equal(txs[0].partner_iban, 'DE44500105175407324931');
+    assert.ok(txs[0].verwendungszweck.includes('Unterhaltsreinigung August'));
+    assert.equal(txs[0].importFormat, 'MT940');
+
+    assert.equal(txs[1].betrag, -250.00);
+    assert.equal(txs[1].buchungstag, '2026-08-15');
+});
+
+test('BNK-3: Same-Day identische Buchungen erhalten unterscheidbare Hashes durch Occurrence Tracking', () => {
+    const CSV_SAME_DAY = `Buchungstag;Wertstellung;Auftraggeber;Verwendungszweck;IBAN;Betrag
+10.08.2026;10.08.2026;Musterkunde GmbH;Abschlag 1;DE12345678901234567890;500,00
+10.08.2026;10.08.2026;Musterkunde GmbH;Abschlag 1;DE12345678901234567890;500,00`;
+
+    const txs = BankingController.parseCsvStatement(CSV_SAME_DAY, 'AUTO', 'DE89370400440532013000');
+    assert.equal(txs.length, 2, 'Beide Same-Day Buchungen müssen geparst werden');
+    assert.notEqual(txs[0].dedup_hash, txs[1].dedup_hash, 'Gleicher Tag, Betrag und Text müssen durch den Occurrence Counter unterscheidbar sein');
+});
+

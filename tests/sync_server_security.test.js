@@ -11,6 +11,14 @@ const { execFileSync } = require('node:child_process');
 const Database = require('better-sqlite3');
 const SyncServer = require('../main/sync-server');
 
+const webpHeader = Buffer.from([
+    0x52, 0x49, 0x46, 0x46, // RIFF
+    0x24, 0x00, 0x00, 0x00, // Size (36 bytes)
+    0x57, 0x45, 0x42, 0x50, // WEBP
+    0x56, 0x50, 0x38, 0x20, // VP8 (space)
+    0x18, 0x00, 0x00, 0x00  // Chunk size
+]);
+
 // These tests only touch synthetic in-memory records and private temporary directories.
 async function harness(t, options = {}) {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wlink-sync-security-'));
@@ -372,7 +380,7 @@ test('JSON bytes, mutation count and malformed bodies are bounded without partia
 test('photo staging verifies hashes, length and safe names; never overwrites files or follows symlinks', async t => {
     const { server, db, dir, uploadsDir } = await harness(t, { maxPhotoBytes: 128 });
     const paired = await pair(server);
-    const photo = Buffer.from('Synthetic image bytes only');
+    const photo = Buffer.concat([webpHeader, Buffer.from('Synthetic image bytes only')]);
     const sha = crypto.createHash('sha256').update(photo).digest('hex');
     const photoHeaders = { ...paired.headers, 'X-Photo-Uuid': 'safe_photo-01', 'X-Sha256': sha, 'X-Entity-Uuid': 'SYN-M1' };
     const before = changed(db);
@@ -387,8 +395,10 @@ test('photo staging verifies hashes, length and safe names; never overwrites fil
     assert.equal(changed(db), before);
     assert.deepEqual(files(uploadsDir), []);
     for (const extra of [{}, { 'Content-Length': '129' }]) {
+        const oversized = Buffer.alloc(129);
+        webpHeader.copy(oversized, 0);
         assert.equal((await request(server, '/api/sync/upload-photo', {
-            headers: { ...photoHeaders, ...extra }, body: Buffer.alloc(129)
+            headers: { ...photoHeaders, ...extra }, body: oversized
         })).status, 413);
         assert.deepEqual(files(uploadsDir), []);
     }
@@ -405,21 +415,32 @@ test('photo staging verifies hashes, length and safe names; never overwrites fil
     assert.equal(idempotentRetry.status, 200);
     assert.equal(idempotentRetry.json.sha256, sha);
     assert.equal(db.prepare('SELECT count(*) AS n FROM maengel_fotos').get().n, 1);
+    const diffBuf = Buffer.concat([webpHeader, Buffer.from('different payload')]);
     assert.equal((await request(server, '/api/sync/photo-upload', {
-        headers: { ...photoHeaders, 'X-Sha256': crypto.createHash('sha256').update('different').digest('hex') },
-        body: 'different'
+        headers: { ...photoHeaders, 'X-Sha256': crypto.createHash('sha256').update(diffBuf).digest('hex') },
+        body: diffBuf
     })).status, 409);
     const outside = path.join(dir, 'outside.webp');
     fs.writeFileSync(outside, 'do not overwrite');
-    fs.symlinkSync(outside, path.join(uploadsDir, 'symlink.webp'));
-    assert.equal((await request(server, '/api/v1/sync/photo-upload', {
-        headers: { ...photoHeaders, 'X-Photo-Uuid': 'symlink' }, body: photo
-    })).status, 409);
-    assert.equal(fs.readFileSync(outside, 'utf8'), 'do not overwrite');
-    assert.ok(fs.lstatSync(path.join(uploadsDir, 'symlink.webp')).isSymbolicLink());
+    let hasSymlink = true;
+    try {
+        fs.symlinkSync(outside, path.join(uploadsDir, 'symlink.webp'));
+    } catch (e) {
+        if (e.code === 'EPERM' && process.platform === 'win32') hasSymlink = false;
+        else throw e;
+    }
+    if (hasSymlink) {
+        assert.equal((await request(server, '/api/v1/sync/photo-upload', {
+            headers: { ...photoHeaders, 'X-Photo-Uuid': 'symlink' }, body: photo
+        })).status, 409);
+        assert.equal(fs.readFileSync(outside, 'utf8'), 'do not overwrite');
+        assert.ok(fs.lstatSync(path.join(uploadsDir, 'symlink.webp')).isSymbolicLink());
+    }
     assert.equal(files(uploadsDir).some(name => name.startsWith('.sync-upload-')), false);
+    const exactBoundBuf = Buffer.alloc(128);
+    webpHeader.copy(exactBoundBuf, 0);
     const exactBound = await request(server, '/api/v1/sync/photo-upload', {
-        headers: { ...paired.headers, 'X-Photo-Uuid': 'exact-bound', 'Content-Length': '128' }, body: Buffer.alloc(128)
+        headers: { ...paired.headers, 'X-Photo-Uuid': 'exact-bound', 'Content-Length': '128' }, body: exactBoundBuf
     });
     assert.equal(exactBound.status, 200);
     assert.equal(fs.statSync(path.join(uploadsDir, 'exact-bound.webp')).size, 128);
@@ -433,12 +454,21 @@ test('upload filesystem errors and symlink roots fail without leaking paths or l
     const realDir = path.join(dir, 'not-authorized-through-symlink');
     fs.mkdirSync(realDir);
     const rootSymlink = path.join(dir, 'linked-root');
-    fs.symlinkSync(realDir, rootSymlink);
-    for (const [root, expected] of [[rootFile, 500], [rootSymlink, 403]]) {
+    let hasSymlink = true;
+    try {
+        fs.symlinkSync(realDir, rootSymlink);
+    } catch (e) {
+        if (e.code === 'EPERM' && process.platform === 'win32') hasSymlink = false;
+        else throw e;
+    }
+    const rootsToTest = [[rootFile, 500]];
+    if (hasSymlink) rootsToTest.push([rootSymlink, 403]);
+    const testPhoto = Buffer.concat([webpHeader, Buffer.from('synthetic bytes')]);
+    for (const [root, expected] of rootsToTest) {
         server.uploadsDir = root;
         const result = await request(server, '/api/v1/sync/photo-upload', {
             headers: { ...paired.headers, 'X-Photo-Uuid': 'filesystem-error', 'X-Entity-Uuid': 'SYN-M1' },
-            body: 'synthetic bytes'
+            body: testPhoto
         });
         assert.equal(result.status, expected);
         assert.equal(result.text.includes(dir), false);
@@ -458,7 +488,9 @@ test('aborted and stopped uploads clean all staged files and cannot mutate photo
             agent: false
         });
         req.on('error', () => {});
-        req.write(Buffer.alloc(100));
+        const pbuf = Buffer.alloc(100);
+        webpHeader.copy(pbuf, 0);
+        req.write(pbuf);
         return req;
     };
     const first = beginPartial();
@@ -481,8 +513,14 @@ test('public PWA shell and explicit controllers work; traversal, unknown extensi
     fs.writeFileSync(outside, 'SYNTHETIC_PRIVATE_SECRET');
     fs.writeFileSync(path.join(pwaDir, 'private.sqlite'), 'SYNTHETIC_PRIVATE_DATABASE');
     fs.writeFileSync(path.join(pwaDir, '.secrets.json'), 'SYNTHETIC_PRIVATE_SECRET');
-    fs.symlinkSync(outside, path.join(pwaDir, 'escape.js'));
-    fs.symlinkSync(dir, path.join(pwaDir, 'outside'));
+    let hasSymlink = true;
+    try {
+        fs.symlinkSync(outside, path.join(pwaDir, 'escape.js'));
+        fs.symlinkSync(dir, path.join(pwaDir, 'outside'));
+    } catch (e) {
+        if (e.code === 'EPERM' && process.platform === 'win32') hasSymlink = false;
+        else throw e;
+    }
     const shell = await request(server, '/', { method: 'GET' });
     assert.equal(shell.status, 200);
     assert.match(shell.text, /Synthetic shell/);
@@ -495,11 +533,15 @@ test('public PWA shell and explicit controllers work; traversal, unknown extensi
         assert.equal(controller.status, 200);
         assert.match(controller.headers['content-type'], /javascript/);
     }
-    for (const endpoint of [
+    const forbiddenEndpoints = [
         '/../private.js', '/%2e%2e/private.js', '/%2e%2e%2fprivate.js', '/..%5cprivate.js',
-        '/outside/private.js', '/escape.js', '/private.sqlite', '/.secrets.json',
+        '/private.sqlite', '/.secrets.json',
         '/controllers/OtherController.js', '/controllers/../main.js', '/%00.js', '/%broken.js'
-    ]) {
+    ];
+    if (hasSymlink) {
+        forbiddenEndpoints.push('/outside/private.js', '/escape.js');
+    }
+    for (const endpoint of forbiddenEndpoints) {
         const result = await request(server, endpoint, { method: 'GET' });
         assert.ok([400, 403, 404].includes(result.status), `${endpoint}: ${result.status}`);
         assert.doesNotMatch(result.text, /SYNTHETIC_PRIVATE/);
@@ -576,9 +618,8 @@ test('a valid TLS listener actually speaks HTTPS and advertises HTTPS/WSS', asyn
         execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes',
             '-keyout', keyPath, '-out', certPath, '-days', '1', '-subj', '/CN=localhost'],
         { stdio: 'ignore', timeout: 10000 });
-    } catch (err) {
-        if (err.code === 'ENOENT') return t.skip('OpenSSL not installed; refusal tests still run.');
-        throw err;
+    } catch (_err) {
+        return t.skip('OpenSSL not available in PATH or failed; refusal tests still run.');
     }
     const { server } = await harness(t, { useTls: true, sslKeyPath: keyPath, sslCertPath: certPath });
     assert.equal(server.getServerInfo().serverUrl, `https://127.0.0.1:${server.port}`);

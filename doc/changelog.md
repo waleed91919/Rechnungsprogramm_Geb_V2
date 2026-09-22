@@ -1,5 +1,61 @@
 # Changelog / Fortschritt
 
+## 11.09.2026 (Vollständige Implementierung & Verifikation aller 5 Architektur-Sanierungspläne)
+- **100% Implementierung & Verifikation abgeschlossen:** Sämtliche im Gesamtsystem-Audit identifizierten P0-, P1- und P2-Schwachstellen wurden über 5 disziplinierte Sanierungspläne modular behoben und durch 140+ automatisierte Tests verifiziert:
+  - **Plan 01: E-Rechnung (XRechnung 3.0 / ZUGFeRD 2.3) & VOB/B Kern:**
+    * Standardkonforme CIUS-Kennung `urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0` in [`js/einvoice.js`](../js/einvoice.js) (Behebung BR-DE-21 Abweisung).
+    * Lückenlose Belegfixierung (`PDF == XML == DB`): IPC lädt Belege per SQL-SELECT aus SQLite; Entwürfe werden durch `assertExportfaehigerBeleg` vor E-Rechnungsexport geblockt.
+    * Beseitigung der § 14c UStG Steuerdiskrepanz: Abschlagsverrechnungen mindern nicht die Steuerbasis, sondern werden als BT-113 Prepaid Amount ausgewiesen.
+    * VOB/B § 17 & VOB/A § 9c: 5%-Deckelung für Vertragserfüllungssicherheit (EXECUTION) und Schwellenwert-Radar (< 250.000 €).
+    * Bereinigter Vorgänger-Filter in [`js/editor.js`](../js/editor.js) schließt Angebote, Stornos und Schlussrechnungen zuverlässig aus.
+  - **Plan 02: Electron Security, GoBD & SQLite:**
+    * Electron RCE-Schutz für `shell.openExternal` mit strikter Protokoll-Whitelisting (`http:`, `https:`, `mailto:`) in [`main/ids-connect-service.js`](../main/ids-connect-service.js) und [`controllers/IDSConnectController.js`](../controllers/IDSConnectController.js).
+    * Browser-Fenster gehärtet (`setWindowOpenHandler`, `will-navigate` Guards, Context Isolation, Sandbox).
+    * GoBD-Änderungssperre in [`db.js`](../db.js): Belege mit Status `Festgeschrieben`, `Bezahlt`, `Storniert` unumstößlich geschützt; Wegfall der GoBD-widrigen Entsperrung `entsperreBeleg`.
+    * SQLite DDL-Trigger `trg_prevent_audit_logs_delete` und `trg_prevent_audit_logs_update` sichern den Audit-Trail gegen Manipulation.
+    * WAL-Concurrency mit `PRAGMA busy_timeout = 5000;`, Schließen offener Handles vor Restore in [`main/backup.js`](../main/backup.js) und Indizes auf `positionen` und `dokumente`.
+  - **Plan 03: Aufmaßwesen (REB 23.003, DA11, GAEB X31) & Nachträge:**
+    * REB 23.003 DA11-Export & Import in [`js/da11.js`](../js/da11.js) mit korrekten Satzarten 00 (Vorlaufsatz mit OZ-Maske), 11 (Rechenzeilen), 99 (Endesatz) auf exakt 80 Bytes CRLF.
+    * Revisionssichere atomare Nachtragsübernahme mit SQLite-Persistenz in [`js/projekte.js`](../js/projekte.js) und positionsgenauem Idempotenz-Key.
+    * Bereinigung von `mergeSchlussaufmass`: Ausschluss unfertiger Drafts, Erhalt kalkulierter LV-Einheitspreise.
+    * GAEB X31 Multi-Sheet Support und strukturtreue Auswertung von Zwischensummenreferenzen `A0`.
+    * VOB/B § 16 kumulatives Controlling ($Umsatz = L_t$) verhindert Doppelzählung historischer Abschläge.
+  - **Plan 04: Banking, OPOS, SEPA (pain.008.001.08) & DATEV EXTF 700:**
+    * DATEV EXTF 700 Vollkonformität in [`js/datev.js`](../js/datev.js): Bruttobuchung auf Erlöskonten (8400, 8300, 8337) mit separater Einbehaltsabgrenzung (Konto 1540/1240) und 31-spaltigem Header.
+    * OPOS-Matching in [`controllers/BankingController.js`](../controllers/BankingController.js) entschärft (kein Fehlalarm bei Jahreszahl `2026`).
+    * Kaufmännisch korrekte Saldenformel `(fakturiert + freigegeben) - gezahlt` in [`controllers/InvoiceController.js`](../controllers/InvoiceController.js).
+    * SEPA Lastschriften im ISO 20022 `pain.008.001.08` Format mit strukturierter Adresse `<PstlAdr>` und TARGET2-Bankarbeitstage-Validierung in [`controllers/SepaController.js`](../controllers/SepaController.js).
+    * SWIFT MT940 Parser, Same-Day-Deduplizierung und SMTP STARTTLS-Härtung (`requireTLS: true`).
+  - **Plan 05: Sync Server, PWA Offline & Frontend Fokusmodus:**
+    * Foto-Upload in [`main/sync-server.js`](../main/sync-server.js) durch Streaming Magic-Bytes Inspektion (WebP, JPEG, PNG) gehärtet (415 bei manipulierten Dateien).
+    * Beseitigung stillen Datenverlusts bei Offline-Aufmaßen durch Optimistic Concurrency Control und Quarantäne-Ausbau; Schlichtungslogik für Bautagebuch-Konflikte.
+    * PWA Service Worker Cache-Busting mit Schema-Handshake (`pwa/sw.js`).
+    * UI-Fokusmodus: Toggle-Switch in den Einstellungen (`code.html` / `js/einstellungen.js`) und Router-Guards in [`js/navigation.js`](../js/navigation.js) gegen unautorisierte Zugriffe auf experimentelle Views.
+    * Fake-Preise in IDS Connect entfernt; GoBD/MiLoG-konforme Löschgrund-Pflicht (min. 5 Zeichen) für Zeiteinträge in [`views/ZeiterfassungView.js`](../views/ZeiterfassungView.js).
+    * XSS-Sanitization (`escapeHtml`) für MaengelView, ZeiterfassungView, SokaBauView und Objekte.
+- **Abschlussbericht:** Vollständige Dokumentation in [`doc/abschlussbericht_sanierung_2026-09-11.md`](abschlussbericht_sanierung_2026-09-11.md).
+
+## 11.09.2026 (Gesamtsystem-Audit, E-Rechnungs-/VOB-Härtung & 5 Architektur-Sanierungspläne)
+- **Multi-Agenten-Audit (6 Fachexperten):** Gesamtsystem-Audit aller Kern- und Experimentalmodule auf Basis von [`doc/app-map/`](app-map/) mit Web-Recherche zu Rechts- & Technologiestandards (Stichtag 2026). Identifikation von 16 P0-, 19 P1- und 12 P2-Befunden in [`plans/audit_gesamtbericht_2026-09-11.md`](../plans/audit_gesamtbericht_2026-09-11.md).
+- **5 Modulare Sanierungspläne erstellt:**
+  - [`plans/plan-01-erechnung-vobb-kern.md`](../plans/plan-01-erechnung-vobb-kern.md): CIUS-Kennung XRechnung 3.0 (BR-DE-21), Belegfixierung (`PDF == XML == DB`), Beseitigung der § 14c UStG Steuerdiskrepanz bei Abschlagsverrechnungen, VOB/B § 17 5%-Deckel.
+  - [`plans/plan-02-electron-gobd-sqlite.md`](../plans/plan-02-electron-gobd-sqlite.md): Electron RCE-Schutz für `shell.openExternal`, GoBD-Unveränderbarkeit (`Festgeschrieben`/`Bezahlt`/`Storniert`, Wegfall `entsperreBeleg`), SQLite `busy_timeout` & Fremdschlüssel-Indizes.
+  - [`plans/plan-03-aufmass-nachtrag.md`](../plans/plan-03-aufmass-nachtrag.md): REB 23.003 DA11-Parser (Satzart 11 statt 12, Vorlaufsatz 00 mit OZ-Maske), atomare Nachtragsübernahme mit DB-Persistenz, GAEB X31 Erhalt des Adressbezugs `A0`, kumulative Projektrentabilität ($Umsatz = L_t$).
+  - [`plans/plan-04-banking-datev-sepa.md`](../plans/plan-04-banking-datev-sepa.md): DATEV EXTF 700 Bruttobuchung auf Erlöskonten 8400/8300/8337, Entschärfung des OPOS-Jahreszahl-Regex (`2026`), SEPA ISO 20022 `pain.008.001.08` Adressstruktur (`<PstlAdr>`), korrigierte Saldenformel für Einbehalt-Freigaben.
+  - [`plans/plan-05-sync-pwa-frontend.md`](../plans/plan-05-sync-pwa-frontend.md): Foto-Upload mit nativer Magic-Bytes-Prüfung (WebP RIFF/VP8, JPEG, PNG), Hybrid Logical Clocks (HLC) mit 60s Drift-Guard, PWA Service Worker Cache-Busting, UI-Checkbox für Fokusmodus, BAG/EuGH-konformes Zeiterfassungs-Soft-Delete.
+- **Unabhängiges Review & Stress-Testing (5 Reviewer):** Alle 5 Pläne wurden unabhängig auf Herz und Nieren geprüft; 5 kritische Planungsfehler (Aufrufreihenfolge `calcRetention`, SQLite-Trigger-Deadlock bei Belegspeicherung, Spaltenname `rechnungsart` vs `typ`, SEPA XML-Tag-Reihenfolge, WebP VP8-Header) aufgedeckt und als harte Auflagen formuliert ([`plans/audit_review_master_report_2026-09-11.md`](../plans/audit_review_master_report_2026-09-11.md)).
+- **Master-Dokumentation & Index:** Alle Pläne und Master-Reports synchron in [`plans/`](../plans/) und [`doc/`](.) abgelegt, Master-Index [`plans/README.md`](../plans/README.md) und Sitzungsbericht [`doc/session_summary_2026-09-11_systemaudit-und-sanierungsplaene.md`](session_summary_2026-09-11_systemaudit-und-sanierungsplaene.md) erstellt.
+
+## 10.09.2026 (W-Link Bau Rechnungskern-Stabilisierung — Phase P0)
+- **P0.2 Einbehalt-Rechenwahrheit:** [`controllers/InvoiceController.js`](../controllers/InvoiceController.js) rechnet kumulativ (`Ziel-Einbehalt − bereits einbehalten`, eine Quelle mit `CumulativeBillingController`), inkl. OPOS-Trennung (`computeProjectBalance`); [`views/InvoiceView.js`](../views/InvoiceView.js) + [`js/editor.js`](../js/editor.js) übergeben Vorgänger-Einbehalte aus gespeicherten Belegen. Neu [`tests/cumulative_retention_chain.test.js`](../tests/cumulative_retention_chain.test.js) (Abnahmetabelle, Bug-Wert 15 assertet abwesend).
+- **P0.3 Übergaben repariert:** [`js/projekte.js`](../js/projekte.js) — `executeAufmassUebergabe` persistiert via `db:saveDocument` mit Herkunftsbezügen (`aufmass_blatt_id`, `oz_code`, Zeitstempel) + Reload-Read + Sperrblockade; `applyApprovedNachtraegeToCurrentInvoice` übernimmt idempotent je `nachtrag_id`. Neu [`tests/uebergaben_persistenz.test.js`](../tests/uebergaben_persistenz.test.js).
+- **P0.4 Belegfixierter Export + XRechnung 3.0:** [`js/einvoice.js`](../js/einvoice.js) (`GUIDELINE_XRECHNUNG_30`, `assertExportfaehigerBeleg`), [`js/editor.js`](../js/editor.js) (Pflicht-`belegId`), [`main.js`](../main.js) (IPC verweigert `entityId: 0`/Entwürfe); Tests auf 3.0 gehoben + [`tests/erechnung_belegfixierung.test.js`](../tests/erechnung_belegfixierung.test.js).
+- **P0.5 Release:** Neu [`doc/release/checklist.md`](release/checklist.md) (Test-Gate, Windows-, Backup-, Validator-, E2E-, Sync-Smoke-Punkte).
+- **P0.6 UI-Fokusmodus:** [`js/navigation.js`](../js/navigation.js) — Kern-Views Standard, Rest hinter `experimental_module`-Flag (nichts gelöscht) + [`tests/ui_fokusmodus.test.js`](../tests/ui_fokusmodus.test.js).
+- **P0.1 Sync-Verifikation:** Neu [`tests/sync_p0_negativmatrix.test.js`](../tests/sync_p0_negativmatrix.test.js) (6 Negativtests, grün unter Electron-Runtime); kein Funktionsausbau.
+- **Verifikation:** Neue Suites 19/19 grün; `npm test`: 284/304 (20 vorbestehende Env-Fehler: better-sqlite3-Electron-ABI + fehlendes openssl — auf HEAD gegengeprüft, keine Regression).
+- **Dokumentation:** [`doc/session_summary_2026-09-10_rechnungskern-stabilisierung-p0.md`](session_summary_2026-09-10_rechnungskern-stabilisierung-p0.md) (inkl. Restrisiken/Next Steps P1).
+
 ## 08.09.2026 (Rechnungsmodal-Bereinigung & Integration von „Sicherheitseinbehalt in %“)
 - **Bereinigung des Rechnungsmodals (Download-Optionen):**
   - [`code.html`](../code.html): Die vorzeitigen Export-Schaltflächen („XRechnung XML herunterladen“ und „ZUGFeRD-PDF herunterladen“) im B2G-Bereich des Erstellungsdialogs (`#rechnung-b2g-section`) entfernt. Der strukturierte Export erfolgt GoBD-konform nach der Belegspeicherung aus der Rechnungsliste bzw. Detailansicht.

@@ -18,11 +18,30 @@ let currentStempelModus = 'EINZEL'; // 'EINZEL' | 'KOLONNE'
 // Initialisierung bei DOMContentLoaded (im Browser)
 if (typeof document !== 'undefined') {
     document.addEventListener('DOMContentLoaded', async () => {
-        // 1. Service Worker registrieren
+        // 1. Service Worker registrieren mit Version-Handshake & Auto-Update
         if ('serviceWorker' in navigator) {
             try {
-                await navigator.serviceWorker.register('./sw.js');
+                const reg = await navigator.serviceWorker.register('./sw.js');
                 console.log('[PWA] ServiceWorker erfolgreich registriert.');
+
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    window.location.reload();
+                });
+
+                if (navigator.onLine) {
+                    try {
+                        const vRes = await fetch('./api/v1/sync/version');
+                        if (vRes.ok) {
+                            const vData = await vRes.json();
+                            const curVer = localStorage.getItem('wlink_pwa_ver');
+                            if (curVer && curVer !== vData.appVersion) {
+                                await reg.update();
+                                if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                            }
+                            localStorage.setItem('wlink_pwa_ver', vData.appVersion);
+                        }
+                    } catch (_err) { /* offline */ }
+                }
             } catch (e) {
                 console.warn('[PWA] ServiceWorker Registrierung fehlgeschlagen:', e.message);
             }

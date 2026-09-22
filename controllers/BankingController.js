@@ -130,17 +130,28 @@ const BankingController = {
         return '';
     },
 
-    calculateTransactionHash({ iban, buchungstag, betrag, verwendungszweck, partnerIban, primanota }) {
-        const normIban = this._cleanIban(iban);
+    validateIban(iban) {
+        if (!iban || typeof iban !== 'string') return false;
+        const clean = this._cleanIban(iban);
+        if (!/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(clean)) return false;
+        return true;
+    },
+
+    calculateTransactionHash({ iban, konto_iban, accountIban, buchungstag, betrag, verwendungszweck, partnerIban, partner_iban, primanota, occurrenceIndex = 0 }) {
+        const normIban = this._cleanIban(iban || konto_iban || accountIban);
         const normTag = String(buchungstag || '').trim();
         const normBetrag = (Math.round((parseFloat(betrag) || 0) * 100) / 100).toFixed(2);
         const normText = String(verwendungszweck || '').replace(/\s+/g, ' ').trim().toLowerCase();
-        const normPartner = this._cleanIban(partnerIban);
+        const normPartner = this._cleanIban(partnerIban || partner_iban);
         const normNota = String(primanota || '').trim();
+        const occ = parseInt(occurrenceIndex, 10) || 0;
 
-        const raw = `${normIban}|${normTag}|${normBetrag}|${normText}|${normPartner}|${normNota}`;
+        const raw = occ > 0
+            ? `${normIban}|${normTag}|${normBetrag}|${normText}|${normPartner}|${normNota}|${occ}`
+            : `${normIban}|${normTag}|${normBetrag}|${normText}|${normPartner}|${normNota}`;
         return this._sha256(raw);
     },
+
 
     parseCamt053(xmlString) {
         if (!xmlString || typeof xmlString !== 'string') {
@@ -186,6 +197,8 @@ const BankingController = {
             let ntryMatch;
             let skippedPending = 0;
             let rvslSkipped = 0;
+            const collisionMap = new Map();
+
 
             while ((ntryMatch = ntryRegex.exec(stmtContent)) !== null) {
                 const ntry = ntryMatch[1];
@@ -275,14 +288,20 @@ const BankingController = {
                     || ntry.match(/<SubFmlyCd>([^<]+)<\/SubFmlyCd>/i);
                 const buchungstext = buchungstextMatch ? buchungstextMatch[1] : '';
 
+                const tupleKey = `${accountIban}|${bookgDt}|${betrag.toFixed(2)}|${verwendungszweck}|${partnerIban}`;
+                const occ = collisionMap.get(tupleKey) || 0;
+                collisionMap.set(tupleKey, occ + 1);
+
                 const dedupHash = this.calculateTransactionHash({
                     iban: accountIban,
                     buchungstag: bookgDt,
                     betrag,
                     verwendungszweck,
                     partnerIban,
-                    primanota
+                    primanota,
+                    occurrenceIndex: occ
                 });
+
 
                 const pName = this._cleanText(partnerName);
                 const vZweck = this._cleanText(verwendungszweck);
@@ -426,6 +445,8 @@ const BankingController = {
         };
 
         const transactions = [];
+        const collisionMap = new Map();
+
 
         for (let i = headerIdx + 1; i < rawLines.length; i++) {
             const line = rawLines[i];
@@ -528,14 +549,20 @@ const BankingController = {
 
             if (!buchungstag && !betrag) continue;
 
+            const tupleKey = `${accountIbanFallback}|${buchungstag}|${betrag.toFixed(2)}|${verwendungszweck}|${partnerIban}`;
+            const occ = collisionMap.get(tupleKey) || 0;
+            collisionMap.set(tupleKey, occ + 1);
+
             const dedupHash = this.calculateTransactionHash({
                 iban: accountIbanFallback,
                 buchungstag,
                 betrag,
                 verwendungszweck,
                 partnerIban,
-                primanota
+                primanota,
+                occurrenceIndex: occ
             });
+
 
             const pName = this._cleanText(partnerName);
             const vZweck = this._cleanText(verwendungszweck);
@@ -569,27 +596,220 @@ const BankingController = {
         return transactions;
     },
 
+    /**
+     * Parst SWIFT MT940 Kontoauszugsdateien (.sta / .swi / .txt) (BNK-1)
+     */
+    parseMt940(mt940String, accountIbanFallback = '') {
+        if (!mt940String || typeof mt940String !== 'string') return [];
+
+        const content = mt940String.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+        const rawStatements = content.split(/(?=:20:)/g).filter(s => s.trim().length > 0);
+        const statements = [];
+        const collisionMap = new Map();
+
+        for (const rawStmt of rawStatements) {
+            let accountIban = accountIbanFallback;
+            let openingBalance = 0;
+            let closingBalance = 0;
+            const transactions = [];
+
+            // :25: Kontobezeichnung (IBAN oder BLZ/KTO)
+            const tag25Match = rawStmt.match(/:25:([^\n]+)/);
+            if (tag25Match) {
+                const rawAcc = tag25Match[1].trim().replace(/\//g, '');
+                if (this.validateIban(rawAcc)) {
+                    accountIban = this._cleanIban(rawAcc);
+                } else if (!accountIban) {
+                    accountIban = rawAcc;
+                }
+            }
+
+            // :60F: Anfangssaldo
+            const tag60Match = rawStmt.match(/:60[FM]:([CD])(\d{6})([A-Z]{3})([0-9,]+)/);
+            if (tag60Match) {
+                let opAmt = parseFloat(tag60Match[4].replace(/\./g, '').replace(',', '.'));
+                if (tag60Match[1] === 'D') opAmt = -Math.abs(opAmt);
+                openingBalance = Math.round(opAmt * 100) / 100;
+            }
+
+            // :62F: Endsaldo
+            const tag62Match = rawStmt.match(/:62[FM]:([CD])(\d{6})([A-Z]{3})([0-9,]+)/);
+            if (tag62Match) {
+                let clAmt = parseFloat(tag62Match[4].replace(/\./g, '').replace(',', '.'));
+                if (tag62Match[1] === 'D') clAmt = -Math.abs(clAmt);
+                closingBalance = Math.round(clAmt * 100) / 100;
+            }
+
+            // Transaktionen: :61: gefolgt von optionalem :86:
+            const txRegex = /:61:(\d{6})(\d{4})?([CD]|RC|RD)([A-Z])?([0-9,]+)([A-Za-z0-9]{4})([^\n]*)\n(?::86:([\s\S]*?)(?=(?::61:|:62[FM]:|$)))?/g;
+            let match;
+
+            while ((match = txRegex.exec(rawStmt)) !== null) {
+                const valutaRaw = match[1]; // YYMMDD
+                const buchungsTagRaw = match[2] || valutaRaw.substring(2); // MMDD
+                const dcMark = match[3]; // C = Haben (Eingang), D = Soll (Ausgang)
+                const amountRaw = match[5]; // Betrag mit Komma
+                const gvCode = match[6]; // z.B. NTRF, NCHK
+                const primanota = (match[7] || '').trim();
+                const tag86Content = (match[8] || '').trim();
+
+                // Datumskonvertierung (YYMMDD -> YYYY-MM-DD)
+                const yearPrefix = parseInt(valutaRaw.substring(0, 2), 10) >= 70 ? '19' : '20';
+                const valuta = `${yearPrefix}${valutaRaw.substring(0, 2)}-${valutaRaw.substring(2, 4)}-${valutaRaw.substring(4, 6)}`;
+
+                let buchungstag = valuta;
+                if (buchungsTagRaw && buchungsTagRaw.length === 4) {
+                    buchungstag = `${yearPrefix}${valutaRaw.substring(0, 2)}-${buchungsTagRaw.substring(0, 2)}-${buchungsTagRaw.substring(2, 4)}`;
+                }
+
+                // Betrag berechnen
+                let betrag = parseFloat(amountRaw.replace(/\./g, '').replace(',', '.'));
+                if (dcMark.includes('D')) {
+                    betrag = -Math.abs(betrag);
+                } else {
+                    betrag = Math.abs(betrag);
+                }
+
+                // :86: Verwendungszweck und Partner analysieren (ZKA-Struktur ?00 bis ?38)
+                let partnerName = '';
+                let partnerIban = '';
+                let partnerBic = '';
+                let verwendungszweck = '';
+                let buchungstext = '';
+
+                if (tag86Content.includes('?')) {
+                    const subFields = tag86Content.split(/\?(\d{2})/);
+                    for (let i = 1; i < subFields.length; i += 2) {
+                        const code = subFields[i];
+                        const val = (subFields[i + 1] || '').replace(/\n/g, ' ').trim();
+                        if (code === '00') buchungstext = val;
+                        else if (['20', '21', '22', '23', '24', '25', '26', '27', '28', '29'].includes(code)) {
+                            verwendungszweck += (verwendungszweck ? ' ' : '') + val;
+                        } else if (code === '30') partnerBic = val;
+                        else if (code === '31') partnerIban = val;
+                        else if (code === '32' || code === '33') {
+                            partnerName += (partnerName ? ' ' : '') + val;
+                        } else if (code === '38') partnerIban = val;
+                    }
+                } else {
+                    verwendungszweck = tag86Content.replace(/\n/g, ' ').trim();
+                }
+
+                // BNK-3: Same-Day Occurrence Tracking
+                const tupleKey = `${accountIban}|${buchungstag}|${betrag.toFixed(2)}|${verwendungszweck}|${partnerIban}`;
+                const occ = collisionMap.get(tupleKey) || 0;
+                collisionMap.set(tupleKey, occ + 1);
+
+                const dedupHash = this.calculateTransactionHash({
+                    iban: accountIban,
+                    buchungstag,
+                    betrag,
+                    verwendungszweck,
+                    partnerIban,
+                    primanota,
+                    occurrenceIndex: occ
+                });
+
+                transactions.push({
+                    accountIban,
+                    account_iban: accountIban,
+                    buchungstag,
+                    valuta,
+                    valutadatum: valuta,
+                    betrag: Math.round(betrag * 100) / 100,
+                    waehrung: 'EUR',
+                    partnerName: this._cleanText(partnerName),
+                    partner_name: this._cleanText(partnerName),
+                    partnerIban: this._cleanIban(partnerIban),
+                    partner_iban: this._cleanIban(partnerIban),
+                    partnerBic: this._cleanBic(partnerBic),
+                    partner_bic: this._cleanBic(partnerBic),
+                    buchungstext: this._cleanText(buchungstext),
+                    verwendungszweck: this._cleanText(verwendungszweck),
+                    gvCode,
+                    gv_code: gvCode,
+                    primanota,
+                    dedupHash,
+                    dedup_hash: dedupHash,
+                    importFormat: 'MT940'
+                });
+            }
+
+            statements.push({
+                accountIban,
+                iban: accountIban,
+                openingBalance,
+                closingBalance,
+                transactions,
+                statementType: 'MT940'
+            });
+        }
+
+        return statements;
+    },
+
+    /**
+     * Prüft, ob ein Verwendungszweck eine gegebene Rechnungsnummer referenziert.
+     * Härtung gegen OPOS-1: Schließt isolierte Jahreszahlen (2000..2099) strikt aus.
+     */
     _matchesNumberVariant(text, docNr) {
         if (!text || !docNr) return false;
         const upperText = String(text).toUpperCase();
         const upperDoc = String(docNr).toUpperCase().trim();
+
+        // 1. Exakter Match
         if (upperText.includes(upperDoc)) return true;
 
+        // 2. Delimiter-bereinigter Match (z.B. "RE20260042")
         const strippedDoc = upperDoc.replace(/[^A-Z0-9]/g, '');
         const strippedText = upperText.replace(/[^A-Z0-9]/g, '');
         if (strippedDoc && strippedDoc.length >= 4 && strippedText.includes(strippedDoc)) {
             return true;
         }
 
-        const numOnlyMatch = upperDoc.match(/\d{3,}/);
-        if (numOnlyMatch && numOnlyMatch[0].length >= 4) {
-            const numPart = numOnlyMatch[0];
-            const regex = new RegExp(`(?:\\b|RE|RN|RG|RECHNUNG|NR|NUMMER)[-_\\s]*${numPart}(?:\\b|[^0-9])`, 'i');
-            if (regex.test(upperText)) return true;
+        // 3. Strukturierter Match mit Präfix und Trennzeichen
+        const escapeRegex = (s) => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+        const docWordRegex = new RegExp(`\\b${escapeRegex(upperDoc)}\\b`, 'i');
+        if (docWordRegex.test(upperText)) return true;
+
+        // 4. Strukturierte Zerlegung in Jahreszahl und laufende Nummer (z.B. RE-2026-0042)
+        const partsMatch = upperDoc.match(/^(?:([A-Z]+)[-_/\s]*)?(\d{4})[-_/\s]+(\d{1,8})$/i);
+        if (partsMatch) {
+            const prefix = partsMatch[1] || 'RE';
+            const year = partsMatch[2];
+            const seq = partsMatch[3];
+            const seqInt = parseInt(seq, 10);
+
+            // Match mit optionalen Trennzeichen: "RE 2026/42" oder "2026-0042"
+            const structuredRegex = new RegExp(`(?:${prefix}[-_\\s/]*)?${year}[-_\\s/]+0*${seqInt}\\b`, 'i');
+            if (structuredRegex.test(upperText)) return true;
+
+            // Match: Präfix direkt vor der Sequenznummer (z.B. "RE-42" oder "RN 0042")
+            if (seq.length >= 2) {
+                const prefixSeqRegex = new RegExp(`\\b(?:RE|RN|RG|RECHNUNG|RE-NR|R-NR)[-_\\s]*0*${seqInt}\\b`, 'i');
+                if (prefixSeqRegex.test(upperText)) return true;
+            }
+        }
+
+        // 5. Ziffernblock-Prüfung MIT JAHRESZAHLEN-SCHUTZ (OPOS-1)
+        const allDigits = upperDoc.match(/\d+/g);
+        if (allDigits) {
+            for (const d of allDigits) {
+                const val = parseInt(d, 10);
+                // Strikte Blacklist für Jahreszahlen: 2000 bis 2099 dürfen NIEMALS als isolierte Rechnungsnummer matchen!
+                if (val >= 2000 && val <= 2099) {
+                    continue;
+                }
+                if (d.length >= 4) {
+                    const cleanBlockRegex = new RegExp(`\\b(?:RE|RN|RG|RECHNUNG|NR|NUMMER)[-_\\s]*0*${val}\\b`, 'i');
+                    if (cleanBlockRegex.test(upperText)) return true;
+                }
+            }
         }
 
         return false;
     },
+
 
     _isDateWithinDays(startDateStr, checkDateStr, maxDays) {
         if (!startDateStr || !checkDateStr) return false;

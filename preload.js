@@ -14,7 +14,7 @@ contextBridge.exposeInMainWorld('api', {
     bulkSaveDocuments: (docs) => ipcRenderer.invoke('db:bulkSaveDocuments', docs),
     deleteDocument: (id) => ipcRenderer.invoke('db:deleteDocument', id),
     updateDocumentStatus: (id, patch) => ipcRenderer.invoke('db:updateDocumentStatus', id, patch),
-    unlockDocument: (id, grund) => ipcRenderer.invoke('db:unlockDocument', id, grund),
+    unlockDocument: (id, grund) => Promise.reject(new Error('GoBD: Belege können nicht entsperrt werden. Bitte Storno nutzen.')),
     storniereRechnung: (updatedOriginal, stornoDoc) => ipcRenderer.invoke('db:storniereRechnung', updatedOriginal, stornoDoc),
     verifyAuditChain: () => ipcRenderer.invoke('audit:verify'),
 
@@ -171,7 +171,7 @@ contextBridge.exposeInMainWorld('api', {
     deleteMitarbeiter: (id) => ipcRenderer.invoke('mitarbeiter:delete', id),
     getZeiteintraege: (filter) => ipcRenderer.invoke('zeiterfassung:getAll', filter),
     saveZeiteintrag: (data) => ipcRenderer.invoke('zeiterfassung:save', data),
-    deleteZeiteintrag: (id) => ipcRenderer.invoke('zeiterfassung:delete', id),
+    deleteZeiteintrag: (id, meta) => ipcRenderer.invoke('zeiterfassung:delete', id, meta),
     getZeiterfassungMonatsauswertung: (monat, jahr, mitarbeiterId) => ipcRenderer.invoke('zeiterfassung:getMonatsauswertung', { monat, jahr, mitarbeiterId }),
 
     // --- Phase 3: VOB/B Bedenken- & Behinderungsanzeigen ---

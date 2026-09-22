@@ -316,7 +316,62 @@ test('T-R9: Gemischte FRST/RCUR-Positionen erzeugen zwei PmtInf-Blöcke mit korr
     assert.ok(grpHdr.includes('<CtrlSum>600.00</CtrlSum>'), 'GrpHdr-CtrlSum muss Summe aller InstdAmt sein');
 });
 
+test('T-SEP-1: pain.008.001.08 strukturiertes PstlAdr in exakter XSD-Reihenfolge (SEP-1)', () => {
+    const xml = SepaController.generatePain00800108({
+        ...BASIS_GENERATOR_OPTS,
+        creditorStreet: 'Hauptstraße 10',
+        creditorZip: '10115',
+        creditorCity: 'Berlin',
+        creditorCountry: 'DE',
+        sequenceType: 'FRST',
+        transactions: [
+            basisTransaktion({
+                strasse: 'Musterstraße 12',
+                plz: '10115',
+                stadt: 'Berlin',
+                land: 'DE'
+            })
+        ]
+    });
+
+    assert.ok(xml.includes('<PstlAdr>'), 'XML muss PstlAdr enthalten');
+    assert.ok(xml.includes('<StrtNm>Musterstraße</StrtNm>'));
+    assert.ok(xml.includes('<BldgNb>12</BldgNb>'));
+    assert.ok(xml.includes('<PstCd>10115</PstCd>'));
+    assert.ok(xml.includes('<TwnNm>Berlin</TwnNm>'));
+    assert.ok(xml.includes('<Ctry>DE</Ctry>'));
+
+    // Prüfe strikte XSD-Reihenfolge: StrtNm vor BldgNb vor PstCd vor TwnNm vor Ctry
+    const idxStrt = xml.indexOf('<StrtNm>Musterstraße</StrtNm>');
+    const idxBldg = xml.indexOf('<BldgNb>12</BldgNb>');
+    const idxPstCd = xml.indexOf('<PstCd>10115</PstCd>');
+    const idxTwnNm = xml.indexOf('<TwnNm>Berlin</TwnNm>');
+    const idxCtry = xml.indexOf('<Ctry>DE</Ctry>');
+
+    assert.ok(idxStrt < idxBldg, 'StrtNm vor BldgNb');
+    assert.ok(idxBldg < idxPstCd, 'BldgNb vor PstCd');
+    assert.ok(idxPstCd < idxTwnNm, 'PstCd vor TwnNm');
+    assert.ok(idxTwnNm < idxCtry, 'TwnNm vor Ctry');
+});
+
+test('T-SEP-2: TARGET2-Ausführungsdatum Prüfung & Auto-Adjust (SEP-2)', () => {
+    // Ostermontag 2026 (06.04.2026) ist TARGET2-Schließtag
+    assert.throws(
+        () => SepaController.assertAndNormalizeExecutionDate('2026-04-06', false),
+        /kein gültiger TARGET2-Bankarbeitstag|TARGET2-Feiertag/
+    );
+
+    // Mit autoAdjust: Vorrücken auf Dienstag 07.04.2026
+    const adjusted = SepaController.assertAndNormalizeExecutionDate('2026-04-06', true);
+    assert.equal(adjusted, '2026-04-07', 'Muss auf den nächsten Bankarbeitstag vorrücken');
+
+    // Wochenende Samstag (2026-08-22) -> Montag (2026-08-24)
+    const weekendAdj = SepaController.assertAndNormalizeExecutionDate('2026-08-22', true);
+    assert.equal(weekendAdj, '2026-08-24');
+});
+
 if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
+
     function starteElectronInner(markerArg) {
         const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
         assert.ok(fs.existsSync(electronBin), 'Electron-Binary muss vorhanden sein');

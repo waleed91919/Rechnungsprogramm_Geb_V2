@@ -948,7 +948,21 @@ function handleKundeSelect(event) {
     }
 }
 
-function collectERechnungExportData() {
+function collectERechnungExportData(options = {}) {
+    // P0.4 Belegfixierung: Exportdaten stammen aus dem GESPEICHERTEN Beleg.
+    // Pflicht: belegId (aus DB geladen). Ohne belegId → throw, kein Export.
+    const belegIdRaw = options.belegId !== undefined ? options.belegId
+        : document.getElementById('rechnung-id')?.value;
+    const belegId = belegIdRaw !== '' && belegIdRaw !== null && belegIdRaw !== undefined
+        ? parseInt(belegIdRaw, 10) : null;
+    if (!Number.isFinite(belegId)) {
+        throw new Error('E-Rechnungs-Export blockiert: Feld „Beleg-ID“ fehlt — Beleg erst speichern und festschreiben (Entwurf nur als Vorschau).');
+    }
+    const savedList = (state.rechnungen || []).concat(state.dokumente || []);
+    const savedDoc = savedList.find(d => parseInt(d.id) === belegId) || null;
+    if (savedDoc && !savedDoc.isLocked && savedDoc.status !== 'Festgeschrieben' && !options.allowDraft) {
+        throw new Error(`E-Rechnungs-Export blockiert: Feld „Status“ ist „${savedDoc.status || 'Entwurf'}“ — nur festgeschriebene Belege sind versandfähig.`);
+    }
     const kundeId = parseInt(document.getElementById('rechnung-kunde')?.value);
     const kunde = state.kunden.find(k => k.id === kundeId) || { name: 'Empfänger' };
     const nr = document.getElementById('rechnung-nr')?.value || 'RE-000';
@@ -960,6 +974,7 @@ function collectERechnungExportData() {
     const customer_type = document.getElementById('rechnung-customer-type')?.value || kunde.customer_type || 'B2B';
 
     const currentDoc = {
+        id: belegId,
         nr,
         datum,
         faellig,
@@ -1009,7 +1024,13 @@ function validateERechnungForB2G(currentDoc, customer) {
 }
 
 async function exportZugferdPdfFromModal() {
-    const { currentDoc, customer, nr } = collectERechnungExportData();
+    let currentDoc, customer, nr;
+    try {
+        ({ currentDoc, customer, nr } = collectERechnungExportData());
+    } catch (gateErr) {
+        showToast(gateErr.message || 'E-Rechnungs-Export blockiert: ungespeicherter Entwurf.', 'error');
+        return;
+    }
     if (!validateERechnungForB2G(currentDoc, customer)) return;
 
     if (!(window.api && typeof window.api.exportZugferdPdf === 'function')) {
@@ -1030,6 +1051,7 @@ async function exportZugferdPdfFromModal() {
 
     try {
         const res = await window.api.exportZugferdPdf({
+            docId: currentDoc.id,
             doc: currentDoc,
             customer,
             profile: 'EN16931',
@@ -1058,12 +1080,21 @@ async function exportXRechnungXMLFromModal() {
         return;
     }
 
-    const { currentDoc, customer, nr } = collectERechnungExportData();
+    const { currentDoc, customer, nr } = (() => {
+        try {
+            return collectERechnungExportData();
+        } catch (gateErr) {
+            showToast(gateErr.message || 'E-Rechnungs-Export blockiert: ungespeicherter Entwurf.', 'error');
+            return {};
+        }
+    })();
+    if (!currentDoc) return;
     if (!validateERechnungForB2G(currentDoc, customer)) return;
 
     if (window.api && typeof window.api.exportXRechnungXml === 'function') {
         try {
             const res = await window.api.exportXRechnungXml({
+                docId: currentDoc.id,
                 doc: currentDoc,
                 customer,
                 fileNameHint: `XRechnung_${nr}.xml`
@@ -1488,6 +1519,32 @@ function calculateRechnungTotals() {
     state.currentRechnungTotals13bNetto = 0;
     state.currentRechnungTotalsNormalNetto = 0;
 
+    // P0.2: Vorgänger-Einbehalte desselben Projekts aus gespeicherten Belegen laden.
+    let previousInvoices = [];
+    try {
+        const curIdEl = document.getElementById('rechnung-id');
+        const curId = curIdEl && curIdEl.value ? parseInt(curIdEl.value, 10) : null;
+        const docs = (state.rechnungen || []).concat(state.dokumente || []);
+        if (currentProjekt) {
+            previousInvoices = docs.filter(d => {
+                const pid = d.projektId !== undefined ? d.projektId : d.projekt_id;
+                const isSameProject = parseInt(pid, 10) === parseInt(currentProjekt.id, 10);
+                const isNotCurrent = (curId == null || parseInt(d.id, 10) !== curId);
+                const isInvoice = (d.type === 'rechnung' || !d.type);
+                const isValidStatus = d.status !== 'Storniert' && d.status !== 'Entwurf';
+                const isNotSchluss = d.rechnungsart !== 'SCHLUSSRECHNUNG';
+                return isSameProject && isNotCurrent && isInvoice && isValidStatus && isNotSchluss;
+            });
+        }
+    } catch (_e) { previousInvoices = []; }
+
+    const rechnungArt = document.getElementById('rechnung-art')?.value || 'REGULAER';
+    const retentionMode = (rechnungArt === 'ABSCHLAG_KUMULIERT' || currentProjekt?.retention_mode === 'EXECUTION')
+        ? 'EXECUTION'
+        : 'WARRANTY';
+    const contractTotalNet = currentProjekt ? (parseFloat(currentProjekt.budget) || parseFloat(currentProjekt.contractTotalNet) || 0) : 0;
+    const retentionBase = document.getElementById('rechnung-sicherheitseinbehalt-basis')?.value || currentProjekt?.retention_base || 'netto';
+
     const calculated = window.invoiceView.handleInputEvent(
         state.currentRechnungPositionen || [],
         state.currentRechnungVerrechnungen || [],
@@ -1495,6 +1552,12 @@ function calculateRechnungTotals() {
         (res) => {
             state.currentRechnungTotals13bNetto = res.totals13bNetto;
             state.currentRechnungTotalsNormalNetto = res.totalsNormalNetto;
+        },
+        {
+            previousInvoices,
+            retentionMode,
+            contractTotalNet,
+            retentionBase
         }
     );
 

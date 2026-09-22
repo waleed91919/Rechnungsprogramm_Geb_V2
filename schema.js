@@ -51,6 +51,7 @@ function createSchema(db) {
         mahnungDatum TEXT,
         mahnungGebuehr REAL DEFAULT 0,
         eingabemodus TEXT DEFAULT 'netto',
+        zahlbetrag REAL DEFAULT 0,
         FOREIGN KEY(kundeId) REFERENCES kunden(id),
         FOREIGN KEY(projektId) REFERENCES projekte(id)
     )`);
@@ -100,6 +101,7 @@ function createSchema(db) {
         aktuelle_rechnung_id INTEGER,
         vorherige_rechnung_id INTEGER,
         abzugsbetrag_netto REAL DEFAULT 0,
+        abzugsbetrag_brutto REAL DEFAULT 0,
         FOREIGN KEY(aktuelle_rechnung_id) REFERENCES dokumente(id),
         FOREIGN KEY(vorherige_rechnung_id) REFERENCES dokumente(id)
     )`);
@@ -918,6 +920,10 @@ function createSchema(db) {
         status TEXT NOT NULL DEFAULT 'ERFASST' CHECK(status IN ('ERFASST', 'GEPRUEFT', 'FREIGEGEBEN', 'ABGERECHNET', 'STORNIERT')),
         device_id TEXT,
         sha256_hash TEXT,
+        is_deleted INTEGER NOT NULL DEFAULT 0,
+        deleted_at DATETIME,
+        deleted_by TEXT,
+        delete_reason TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
@@ -925,6 +931,7 @@ function createSchema(db) {
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_zeit_mitarbeiter_datum ON zeiterfassung(mitarbeiter_id, zeit_von)`); } catch (e) { console.error('[DB Schema] Index idx_zeit_mitarbeiter_datum:', e.message); }
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_zeit_projekt ON zeiterfassung(projekt_id)`); } catch (e) { console.error('[DB Schema] Index idx_zeit_projekt:', e.message); }
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_zeit_uuid ON zeiterfassung(uuid)`); } catch (e) { console.error('[DB Schema] Index idx_zeit_uuid:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_zeiterfassung_active ON zeiterfassung(is_deleted, zeit_von)`); } catch (e) { console.error('[DB Schema] Index idx_zeiterfassung_active:', e.message); }
 
     // 3. Idempotente Sync-Tracking Tabelle
     db.exec(`CREATE TABLE IF NOT EXISTS sync_processed_mutations (
@@ -1696,12 +1703,17 @@ function runMigrations(db) {
             status TEXT NOT NULL DEFAULT 'ERFASST' CHECK(status IN ('ERFASST', 'GEPRUEFT', 'FREIGEGEBEN', 'ABGERECHNET', 'STORNIERT')),
             device_id TEXT,
             sha256_hash TEXT,
+            is_deleted INTEGER NOT NULL DEFAULT 0,
+            deleted_at DATETIME,
+            deleted_by TEXT,
+            delete_reason TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )`);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_zeit_mitarbeiter_datum ON zeiterfassung(mitarbeiter_id, zeit_von)`);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_zeit_projekt ON zeiterfassung(projekt_id)`);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_zeit_uuid ON zeiterfassung(uuid)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_zeiterfassung_active ON zeiterfassung(is_deleted, zeit_von)`);
 
         db.exec(`CREATE TABLE IF NOT EXISTS sync_processed_mutations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -2014,7 +2026,21 @@ function runMigrations(db) {
     try { db.exec(`ALTER TABLE aufmass_zeilen ADD COLUMN raum_id INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
     try { db.exec(`ALTER TABLE aufmass_zeilen ADD COLUMN formel_code TEXT DEFAULT '91'`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
     try { db.exec(`ALTER TABLE aufmass_zeilen ADD COLUMN rechenansatz TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE aufmass_zeilen ADD COLUMN version INTEGER NOT NULL DEFAULT 1`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE aufmass_zeilen ADD COLUMN hlc_timestamp TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE aufmass_zeilen ADD COLUMN updated_by_device TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE aufmass_zeilen ADD COLUMN last_synced_at DATETIME DEFAULT CURRENT_TIMESTAMP`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
     try { db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_aufmass_zeilen_uuid ON aufmass_zeilen(uuid)`); } catch (e) { if (!e.message.includes('already exists')) console.warn('[DB Migration Warning]:', e.message); }
+
+    // 8. Zeiterfassung Soft-Delete & Revisionsschutz (COMP-1)
+    try { db.exec(`ALTER TABLE zeiterfassung ADD COLUMN is_deleted INTEGER NOT NULL DEFAULT 0`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE zeiterfassung ADD COLUMN deleted_at DATETIME`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE zeiterfassung ADD COLUMN deleted_by TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE zeiterfassung ADD COLUMN delete_reason TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_zeiterfassung_active ON zeiterfassung(is_deleted, zeit_von)`); } catch (e) { if (!e.message.includes('already exists')) console.warn('[DB Migration Warning]:', e.message); }
+
+    // --- DB-4, DB-8, GOBD-3, GOBD-4: Indizes, Soft-Delete & SQLite Triggers ---
+    ensureGoBDSchemaAndTriggers(db);
 
     // --- Datenintegrität: Duplikate bereinigen + UNIQUE-Indizes ---
     ensureUniqueConstraints(db);
@@ -2126,6 +2152,101 @@ function ensureUniqueConstraints(db) {
     } catch (e) {
         if (!e.message.includes('duplicate column')) {
             console.warn('[DB Migration Warning]:', e.message);
+        }
+    }
+}
+
+/**
+ * DB-4, DB-8, GOBD-3, GOBD-4 & SQLite Triggers:
+ * Richtet Indizes, Soft-Delete-Spalten und Unveränderbarkeits-Trigger ein.
+ * Jedes Statement ist in einem separaten try/catch gekapselt, um Teilabbrüche zu verhindern.
+ */
+function ensureGoBDSchemaAndTriggers(db) {
+    // DB-4 & DB-8: Performance-Indizes
+    const indexes = [
+        'CREATE INDEX IF NOT EXISTS idx_positionen_dokumentId ON positionen(dokumentId)',
+        'CREATE INDEX IF NOT EXISTS idx_positionen_artikelId ON positionen(artikelId)',
+        'CREATE INDEX IF NOT EXISTS idx_positionen_dok_art ON positionen(dokumentId, artikelId)',
+        'CREATE INDEX IF NOT EXISTS idx_dokumente_kundeId ON dokumente(kundeId)',
+        'CREATE INDEX IF NOT EXISTS idx_dokumente_projektId ON dokumente(projektId)',
+        'CREATE INDEX IF NOT EXISTS idx_dokumente_kunde_projekt ON dokumente(kundeId, projektId)',
+        'CREATE INDEX IF NOT EXISTS idx_dokumente_type_status ON dokumente(type, status)'
+    ];
+
+    for (const sql of indexes) {
+        try {
+            db.exec(sql);
+        } catch (e) {
+            console.warn('[DB Index Migration]:', e.message);
+        }
+    }
+
+    // GOBD-3 & GOBD-4: Soft-Delete Spalten & Indizes
+    const softDeleteMigrations = [
+        'ALTER TABLE eingangsrechnungen ADD COLUMN is_deleted INTEGER DEFAULT 0',
+        'ALTER TABLE eingangsrechnungen ADD COLUMN deleted_at TEXT',
+        'ALTER TABLE eingangsrechnungen ADD COLUMN deletion_reason TEXT',
+        'CREATE INDEX IF NOT EXISTS idx_eingangsrechnungen_deleted ON eingangsrechnungen(is_deleted)',
+        'ALTER TABLE kunden ADD COLUMN is_deleted INTEGER DEFAULT 0',
+        'ALTER TABLE kunden ADD COLUMN deleted_at TEXT',
+        'CREATE INDEX IF NOT EXISTS idx_kunden_deleted ON kunden(is_deleted)',
+        'ALTER TABLE artikel ADD COLUMN is_deleted INTEGER DEFAULT 0',
+        'ALTER TABLE artikel ADD COLUMN deleted_at TEXT',
+        'CREATE INDEX IF NOT EXISTS idx_artikel_deleted ON artikel(is_deleted)',
+        'ALTER TABLE dokumente ADD COLUMN zahlbetrag REAL DEFAULT 0',
+        'ALTER TABLE rechnung_verrechnungen ADD COLUMN abzugsbetrag_brutto REAL DEFAULT 0'
+    ];
+
+    for (const sql of softDeleteMigrations) {
+        try {
+            db.exec(sql);
+        } catch (e) {
+            if (!e.message.includes('duplicate column') && !e.message.includes('already exists')) {
+                console.warn('[DB Soft-Delete Migration]:', e.message);
+            }
+        }
+    }
+
+    // GoBD Engine-Level Triggers für Unveränderbarkeit
+    const triggers = [
+        `CREATE TRIGGER IF NOT EXISTS trg_prevent_audit_logs_delete
+        BEFORE DELETE ON audit_logs
+        BEGIN
+            SELECT RAISE(ABORT, 'GoBD-Verstoß: Das Löschen von Einträgen im Audit-Trail (audit_logs) ist gesetzlich strengstens verboten.');
+        END;`,
+
+        `CREATE TRIGGER IF NOT EXISTS trg_prevent_audit_logs_update
+        BEFORE UPDATE ON audit_logs
+        BEGIN
+            SELECT RAISE(ABORT, 'GoBD-Verstoß: Das Ändern bestehender Audit-Log-Einträge ist technisch und rechtlich unzulässig.');
+        END;`,
+
+        `CREATE TRIGGER IF NOT EXISTS trg_prevent_locked_dokumente_delete
+        BEFORE DELETE ON dokumente
+        FOR EACH ROW
+        WHEN OLD.isLocked = 1 OR OLD.status IN ('Festgeschrieben', 'Bezahlt', 'Storniert')
+        BEGIN
+            SELECT RAISE(ABORT, 'GoBD-Verstoß (§ 146 AO): Festgeschriebene, bezahlte oder gesperrte Belege dürfen nicht gelöscht werden.');
+        END;`,
+
+        `CREATE TRIGGER IF NOT EXISTS trg_prevent_locked_positionen_delete
+        BEFORE DELETE ON positionen
+        FOR EACH ROW
+        WHEN (
+            SELECT 1 FROM dokumente
+            WHERE id = OLD.dokumentId
+              AND (isLocked = 1 OR status IN ('Festgeschrieben', 'Bezahlt', 'Storniert'))
+        ) IS NOT NULL
+        BEGIN
+            SELECT RAISE(ABORT, 'GoBD-Verstoß: Positionen festgeschriebener Belege dürfen nicht gelöscht werden.');
+        END;`
+    ];
+
+    for (const sql of triggers) {
+        try {
+            db.exec(sql);
+        } catch (e) {
+            console.warn('[DB Trigger Migration]:', e.message);
         }
     }
 }
@@ -2272,6 +2393,7 @@ module.exports = {
     runMigrations,
     seedDefaultData,
     ensureUniqueConstraints,
+    ensureGoBDSchemaAndTriggers,
     dedupeDuplicateDocumentNumbers,
     dedupeDuplicateVerrechnungen,
     dedupeDuplicateRetentions

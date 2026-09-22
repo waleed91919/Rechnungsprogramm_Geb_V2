@@ -72,6 +72,10 @@ class MobileSyncWorker {
      */
     async queueMutation(entityType, entityUuid, mutationType, payload) {
         const uuid = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'outbox-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+        if (!this.hlc && typeof HybridLogicalClock !== 'undefined') {
+            this.hlc = new HybridLogicalClock(this.deviceId || 'mob-worker');
+        }
+        const hlcTimestamp = this.hlc ? this.hlc.now() : new Date().toISOString();
         const entry = {
             uuid,
             entity_type: entityType,
@@ -79,6 +83,7 @@ class MobileSyncWorker {
             mutation_type: mutationType,
             payload: typeof payload === 'string' ? payload : JSON.stringify(payload),
             lamport_timestamp: Date.now(),
+            hlc_timestamp: hlcTimestamp,
             status: 'PENDING',
             created_at: new Date().toISOString()
         };

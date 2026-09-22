@@ -3,6 +3,16 @@
  * Monatsmeldungen, DTA-Bau & XML V3.0 Export, MiLoG/ArbZG Ampel-Prüfprotokoll und § 14 AEntG Fristenradar
  */
 
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 window.SokaBauView = class SokaBauView {
     constructor() {
         this.selectedMonth = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
@@ -228,10 +238,10 @@ window.SokaBauView = class SokaBauView {
                                     <tr class="${isInvalid ? 'bg-red-50/40' : (hasWarn ? 'bg-amber-50/20' : 'hover:bg-slate-50')} transition-colors">
                                         <td class="px-3 py-2.5">${statusBadge}</td>
                                         <td class="px-3 py-2.5 font-mono text-[11px] text-slate-600">
-                                            <div class="font-bold text-slate-800">${an.anNummer}</div>
-                                            <div class="text-[10px] text-slate-400">${an.vsnr || '<span class="text-red-500 font-bold">VSNR fehlt!</span>'}</div>
+                                            <div class="font-bold text-slate-800">${escapeHtml(an.anNummer)}</div>
+                                            <div class="text-[10px] text-slate-400">${an.vsnr ? escapeHtml(an.vsnr) : '<span class="text-red-500 font-bold">VSNR fehlt!</span>'}</div>
                                         </td>
-                                        <td class="px-3 py-2.5 font-bold text-slate-800">${an.name}, ${an.vorname}</td>
+                                        <td class="px-3 py-2.5 font-bold text-slate-800">${escapeHtml(an.name)}, ${escapeHtml(an.vorname)}</td>
                                         <td class="px-3 py-2.5 text-center font-semibold text-slate-700">${an.beschaeftigungstage}</td>
                                         <td class="px-3 py-2.5 text-right font-mono">${an.geleisteteStunden.toFixed(1)} h</td>
                                         <td class="px-3 py-2.5 text-right font-mono font-bold text-slate-800">${an.bruttoLohn.toFixed(2)} €</td>
@@ -247,7 +257,7 @@ window.SokaBauView = class SokaBauView {
                                             <td colspan="12" class="px-4 py-1.5 text-amber-900">
                                                 ${an.complianceWarnings.map(w => `
                                                     <div class="flex items-center gap-1.5 text-[11px] ${w.level === 'ERROR' ? 'text-red-700 font-bold' : 'text-amber-800'}">
-                                                        <span>⚠️</span> ${w.message}
+                                                        <span>⚠️</span> ${escapeHtml(w.message)}
                                                     </div>
                                                 `).join('')}
                                             </td>

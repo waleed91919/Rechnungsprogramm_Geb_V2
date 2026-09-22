@@ -2,10 +2,12 @@ const crypto = require('crypto');
 
 function baueTransportOptionen(konto) {
     const port = parseInt(konto.port, 10) || 587;
+    const isSecure = port === 465 ? true : !!konto.secure;
     return {
         host: konto.host,
         port,
-        secure: port === 465 ? true : !!konto.secure,
+        secure: isSecure,
+        requireTLS: !isSecure, // MAIL-1: Verhindert STARTTLS-Stripping auf Port 587/25
         auth: { user: konto.user, pass: konto.pass },
         connectionTimeout: 15000,
         greetingTimeout: 15000,
@@ -13,6 +15,7 @@ function baueTransportOptionen(konto) {
         tls: { minVersion: 'TLSv1.2', rejectUnauthorized: true }
     };
 }
+
 
 const DEFAULT_TRANSPORT_FACTORY = (smtpOptionen) => {
     const nodemailer = require('nodemailer');

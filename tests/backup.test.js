@@ -196,11 +196,13 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
         const restoreRes = await backupService.restoreBackup(backupRes.backupId, 'Test Wiederherstellung');
         assert.strictEqual(restoreRes.success, true);
 
-        // Kunden müssen wieder da sein
-        const countAfter = testDb.prepare('SELECT COUNT(*) as c FROM kunden').get().c;
+        // Kunden müssen wieder da sein (Verbindung nach Restore neu öffnen, da altes Handle sicher geschlossen wurde)
+        const reloadedDb = new Database(dbPath);
+        const countAfter = reloadedDb.prepare('SELECT COUNT(*) as c FROM kunden').get().c;
         assert.strictEqual(countAfter, 2, 'Kundenanzahl muss nach Restore exakt 2 sein');
 
-        testDb.close();
+        reloadedDb.close();
+        if (testDb.open) testDb.close();
         fs.rmSync(testDir, { recursive: true, force: true });
         console.log('BACKUP_TESTS_PASSED');
     });

@@ -40,6 +40,11 @@ async function init() {
         console.error("Failed to load state from DB:", e);
     }
 
+    // NAV-1 & B-13: UI-Fokusmodus beim App-Start anwenden
+    if (typeof applyFocusMode === 'function') {
+        applyFocusMode();
+    }
+
     switchView('dashboard');
     
     // Notifications check

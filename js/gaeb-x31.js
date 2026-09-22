@@ -146,21 +146,60 @@ class GaebX31Service {
     }
 
     /**
+     * Löst REB 23.003 Zeilenadressen (z. B. A0 für Vorzeile, A1..A9, BBBBZI)
+     * mathematisch sicher auf, ohne Adressbuchstaben blind zu zerstören.
+     * @param {string} expr - Rechenansatz (z. B. 'A0 * 2.50' oder '15.00 * 4.00')
+     * @param {Map} addressCache - Map bekannter Adress-Ergebnisse
+     * @param {number} lastResult - Ergebnis der unmittelbar vorhergehenden Zeile
+     * @returns {number} Berechnetes Ergebnis
+     */
+    static evaluateFormulaWithAddresses(expr, addressCache = new Map(), lastResult = 0) {
+        if (!expr || typeof expr !== 'string') return 0;
+        try {
+            let workingExpr = expr.trim();
+
+            // 1. Komma durch Punkt ersetzen
+            workingExpr = workingExpr.replace(/,/g, '.');
+
+            // 2. Relativen Adressbezug A0 (Ergebnis der unmittelbaren Vorzeile) auflösen
+            const safeLastResult = lastResult < 0 ? `(${lastResult})` : String(lastResult || 0);
+            workingExpr = workingExpr.replace(/\bA0\b/gi, safeLastResult);
+
+            // 3. Absolute REB-Adressen (z. B. 0001A0 oder A1..A9) aus Cache ersetzen
+            if (addressCache && typeof addressCache.forEach === 'function') {
+                addressCache.forEach((val, addr) => {
+                    const safeVal = val < 0 ? `(${val})` : String(val);
+                    const regex = new RegExp(`\\b${addr}\\b`, 'gi');
+                    workingExpr = workingExpr.replace(regex, safeVal);
+                });
+            }
+
+            // 4. Prüfen auf verbliebene unaufgelöste Bezeichner (z.B. unbekannte Adressen)
+            if (/[a-zA-Z_]/.test(workingExpr)) {
+                return 0;
+            }
+
+            // 5. Bereinigung unzulässiger Zeichen (nur noch Operatoren, Klammern, Zahlen zulässig)
+            const sanitized = workingExpr.replace(/[^0-9+\-*/().\s]/g, '').trim();
+            if (!sanitized) return 0;
+
+            // 6. Sichere mathematische Auswertung
+            const res = Function(`'use strict'; return (${sanitized});`)();
+            return typeof res === 'number' && !isNaN(res) && isFinite(res) 
+                ? Math.round(res * 10000) / 10000 
+                : 0;
+        } catch (_e) {
+            return 0;
+        }
+    }
+
+    /**
      * Sichere mathematische Auswertung von REB Formeln und Ausdrücken.
      * @param {string} expr
      * @returns {number}
      */
     static evaluateFormula(expr) {
-        if (!expr || typeof expr !== 'string') return 0;
-        try {
-            const sanitized = expr.replace(/,/g, '.').replace(/[^0-9+\-*/().\s]/g, '');
-            if (!sanitized.trim()) return 0;
-            // Safe math eval
-            const res = Function(`'use strict'; return (${sanitized});`)();
-            return typeof res === 'number' && !isNaN(res) && isFinite(res) ? Math.round(res * 10000) / 10000 : 0;
-        } catch (_e) {
-            return 0;
-        }
+        return GaebX31Service.evaluateFormulaWithAddresses(expr, new Map(), 0);
     }
 
     /**
@@ -208,6 +247,10 @@ class GaebX31Service {
             let aMatch;
             let calculatedSum = 0;
 
+            // Scoping pro Item: runningLastResult und addressCache werden pro Position initialisiert
+            let runningLastResult = 0;
+            const addressCache = new Map();
+
             while ((aMatch = ansatzRegex.exec(itemXml)) !== null) {
                 const aXml = aMatch[0];
                 const sheetNo = GaebX31Service.extractTag(aXml, 'SheetNo') || '001';
@@ -232,10 +275,20 @@ class GaebX31Service {
                     }
                 }
 
-                let resultQty = parseFloat(GaebX31Service.extractTag(aXml, 'ResultQty'));
+                // Autoritatives Ergebnis aus dem XML bevorzugen
+                const parsedResultTag = GaebX31Service.extractTag(aXml, 'ResultQty');
+                let resultQty = parsedResultTag !== null && parsedResultTag !== '' ? parseFloat(parsedResultTag) : NaN;
+
+                // Falls kein ResultQty vorhanden -> unter Auflösung von A0 berechnen
                 if (isNaN(resultQty)) {
-                    resultQty = GaebX31Service.evaluateFormula(rowAnsatz);
+                    resultQty = GaebX31Service.evaluateFormulaWithAddresses(rowAnsatz, addressCache, runningLastResult);
                 }
+
+                runningLastResult = resultQty;
+                const cleanSheet = String(sheetNo || '0001').padStart(4, '0');
+                addressCache.set(`${cleanSheet}${rowNo}`, resultQty);
+                addressCache.set(rowNo, resultQty);
+                addressCache.set(`${sheetNo}${rowNo}`, resultQty);
 
                 calculatedSum += (resultQty * sign);
 

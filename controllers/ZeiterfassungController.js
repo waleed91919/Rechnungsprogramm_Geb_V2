@@ -359,6 +359,15 @@ class ZeiterfassungController {
             }
         }
 
+        const existing = db.prepare('SELECT * FROM zeiterfassung WHERE uuid = ?').get(uuid);
+        if (existing && (existing.status === 'FREIGEGEBEN' || existing.status === 'ABGERECHNET')) {
+            if (data.status !== existing.status && (data.status === 'ABGERECHNET' || data.status === 'FREIGEGEBEN')) {
+                // Status progression is permitted
+            } else {
+                throw new Error(`Revisionsschutz (MiLoG / GoBD): Zeiteintrag im Status "${existing.status}" darf nicht nachträglich verändert werden.`);
+            }
+        }
+
         const stmt = db.prepare(`
             INSERT INTO zeiterfassung (
                 uuid, mitarbeiter_id, projekt_id, liegenschaft_id, gebaeude_id, raum_id,
@@ -443,7 +452,7 @@ class ZeiterfassungController {
             LEFT JOIN mitarbeiter m ON z.mitarbeiter_id = m.id
             LEFT JOIN projekte p ON z.projekt_id = p.id
             LEFT JOIN liegenschaften l ON z.liegenschaft_id = l.id
-            WHERE 1=1
+            WHERE COALESCE(z.is_deleted, 0) = 0
         `;
         const params = [];
 
@@ -474,28 +483,68 @@ class ZeiterfassungController {
     }
 
     /**
-     * Löscht einen Zeiteintrag.
+     * Revisionssicheres Soft-Delete eines Zeiteintrags (EuGH C-55/18, BAG 1 ABR 22/21, § 17 MiLoG & GoBD).
      */
-    static deleteZeiteintrag(db, idOrUuid, auditLogger = null) {
-        if (!db) return { success: false };
-        let stmt;
-        if (typeof idOrUuid === 'number') {
-            stmt = db.prepare('DELETE FROM zeiterfassung WHERE id = ?');
-        } else {
-            stmt = db.prepare('DELETE FROM zeiterfassung WHERE uuid = ?');
-        }
-        const res = stmt.run(idOrUuid);
+    static deleteZeiteintrag(db, idOrUuid, auditLogger = null, meta = {}) {
+        if (!db) return { success: false, error: 'Keine Datenbankverbindung.' };
 
+        const selector = typeof idOrUuid === 'number' ? 'id = ?' : 'uuid = ?';
+        const entry = db.prepare(`SELECT * FROM zeiterfassung WHERE ${selector}`).get(idOrUuid);
+
+        if (!entry) {
+            return { success: false, error: 'Zeiteintrag nicht gefunden.' };
+        }
+
+        // 1. Revisionsschutz-Prüfung: Freigegebene oder abgerechnete Einträge sind gesperrt!
+        if (entry.status === 'FREIGEGEBEN' || entry.status === 'ABGERECHNET') {
+            throw new Error(
+                `Revisionsschutz (MiLoG / GoBD): Zeiteintrag im Status "${entry.status}" darf nicht gelöscht werden. Bitte erstellen Sie eine Korrekturbuchung.`
+            );
+        }
+
+        // 2. Begründung validieren (mindestens 5 Zeichen bei expliziter Begründungspflicht)
+        let reason = (meta && meta.reason ? meta.reason : (typeof meta === 'string' ? meta : '')).trim();
+        if (!reason) {
+            reason = 'Manuell storniert';
+        }
+        if (reason.length < 5) {
+            throw new Error('Löschen erfordert eine Begründung mit mindestens 5 Zeichen (Audit-Pflicht).');
+        }
+
+        const deletedBy = (meta && meta.user) || 'SYSTEM_USER';
+
+        // 3. Revisionssicheres Soft-Delete
+        const stmt = db.prepare(`
+            UPDATE zeiterfassung
+            SET is_deleted = 1,
+                deleted_at = CURRENT_TIMESTAMP,
+                deleted_by = ?,
+                delete_reason = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE ${selector}
+        `);
+
+        const res = stmt.run(deletedBy, reason, idOrUuid);
+
+        // 4. Audit-Log Eintrag schreiben
         if (auditLogger && auditLogger.appendAuditLog) {
             auditLogger.appendAuditLog({
                 entityType: 'ZEITERFASSUNG',
-                entityId: typeof idOrUuid === 'number' ? idOrUuid : 0,
-                action: 'ZEITERFASSUNG_GELOESCHT',
-                details: { identifier: idOrUuid }
+                entityId: entry.id,
+                action: 'ZEITERFASSUNG_SOFT_DELETED',
+                details: {
+                    uuid: entry.uuid,
+                    mitarbeiter_id: entry.mitarbeiter_id,
+                    zeit_von: entry.zeit_von,
+                    zeit_bis: entry.zeit_bis,
+                    dauer_min: entry.dauer_min,
+                    reason,
+                    deletedBy
+                }
             });
         }
 
-        return { success: res.changes > 0 };
+        return { success: res.changes > 0, softDeleted: true };
     }
 }
 

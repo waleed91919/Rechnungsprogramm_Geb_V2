@@ -30,9 +30,19 @@ class InvoiceController {
         retentionMode = 'WARRANTY',
         contractTotalNet = 0,
         maxRetentionRate = 5.0,
+        retentionBase = 'netto',
         verrechnungen = [],
-        anzahlung = 0
+        anzahlung = 0,
+        previousRetentionTotal = 0,
+        previousInvoices = [],
+        totalPerformanceNet = null
     }) {
+        // EINE Einbehalt-Quelle (P0.2): Vorgänger-Einbehalte aus gespeicherten
+        // Belegen ableiten, nie aus Formular-State raten. previousInvoices hat
+        // Vorrang, previousRetentionTotal ist der explizite Fallback.
+        const prevRetention = (Array.isArray(previousInvoices) && previousInvoices.length > 0)
+            ? this.sumPreviousRetention(previousInvoices)
+            : (parseFloat(previousRetentionTotal) || 0);
         let positionenNetto = 0;
         let positionenBrutto = 0;
         let totals13bNetto = 0;
@@ -88,11 +98,19 @@ class InvoiceController {
                 : globalRabatt.value);
         }
 
-        // 3. Verrechnungen / Abschlagszahlungen Summe Netto
+        // 3. Verrechnungen / Abschlagszahlungen Summe Netto & Brutto
         const verrechnungenSummeNetto = this.round2(verrechnungen.reduce(
-            (sum, v) => sum + (parseFloat(v.abzugsbetrag_netto) || 0),
+            (sum, v) => sum + (parseFloat(v && v.abzugsbetrag_netto) || (v && parseFloat(v.betrag)) || 0),
             0
         ));
+        const verrechnungenSummeBrutto = this.round2(verrechnungen.reduce((sum, v) => {
+            if (v && v.abzugsbetrag_brutto !== undefined && v.abzugsbetrag_brutto !== null && Number.isFinite(parseFloat(v.abzugsbetrag_brutto))) {
+                return sum + parseFloat(v.abzugsbetrag_brutto);
+            }
+            const net = parseFloat(v && v.abzugsbetrag_netto) || (v && parseFloat(v.betrag)) || 0;
+            const rate = isGlobal13b ? 0 : (parseFloat(v && v.mwst) || 19.0);
+            return sum + this.round2(net * (1 + rate / 100));
+        }, 0));
 
         // 4. Netto / Brutto nach Rabatt & Steuern
         let nettoNachRabatt = 0;
@@ -106,8 +124,27 @@ class InvoiceController {
         let vobAHint = null;
 
         const calcRetention = (baseNet) => {
+            // Kumulative Einbehalt-Logik (einzige Stelle, P0.2 — gespiegelt zu
+            // CumulativeBillingController.calculateCumulativeInvoice):
+            // Ziel-Einbehalt auf kumulierter Leistung minus bereits einbehalten.
             if (sicherheitseinbehaltProzent <= 0) return 0;
-            const raw = this.round2(baseNet * (sicherheitseinbehaltProzent / 100));
+            const rate = parseFloat(sicherheitseinbehaltProzent) || 0;
+            const cumulativeBaseNet = (totalPerformanceNet !== null && totalPerformanceNet !== undefined)
+                ? (parseFloat(totalPerformanceNet) || 0)
+                : (parseFloat(baseNet) || 0) + (Array.isArray(previousInvoices) && previousInvoices.length > 0
+                    ? previousInvoices.reduce((s, inv) => s + (parseFloat(inv.netto) || parseFloat(inv.currentPeriodNet) || parseFloat(inv.kumulierte_leistung_netto) || 0), 0)
+                    : 0);
+
+            // H-1 & VOB/B § 17 Abs. 6 S. 2: Bei 13b zwingend Netto, sonst vertraglich Netto oder Brutto
+            const effectiveBaseMode = isGlobal13b ? 'netto' : String(retentionBase || 'netto').toLowerCase();
+            let effectiveBase = cumulativeBaseNet;
+            if (effectiveBaseMode === 'brutto') {
+                const avgTaxRate = (nettoNachRabatt > 0 && totalTax > 0) ? (totalTax / nettoNachRabatt) : (isGlobal13b ? 0 : 0.19);
+                effectiveBase = this.round2(cumulativeBaseNet * (1 + avgTaxRate));
+            }
+
+            const uncappedTarget = this.round2(effectiveBase * (rate / 100));
+            let target = uncappedTarget;
             if (retentionMode === 'EXECUTION') {
                 const cNet = parseFloat(contractTotalNet) || 0;
                 if (cNet > 0 && cNet < 250000) {
@@ -115,48 +152,47 @@ class InvoiceController {
                 }
                 if (cNet > 0) {
                     const mRate = parseFloat(maxRetentionRate) || 5.0;
-                    maxRetentionCap = this.round2(cNet * (mRate / 100));
-                    if (raw >= maxRetentionCap) {
+                    const effectiveCapBase = effectiveBaseMode === 'brutto'
+                        ? this.round2(cNet * (1 + ((nettoNachRabatt > 0 && totalTax > 0) ? (totalTax / nettoNachRabatt) : 0.19)))
+                        : cNet;
+                    maxRetentionCap = this.round2(effectiveCapBase * (mRate / 100));
+                    if (target >= maxRetentionCap) {
                         isCapped = true;
-                        return maxRetentionCap;
+                        target = maxRetentionCap;
                     }
                 }
             }
-            return raw;
+            // Perioden-Einbehalt = kumulatives Ziel minus Vorgänger-Einbehalte.
+            return this.round2(Math.max(0, target - prevRetention));
         };
 
         if (mode === 'netto') {
             nettoNachRabatt = this.round2(Math.max(0, positionenNetto - abzug));
             const rabattFaktor = positionenNetto > 0 ? (nettoNachRabatt / positionenNetto) : 1;
 
-            sicherheitseinbehaltNetto = calcRetention(nettoNachRabatt);
-
-            // VOB/B & § 13 UStG: Sicherheitseinbehalt mindert NICHT die Steuerentstehung!
-            // Die Steuer bemisst sich auf das volle Netto nach Rabatt abzüglich Netto-Verrechnungen.
-            const steuerpflichtigesNetto = this.round2(Math.max(
-                0,
-                this.round2(nettoNachRabatt - verrechnungenSummeNetto)
-            ));
-            const taxableRatio = nettoNachRabatt > 0 ? (steuerpflichtigesNetto / nettoNachRabatt) : 0;
-
+            // § 14 Abs. 5 UStG & EN 16931: Weder Einbehalte noch Abschlagsverrechnungen
+            // mindern die Steuerbemessungsgrundlage der Gesamtleistung!
+            // Die Steuer bemisst sich ausnahmslos auf das volle Netto nach Rabatt.
             const taxRates = Object.keys(taxBases)
                 .filter(rate => taxBases[rate] > 0)
                 .sort((a, b) => parseFloat(b) - parseFloat(a));
 
             taxRates.forEach(rate => {
                 const rateValue = parseFloat(rate);
-                const basisAdj = this.round2(taxBases[rate] * rabattFaktor * taxableRatio);
+                const basisAdj = this.round2(taxBases[rate] * rabattFaktor);
                 const adjustedTax = rateValue > 0 ? this.round2(basisAdj * rateValue / 100) : 0;
                 totalTax = this.round2(totalTax + adjustedTax);
                 taxBreakdown.push({
                     rate: rateValue,
                     amount: adjustedTax,
-                    label: `zzgl. ${rate}% MwSt.` + (taxableRatio < 1 ? ` (auf gemindertes Netto)` : ''),
-                    isReduced: taxableRatio < 1
+                    label: `zzgl. ${rate}% MwSt.`
                 });
             });
 
-            bruttoNachRabatt = this.round2(steuerpflichtigesNetto + totalTax);
+            bruttoNachRabatt = this.round2(nettoNachRabatt + totalTax);
+
+            // B-4 & H-1: Sicherheitseinbehalt erst NACH der Steuerermittlung berechnen
+            sicherheitseinbehaltNetto = calcRetention(nettoNachRabatt);
         } else {
             // Mode Brutto
             bruttoNachRabatt = this.round2(Math.max(0, positionenBrutto - abzug));
@@ -178,32 +214,24 @@ class InvoiceController {
             });
             nettoNachRabatt = this.round2(bruttoNachRabatt - totalTaxBase);
 
-            sicherheitseinbehaltNetto = calcRetention(nettoNachRabatt);
-
-            // VOB/B & § 13 UStG: Sicherheitseinbehalt mindert NICHT die Steuerentstehung!
-            const steuerpflichtigesNetto = this.round2(Math.max(
-                0,
-                this.round2(nettoNachRabatt - verrechnungenSummeNetto)
-            ));
-            const taxableRatio = nettoNachRabatt > 0 ? (steuerpflichtigesNetto / nettoNachRabatt) : 0;
-
             taxRates.forEach(rate => {
                 const rateValue = parseFloat(rate);
-                const adjustedTax = this.round2((reducedTaxes[rate] || 0) * taxableRatio);
-                totalTax = this.round2(totalTax + adjustedTax);
+                const taxOnReduced = reducedTaxes[rate] || 0;
+                totalTax = this.round2(totalTax + taxOnReduced);
                 taxBreakdown.push({
                     rate: rateValue,
-                    amount: adjustedTax,
-                    label: `darin enthaltene ${rate}% MwSt.` + (taxableRatio < 1 ? ` (angepasst)` : ''),
-                    isReduced: taxableRatio < 1
+                    amount: taxOnReduced,
+                    label: `darin enthaltene ${rate}% MwSt.`
                 });
             });
 
-            bruttoNachRabatt = this.round2(steuerpflichtigesNetto + totalTax);
+            // B-4 & H-1: Sicherheitseinbehalt erst NACH der Steuerermittlung berechnen
+            sicherheitseinbehaltNetto = calcRetention(nettoNachRabatt);
         }
 
         const anzahlungCent = this.round2(anzahlung);
-        const zahlbetrag = this.round2(Math.max(0, bruttoNachRabatt - anzahlungCent - sicherheitseinbehaltNetto));
+        // Zahlbetrag = Brutto abzüglich Anzahlung, Sicherheitseinbehalt und Abschlagsverrechnungen (brutto)
+        const zahlbetrag = this.round2(Math.max(0, bruttoNachRabatt - anzahlungCent - sicherheitseinbehaltNetto - verrechnungenSummeBrutto));
 
         return {
             zwischensumme: mode === 'netto' ? positionenNetto : positionenBrutto,
@@ -216,11 +244,14 @@ class InvoiceController {
             sicherheitseinbehaltNetto,
             sicherheitseinbehaltProzent,
             retentionMode,
+            retentionBase: isGlobal13b ? 'netto' : String(retentionBase || 'netto').toLowerCase(),
             isCapped,
             maxRetentionCap,
             contractTotalNet: parseFloat(contractTotalNet) || 0,
+            previousRetentionTotal: this.round2(prevRetention),
             vobAHint,
             verrechnungenSummeNetto,
+            verrechnungenSummeBrutto,
             taxBreakdown,
             totalTax,
             anzahlung: anzahlungCent,
@@ -229,6 +260,51 @@ class InvoiceController {
             processedPositions
         };
     }
+
+    /**
+     * Summiert bereits einbehaltene Beträge aller Vorgänger-Abschläge
+     * (einzige Summierungsstelle neben CumulativeBillingController).
+     */
+    static sumPreviousRetention(previousInvoices = []) {
+        return this.round2((previousInvoices || []).reduce((sum, inv) => {
+            return sum + (parseFloat(inv.sicherheitseinbehalt) || parseFloat(inv.sicherheitseinbehaltNetto) || parseFloat(inv.securityRetentionAmount) || 0);
+        }, 0));
+    }
+
+    /**
+     * OPOS-Abgleich (P0.2 / SAL-1): trennt Leistung / Faktura / Zahlung / Einbehalt.
+     * Kaufmännisch korrigierte Saldenformel gem. VOB/B § 17.
+     * Offener Saldo = (fakturiert + freigegebeneEinbehalte) − gezahlt.
+     */
+    static computeProjectBalance({ invoices = [], paymentsTotal = 0, releasedRetentionTotal = 0 } = {}) {
+        const r2 = (v) => this.round2(v);
+        const fakturiert = r2(invoices.reduce((s, i) => s + (parseFloat(i.zahlbetrag) || 0), 0));
+        const gezahlt = r2(paymentsTotal);
+        const freigegeben = r2(releasedRetentionTotal);
+
+        const einbehaltenGesamt = r2(invoices.reduce((s, i) => {
+            return s + (parseFloat(i.sicherheitseinbehalt) || parseFloat(i.sicherheitseinbehaltNetto) || parseFloat(i.securityRetentionAmount) || 0);
+        }, 0));
+
+        const einbehaltenOffen = r2(Math.max(0, einbehaltenGesamt - freigegeben));
+
+        // SAL-1 (B-8) FIX:
+        // Freigegebene Einbehalte begründen eine fällige Werklohnforderung!
+        // Offener Saldo = (Fakturiert + Freigegeben) - Gezahlt
+        const faelligeForderung = r2(fakturiert + freigegeben);
+        const offenerSaldo = r2(Math.max(0, faelligeForderung - gezahlt));
+
+        return {
+            fakturiert,
+            gezahlt,
+            freigegebeneEinbehalte: freigegeben,
+            einbehaltenGesamt,
+            einbehaltenOffen,
+            faelligeForderung,
+            offenerSaldo
+        };
+    }
+
 
     /**
      * Validiert ein Rechnungsdokument vor dem Speichern.

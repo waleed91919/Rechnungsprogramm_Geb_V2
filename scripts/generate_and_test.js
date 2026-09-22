@@ -61,6 +61,8 @@ const b2gKunde = {
 
 const b2gInvoice = {
     id: 201,
+    status: 'Festgeschrieben',
+    isLocked: 1,
     nr: 'RE-2026-B2G-001',
     datum: '2026-07-01',
     faellig: '2026-07-31',
@@ -107,6 +109,8 @@ console.log(`  Subcontractor § 48b Check: Valid=${sec48bStatus.isValid}, Code=$
 // 1. Abschlagsrechnung
 const ab1Doc = {
     id: 301,
+    status: 'Festgeschrieben',
+    isLocked: 1,
     nr: 'RE-2026-B2B-AB1',
     datum: '2026-07-05',
     rechnungsart: 'ABSCHLAG_KUMULIERT',
@@ -154,6 +158,8 @@ fs.writeFileSync(ab1Path, ab1Buffer);
 
 const ab2Doc = {
     id: 302,
+    status: 'Festgeschrieben',
+    isLocked: 1,
     nr: 'RE-2026-B2B-AB2',
     datum: '2026-07-20',
     rechnungsart: 'ABSCHLAG_KUMULIERT',

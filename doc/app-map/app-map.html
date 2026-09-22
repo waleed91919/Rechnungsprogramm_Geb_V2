@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>W-Link ERP — App-Map (Offline-Übersicht)</title>
+<style>
+  body { font-family: Segoe UI, Arial, sans-serif; margin: 24px; color: #1e293b; background: #f8fafc; }
+  h1 { font-size: 22px; } h2 { font-size: 17px; margin-top: 28px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 12px; }
+  .card { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px 14px; width: 300px; }
+  .core { border-left: 6px solid #16a34a; } .exp { border-left: 6px solid #d97706; }
+  .risk { border-left: 6px solid #dc2626; } .ok { border-left: 6px solid #2563eb; }
+  code { background: #eef2ff; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  table { border-collapse: collapse; background: #fff; font-size: 13px; }
+  td, th { border: 1px solid #cbd5e1; padding: 6px 9px; text-align: left; }
+  a { color: #1d4ed8; } .meta { color: #475569; font-size: 13px; }
+  svg { background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; }
+</style>
+</head>
+<body>
+<h1>W-Link ERP — Visuelle App-Map (Offline, Stand 10.09.2026)</h1>
+<p class="meta">Repo <code>F:\server\Rechnungsprogramm_Geb_V2</code> · v1.0.5 · Electron + SQLite + PWA/Sync · Details in <code>doc/app-map/*.md</code> (diese HTML-Datei ist nur die Übersicht, keine CDN-Abhängigkeit).</p>
+
+<h2>Architektur (statisch, offline)</h2>
+<svg width="980" height="300" role="img" aria-label="Architekturdiagramm">
+  <rect x="10" y="10" width="220" height="120" fill="#ecfdf5" stroke="#16a34a"/><text x="20" y="32" font-size="13" font-weight="bold">Electron Main</text><text x="20" y="50" font-size="11">main.js · Fenster</text><text x="20" y="66" font-size="11">setupIpc: 171 Kanäle</text><text x="20" y="82" font-size="11">ZUGFeRD/XRechnung</text><text x="20" y="98" font-size="11">Sync-Hub :38400</text><text x="20" y="114" font-size="11">Backup · Mail · Audit</text>
+  <rect x="250" y="10" width="230" height="120" fill="#eff6ff" stroke="#2563eb"/><text x="260" y="32" font-size="13" font-weight="bold">Renderer</text><text x="260" y="50" font-size="11">19 Views (9 CORE/10 EXP)</text><text x="260" y="66" font-size="11">editor.js · projekte.js</text><text x="260" y="82" font-size="11">einvoice.js · banking.js</text><text x="260" y="98" font-size="11">views/*.js (10)</text><text x="260" y="114" font-size="11">preload window.api</text>
+  <rect x="500" y="10" width="220" height="120" fill="#fefce8" stroke="#a16207"/><text x="510" y="32" font-size="13" font-weight="bold">SQLite (65 Tab.)</text><text x="510" y="50" font-size="11">dokumente/positionen</text><text x="510" y="66" font-size="11">Verrechnungen/kumulativ</text><text x="510" y="82" font-size="11">Bank/OPOS/SEPA</text><text x="510" y="98" font-size="11">audit_logs · backup</text><text x="510" y="114" font-size="11">F1/F2/F3 · Phase 2-4</text>
+  <rect x="740" y="10" width="220" height="120" fill="#fff7ed" stroke="#d97706"/><text x="750" y="32" font-size="13" font-weight="bold">PWA (experimentell)</text><text x="750" y="50" font-size="11">App-Shell + sw.js</text><text x="750" y="66" font-size="11">Dexie Offline-DB</text><text x="750" y="82" font-size="11">sync-worker Push/Pull</text><text x="750" y="98" font-size="11">REB-Aufmaß · Kamera</text>
+  <line x1="230" y1="70" x2="250" y2="70" stroke="#64748b" stroke-width="2" marker-end="none"/><text x="196" y="64" font-size="10">IPC</text>
+  <line x1="480" y1="70" x2="500" y2="70" stroke="#64748b" stroke-width="2"/><text x="478" y="64" font-size="10"></text>
+  <line x1="720" y1="70" x2="740" y2="70" stroke="#64748b" stroke-width="2"/><text x="700" y="64" font-size="10">TLS</text>
+  <rect x="10" y="150" width="950" height="130" fill="#fef2f2" stroke="#dc2626"/><text x="20" y="172" font-size="13" font-weight="bold">Kern-Flow mit 7 P0-Lücken (FREIGABE NEIN)</text><text x="20" y="192" font-size="11">Kunde → Angebot/LV → Projekt → Aufmaß(B-6,B-7)/Nachtrag(B-7) → Abschlag(B-4,B-5) → OPOS → Schluss → Export(B-1,B-2,B-3) → StB</text><text x="20" y="212" font-size="11">B-1 URN einvoice.js:6 · B-2 KoSIT fehlt · B-3 DOM-statt-DB editor.js:951 · B-4 Totals editor.js:1542</text><text x="20" y="232" font-size="11">B-5 Filter editor.js:1527 · B-6 Sperre projekte.js/db.js:106 · B-7 nur String-Tests uebergaben_persistenz:26</text><text x="20" y="262" font-size="11">Vollverortung: 05-risiken-pruefpunkte.md · Prüfbericht §2.1</text>
+</svg>
+
+<h2>Kern-Flow (Klickpfad → Map-Datei)</h2>
+<div class="grid">
+  <div class="card core"><b>00 Übersicht</b><br><span class="meta">Gesamtbild, Modulstatus</span><br><a href="00-uebersicht.md">00-uebersicht.md</a></div>
+  <div class="card core"><b>01 Navigation</b><br><span class="meta">19 Views, CORE vs EXP</span><br><a href="01-navigation-views.md">01-navigation-views.md</a></div>
+  <div class="card risk"><b>02 Rechnungskern</b><br><span class="meta">Kunde→StB, Datei:Zeile</span><br><a href="02-rechnungskern-flow.md">02-rechnungskern-flow.md</a></div>
+  <div class="card ok"><b>03 Daten/IPC</b><br><span class="meta">64 Tabellen, 171 Kanäle, 22 Controller</span><br><a href="03-daten-ipc-schema.md">03-daten-ipc-schema.md</a></div>
+  <div class="card exp"><b>04 Sync/PWA</b><br><span class="meta">8 Routen, Pairing→Push/Pull</span><br><a href="04-sync-pwa-map.md">04-sync-pwa-map.md</a></div>
+  <div class="card risk"><b>05 Risiken</b><br><span class="meta">7 P0-Lücken verortet</span><br><a href="05-risiken-pruefpunkte.md">05-risiken-pruefpunkte.md</a></div>
+</div>
+
+<h2>Kennzahlen</h2>
+<table>
+<tr><th>Objekt</th><th>Zahl</th><th>Beleg</th></tr>
+<tr><td>Views (Routen)</td><td>19 (18 mit viewConfig; projekt-details ohne)</td><td><code>js/navigation.js:3-150</code></td></tr>
+<tr><td>Dateien views/*.js</td><td>10</td><td>Verzeichnislisting</td></tr>
+<tr><td>Dateien controllers/*.js</td><td>22</td><td>Verzeichnislisting</td></tr>
+<tr><td>SQLite-Tabellen (eindeutig)</td><td>65</td><td><code>schema.js</code> CREATE TABLE</td></tr>
+<tr><td>IPC-Handles main.js</td><td>171</td><td><code>main.js:181-1508</code></td></tr>
+<tr><td>Sync-HTTP-Routen</td><td>8 (+Alias)</td><td><code>main/sync-server.js:574-630</code></td></tr>
+<tr><td>Test-Suites</td><td>52</td><td><code>tests/*.test.js</code></td></tr>
+<tr><td>P0-Befunde</td><td>7 blockierend (+6 P1, 3 Hinweise)</td><td>Prüfbericht §2</td></tr>
+</table>
+<p class="meta">Prüfanleitung: README.md in diesem Ordner. Hinweis: Bei Öffnung per Doppelklick (file://) zeigen die .md-Links Rohtext — zum Lesen VS Code (Markdown-Vorschau) oder einen Markdown-Viewer nutzen. Kein Commit/Push durchgeführt (reine Map-Erstellung).</p>
+</body>
+</html>

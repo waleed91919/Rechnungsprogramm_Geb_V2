@@ -202,6 +202,59 @@ const SepaController = {
         return String(98 - rest).padStart(2, '0') === pruefziffer;
     },
 
+    /**
+     * Zerlegt eine Adresszeile in Straße und Hausnummer
+     */
+    _splitStreetAndNumber(rawAddress) {
+        if (!rawAddress) return { street: '', buildingNumber: '' };
+        const clean = String(rawAddress).trim();
+        const match = clean.match(/^(.+?)\s+(\d+[\s\w\-\/]*)$/);
+        if (match) {
+            return { street: match[1].trim(), buildingNumber: match[2].trim() };
+        }
+        return { street: clean, buildingNumber: '' };
+    },
+
+    /**
+     * Erzeugt das strukturierte <PstlAdr> Element gem. ISO 20022 / EPC Rulebook
+     * WICHTIG: Strikte XSD-Sequenzfolge StrtNm -> BldgNb -> PstCd -> TwnNm -> Ctry
+     */
+    _buildStructuredPstlAdr({ street, buildingNumber, postalCode, city, country = 'DE' }) {
+        const ctry = String(country || 'DE').trim().toUpperCase().substring(0, 2);
+        const twn = this._escapeXml(String(city || 'Unbekannt').trim());
+        const pstCd = this._escapeXml(String(postalCode || '').trim());
+        const strt = this._escapeXml(String(street || '').trim());
+        const bldg = this._escapeXml(String(buildingNumber || '').trim());
+
+        let xml = '          <PstlAdr>\n';
+        if (strt) xml += `            <StrtNm>${strt}</StrtNm>\n`;
+        if (bldg) xml += `            <BldgNb>${bldg}</BldgNb>\n`;
+        if (pstCd) xml += `            <PstCd>${pstCd}</PstCd>\n`;
+        if (twn) xml += `            <TwnNm>${twn}</TwnNm>\n`;
+        xml += `            <Ctry>${ctry || 'DE'}</Ctry>\n`;
+        xml += '          </PstlAdr>';
+        return xml;
+    },
+
+    /**
+     * Validiert und normalisiert das Ausführungsdatum gegen den TARGET2-Kalender (SEP-2)
+     */
+    assertAndNormalizeExecutionDate(executionDate, autoAdjust = false) {
+        if (!executionDate || !/^\d{4}-\d{2}-\d{2}$/.test(String(executionDate).trim())) {
+            throw new Error(`Ungültiges SEPA-Ausführungsdatum "${executionDate}". Erwartet: JJJJ-MM-DD.`);
+        }
+        const cleanDate = String(executionDate).trim();
+        const isValidTarget2 = this.isTarget2BankingDay(cleanDate);
+
+        if (!isValidTarget2) {
+            if (autoAdjust) {
+                return this.getNextTarget2BankingDay(cleanDate, 1);
+            }
+            throw new Error(`Das Ausführungsdatum "${cleanDate}" ist kein gültiger TARGET2-Bankarbeitstag (Wochenende oder TARGET2-Feiertag).`);
+        }
+        return cleanDate;
+    },
+
     generatePain008Xml({
         msgId,
         messageId,
@@ -211,7 +264,12 @@ const SepaController = {
         creditorIban,
         creditorBic,
         creditorId,
+        creditorStreet,
+        creditorZip,
+        creditorCity,
+        creditorCountry,
         executionDate,
+        autoAdjustDate = false,
         schemeType = 'CORE',
         localInstrument,
         sequenceType = 'RCUR',
@@ -223,6 +281,8 @@ const SepaController = {
         const finalScheme = localInstrument || schemeType || 'CORE';
         const cleanCredIban = this._cleanIban(creditorIban);
         const cleanCredBic = this._cleanBic(creditorBic);
+
+        const normalizedExecDate = this.assertAndNormalizeExecutionDate(executionDate, autoAdjustDate);
 
         if (!['FRST', 'RCUR', 'FNAL', 'OOFF'].includes(sequenceType)) {
             throw new Error(`Ungültiger Sequenztyp "${sequenceType}" für SEPA-Lastschrift (zulässig: FRST, RCUR, FNAL, OOFF).`);
@@ -255,14 +315,20 @@ const SepaController = {
                 blockId: `${finalMsgId || Date.now()}-${idx + 1}`,
                 sequenceType: seq,
                 transactions: gruppen.get(seq),
-                executionDate,
+                executionDate: normalizedExecDate,
                 scheme: finalScheme,
                 bicTag,
+                schemaVersion,
                 creditorName,
                 creditorIban: cleanCredIban,
                 creditorBic: cleanCredBic,
-                creditorId
+                creditorId,
+                creditorStreet,
+                creditorZip,
+                creditorCity,
+                creditorCountry
             }));
+
 
         return `<?xml version="1.0" encoding="UTF-8"?>
 <Document xmlns="${xmlNamespace}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -288,12 +354,29 @@ const SepaController = {
         executionDate,
         scheme,
         bicTag,
+        schemaVersion,
         creditorName,
         creditorIban,
         creditorBic,
-        creditorId
+        creditorId,
+        creditorStreet,
+        creditorZip,
+        creditorCity,
+        creditorCountry
     }) {
         const blockSum = Math.round(transactions.reduce((sum, tx) => sum + (parseFloat(tx.betrag !== undefined ? tx.betrag : tx.amount) || 0), 0) * 100) / 100;
+
+        let credPstlAdrXml = '';
+        if (creditorStreet || creditorCity || creditorZip) {
+            const credStreetParts = this._splitStreetAndNumber(creditorStreet || '');
+            credPstlAdrXml = '\n' + this._buildStructuredPstlAdr({
+                street: credStreetParts.street,
+                buildingNumber: credStreetParts.buildingNumber,
+                postalCode: creditorZip,
+                city: creditorCity,
+                country: creditorCountry || 'DE'
+            });
+        }
 
         let txXml = '';
         for (const tx of transactions) {
@@ -318,6 +401,18 @@ const SepaController = {
             const debtorBic = this._cleanBic(txDebtorBic);
             const rmtInf = this._escapeXml(txRmt);
 
+            let debtorPstlAdr = '';
+            if (schemaVersion === 'pain.008.001.08' || tx.strasse || tx.debtorStreet || tx.address || tx.stadt || tx.ort || tx.debtorCity || tx.city || tx.plz || tx.debtorZip) {
+                const debtorStreetParts = this._splitStreetAndNumber(tx.strasse || tx.debtorStreet || tx.address || '');
+                debtorPstlAdr = '\n' + this._buildStructuredPstlAdr({
+                    street: debtorStreetParts.street,
+                    buildingNumber: debtorStreetParts.buildingNumber,
+                    postalCode: tx.plz || tx.debtorZip || tx.postalCode || '',
+                    city: tx.stadt || tx.ort || tx.debtorCity || tx.city || 'Unbekannt',
+                    country: tx.land || tx.debtorCountry || tx.country || 'DE'
+                });
+            }
+
             txXml += `
       <DrctDbtTxInf>
         <PmtId>
@@ -332,7 +427,7 @@ const SepaController = {
         </DrctDbtTx>
         ${debtorBic ? `<DbtrAgt><FinInstnId><${bicTag}>${debtorBic}</${bicTag}></FinInstnId></DbtrAgt>` : '<DbtrAgt><FinInstnId><Othr><Id>NOTPROVIDED</Id></Othr></FinInstnId></DbtrAgt>'}
         <Dbtr>
-          <Nm>${debtorName}</Nm>
+          <Nm>${debtorName}</Nm>${debtorPstlAdr}
         </Dbtr>
         <DbtrAcct>
           <Id>
@@ -362,7 +457,7 @@ const SepaController = {
       </PmtTpInf>
       <ReqdColltnDt>${executionDate}</ReqdColltnDt>
       <Cdtr>
-        <Nm>${this._escapeXml(creditorName)}</Nm>
+        <Nm>${this._escapeXml(creditorName)}</Nm>${credPstlAdrXml}
       </Cdtr>
       <CdtrAcct>
         <Id>

@@ -52,6 +52,35 @@ function isContained(root, candidate) {
 
 const ZeiterfassungController = require('../controllers/ZeiterfassungController');
 const BautagebuchMobileController = require('../controllers/BautagebuchMobileController');
+const HybridLogicalClock = require('./hlc');
+
+/**
+ * Zero-Dependency Streaming Magic-Bytes Inspektion (JPEG, PNG, WebP)
+ */
+function detectImageFormat(buffer) {
+    if (!buffer || buffer.length < 12) return null;
+
+    // 1. PNG Check (8 Bytes: 89 50 4E 47 0D 0A 1A 0A)
+    if (buffer.length >= 8 &&
+        buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47 &&
+        buffer[4] === 0x0D && buffer[5] === 0x0A && buffer[6] === 0x1A && buffer[7] === 0x0A) {
+        return { ext: 'png', mime: 'image/png' };
+    }
+
+    // 2. JPEG Check (3 Bytes: FF D8 FF)
+    if (buffer.length >= 3 && buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+        return { ext: 'jpg', mime: 'image/jpeg' };
+    }
+
+    // 3. WebP Check (RIFF .... WEBP)
+    if (buffer.length >= 12 &&
+        buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+        buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50) {
+        return { ext: 'webp', mime: 'image/webp' };
+    }
+
+    return null;
+}
 
 class SyncServer {
     /**
@@ -89,6 +118,7 @@ class SyncServer {
         this.globalPairAttempts = { startedAt: Date.now(), count: 0 };
         this.pendingUploads = new Set();
         this.advertisedHost = null;
+        this.hlc = new HybridLogicalClock('srv-' + (this.port || 'main'));
     }
 
     /**
@@ -570,13 +600,22 @@ class SyncServer {
                 return res.end();
             }
             const route = pathname.replace(/^\/api\/sync\//, '/api/v1/sync/');
-            // 1. Healthcheck / Discovery
+            // 1. Healthcheck / Discovery / Version Handshake
+            if (route === '/api/v1/sync/version' && req.method === 'GET') {
+                return this.sendJson(res, 200, {
+                    app: 'W-Link ERP',
+                    appVersion: '1.4.0',
+                    schemaVersion: 4,
+                    swCacheName: 'wlink-mobile-v1.4.0-build20260911',
+                    serverTime: new Date().toISOString()
+                });
+            }
             if ((route === '/api/v1/sync/ping' || route === '/api/v1/sync/info') && req.method === 'GET') {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 return res.end(JSON.stringify({
                     status: 'OK',
                     app: 'W-Link ERP',
-                    version: '1.2.0',
+                    version: '1.4.0',
                     serverTime: new Date().toISOString(),
                     connectedClients: this.activeSockets.size + this.sseClients.size
                 }));
@@ -765,10 +804,13 @@ class SyncServer {
      * Schreibt eine mobile Mutation in die SQLite-Hauptdatenbank oder leitet sie bei Konflikten in Quarantäne.
      */
     applyEntityMutation(mut, deviceId) {
-        const { entity_type, mutation_type, entity_uuid, payload, lamport_timestamp } = mut;
+        const { entity_type, mutation_type, entity_uuid, payload, lamport_timestamp, hlc_timestamp } = mut;
         const data = typeof payload === 'string' ? JSON.parse(payload) : (payload || {});
         data.uuid = data.uuid || entity_uuid || mut.uuid;
         data.device_id = deviceId;
+        if (hlc_timestamp && this.hlc) {
+            this.hlc.receive(hlc_timestamp);
+        }
 
         if (entity_type === 'ZEITERFASSUNG') {
             const serverRecord = this.db.prepare('SELECT * FROM zeiterfassung WHERE uuid = ?').get(data.uuid);
@@ -828,14 +870,45 @@ class SyncServer {
             return { conflict: false };
 
         } else if (entity_type === 'AUFMASS_ZEILE' || entity_type === 'AUFMASS') {
+            const existing = this.db.prepare('SELECT * FROM aufmass_zeilen WHERE uuid = ?').get(data.uuid);
+
+            if (existing) {
+                const isSameContent = existing.rechenansatz === data.rechenansatz &&
+                                      Math.abs(existing.ergebnis - data.ergebnis) < 0.0001;
+
+                if (!isSameContent) {
+                    const isStale = (data.base_version !== undefined && data.base_version < existing.version) ||
+                                    (existing.updated_by_device && existing.updated_by_device !== deviceId);
+
+                    if (isStale) {
+                        this.quarantineConflict(
+                            'AUFMASS_ZEILE',
+                            data.uuid,
+                            deviceId,
+                            existing,
+                            data,
+                            `Aufmaß-Kollision: Server hat Version ${existing.version || 1} (${existing.rechenansatz}), Client sendet (${data.rechenansatz})`
+                        );
+                        return { conflict: true, reason: 'Aufmaß-Kollision', uuid: mut.uuid };
+                    }
+                }
+            }
+
+            const currentHlc = (this.hlc && hlc_timestamp) ? this.hlc.now() : (hlc_timestamp || new Date().toISOString());
+
             const stmt = this.db.prepare(`
                 INSERT INTO aufmass_zeilen (
-                    uuid, blatt_id, oz_code, zeilen_nr, bezeichnung, formel_reb, formel_code, rechenansatz, ergebnis, einheit, raum_id
+                    uuid, blatt_id, oz_code, zeilen_nr, bezeichnung, formel_reb, formel_code, rechenansatz, ergebnis, einheit, raum_id, version, hlc_timestamp, updated_by_device, last_synced_at
                 ) VALUES (
-                    @uuid, @blatt_id, @oz_code, @zeilen_nr, @bezeichnung, @formel_code, @formel_code, @rechenansatz, @ergebnis, @einheit, @raum_id
+                    @uuid, @blatt_id, @oz_code, @zeilen_nr, @bezeichnung, @formel_code, @formel_code, @rechenansatz, @ergebnis, @einheit, @raum_id, 1, @hlc_timestamp, @updated_by_device, CURRENT_TIMESTAMP
                 ) ON CONFLICT(uuid) DO UPDATE SET
                     rechenansatz = excluded.rechenansatz,
-                    ergebnis = excluded.ergebnis
+                    ergebnis = excluded.ergebnis,
+                    bezeichnung = excluded.bezeichnung,
+                    version = COALESCE(aufmass_zeilen.version, 1) + 1,
+                    hlc_timestamp = excluded.hlc_timestamp,
+                    updated_by_device = excluded.updated_by_device,
+                    last_synced_at = CURRENT_TIMESTAMP
             `);
             stmt.run({
                 uuid: data.uuid,
@@ -847,7 +920,9 @@ class SyncServer {
                 rechenansatz: data.rechenansatz || `${data.ergebnis || 0}=`,
                 ergebnis: parseFloat(data.ergebnis) || 0.0,
                 einheit: data.einheit || 'm²',
-                raum_id: data.raum_id || null
+                raum_id: data.raum_id || null,
+                hlc_timestamp: currentHlc,
+                updated_by_device: deviceId
             });
             return { conflict: false };
 
@@ -983,8 +1058,8 @@ class SyncServer {
         await fs.promises.mkdir(configuredRoot, { recursive: true, mode: 0o700 });
         if ((await fs.promises.lstat(configuredRoot)).isSymbolicLink()) throw httpError(403, 'Upload-Verzeichnis nicht erlaubt.');
         const root = await fs.promises.realpath(configuredRoot);
-        const fileName = `${photoUuid}.webp`;
-        const targetPath = path.join(root, fileName);
+        let fileName = `${photoUuid}.webp`;
+        let targetPath = path.join(root, fileName);
         let stageDir;
         let handle;
         let published = false;
@@ -997,15 +1072,39 @@ class SyncServer {
             handle = await fs.promises.open(stagePath,
                 fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW || 0), 0o600);
             let bytes = 0;
+            const headerChunks = [];
+            let headerBytes = 0;
+            let detected = null;
+
             // Async iteration supplies backpressure; early limit rejection must not destroy the response socket.
             for await (const chunk of req.iterator({ destroyOnReturn: false })) {
                 this.assertSession(req.syncSession);
                 bytes += chunk.length;
                 if (bytes > this.maxPhotoBytes) throw httpError(413, 'Foto zu groß.');
+                if (!detected) {
+                    headerChunks.push(chunk);
+                    headerBytes += chunk.length;
+                    if (headerBytes >= 16) {
+                        const headerBuf = Buffer.concat(headerChunks);
+                        detected = detectImageFormat(headerBuf);
+                        if (!detected) {
+                            throw httpError(415, 'Nicht unterstütztes Bildformat. Erlaubt sind JPEG, PNG und WebP.');
+                        }
+                    }
+                }
                 hash.update(chunk);
                 await handle.writeFile(chunk);
             }
             if (req.aborted || !req.complete) throw httpError(400, 'Upload abgebrochen.');
+            if (!detected) {
+                const headerBuf = Buffer.concat(headerChunks);
+                detected = detectImageFormat(headerBuf);
+                if (!detected) {
+                    throw httpError(415, 'Nicht unterstütztes Bildformat. Erlaubt sind JPEG, PNG und WebP.');
+                }
+            }
+            fileName = `${photoUuid}.${detected.ext}`;
+            targetPath = path.join(root, fileName);
             calculatedSha = hash.digest('hex');
             if (clientSha && calculatedSha !== clientSha.toLowerCase()) throw httpError(422, 'SHA-256 stimmt nicht überein.');
             await handle.sync();
@@ -1045,7 +1144,8 @@ class SyncServer {
                 file_name: fileName,
                 filePath: fileName, // legacy property, deliberately relative
                 sha256: calculatedSha,
-                clientShaMatches: true
+                clientShaMatches: true,
+                mime: detected.mime
             });
         } catch (err) {
             if (err.code === 'EEXIST') {
@@ -1125,8 +1225,17 @@ class SyncServer {
             if (!isContained(root, fullPath) || (publicController && fullPath !== candidate)) throw httpError(403, 'Datei nicht erlaubt.');
             file = await fs.promises.open(fullPath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
             const stat = await file.stat();
-            if (!stat.isFile()) throw httpError(404, 'Datei nicht gefunden.');
-            res.writeHead(200, { 'Content-Type': mimeTypes[ext], 'Content-Length': stat.size });
+            const isServiceWorker = pathname === '/sw.js' || pathname === '/manifest.webmanifest';
+            const cacheControl = isServiceWorker
+                ? 'no-cache, no-store, must-revalidate, max-age=0'
+                : 'public, max-age=3600, stale-while-revalidate=86400';
+
+            res.writeHead(200, {
+                'Content-Type': mimeTypes[ext],
+                'Content-Length': stat.size,
+                'Cache-Control': cacheControl,
+                'Pragma': isServiceWorker ? 'no-cache' : 'public'
+            });
             if (headOnly) return res.end();
             const stream = file.createReadStream();
             file = null; // stream owns and closes the descriptor
@@ -1186,15 +1295,111 @@ class SyncServer {
         const conflict = this.db.prepare('SELECT * FROM sync_conflicts WHERE id = ?').get(conflictId);
         if (!conflict) throw new Error(`Konflikt #${conflictId} nicht gefunden.`);
 
+        const effectiveData = resolutionStrategy === 'RESOLVED_CLIENT'
+            ? JSON.parse(conflict.client_data_json || '{}')
+            : (resolutionStrategy === 'RESOLVED_MERGE' ? mergedData : null);
+
         const tx = this.db.transaction(() => {
-            if (resolutionStrategy === 'RESOLVED_CLIENT') {
-                const clientObj = JSON.parse(conflict.client_data_json || '{}');
-                if (conflict.entity_type === 'ZEITERFASSUNG') {
-                    ZeiterfassungController.saveZeiteintrag(this.db, clientObj, this.auditLogger);
+            if (effectiveData && (resolutionStrategy === 'RESOLVED_CLIENT' || resolutionStrategy === 'RESOLVED_MERGE')) {
+                const { entity_type, entity_uuid } = conflict;
+
+                if (entity_type === 'ZEITERFASSUNG') {
+                    ZeiterfassungController.saveZeiteintrag(this.db, effectiveData, this.auditLogger);
+
+                } else if (entity_type === 'BAUTAGEBUCH') {
+                    const upsertBt = this.db.prepare(`
+                        INSERT INTO bautagebuch (
+                            uuid, project_id, datum, wetter, temperatur_min, temperatur_max,
+                            personal_eigen_anzahl, personal_eigen_stunden, personal_sub_json, geraete_json,
+                            tagesbericht, vorkommnisse_behinderungen, fotos_json, updated_at
+                        ) VALUES (
+                            @uuid, @project_id, @datum, @wetter, @temperatur_min, @temperatur_max,
+                            @personal_eigen_anzahl, @personal_eigen_stunden, @personal_sub_json, @geraete_json,
+                            @tagesbericht, @vorkommnisse_behinderungen, @fotos_json, CURRENT_TIMESTAMP
+                        ) ON CONFLICT(uuid) DO UPDATE SET
+                            tagesbericht = excluded.tagesbericht,
+                            vorkommnisse_behinderungen = excluded.vorkommnisse_behinderungen,
+                            fotos_json = excluded.fotos_json,
+                            personal_eigen_anzahl = excluded.personal_eigen_anzahl,
+                            personal_eigen_stunden = excluded.personal_eigen_stunden,
+                            personal_sub_json = excluded.personal_sub_json,
+                            geraete_json = excluded.geraete_json,
+                            updated_at = CURRENT_TIMESTAMP
+                    `);
+
+                    upsertBt.run({
+                        uuid: entity_uuid,
+                        project_id: parseInt(effectiveData.projekt_id || effectiveData.project_id, 10),
+                        datum: effectiveData.datum,
+                        wetter: effectiveData.wetter || 'HEITER',
+                        temperatur_min: parseFloat(effectiveData.temperatur_min) || 0.0,
+                        temperatur_max: parseFloat(effectiveData.temperatur_max) || 0.0,
+                        personal_eigen_anzahl: parseInt(effectiveData.personal_eigen_anzahl, 10) || 0,
+                        personal_eigen_stunden: parseFloat(effectiveData.personal_eigen_stunden) || 0.0,
+                        personal_sub_json: typeof effectiveData.personal_sub_json === 'string'
+                            ? effectiveData.personal_sub_json : JSON.stringify(effectiveData.personal_sub_json || []),
+                        geraete_json: typeof effectiveData.geraete_json === 'string'
+                            ? effectiveData.geraete_json : JSON.stringify(effectiveData.geraete_json || []),
+                        tagesbericht: effectiveData.tagesbericht || '',
+                        vorkommnisse_behinderungen: effectiveData.vorkommnisse || effectiveData.vorkommnisse_behinderungen || '',
+                        fotos_json: typeof effectiveData.fotos_json === 'string'
+                            ? effectiveData.fotos_json : JSON.stringify(effectiveData.fotos_json || [])
+                    });
+
+                } else if (entity_type === 'AUFMASS_ZEILE' || entity_type === 'AUFMASS') {
+                    const upsertAufmass = this.db.prepare(`
+                        INSERT INTO aufmass_zeilen (
+                            uuid, blatt_id, oz_code, zeilen_nr, bezeichnung, formel_reb, formel_code,
+                            rechenansatz, ergebnis, einheit, raum_id, version, updated_at
+                        ) VALUES (
+                            @uuid, @blatt_id, @oz_code, @zeilen_nr, @bezeichnung, @formel_code, @formel_code,
+                            @rechenansatz, @ergebnis, @einheit, @raum_id, 1, CURRENT_TIMESTAMP
+                        ) ON CONFLICT(uuid) DO UPDATE SET
+                            rechenansatz = excluded.rechenansatz,
+                            ergebnis = excluded.ergebnis,
+                            bezeichnung = excluded.bezeichnung,
+                            version = COALESCE(aufmass_zeilen.version, 1) + 1,
+                            updated_at = CURRENT_TIMESTAMP
+                    `);
+
+                    upsertAufmass.run({
+                        uuid: entity_uuid,
+                        blatt_id: effectiveData.blatt_id || 1,
+                        oz_code: effectiveData.oz || effectiveData.oz_code || '01.01.001',
+                        zeilen_nr: effectiveData.zeilen_nr || 1,
+                        bezeichnung: effectiveData.bezeichnung || '',
+                        formel_code: effectiveData.formel_code || '91',
+                        rechenansatz: effectiveData.rechenansatz || `${effectiveData.ergebnis || 0}=`,
+                        ergebnis: parseFloat(effectiveData.ergebnis) || 0.0,
+                        einheit: effectiveData.einheit || 'm²',
+                        raum_id: effectiveData.raum_id || null
+                    });
+
+                } else if (entity_type === 'MAENGEL' || entity_type === 'MANGEL') {
+                    this.db.prepare(`
+                        UPDATE maengel SET
+                            titel = COALESCE(@titel, titel),
+                            beschreibung = COALESCE(@beschreibung, beschreibung),
+                            status = COALESCE(@status, status),
+                            frist_datum = COALESCE(@frist_datum, frist_datum),
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE uuid = @uuid
+                    `).run({
+                        uuid: entity_uuid,
+                        titel: effectiveData.titel,
+                        beschreibung: effectiveData.beschreibung,
+                        status: effectiveData.status,
+                        frist_datum: effectiveData.frist_datum
+                    });
                 }
-            } else if (resolutionStrategy === 'RESOLVED_MERGE' && mergedData) {
-                if (conflict.entity_type === 'ZEITERFASSUNG') {
-                    ZeiterfassungController.saveZeiteintrag(this.db, mergedData, this.auditLogger);
+
+                if (this.auditLogger && this.auditLogger.appendAuditLog) {
+                    this.auditLogger.appendAuditLog({
+                        entityType: entity_type,
+                        entityId: conflictId,
+                        action: 'SYNC_CONFLICT_RESOLVED',
+                        details: { strategy: resolutionStrategy, uuid: entity_uuid }
+                    });
                 }
             }
 

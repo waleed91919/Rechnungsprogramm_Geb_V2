@@ -165,7 +165,69 @@ if (typeof window !== 'undefined' && window.api && window.api.onIdsCartReceived)
 }
 
 
+// P0.6 UI-Fokusmodus: Kern-Flow ohne Modul-Hopping, Rest hinter Flag (nichts gelöscht).
+// Kern: Kunde → Angebot/LV → Auftrag/Projekt → Aufmaß/Nachtrag → Abschlag →
+// Zahlung → Schlussrechnung → Export (Dashboard, Kunden, Angebote, Projekte,
+// Rechnungen, Banking/OPOS, Berichte/StB-Export, Einstellungen).
+const CORE_VIEWS = new Set([
+    'dashboard', 'kunden', 'angebote', 'projekte', 'projekt-details',
+    'rechnungen', 'banking', 'berichte', 'einstellungen'
+]);
+// Experimentell (Standard: ausgeblendet, Opt-in pro Arbeitsplatz):
+const EXPERIMENTAL_VIEWS = new Set([
+    'objekte', 'objekt-details', 'dauerrechnungen', 'putzplan',
+    'maengel', 'zeiterfassung', 'grosshandel', 'sokabau', 'sync', 'artikel'
+]);
+
+function isExperimentalEnabled() {
+    try {
+        if (typeof state !== 'undefined' && state && state.einstellungen) {
+            const val = state.einstellungen.experimental_module;
+            return val === true || val === 'true' || val === 1 || val === '1';
+        }
+    } catch (_e) { /* ignore */ }
+    return false;
+}
+
+function getVisibleViews() {
+    if (isExperimentalEnabled()) return views.slice();
+    return views.filter(v => !EXPERIMENTAL_VIEWS.has(v) || CORE_VIEWS.has(v));
+}
+
+function applyFocusMode() {
+    // Blendung nur (display), kein Löschen; State bleibt erhalten (kein Datenverlust
+    // beim Wechsel Kern ↔ experimentell).
+    if (typeof document === 'undefined') return getVisibleViews();
+    const visible = new Set(getVisibleViews());
+    views.forEach(view => {
+        const nav = document.getElementById(`nav-${view}`);
+        if (nav) {
+            const show = visible.has(view);
+            nav.style.display = show ? '' : 'none';
+            nav.setAttribute('data-experimental',
+                EXPERIMENTAL_VIEWS.has(view) ? 'true' : 'false');
+            if (!show) nav.setAttribute('title', 'Experimentell — in Einstellungen aktivierbar');
+            else nav.removeAttribute('title');
+        }
+    });
+    return Array.from(visible);
+}
+
 function switchView(viewName) {
+    // 1. Router-Guard gegen experimentelle Module im Fokusmodus (NAV-2)
+    if (!isExperimentalEnabled() && EXPERIMENTAL_VIEWS.has(viewName) && !CORE_VIEWS.has(viewName)) {
+        console.warn(`[Navigation Guard] Aufruf von "${viewName}" blockiert — Fokusmodus ist aktiv.`);
+        if (typeof showToast === 'function') {
+            showToast(`Modul "${viewName}" ist im Fokusmodus ausgeblendet.`, 'warning');
+        } else if (typeof showNotification === 'function') {
+            showNotification(
+                'Fokusmodus aktiv',
+                `Das Modul "${viewName}" ist im Fokusmodus ausgeblendet. Aktivieren Sie "Zusatzmodule" in den Einstellungen.`
+            );
+        }
+        viewName = 'dashboard';
+    }
+
     if (typeof state !== 'undefined') {
         state.view = viewName;
     }
@@ -307,5 +369,5 @@ if (typeof window !== 'undefined') {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { switchView, viewConfig };
+    module.exports = { switchView, viewConfig, CORE_VIEWS, EXPERIMENTAL_VIEWS, isExperimentalEnabled, getVisibleViews, applyFocusMode };
 }

@@ -241,11 +241,20 @@ async function handleBankFileUpload(file) {
                 skippedPendingSumme = statements.reduce((sum, s) => sum + (s.skippedPending || 0), 0);
                 rvslSkippedSumme = statements.reduce((sum, s) => sum + (s.rvslSkipped || 0), 0);
             }
+        } else if (file.name.toLowerCase().endsWith('.sta') || file.name.toLowerCase().endsWith('.swi') || (content.includes(':20:') && content.includes(':25:'))) {
+            format = 'MT940';
+            const parser = typeof BankingController !== 'undefined' ? BankingController : window.BankingController;
+            const statements = parser.parseMt940(content, konto ? konto.iban : '');
+            if (statements.length > 0) {
+                transactions = statements.flatMap(s => s.transactions);
+                closingBalance = statements[0].closingBalance;
+            }
         } else {
             const parser = typeof BankingController !== 'undefined' ? BankingController : window.BankingController;
             transactions = parser.parseCsvStatement(content, 'AUTO', konto ? konto.iban : '');
             format = 'CSV';
         }
+
 
         if (transactions.length === 0) {
             if (typeof showToast === 'function') showToast('Keine buchbaren Zeilen in der Datei gefunden (ggf. nur vorgemerkte/stornierte Einträge).', 'warning');

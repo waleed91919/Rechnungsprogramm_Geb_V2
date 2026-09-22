@@ -156,6 +156,15 @@ window.InvoiceView = class InvoiceView {
             sichProzent = parseFloat(currentProjekt.sicherheitseinbehalt_prozent) || 0;
         }
 
+        const artEl = document.getElementById('rechnung-art');
+        const rechnungArt = artEl ? artEl.value : 'REGULAER';
+        const retentionMode = (rechnungArt === 'ABSCHLAG_KUMULIERT' || (currentProjekt && currentProjekt.retention_mode === 'EXECUTION'))
+            ? 'EXECUTION'
+            : 'WARRANTY';
+        const contractTotalNet = currentProjekt ? (parseFloat(currentProjekt.budget) || parseFloat(currentProjekt.contractTotalNet) || 0) : 0;
+        const retentionBaseEl = document.getElementById('rechnung-sicherheitseinbehalt-basis');
+        const retentionBase = retentionBaseEl ? retentionBaseEl.value : (currentProjekt && currentProjekt.retention_base ? currentProjekt.retention_base : 'netto');
+
         return {
             positionen: currentPositions,
             verrechnungen: currentVerrechnungen,
@@ -166,6 +175,9 @@ window.InvoiceView = class InvoiceView {
                 type: rabattTypeEl?.value || '%'
             },
             sicherheitseinbehaltProzent: sichProzent,
+            retentionMode,
+            contractTotalNet,
+            retentionBase,
             anzahlung: parseFloat(anzahlungEl?.value) || 0
         };
     }
@@ -214,7 +226,9 @@ window.InvoiceView = class InvoiceView {
                 sichRow.classList.remove('hidden');
                 const lbl = document.getElementById('rechnung-sicherheitseinbehalt-label');
                 const val = document.getElementById('rechnung-sicherheitseinbehalt-wert');
-                if (lbl) lbl.innerText = `Sicherheitseinbehalt Netto (${calculated.sicherheitseinbehaltProzent}%)`;
+                const capSuffix = calculated.isCapped ? ' [Gedeckelt auf 5% Auftragssumme]' : '';
+                const baseSuffix = calculated.retentionBase === 'brutto' ? ' Brutto' : ' Netto';
+                if (lbl) lbl.innerText = `Sicherheitseinbehalt${baseSuffix} (${calculated.sicherheitseinbehaltProzent}%)${capSuffix}`;
                 if (val) val.innerText = '-' + fmt(calculated.sicherheitseinbehaltNetto);
             } else {
                 sichRow.classList.add('hidden');
@@ -224,10 +238,13 @@ window.InvoiceView = class InvoiceView {
         // 4. Verrechnungen Zeile
         const verrRow = document.getElementById('rechnung-verrechnungen-row');
         if (verrRow) {
-            if (calculated.verrechnungenSummeNetto > 0) {
+            const verrSum = (calculated.verrechnungenSummeBrutto !== undefined && calculated.verrechnungenSummeBrutto > 0)
+                ? calculated.verrechnungenSummeBrutto
+                : (calculated.verrechnungenSummeNetto || 0);
+            if (verrSum > 0) {
                 verrRow.classList.remove('hidden');
                 const verrWert = document.getElementById('rechnung-verrechnungen-wert');
-                if (verrWert) verrWert.innerText = '-' + fmt(calculated.verrechnungenSummeNetto);
+                if (verrWert) verrWert.innerText = '-' + fmt(verrSum);
             } else {
                 verrRow.classList.add('hidden');
             }
@@ -255,8 +272,16 @@ window.InvoiceView = class InvoiceView {
     /**
      * Führt die Neuberechnung über den Controller aus und aktualisiert das UI.
      */
-    handleInputEvent(currentPositions, currentVerrechnungen, currentProjekt, onCalculatedCallback) {
+    handleInputEvent(currentPositions, currentVerrechnungen, currentProjekt, onCalculatedCallback, cumulativeOpts = {}) {
         const formData = this.getFormData(currentPositions, currentVerrechnungen, currentProjekt);
+        // P0.2: kumulative Einbehalt-Verrechnung — Vorgänger-Einbehalte aus
+        // gespeicherten Belegen, nie aus Formular-State.
+        if (Array.isArray(cumulativeOpts.previousInvoices)) formData.previousInvoices = cumulativeOpts.previousInvoices;
+        if (cumulativeOpts.previousRetentionTotal !== undefined) formData.previousRetentionTotal = cumulativeOpts.previousRetentionTotal;
+        if (cumulativeOpts.totalPerformanceNet !== undefined) formData.totalPerformanceNet = cumulativeOpts.totalPerformanceNet;
+        if (cumulativeOpts.retentionMode) formData.retentionMode = cumulativeOpts.retentionMode;
+        if (cumulativeOpts.contractTotalNet !== undefined) formData.contractTotalNet = cumulativeOpts.contractTotalNet;
+        if (cumulativeOpts.retentionBase !== undefined) formData.retentionBase = cumulativeOpts.retentionBase;
         const result = window.InvoiceController.calculateTotals(formData);
         this.updateTotalsUI(result);
         if (typeof onCalculatedCallback === 'function') {

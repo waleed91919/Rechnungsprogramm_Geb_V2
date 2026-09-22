@@ -33,6 +33,8 @@ const invoice = {
     netto: 5000.00,
     steuer: 950.00,
     brutto: 5950.00,
+    status: 'Festgeschrieben',
+    isLocked: 1,
     positionen: [
         { name: 'Rohbauarbeiten Abschnitt Nord (GAEB OZ 01.001)', menge: 125, einheit: 'm²', preis: 40.00, mwst: 19 }
     ]
@@ -167,12 +169,12 @@ test('Z5: Profilvarianten XRECHNUNG und EN16931 erzeugen korrekte URNs und Datei
     const xInfo = EInvoiceEngine.getZUGFeRDProfileInfo('XRECHNUNG');
     assert.equal(xInfo.profile, 'XRECHNUNG');
     assert.equal(xInfo.fileName, 'xrechnung.xml');
-    assert.equal(xInfo.guidelineId, 'urn:cen.eu:en16931:2017#compliant#urn:xoev-de:kosit:standard:xrechnung_2.3');
+    assert.equal(xInfo.guidelineId, 'urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0');
 
     const xmlX = EInvoiceEngine.generateZUGFeRDXML(invoice, customer, seller, { profile: 'XRECHNUNG' });
     assert.ok(
-        xmlX.includes('urn:xoev-de:kosit:standard:xrechnung_2.3'),
-        'XRECHNUNG-XML enthält nicht den XRechnung-2.3-Guideline-URN'
+        xmlX.includes('urn:xeinkauf.de:kosit:xrechnung_3.0'),
+        'XRECHNUNG-XML enthält nicht den XRechnung-3.0-Guideline-URN'
     );
 
     const bufX = await ZugferdBuilder.build({
@@ -256,6 +258,9 @@ test('Z7: BT-10 BuyerReference - Leitweg-ID hat Vorrang vor buyer_reference', ()
 
 test('Z8: § 13b (AE) erzeugt ExemptionReason/VATEX-EU-AE und DuePayableAmount zieht Anzahlungen ab', () => {
     const inv13b = {
+        id: 302,
+        status: 'Festgeschrieben',
+        isLocked: 1,
         nr: 'RE-13B-TEST',
         datum: '2026-08-01',
         faellig: '2026-08-20',
@@ -436,12 +441,15 @@ test('Z12: Ungültiger basePdfBuffer wirft nicht, sondern fällt auf die Platzha
 
 test('Z13: Sicherheitseinbehalt erzeugt BT-20- und BT-22-Notizen sowie korrekte Summation', () => {
     const invEinbehalt = {
+        id: 303,
         nr: 'RE-EINBEHALT-TEST',
         datum: '2026-08-01',
         faellig: '2026-08-31',
         netto: 10000,
         steuer: 1900,
         brutto: 11900,
+        status: 'Festgeschrieben',
+        isLocked: 1,
         sicherheitseinbehalt: 595.00,
         sicherheitseinbehalt_prozent: 5.0,
         positionen: [

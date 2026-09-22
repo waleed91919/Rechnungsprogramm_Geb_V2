@@ -3,13 +3,15 @@
  * Gewährleistet 100% Offline-Verfügbarkeit der App-Shell und Fachmodule.
  */
 
-const CACHE_NAME = 'wlink-mobile-v1.3.1-sync-security';
+const VERSION = 'wlink-mobile-v1.4.0-build20260911';
+const CACHE_NAME = VERSION;
 const APP_SHELL = [
     './',
     './index.html',
     './css/pwa.css',
     './js/dexie.min.js',
     './js/pwa-db.js',
+    './js/hlc.js',
     './js/crypto-sync-bundle.js',
     './js/sync-bundle.js',
     './js/reb-aufmass.js',
@@ -24,6 +26,12 @@ const APP_SHELL = [
     '../controllers/MaengelController.js',
     './manifest.webmanifest'
 ];
+
+self.addEventListener('message', event => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+});
 
 // 1. Installation: App Shell vorab cachen
 self.addEventListener('install', event => {

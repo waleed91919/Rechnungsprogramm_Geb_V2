@@ -3839,6 +3839,29 @@
                     </div>
                 </div>
 
+                <!-- Einstellungen -> Ansicht & Fokusmodus (NAV-1, B-13) -->
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mt-2">
+                    <div class="flex items-start justify-between">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-outlined text-primary text-xl">filter_center_focus</span>
+                                <h3 class="text-sm font-bold text-slate-800">UI-Fokusmodus &amp; Modulsichtbarkeit</h3>
+                            </div>
+                            <p class="text-xs text-slate-500 max-w-xl">
+                                Der Fokusmodus reduziert die Seitennavigation auf den Kern-Workflow (Kunde → Angebot → Projekt/Aufmaß → Rechnung → OPOS → Export). Experimentelle Module (SOKA-BAU, IDS Connect, Mängelkataster, Putzplan) werden ausgeblendet.
+                            </p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="setting-experimental-module" class="sr-only peer" onchange="toggleExperimentalModules(this.checked)">
+                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        </label>
+                    </div>
+                    <div class="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                        <span>Aktiver Modus: <strong id="fokusmodus-status-text" class="text-slate-600 font-medium">Fokusmodus aktiv (Kern-Views)</strong></span>
+                        <span class="italic">Wirksam sofort für diesen Arbeitsplatz</span>
+                    </div>
+                </div>
+
                 <!-- Save Action -->
                 <div class="flex justify-end gap-3 mt-4 mb-12">
                     <button type="button" onclick="loadEinstellungenToForm()"

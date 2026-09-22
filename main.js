@@ -29,9 +29,41 @@ function createWindow() {
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
+            sandbox: true,
+            webSecurity: true,
+            allowRunningInsecureContent: false,
             preload: path.join(__dirname, 'preload.js')
         },
         show: false
+    });
+
+    // SEC-3 Guard 1: Sämtliche unautorisierten Fenster-Öffnungen (window.open, target=_blank) blockieren
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+        console.warn('[Security] Unerlaubter window.open Aufruf abgewiesen:', url);
+        return { action: 'deny' };
+    });
+
+    // SEC-3 Guard 2: Ungewollte Navigation des Hauptfensters verhindern (Single-Page-Integrität)
+    const { fileURLToPath } = require('url');
+    mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+        try {
+            const parsed = new URL(navigationUrl);
+            if (parsed.protocol === 'file:') {
+                const filePath = path.normalize(fileURLToPath(navigationUrl));
+                const expectedPath = path.normalize(path.join(__dirname, 'code.html'));
+                if (filePath === expectedPath) {
+                    return;
+                }
+            }
+        } catch (_) {}
+        event.preventDefault();
+        console.warn('[Security] will-navigate Navigation abgewiesen:', navigationUrl);
+    });
+
+    // SEC-3 Guard 3: Verhindern von Webview-Tags im Renderer
+    mainWindow.webContents.on('will-attach-webview', (event) => {
+        event.preventDefault();
+        console.warn('[Security] will-attach-webview Aufruf unterbunden.');
     });
 
     // Deutsche Menüleiste
@@ -243,10 +275,9 @@ function setupIpc() {
         return await dbAPI.updateDocumentStatus(id, patch);
     }));
 
-    // GoBD: Expliziter Freigabe-Weg für gesperrte Belege (audit-pflichtig)
+    // GOBD-2: GoBD-konformes Verbot jeglicher Beleg-Entsperrung
     ipcMain.handle('db:unlockDocument', wrapHandler(async (e, id, grund) => {
-        if (typeof id !== 'number') throw new Error('Ungültige Dokumenten-ID');
-        return await dbAPI.entsperreBeleg(id, grund);
+        throw new Error('GoBD-Verstoß: Entsperren von Belegen ist deaktiviert. Bitte erstellen Sie ein Storno.');
     }));
 
     // Atomares Storno: Original-Status + Gutschrift in einer Transaktion
@@ -1050,20 +1081,37 @@ function setupIpc() {
     ipcMain.handle('invoice:exportZugferdPdf', wrapHandler(async (event, payload = {}) => {
         const win = BrowserWindow.fromWebContents(event.sender);
         try {
-            const doc = payload.doc;
-            const customer = payload.customer || null;
-            if (!doc || typeof doc !== 'object' || !doc.nr) {
-                throw new Error('Ungültige Rechnungsdaten für den ZUGFeRD-Export.');
+            const docId = payload.docId || (payload.doc && payload.doc.id);
+            if (!docId || typeof docId !== 'number' || docId <= 0) {
+                throw new Error('ZUGFeRD-Export blockiert: Feld „Beleg-ID“ fehlt — Beleg erst speichern und festschreiben.');
             }
 
-            const profile = payload.profile === 'XRECHNUNG' ? 'XRECHNUNG' : 'EN16931';
+            // B-3: Belegfixierung - Lade maßgeblichen Datensatz direkt per SELECT aus SQLite
+            const dbDoc = dbAPI.getDocumentById ? dbAPI.getDocumentById(docId) : dbAPI.getDocumentWithChildren(docId);
+            if (!dbDoc) {
+                throw new Error(`ZUGFeRD-Export blockiert: Beleg #${docId} wurde in der Datenbank nicht gefunden.`);
+            }
+
             const EInvoiceEngine = require('./js/einvoice');
+            // B-9 & H-2: Export-Gate erzwingen
+            EInvoiceEngine.assertExportfaehigerBeleg(dbDoc);
+
+            // Integritätsprüfung gegen übergebenen Renderer-DOM-Stand
+            if (payload.doc && typeof payload.doc === 'object') {
+                if (Math.abs((parseFloat(payload.doc.netto) || 0) - (parseFloat(dbDoc.netto) || 0)) > 0.02 ||
+                    Math.abs((parseFloat(payload.doc.brutto) || 0) - (parseFloat(dbDoc.brutto) || 0)) > 0.02) {
+                    throw new Error('Integritätsfehler (B-3): Die Werte im Rechnungsformular weichen vom gespeicherten Beleg ab. Bitte Änderungen zuerst speichern oder verwerfen.');
+                }
+            }
+
+            const customer = (dbDoc.kundeId ? db.prepare('SELECT * FROM kunden WHERE id=?').get(dbDoc.kundeId) : null) || payload.customer || null;
+            const profile = payload.profile === 'XRECHNUNG' ? 'XRECHNUNG' : 'EN16931';
             const { ZugferdBuilder } = require('./main/zugferd-builder');
             const profileInfo = EInvoiceEngine.getZUGFeRDProfileInfo(profile);
 
             const fullState = await dbAPI.getFullState();
             const seller = { ...(fullState.einstellungen || {}), artikel: fullState.artikel || [] };
-            const xmlString = EInvoiceEngine.generateZUGFeRDXML(doc, customer, seller, { profile });
+            const xmlString = EInvoiceEngine.generateZUGFeRDXML(dbDoc, customer, seller, { profile });
 
             // Echte menschenlesbare Sichtseite: bevorzugt vom Renderer mitgeliefert,
             // sonst per printToPDF vom aufrufenden Fenster erfassen; bei jedem Fehler
@@ -1080,25 +1128,25 @@ function setupIpc() {
                 }
             }
 
-            const duePayableAmount = EInvoiceEngine.computeTotals(doc).duePayable;
+            const duePayableAmount = EInvoiceEngine.computeTotals(dbDoc).duePayable;
 
             const buffer = await ZugferdBuilder.build({
                 basePdfBuffer,
                 xmlString,
                 meta: {
-                    nr: doc.nr,
-                    datum: doc.datum,
+                    nr: dbDoc.nr,
+                    datum: dbDoc.datum,
                     sellerName: seller.firmenname || seller.name || '',
-                    empfaengerName: (customer && customer.name) || doc.customerName || '',
+                    empfaengerName: (customer && (customer.name || customer.firmenname)) || dbDoc.customerName || '',
                     duePayableAmount: duePayableAmount.toFixed(2),
                     conformanceLevel: profileInfo.conformanceLevel,
                     fileName: profileInfo.fileName,
-                    title: `Rechnung ${doc.nr}`
+                    title: `Rechnung ${dbDoc.nr}`
                 }
             });
 
             const { dialog } = require('electron');
-            const fileNameHint = String(payload.fileNameHint || `ZUGFeRD_${doc.nr}.pdf`).replace(/[\\/:*?"<>|]/g, '_');
+            const fileNameHint = String(payload.fileNameHint || `ZUGFeRD_${dbDoc.nr}.pdf`).replace(/[\\/:*?"<>|]/g, '_');
 
             const { filePath } = await dialog.showSaveDialog(win, {
                 title: 'ZUGFeRD-PDF (PDF/A-3) speichern',
@@ -1119,10 +1167,10 @@ function setupIpc() {
             // abgebrochen - unprotokollierte Belegausgaben sind unzulässig.
             appendAuditLog({
                 entityType: 'DOCUMENT',
-                entityId: typeof doc.id === 'number' ? doc.id : 0,
+                entityId: dbDoc.id,
                 action: 'ZUGFERD_EXPORT',
                 details: {
-                    nr: doc.nr,
+                    nr: dbDoc.nr,
                     profile,
                     fileName: path.basename(filePath),
                     bytes: buffer.length,
@@ -1145,25 +1193,42 @@ function setupIpc() {
     ipcMain.handle('invoice:exportXRechnungXml', wrapHandler(async (event, payload = {}) => {
         const win = BrowserWindow.fromWebContents(event.sender);
         try {
-            const doc = payload.doc;
-            const customer = payload.customer || null;
-            if (!doc || typeof doc !== 'object' || !doc.nr) {
-                throw new Error('Ungültige Rechnungsdaten für den XRechnung-Export.');
+            const docId = payload.docId || (payload.doc && payload.doc.id);
+            if (!docId || typeof docId !== 'number' || docId <= 0) {
+                throw new Error('XRechnung-Export blockiert: Feld „Beleg-ID“ fehlt — Beleg erst speichern und festschreiben.');
+            }
+
+            // B-3: Belegfixierung - Lade maßgeblichen Datensatz direkt per SELECT aus SQLite
+            const dbDoc = dbAPI.getDocumentById ? dbAPI.getDocumentById(docId) : dbAPI.getDocumentWithChildren(docId);
+            if (!dbDoc) {
+                throw new Error(`XRechnung-Export blockiert: Beleg #${docId} wurde in der Datenbank nicht gefunden.`);
             }
 
             const EInvoiceEngine = require('./js/einvoice');
+            // B-9 & H-2: Export-Gate erzwingen
+            EInvoiceEngine.assertExportfaehigerBeleg(dbDoc);
+
+            // Integritätsprüfung gegen übergebenen Renderer-DOM-Stand
+            if (payload.doc && typeof payload.doc === 'object') {
+                if (Math.abs((parseFloat(payload.doc.netto) || 0) - (parseFloat(dbDoc.netto) || 0)) > 0.02 ||
+                    Math.abs((parseFloat(payload.doc.brutto) || 0) - (parseFloat(dbDoc.brutto) || 0)) > 0.02) {
+                    throw new Error('Integritätsfehler (B-3): Die Werte im Rechnungsformular weichen vom gespeicherten Beleg ab. Bitte Änderungen zuerst speichern oder verwerfen.');
+                }
+            }
+
+            const customer = (dbDoc.kundeId ? db.prepare('SELECT * FROM kunden WHERE id=?').get(dbDoc.kundeId) : null) || payload.customer || null;
             const fullState = await dbAPI.getFullState();
             const seller = { ...(fullState.einstellungen || {}), artikel: fullState.artikel || [] };
 
-            const validation = EInvoiceEngine.validateForEN16931(doc, customer, seller);
+            const validation = EInvoiceEngine.validateForEN16931(dbDoc, customer, seller);
             if (!validation.isValid) {
                 focusWin(win);
                 return { success: false, validationErrors: validation.errors, error: validation.errors.join(' ') };
             }
 
-            const xmlString = EInvoiceEngine.generateXRechnungXML(doc, customer, seller);
+            const xmlString = EInvoiceEngine.generateXRechnungXML(dbDoc, customer, seller);
             const { dialog } = require('electron');
-            const fileNameHint = String(payload.fileNameHint || `XRechnung_${doc.nr}.xml`).replace(/[\\/:*?"<>|]/g, '_');
+            const fileNameHint = String(payload.fileNameHint || `XRechnung_${dbDoc.nr}.xml`).replace(/[\\/:*?"<>|]/g, '_');
 
             const { filePath } = await dialog.showSaveDialog(win, {
                 title: 'XRechnung XML (EN 16931) speichern',
@@ -1181,10 +1246,10 @@ function setupIpc() {
 
             appendAuditLog({
                 entityType: 'DOCUMENT',
-                entityId: typeof doc.id === 'number' ? doc.id : 0,
+                entityId: dbDoc.id,
                 action: 'XRECHNUNG_EXPORT',
                 details: {
-                    nr: doc.nr,
+                    nr: dbDoc.nr,
                     fileName: path.basename(filePath),
                     bytes: Buffer.byteLength(xmlString, 'utf-8'),
                     sha256: require('crypto').createHash('sha256').update(xmlString, 'utf-8').digest('hex')
@@ -1230,15 +1295,51 @@ function setupIpc() {
         return dbAPI.saveProjectKalkulationProfile(projektId, profileData);
     }));
 
-    // --- DATANORM 4.0 / 5.0 Streaming Import ---
+    // --- DATANORM 4.0 / 5.0 Streaming Import (SEC-5 gehärtet) ---
     ipcMain.handle('datanorm:startImport', wrapHandler(async (event, payload) => {
         const win = BrowserWindow.fromWebContents(event.sender);
+        const { filePaths, options } = payload || {};
+
+        if (!Array.isArray(filePaths) || filePaths.length === 0) {
+            throw new Error('Keine Dateipfade für den Import übergeben.');
+        }
+
+        const ALLOWED_EXTS = new Set(['.001', '.002', '.003', '.004', '.005', '.ans', '.art', '.dat', '.txt', '.csv', '.d81', '.d82', '.d83', '.d84', '.d85', '.d86']);
+        const validatedPaths = [];
+
+        for (const fp of filePaths) {
+            if (typeof fp !== 'string' || !fp.trim()) continue;
+            const resolved = path.resolve(fp.trim());
+            const ext = path.extname(resolved).toLowerCase();
+
+            if (!ALLOWED_EXTS.has(ext)) {
+                throw new Error(`Sicherheitsverstoß (SEC-5): Dateityp "${ext}" ist für DATANORM unzulässig.`);
+            }
+            if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+                throw new Error(`Datei nicht gefunden oder kein reguläres Dateiobjekt: ${path.basename(resolved)}`);
+            }
+
+            // Größen-Check (Schutz vor DoS durch übergroße Dateien > 250 MB)
+            const stat = fs.statSync(resolved);
+            if (stat.size > 250 * 1024 * 1024) {
+                throw new Error(`Datei ${path.basename(resolved)} überschreitet das Sicherheitslimit von 250 MB.`);
+            }
+
+            // Systemverzeichnis-Prüfung
+            const lower = resolved.toLowerCase();
+            if (lower.startsWith('c:\\windows') || lower.startsWith('/etc')) {
+                throw new Error(`Zugriff auf Systempfad verweigert: ${resolved}`);
+            }
+
+            validatedPaths.push(resolved);
+        }
+
         const progressCb = (progress) => {
             if (win && !win.isDestroyed()) {
                 win.webContents.send('datanorm:progress', progress);
             }
         };
-        return await dbAPI.startDatanormImport(payload, progressCb);
+        return await dbAPI.startDatanormImport({ filePaths: validatedPaths, options }, progressCb);
     }));
 
     ipcMain.handle('datanorm:getKataloge', wrapHandler(async (event, filter) => {
@@ -1303,8 +1404,8 @@ function setupIpc() {
         return dbAPI.saveZeiteintrag(data);
     }));
 
-    ipcMain.handle('zeiterfassung:delete', wrapHandler(async (event, id) => {
-        return dbAPI.deleteZeiteintrag(id);
+    ipcMain.handle('zeiterfassung:delete', wrapHandler(async (event, id, meta) => {
+        return dbAPI.deleteZeiteintrag(id, meta);
     }));
 
     ipcMain.handle('zeiterfassung:getMonatsauswertung', wrapHandler(async (event, { monat, jahr, mitarbeiterId }) => {
@@ -1429,14 +1530,24 @@ function setupIpc() {
     ipcMain.handle('ids:queryPriceAvailability', wrapHandler(async (event, { kontoId, itemNumbers }) => {
         const konto = dbAPI.getIdsKontoById(kontoId);
         if (!konto) throw new Error(`Großhandelskonto #${kontoId} nicht gefunden.`);
-        const items = (itemNumbers || []).map(num => ({
-            supplierItemNumber: num,
-            netPrice: 45.0,
-            grossPrice: 75.0,
-            availabilityStatus: 'IN_STOCK',
-            deliveryDays: 1
-        }));
-        return { success: true, items };
+
+        // Echte Schnittstellenprüfung statt Fake-Preise (MOCK-1)
+        if (!konto.price_service_url || !konto.api_key) {
+            return {
+                success: false,
+                error: 'PRICE_UNAVAILABLE',
+                message: 'Für dieses Großhandelskonto ist keine Webservice-Schnittstelle für Echtzeitpreise hinterlegt. Bitte Preise im Online-Shop prüfen.',
+                items: (itemNumbers || []).map(num => ({
+                    supplierItemNumber: num,
+                    netPrice: null,
+                    grossPrice: null,
+                    availabilityStatus: 'PRICE_UNAVAILABLE',
+                    deliveryDays: null
+                }))
+            };
+        }
+
+        return await idsConnectService.queryRealtimePrice(konto, itemNumbers);
     }));
 
     // --- Phase 4: SOKA-BAU / ZVK Meldedaten-Engine ---
@@ -1468,8 +1579,38 @@ function setupIpc() {
         return dbAPI.deleteSokaMeldung(id);
     }));
 
+    // SEC-4: Sicherer SOKA-Bau Datei-Export mit Pfad-Validierung
     ipcMain.handle('soka:exportFiles', wrapHandler(async (event, { meldungId, exportDir }) => {
-        return dbAPI.exportSokaFiles(meldungId, exportDir);
+        const win = BrowserWindow.fromWebContents(event.sender);
+        let targetDir = exportDir;
+
+        // Wenn kein Pfad angegeben wurde oder ungültig ist: Nativer Dialog
+        if (!targetDir || typeof targetDir !== 'string') {
+            const { dialog } = require('electron');
+            const result = await dialog.showOpenDialog(win, {
+                title: 'Zielordner für SOKA-BAU Export wählen',
+                properties: ['openDirectory', 'createDirectory']
+            });
+            if (result.canceled || result.filePaths.length === 0) {
+                return { canceled: true };
+            }
+            targetDir = result.filePaths[0];
+        }
+
+        // Path Traversal & Systemverzeichnis-Schutz
+        const resolvedPath = path.resolve(targetDir);
+        const normalizedPath = path.normalize(resolvedPath);
+        if (normalizedPath !== resolvedPath || normalizedPath.includes('..')) {
+            throw new Error('Sicherheitsverstoß (SEC-4): Unzulässiger Pfad mit Traversal-Sequenzen.');
+        }
+
+        // Verbot kritischer Systemverzeichnisse unter Windows/Linux
+        const lower = normalizedPath.toLowerCase();
+        if (lower.startsWith('c:\\windows') || lower.startsWith('c:\\program files') || lower.startsWith('/etc') || lower.startsWith('/bin')) {
+            throw new Error('Sicherheitsverstoß: Export in Systemverzeichnisse ist untersagt.');
+        }
+
+        return dbAPI.exportSokaFiles(meldungId, normalizedPath);
     }));
 
     // --- Phase 4: Nachunternehmer Compliance & § 14 AEntG ---
@@ -1516,26 +1657,43 @@ function setupIpc() {
     }
 }
 
+// DB-3 Fix: Deterministischer Shutdown-Lifecycle mit event.preventDefault()
 let isQuittingApp = false;
 app.on('before-quit', async (event) => {
     if (isQuittingApp) return;
+
+    // Beenden unterbrechen, um asynchrone Sicherungen sauber abzuschließen
+    event.preventDefault();
+
     try {
+        console.log('[App Shutdown] Bereite geordnetes Beenden vor...');
         if (syncServerInstance) {
             await syncServerInstance.stop();
         }
-    } catch (_syncStopErr) { }
 
-    try {
         const { db, dbAPI } = require('./db');
-        const autoExitRow = db.prepare("SELECT value FROM einstellungen WHERE key='backup_auto_on_exit'").get();
-        if (!autoExitRow || autoExitRow.value === 'true' || autoExitRow.value === '1') {
-            console.log('[Auto-Backup] Erstelle Sicherung beim Beenden der Anwendung...');
-            await dbAPI.createBackup('AUTO_SHUTDOWN', 'Automatisches Backup beim Beenden der Anwendung');
+        if (db && db.open) {
+            const autoExitRow = db.prepare("SELECT value FROM einstellungen WHERE key='backup_auto_on_exit'").get();
+            if (!autoExitRow || autoExitRow.value === 'true' || autoExitRow.value === '1') {
+                console.log('[Auto-Backup] Erstelle Shutdown-Sicherung...');
+                await dbAPI.createBackup('AUTO_SHUTDOWN', 'Automatisches Backup beim Beenden der Anwendung');
+            }
+
+            // WAL Checkpoint ausführen und DB vor Exit ordentlich schließen
+            try {
+                db.pragma('wal_checkpoint(TRUNCATE)');
+                db.close();
+                console.log('[App Shutdown] Datenbank handles ordentlich geschlossen.');
+            } catch (closeErr) {
+                console.warn('[App Shutdown] DB close warning:', closeErr.message);
+            }
         }
-    } catch (e) {
-        console.warn('[Auto-Backup on Exit] Warnung:', e.message);
+    } catch (err) {
+        console.error('[App Shutdown Fehler]:', err.message);
+    } finally {
+        isQuittingApp = true;
+        app.quit(); // Nun regulär beenden
     }
-    isQuittingApp = true;
 });
 
 app.whenReady().then(() => {

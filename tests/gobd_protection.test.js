@@ -124,15 +124,15 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
         await t.test('(a) Inhaltsänderung an gesperrtem Beleg wirft', async () => {
             await assert.rejects(
                 () => dbAPI.saveDocument(baseDoc({ id: docId, isLocked: true, brutto: 999 })),
-                /gesperrt/i
+                /sperr|fixiert|GoBD/i
             );
             await assert.rejects(
                 () => dbAPI.saveDocument(baseDoc({ id: docId, isLocked: true, nr: 'RE-GEAENDERT' })),
-                /gesperrt/i
+                /sperr|fixiert|GoBD/i
             );
             await assert.rejects(
                 () => dbAPI.saveDocument(baseDoc({ id: docId, isLocked: true, positionen: [{ name: 'Neu', menge: 2, einheit: 'Stk.', preis: 50, mwst: 19 }] })),
-                /gesperrt/i
+                /sperr|fixiert|GoBD/i
             );
             // Nichts durfte geschrieben werden
             assert.equal(getRow(docId).brutto, 119);
@@ -141,7 +141,7 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
         await t.test('Entsperren via saveDocument (isLocked:true->false) wird abgelehnt', async () => {
             await assert.rejects(
                 () => dbAPI.saveDocument(baseDoc({ id: docId, isLocked: false })),
-                /entsperren|Freigabe/i
+                /entsperren|Freigabe|Aufheben der Sperre|GoBD/i
             );
             assert.equal(getRow(docId).isLocked, 1);
         });
@@ -160,10 +160,10 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             full.positionen = db.prepare('SELECT * FROM positionen WHERE dokumentId=?').all(docId);
             full.verrechnungen = [];
             full.isLocked = true;
-            full.status = 'Storniert';
+            full.status = 'Gemahnt';
             await dbAPI.saveDocument(full);
             row = getRow(docId);
-            assert.equal(row.status, 'Storniert');
+            assert.equal(row.status, 'Gemahnt');
             assert.equal(row.isLocked, 1);
         });
 
@@ -172,32 +172,27 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             assert.ok(getRow(docId), 'Gesperrter Beleg darf nicht gelöscht werden');
         });
 
-        await t.test('(d) entsperreBeleg: ohne Begründung wirft, mit Begründung frei + Audit', async () => {
-            await assert.rejects(() => dbAPI.entsperreBeleg(docId), /Begründung/i);
-            await assert.rejects(() => dbAPI.entsperreBeleg(docId, '   '), /Begründung/i);
-
-            const res = await dbAPI.entsperreBeleg(docId, 'Test-Freigabe nach Klärung');
-            assert.ok(res.success);
-            assert.equal(res.alreadyUnlocked, false);
-            assert.equal(getRow(docId).isLocked, 0);
-
-            const auditEntry = db.prepare("SELECT * FROM audit_logs WHERE action='ENTSPERRT' ORDER BY id DESC LIMIT 1").get();
-            assert.ok(auditEntry, 'ENTSPERRT muss audit-protokolliert sein');
-            const details = JSON.parse(auditEntry.details);
-            assert.equal(details.grund, 'Test-Freigabe nach Klärung');
-            assert.equal(details.nr, 'RE-GOBD-001');
+        await t.test('(d) entsperreBeleg: GOBD-2 Sperre — Entsperren festgeschriebener Belege ist unzulässig', async () => {
+            await assert.rejects(
+                () => dbAPI.entsperreBeleg(docId, 'Test-Freigabe nach Klärung'),
+                /GoBD-Verstoß|unzulässig|Storno/i
+            );
+            assert.equal(getRow(docId).isLocked, 1);
         });
 
-        await t.test('Nach Entsperrung sind Inhaltsänderungen wieder möglich', async () => {
-            await dbAPI.saveDocument(baseDoc({
-                id: docId,
-                isLocked: false,
-                netto: 200,
-                steuer: 38,
-                brutto: 238,
-                positionen: [{ name: 'Testleistung', menge: 2, einheit: 'Stk.', preis: 100, mwst: 19 }]
-            }));
-            assert.equal(getRow(docId).brutto, 238);
+        await t.test('Gesperrter Beleg bleibt nach Entsperrversuch unverändert geschützt', async () => {
+            await assert.rejects(
+                () => dbAPI.saveDocument(baseDoc({
+                    id: docId,
+                    isLocked: false,
+                    netto: 200,
+                    steuer: 38,
+                    brutto: 238,
+                    positionen: [{ name: 'Testleistung', menge: 2, einheit: 'Stk.', preis: 100, mwst: 19 }]
+                })),
+                /GoBD|gesperrt|unzulässig/i
+            );
+            assert.equal(getRow(docId).brutto, 119);
         });
 
         await t.test('deleteDocument: Ungesperrter Entwurf bleibt löschbar + Audit GELÖSCHT', async () => {
@@ -227,7 +222,7 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
                     baseDoc({ id: lockedId, isLocked: true, brutto: 555 }),
                     baseDoc({ nr: 'RE-BULK-NEW' })
                 ]),
-                /gesperrt/i
+                /gesperrt|fixiert|GoBD/i
             );
             // Transaktion muss vollständig zurückgerollt sein
             assert.equal(db.prepare('SELECT COUNT(*) AS c FROM dokumente WHERE nr=?').get('RE-BULK-NEW').c, 0, 'Neuer Beleg darf bei Rollback nicht existieren');
@@ -256,6 +251,9 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             const result = dbAPI.verifiziereAuditKette();
             assert.equal(result.valid, true, 'Kette nach mehreren Mutationen muss gültig sein: ' + JSON.stringify(result.errors));
             assert.ok(result.checked >= 8, `Es müssen mehrere Einträge geprüft werden (war: ${result.checked})`);
+
+            // DDL-Trigger temporär entfernen um externe DB-Manipulation zu simulieren
+            db.exec('DROP TRIGGER IF EXISTS trg_prevent_audit_logs_update');
 
             // Manipulation eines Eintrags -> Kette ungültig
             const victim = db.prepare('SELECT id FROM audit_logs ORDER BY id ASC LIMIT 1').get();

@@ -1,3 +1,13 @@
+function escapeHtml(text) {
+    if (text === null || text === undefined) return '';
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
 // Objektverwaltung (F1): Rendering & Interaktion
 const OBJEKT_TYP_LABEL = {
     LIEGENSCHAFT: 'Liegenschaft',
@@ -107,7 +117,7 @@ function renderObjekte(filterQuery) {
         tdName.className = 'px-4 align-middle cursor-pointer hover:text-primary transition-colors';
         const einzug = '&nbsp;&nbsp;&nbsp;&nbsp;'.repeat(ebene);
         const pfeil = ebene > 0 ? '<span class="text-slate-300 mr-1">' + '▸'.repeat(Math.min(ebene, 3)) + '</span>' : '';
-        tdName.innerHTML = `${einzug}${pfeil}<span class="${ebene === 0 ? 'font-semibold text-slate-800' : 'font-medium'}">${knoten.name}</span>`;
+        tdName.innerHTML = `${einzug}${pfeil}<span class="${ebene === 0 ? 'font-semibold text-slate-800' : 'font-medium'}">${escapeHtml(knoten.name)}</span>`;
         tdName.onclick = () => openObjektDetails(typ, knoten.id);
         tr.appendChild(tdName);
 
@@ -127,7 +137,7 @@ function renderObjekte(filterQuery) {
         if (empf && empf.kundeId) {
             const kunde = (state.kunden || []).find(k => k.id === empf.kundeId);
             const geerbt = !empf.direkt;
-            tdEmpf.innerHTML = `<span class="font-medium">${kunde ? kunde.name : '#' + empf.kundeId}</span>
+            tdEmpf.innerHTML = `<span class="font-medium">${escapeHtml(kunde ? kunde.name : '#' + empf.kundeId)}</span>
                 <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${empf.art ? 'bg-slate-100 text-slate-600 border border-slate-200' : 'hidden'}">${empf.art ? (OBJEKT_ART_LABEL[empf.art] || empf.art) : ''}</span>
                 <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-yellow-100 text-yellow-800 border border-yellow-200 ${geerbt ? '' : 'hidden'}">geerbt</span>`;
         } else {
@@ -576,11 +586,11 @@ async function refreshObjektDetails() {
     if (empf && empf.kundeId) {
         const artLabel = empf.art ? ` · ${OBJEKT_ART_LABEL[empf.art] || empf.art}` : '';
         if (empf.quelle === 'DIREKT') {
-            empfEl.innerHTML = `<span class="material-symbols-outlined text-[16px]">domain</span> Rechnungsempfänger: ${empf.name || '#' + empf.kundeId}${artLabel}
+            empfEl.innerHTML = `<span class="material-symbols-outlined text-[16px]">domain</span> Rechnungsempfänger: ${escapeHtml(empf.name || '#' + empf.kundeId)}${artLabel}
                 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-600 border border-slate-200">direkt</span>`;
         } else {
             const quelleLabel = empf.quelle.replace('GEERBT_VON_', '');
-            empfEl.innerHTML = `<span class="material-symbols-outlined text-[16px]">domain</span> Rechnungsempfänger: ${empf.name || '#' + empf.kundeId}${artLabel}
+            empfEl.innerHTML = `<span class="material-symbols-outlined text-[16px]">domain</span> Rechnungsempfänger: ${escapeHtml(empf.name || '#' + empf.kundeId)}${artLabel}
                 <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-yellow-100 text-yellow-800 border border-yellow-200">geerbt von ${OBJEKT_TYP_LABEL[quelleLabel] || quelleLabel}</span>`;
         }
     } else {

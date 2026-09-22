@@ -173,7 +173,61 @@ test('T-R26: _isDateWithinDays ist fail-closed - kein Skonto-Match ohne belastba
     assert.ok(!res || res.matchType !== 'SKONTO_DISCOUNT_MATCH', 'Ohne Belegdatum darf kein SKONTO_DISCOUNT_MATCH entstehen');
 });
 
+test('OPOS-1: Isolierte Jahreszahl (2026) im Verwendungszweck führt zu keinem Fehlmatch', () => {
+    const tx = {
+        id: 10,
+        buchungstag: '2026-08-10',
+        betrag: 500.00,
+        partner_name: 'Unbekannter Mieter',
+        verwendungszweck: 'Miete fuer August 2026'
+    };
+
+    const openInvoices = [
+        {
+            id: 105,
+            nr: 'RE-2026-0042',
+            datum: '2026-08-01',
+            faellig: '2026-08-15',
+            brutto: 500.00,
+            bezahlt_betrag: 0,
+            offener_betrag: 500.00,
+            kunde_name: 'Gamma Bau GmbH'
+        }
+    ];
+
+    const match = BankingController.matchTransaction(tx, openInvoices, []);
+    assert.equal(match, null, 'Isolierte Jahreszahl 2026 darf RE-2026-0042 nicht matchen');
+});
+
+test('OPOS-2: Valider Match mit Rechnungsnummer trotz enthaltener Jahreszahl', () => {
+    const tx = {
+        id: 11,
+        buchungstag: '2026-08-10',
+        betrag: 500.00,
+        partner_name: 'Gamma Bau GmbH',
+        verwendungszweck: 'Ausgleich Rechnung RE-2026-0042'
+    };
+
+    const openInvoices = [
+        {
+            id: 105,
+            nr: 'RE-2026-0042',
+            datum: '2026-08-01',
+            faellig: '2026-08-15',
+            brutto: 500.00,
+            bezahlt_betrag: 0,
+            offener_betrag: 500.00,
+            kunde_name: 'Gamma Bau GmbH'
+        }
+    ];
+
+    const match = BankingController.matchTransaction(tx, openInvoices, []);
+    assert.ok(match, 'Exakter Belegnummer-Match muss gefunden werden');
+    assert.equal(match.dokumentId, 105);
+});
+
 if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
+
     let extraStdoutPromise = null;
 
     function starteElectronInner(markerArg) {

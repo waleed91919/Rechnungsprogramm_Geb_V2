@@ -40,7 +40,10 @@ test('baueTransportOptionen: Port 465 erzwingt secure:true; 587 bleibt STARTTLS;
     assert.equal(o587.secure, false);
     const o587s = baueTransportOptionen({ host: 'x', port: 587, secure: true });
     assert.equal(o587s.secure, true);
+    assert.equal(o587.requireTLS, true, 'STARTTLS-Port 587 muss requireTLS: true erzwingen');
+    assert.equal(o465.requireTLS, false, 'Port 465 (SSL) benötigt kein requireTLS');
     for (const o of [o465, o587]) {
+
         assert.equal(o.connectionTimeout, 15000);
         assert.equal(o.greetingTimeout, 15000);
         assert.equal(o.socketTimeout, 30000);

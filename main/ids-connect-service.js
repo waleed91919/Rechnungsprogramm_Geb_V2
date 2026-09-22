@@ -103,19 +103,24 @@ class IDSConnectService {
     }
 
     /**
-     * Validiert eine Session.
+     * Validiert eine Session unter striktem CSRF-Zwang (SEC-2).
      */
-    validateSession(sessionId, csrfToken = null) {
-        if (!sessionId) return false;
+    validateSession(sessionId, csrfToken) {
+        if (!sessionId || !csrfToken) {
+            return false;
+        }
         const session = this.activeSessions.get(sessionId);
-        if (!session) return false;
-
-        // Wenn ein CSRF-Token übergeben wurde, verifiziere ihn strikt
-        if (csrfToken && session.csrfToken && csrfToken !== session.csrfToken) {
+        if (!session || !session.csrfToken) {
             return false;
         }
 
-        return true;
+        const tokenA = Buffer.from(String(csrfToken));
+        const tokenB = Buffer.from(String(session.csrfToken));
+        if (tokenA.length !== tokenB.length) {
+            return false;
+        }
+        const crypto = require('crypto');
+        return crypto.timingSafeEqual(tokenA, tokenB);
     }
 
     /**
@@ -123,11 +128,34 @@ class IDSConnectService {
      */
     _handleHttpRequest(req, res) {
         const reqUrl = new URL(req.url, `http://127.0.0.1:${this.boundPort}`);
+        const originHeader = req.headers['origin'] || req.headers['referer'] || '';
 
-        // CORS Headers für Cross-Origin POSTs aus Browser-Webshops
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        // Ermittle zulässigen Shop-Origin anhand der aktiven Sessions
+        let allowedOrigin = null;
+        for (const sess of this.activeSessions.values()) {
+            if (sess.shopUrl) {
+                try {
+                    const parsedOrigin = new URL(sess.shopUrl).origin;
+                    if (originHeader.startsWith(parsedOrigin)) {
+                        allowedOrigin = parsedOrigin;
+                        break;
+                    }
+                } catch (_) {}
+            }
+        }
+
+        // SEC-2 Fix: Verbot von Wildcard CORS '*'
+        if (allowedOrigin) {
+            res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+            res.setHeader('Vary', 'Origin');
+        } else {
+            res.setHeader('Access-Control-Allow-Origin', 'null');
+        }
+
+        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Requested-With');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('X-Frame-Options', 'DENY');
 
         if (req.method === 'OPTIONS') {
             res.writeHead(200);
@@ -153,6 +181,14 @@ class IDSConnectService {
                     } else if (body.startsWith('xml=')) {
                         const params = new URLSearchParams(body);
                         xmlPayload = params.get('xml') || body;
+                    }
+
+                    // SEC-2: Strikte CSRF- und Session-Validierung
+                    if (!this.validateSession(sessionId, csrfToken)) {
+                        console.warn('[IDS-Connect Security] Ungültige Session oder ungültiges CSRF-Token abgelehnt:', sessionId);
+                        res.writeHead(403, { 'Content-Type': 'application/json; charset=utf-8' });
+                        res.end(JSON.stringify({ error: 'CSRF-Prüfung fehlgeschlagen oder ungültige Session' }));
+                        return;
                     }
 
                     // XML dekodieren falls URL-encoded
@@ -313,14 +349,24 @@ class IDSConnectService {
             csrfToken
         });
 
-        // Falls Electron verfügbar ist, öffne externen Browser
+        // SEC-1: Sicheres Öffnen externer Browserfenster mit strikter Validierung
         try {
             const { shell } = require('electron');
             if (shell && typeof shell.openExternal === 'function') {
+                const parsed = new URL(launchUrl);
+                if (parsed.protocol !== 'https:') {
+                    throw new Error(`Ungültiges Protokoll: ${parsed.protocol}. Nur HTTPS erlaubt.`);
+                }
+                // Verhindere Ausführung gefährlicher Windows-Protokoll-Handler
+                const dangerousPatterns = /^(file|ms-|cmd|powershell|cscript|wscript|reg|javascript|data):/i;
+                if (dangerousPatterns.test(launchUrl)) {
+                    throw new Error(`Potentiell gefährlicher URL-Handler blockiert: ${launchUrl}`);
+                }
                 await shell.openExternal(launchUrl);
             }
-        } catch (_e) {
-            // Ausführung außerhalb von Electron (z. B. im Test)
+        } catch (err) {
+            console.error('[IDS-Connect Security] shell.openExternal abgefangen:', err.message);
+            throw new Error(`Externer Webshop konnte aus Sicherheitsgründen nicht geöffnet werden: ${err.message}`);
         }
 
         return {

@@ -56,14 +56,14 @@ class SokaBauController {
                 mindestlohn2: 16.50
             },
             OST: {
-                ulak: 12.10,
-                zvk: 0.80,
+                ulak: 14.70,
+                zvk: 1.70,
                 bbv: 1.45,
                 winterbauAg: 0.60,
                 winterbauAn: 0.40,
-                urlaubsverguetungSatz: 11.40,
+                urlaubsverguetungSatz: 14.25,
                 mindestlohn1: 14.35,
-                mindestlohn2: 14.35
+                mindestlohn2: 16.50
             },
             BERLIN_WEST: {
                 ulak: 15.05,
@@ -341,8 +341,8 @@ class SokaBauController {
         const bnr = String(betrieb.betriebsnummer || betrieb.soka_betriebsnummer || '00000000').padEnd(8, ' ').slice(0, 8);
         const bName = String(betrieb.firmenname || betrieb.name || 'W-Link Bau GmbH').padEnd(30, ' ').slice(0, 30);
 
-        // 1. Satzart 01 - Betriebssatz (Header)
-        lines.push(`01${bnr}${cleanMonat}${bName}${dateNow}${' '.repeat(40)}`);
+        // 1. Satzart 01 - Betriebssatz (Header: genau 100 Zeichen)
+        lines.push(`01${bnr}${cleanMonat}${bName}${dateNow}${' '.repeat(46)}`.padEnd(100, ' ').slice(0, 100));
 
         let summeBrutto = 0;
         let summeBeitrag = 0;
@@ -363,19 +363,20 @@ class SokaBauController {
             const beitrag = String(Math.round(m.beitraege.gesamtBeitrag * 100)).padStart(8, '0').slice(0, 8);
             const erstattung = String(Math.round(m.urlaub.ulakErstattungsanspruch * 100)).padStart(8, '0').slice(0, 8);
 
-            lines.push(`02${bnr}${cleanMonat}${anNr}${vsnr}${nameStr}${tage}${std}${brutto}${beitrag}${erstattung}`);
+            // Satzart 02: genau 100 Zeichen
+            lines.push(`02${bnr}${cleanMonat}${anNr}${vsnr}${nameStr}${tage}${std}${brutto}${beitrag}${erstattung}`.padEnd(100, ' ').slice(0, 100));
 
-            // Satzart 03 - Ausfallzeiten
+            // Satzart 03 - Ausfallzeiten (genau 100 Zeichen mit 51 Leerzeichen)
             (m.ausfallzeiten || []).forEach(af => {
                 const schluessel = String(af.schluessel || '01').padStart(2, '0').slice(0, 2);
                 const von = String(af.von || af.von_datum || '').replace(/[^0-9]/g, '').padEnd(8, '0').slice(0, 8);
                 const bis = String(af.bis || af.bis_datum || '').replace(/[^0-9]/g, '').padEnd(8, '0').slice(0, 8);
                 const afStd = String(Math.round((parseFloat(af.stunden) || 0) * 100)).padStart(5, '0').slice(0, 5);
-                lines.push(`03${bnr}${cleanMonat}${anNr}${schluessel}${von}${bis}${afStd}`);
+                lines.push(`03${bnr}${cleanMonat}${anNr}${schluessel}${von}${bis}${afStd}${' '.repeat(51)}`.padEnd(100, ' ').slice(0, 100));
             });
         });
 
-        // 3. Satzart 09 - Summensatz (Trailer)
+        // 3. Satzart 09 - Summensatz (Trailer: genau 100 Zeichen mit 39 Leerzeichen)
         const anzahlAn = String(monatsMeldungen.length).padStart(5, '0').slice(0, 5);
         const sumBruttoStr = String(Math.round(summeBrutto * 100)).padStart(10, '0').slice(0, 10);
         const sumBeitragStr = String(Math.round(summeBeitrag * 100)).padStart(10, '0').slice(0, 10);
@@ -383,7 +384,7 @@ class SokaBauController {
         const zahlbetragVal = Math.max(0, Math.round((summeBeitrag - summeErstattung) * 100));
         const zahlbetragStr = String(zahlbetragVal).padStart(10, '0').slice(0, 10);
 
-        lines.push(`09${bnr}${cleanMonat}${anzahlAn}${sumBruttoStr}${sumBeitragStr}${sumErstattungStr}${zahlbetragStr}`);
+        lines.push(`09${bnr}${cleanMonat}${anzahlAn}${sumBruttoStr}${sumBeitragStr}${sumErstattungStr}${zahlbetragStr}${' '.repeat(39)}`.padEnd(100, ' ').slice(0, 100));
 
         return lines.join('\r\n');
     }

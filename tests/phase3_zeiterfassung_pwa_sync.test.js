@@ -480,7 +480,11 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             assert.strictEqual(syncServer.getOpenConflicts().length, 0);
 
             // 6. Large-Blob Streaming Foto-Upload
-            const photoBuffer = Buffer.from('FAKE_IMAGE_DATA_1234567890');
+            const webpHeader = Buffer.from([
+                0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
+                0x56, 0x50, 0x38, 0x20, 0x18, 0x00, 0x00, 0x00
+            ]);
+            const photoBuffer = Buffer.concat([webpHeader, Buffer.from('FAKE_IMAGE_DATA_1234567890')]);
             const photoSha = crypto.createHash('sha256').update(photoBuffer).digest('hex');
             const photoUuid = ZeiterfassungController.generateUUID();
 

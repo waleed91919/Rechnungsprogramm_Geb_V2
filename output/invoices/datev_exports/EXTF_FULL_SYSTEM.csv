@@ -1,4 +1,4 @@
-"EXTF";700;21;"Buchungsstapel";9;;;"W-LINK ERP";"";"";1;20260910001400;;;;"EUR";;;;;
-"Umsatz (ohne Soll/Haben-Kz)";"Soll/Haben-Kennzeichen";"Konto";"Gegenkonto (ohne BU-Schlüssel)";"BU-Schlüssel";"Belegdatum";"Belegfeld 1";"Buchungstext"
-"1190,00";"H";"8400";"10001";"";"1007";"RE-2026-001";"Rechnung RE-2026-001 - Privatkunde"
-"5000,00";"H";"8337";"10002";"19";"1507";"RE-2026-002";"Rechnung RE-2026-002 - Baupartner GmbH"
+"EXTF";700;21;"Buchungsstapel";13;20260922220044179;"";"RE";"";"";1001;10001;20260101;4;20260710;20260715;"Rechnungsstapel W-Link ERP";"";1;0;0;"EUR";"";"";"";"";"03";"";"";"";""
+"Umsatz (ohne Soll/Haben-Kz)";"Soll/Haben-Kennzeichen";"WKZ Umsatz";"Kurs";"Basis-Umsatz";"WKZ Basis-Umsatz";"Konto";"Gegenkonto (ohne BU-Schlüssel)";"BU-Schlüssel";"Belegdatum";"Belegfeld 1";"Belegfeld 2";"Skonto";"Buchungstext"
+"1190,00";"H";"EUR";"";"1190,00";"EUR";"8400";"10001";"";"1007";"RE-2026-001";"";"";"Rechnung RE-2026-001 - Privatkunde"
+"5000,00";"H";"EUR";"";"5000,00";"EUR";"8337";"10002";"19";"1507";"RE-2026-002";"";"";"Rechnung RE-2026-002 - Baupartner GmbH"

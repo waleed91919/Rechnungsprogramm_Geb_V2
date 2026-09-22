@@ -47,6 +47,17 @@ function loadEinstellungenToForm() {
         renderSmtpKonten();
     }
 
+    // UI-Fokusmodus & Modulsichtbarkeit (NAV-1, B-13)
+    const expCb = document.getElementById('setting-experimental-module');
+    if (expCb) {
+        const isExp = state.einstellungen.experimental_module === true ||
+                      state.einstellungen.experimental_module === 'true' ||
+                      state.einstellungen.experimental_module === 1 ||
+                      state.einstellungen.experimental_module === '1';
+        expCb.checked = isExp;
+        updateFokusmodusStatusLabel(isExp);
+    }
+
     const previewImg = document.getElementById('logo-preview-image');
     const btnRemove = document.getElementById('btn-remove-logo');
     if (state.einstellungen.logo) {
@@ -99,6 +110,11 @@ async function saveEinstellungen() {
         state.einstellungen.email_pdf_kopie_speichern = document.getElementById('setting-email-pdf-kopie').checked ? 'true' : 'false';
     }
 
+    const expCb = document.getElementById('setting-experimental-module');
+    if (expCb) {
+        state.einstellungen.experimental_module = expCb.checked ? 'true' : 'false';
+    }
+
     try {
         await window.api.saveEinstellung('firmenname', state.einstellungen.firmenname);
         await window.api.saveEinstellung('adresse', state.einstellungen.adresse);
@@ -130,21 +146,18 @@ async function saveEinstellungen() {
         if (state.einstellungen.backup_auto_on_exit !== undefined) {
             await window.api.saveEinstellung('backup_auto_on_exit', state.einstellungen.backup_auto_on_exit);
         }
-        if (state.einstellungen.rechnungsvorlage) {
-            await window.api.saveEinstellung('rechnungsvorlage', state.einstellungen.rechnungsvorlage);
-        }
-        if (state.einstellungen.eingabemodus) {
-            await window.api.saveEinstellung('eingabemodus', state.einstellungen.eingabemodus);
-        }
-        if (state.einstellungen.unternehmensart) {
-            await window.api.saveEinstellung('unternehmensart', state.einstellungen.unternehmensart);
-        }
         if (document.getElementById('setting-email-text-rechnung')) {
             await window.api.saveEinstellung('email_text_rechnung', state.einstellungen.email_text_rechnung);
             await window.api.saveEinstellung('email_text_mahnung', state.einstellungen.email_text_mahnung);
             await window.api.saveEinstellung('email_text_angebot', state.einstellungen.email_text_angebot);
             await window.api.saveEinstellung('email_signatur', state.einstellungen.email_signatur);
             await window.api.saveEinstellung('email_pdf_kopie_speichern', state.einstellungen.email_pdf_kopie_speichern);
+        }
+        if (expCb) {
+            await window.api.saveEinstellung('experimental_module', state.einstellungen.experimental_module);
+            if (typeof applyFocusMode === 'function') {
+                applyFocusMode();
+            }
         }
         if (state.einstellungen.logo) {
             await window.api.saveEinstellung('logo', state.einstellungen.logo);
@@ -160,6 +173,30 @@ async function saveEinstellungen() {
     } catch (e) {
         console.error('Error saving settings:', e);
         showToast('Fehler beim Speichern der Einstellungen.', 'error');
+    }
+}
+
+function toggleExperimentalModules(checked) {
+    if (typeof state !== 'undefined') {
+        if (!state.einstellungen) state.einstellungen = {};
+        state.einstellungen.experimental_module = checked ? 'true' : 'false';
+    }
+    updateFokusmodusStatusLabel(checked);
+    if (typeof applyFocusMode === 'function') {
+        applyFocusMode();
+    }
+}
+
+function updateFokusmodusStatusLabel(isExp) {
+    const label = document.getElementById('fokusmodus-status-text');
+    if (label) {
+        if (isExp) {
+            label.textContent = 'Alle Module sichtbar (Experten-Modus)';
+            label.className = 'text-indigo-600 font-bold';
+        } else {
+            label.textContent = 'Fokusmodus aktiv (Kern-Views)';
+            label.className = 'text-slate-600 font-medium';
+        }
     }
 }
 

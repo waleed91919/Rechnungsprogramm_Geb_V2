@@ -15,8 +15,25 @@ class IDSConnectController {
             throw new Error('Ungültiges Großhandelskonto: Keine Shop-URL konfiguriert.');
         }
 
-        const baseUrl = konto.shop_url.trim();
-        const url = new URL(baseUrl);
+        const baseUrl = String(konto.shop_url).trim();
+        let url;
+        try {
+            url = new URL(baseUrl);
+        } catch (err) {
+            throw new Error(`Ungültige Shop-URL: "${baseUrl}" ist keine wohlgeformte URL.`);
+        }
+
+        // SEC-1: Strenger HTTPS-Zwang für externe Großhandelsschnittstellen
+        if (url.protocol !== 'https:') {
+            throw new Error(`Sicherheitsverstoß (SEC-1): Protokoll "${url.protocol}" ist nicht zulässig. Großhandels-Shops müssen zwingend über HTTPS (https://) angebunden werden.`);
+        }
+
+        // Hostnamen-Validierung (Verbot von Localhost/IP-Loopback für externe Webshops)
+        const cleanHost = (url.hostname || '').replace(/^\[|\]$/g, '').toLowerCase();
+        if (!cleanHost || cleanHost === 'localhost' || cleanHost === '127.0.0.1' || cleanHost === '::1' || cleanHost === '0.0.0.0') {
+            throw new Error('Sicherheitsverstoß: Lokale Adressen sind als Großhandels-Webshop unzulässig.');
+        }
+
         const params = url.searchParams;
 
         // IDS 2.5 Standard-Parameter (ITEK / BVBS / ZVSHK)

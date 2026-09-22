@@ -312,9 +312,9 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             assert.equal(res.verrechnungenSummeNetto, 100.56, 'Verrechnungssumme muss auf Cent gerundet werden');
             assert.equal(res.anzahlung, 12.35, 'Anzahlung muss auf Cent gerundet werden');
             assert.equal(res.sicherheitseinbehaltNetto, 50.00, 'Einbehalt 5% von 999.99 -> 50.00');
-            assert.equal(res.totalTax, 170.89);
-            assert.equal(res.bruttoNachRabatt, 1070.32);
-            assert.equal(res.zahlbetrag, 1007.97);
+            assert.equal(res.totalTax, 190.00, 'Steuer 19% von 999.99 -> 190.00 (Steuerbasis ungemindert)');
+            assert.equal(res.bruttoNachRabatt, 1189.99, 'Brutto = Netto (999.99) + Steuer (190.00)');
+            assert.equal(res.zahlbetrag, 1007.98, 'Zahlbetrag = Brutto (1189.99) - Anzahlung (12.35) - Einbehalt (50.00) - Verrechnung brutto (119.66)');
         });
 
         await t.test('(d5) §13b-Kombination bleibt korrekt gerundet', () => {

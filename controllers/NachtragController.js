@@ -98,23 +98,28 @@ class NachtragController {
      * Filtert alle genehmigten Nachträge eines Projekts und bereitet sie als Rechnungspositionen vor.
      */
     static extractApprovedPositionsForInvoice(nachtraege = []) {
-        const approvedNachtraege = nachtraege.filter(n => n.status === 'GENEHMIGT');
+        const approvedNachtraege = (nachtraege || []).filter(n => n.status === 'GENEHMIGT');
         const invoicePositions = [];
 
         for (const n of approvedNachtraege) {
-            for (const p of (n.positionen || [])) {
+            const posList = n.positionen || [];
+            posList.forEach((p, idx) => {
+                const posId = p.id !== undefined && p.id !== null ? p.id : (p.pos_nr || (idx + 1));
+
                 invoicePositions.push({
-                    name: `[${n.nachtrag_nr}] ${p.kurztext}`,
-                    oz_code: p.oz_code || n.nachtrag_nr,
-                    menge: p.menge,
+                    name: `[${n.nachtrag_nr}] ${p.kurztext || p.bezeichnung || 'Nachtragsposition'}`,
+                    oz_code: p.oz_code || p.oz || n.nachtrag_nr,
+                    menge: parseFloat(p.menge) || 0,
                     einheit: p.einheit || 'Stk.',
-                    preis: p.einheitspreis,
+                    preis: parseFloat(p.einheitspreis) || 0,
                     cost_type: p.cost_type || 'MATERIAL',
+                    mwst: p.mwst !== undefined ? p.mwst : 19,
                     is_supplement: true,
                     nachtrag_id: n.id,
+                    nachtrag_pos_id: posId,
                     nachtrag_nr: n.nachtrag_nr
                 });
-            }
+            });
         }
 
         return invoicePositions;
