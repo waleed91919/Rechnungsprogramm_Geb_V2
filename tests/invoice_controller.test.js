@@ -337,3 +337,265 @@ test('calculateTotals - sicherheitseinbehaltProzent calculation with custom perc
     assert.strictEqual(res.bruttoNachRabatt, 2380);
     assert.strictEqual(res.zahlbetrag, 2180); // 2380 brutto - 200 sicherheitseinbehalt
 });
+
+test('P0-3: calculateTotals - §13b Vorranglogik (Global vs. Positionsflag)', () => {
+    // 1. Global 13b ohne Positionsflag: Positionen erben standardmäßig 13b (0% Reverse Charge)
+    const resGlobal = InvoiceController.calculateTotals({
+        mode: 'netto',
+        isGlobal13b: true,
+        positionen: [
+            { menge: 1, preis: 500, mwst: 19 },
+            { menge: 2, preis: 250, mwst: 7 }
+        ]
+    });
+    assert.strictEqual(resGlobal.positionenNetto, 1000);
+    assert.strictEqual(resGlobal.totals13bNetto, 1000, 'Alle Positionen müssen dem 13b-Netto zugeordnet sein');
+    assert.strictEqual(resGlobal.totalsNormalNetto, 0);
+    assert.strictEqual(resGlobal.totalTax, 0, 'Globaler 13b-Beleg darf standardmäßig keine Steuer ausweisen');
+    assert.strictEqual(resGlobal.bruttoNachRabatt, 1000);
+    assert.strictEqual(resGlobal.taxBreakdown.length, 0);
+
+    // 2. Global false, aber Pos 1 hat is13b: true (Mischbeleg)
+    const resMischNormal = InvoiceController.calculateTotals({
+        mode: 'netto',
+        isGlobal13b: false,
+        positionen: [
+            { menge: 1, preis: 400, mwst: 19, is13b: true },
+            { menge: 1, preis: 600, mwst: 19 } // normal
+        ]
+    });
+    assert.strictEqual(resMischNormal.positionenNetto, 1000);
+    assert.strictEqual(resMischNormal.totals13bNetto, 400);
+    assert.strictEqual(resMischNormal.totalsNormalNetto, 600);
+    assert.strictEqual(resMischNormal.totalTax, 114); // 19% von 600
+    assert.strictEqual(resMischNormal.bruttoNachRabatt, 1114);
+
+    // 3. Global true, aber Pos 1 weicht explizit mit is13b: false ab
+    const resMisch13bGlobal = InvoiceController.calculateTotals({
+        mode: 'netto',
+        isGlobal13b: true,
+        positionen: [
+            { menge: 1, preis: 300, mwst: 19, is13b: false }, // weicht ab -> normale Besteuerung
+            { menge: 1, preis: 700, mwst: 19 }                 // erbt global 13b
+        ]
+    });
+    assert.strictEqual(resMisch13bGlobal.positionenNetto, 1000);
+    assert.strictEqual(resMisch13bGlobal.totalsNormalNetto, 300);
+    assert.strictEqual(resMisch13bGlobal.totals13bNetto, 700);
+    assert.strictEqual(resMisch13bGlobal.totalTax, 57); // 19% von 300
+    assert.strictEqual(resMisch13bGlobal.bruttoNachRabatt, 1057);
+});
+
+test('K1-4: Leitweg-ID ISO 7064 MOD 97-10 Prüfziffernberechnung & Validierung', () => {
+    // 1. Prüfziffern-Berechnung
+    const pz1 = InvoiceController.computeLeitwegIdChecksum('04011000-1234567890');
+    assert.strictEqual(pz1, '17', 'Prüfziffer für 04011000-1234567890 muss 17 sein');
+
+    const pz2 = InvoiceController.computeLeitwegIdChecksum('991-12345678');
+    assert.strictEqual(pz2, '30', 'Prüfziffer für 991-12345678 muss 30 sein');
+
+    // 2. Gültige IDs
+    assert.strictEqual(InvoiceController.validateLeitwegId('04011000-1234567890-17').valid, true);
+    assert.strictEqual(InvoiceController.validateLeitwegId('991-12345678-30').valid, true);
+
+    // 3. Ungültige Prüfziffer
+    const invalidCheck = InvoiceController.validateLeitwegId('991-12345678-12');
+    assert.strictEqual(invalidCheck.valid, false);
+    assert.ok(invalidCheck.message.includes('Ungültige Prüfziffer'), 'Verständliche Fehlermeldung erwartet');
+    assert.ok(invalidCheck.message.includes('Erwartet: 30'), 'Erwartete Prüfziffer muss genannt werden');
+
+    // 4. B2G Validierung in validateSaveDocument
+    const docB2GValid = {
+        kundeId: 10,
+        customer_type: 'B2G',
+        leitweg_id: '991-12345678-30',
+        positionen: [{ name: 'Leistung', menge: 1, preis: 100 }]
+    };
+    assert.strictEqual(InvoiceController.validateSaveDocument(docB2GValid).valid, true);
+
+    const docB2GInvalid = {
+        kundeId: 10,
+        customer_type: 'B2G',
+        leitweg_id: '991-12345678-99',
+        positionen: [{ name: 'Leistung', menge: 1, preis: 100 }]
+    };
+    const resSaveInvalid = InvoiceController.validateSaveDocument(docB2GInvalid);
+    assert.strictEqual(resSaveInvalid.valid, false);
+    assert.ok(resSaveInvalid.message.includes('Ungültige Leitweg-ID'));
+});
+
+test('P0-4: createStornoData erzeugt Storno-Typ und Ursprungsreferenz', () => {
+    const original = {
+        id: 42,
+        nr: 'RE-2026-0042',
+        datum: '2026-08-10',
+        kundeId: 7,
+        netto: 500,
+        brutto: 595,
+        positionen: [{ name: 'Pos 1', menge: 1, preis: 500, mwst: 19 }]
+    };
+    const { updatedOriginal, stornoDoc, stornoNr } = InvoiceController.createStornoData(original);
+    assert.strictEqual(stornoDoc.typ, 'STORNO');
+    assert.strictEqual(stornoDoc.rechnungsart, 'STORNO');
+    assert.strictEqual(stornoDoc.isStorno, true);
+    assert.strictEqual(stornoDoc.storno_zu_nr, 'RE-2026-0042');
+    assert.strictEqual(stornoDoc.storno_zu_datum, '2026-08-10');
+    assert.strictEqual(stornoNr, 'STORNO - RE-2026-0042');
+    assert.strictEqual(updatedOriginal.status, 'Storniert');
+});
+
+test('P0-3: B2G-Gate härten - B2G-Rechnung mit ungültiger oder fehlender Leitweg-ID wird abgelehnt', () => {
+    const EInvoiceEngine = require('../js/einvoice.js');
+
+    // 1. In InvoiceController.validateSaveDocument: buyer_reference reicht nicht als Ersatz für BT-10 Leitweg-ID
+    const docB2GOnlyBuyerRef = {
+        kundeId: 10,
+        customer_type: 'B2G',
+        buyer_reference: 'BESTELLUNG-9988',
+        positionen: [{ name: 'Leistung', menge: 1, preis: 100 }]
+    };
+    const resOnlyBuyerRef = InvoiceController.validateSaveDocument(docB2GOnlyBuyerRef);
+    assert.strictEqual(resOnlyBuyerRef.valid, false);
+    assert.ok(resOnlyBuyerRef.message.includes('Leitweg-ID'), 'Muss Leitweg-ID fordern und nicht buyer_reference akzeptieren');
+
+    // 2. Ungültige Prüfziffer bei validateSaveDocument
+    const docB2GInvalidLid = {
+        kundeId: 10,
+        customer_type: 'B2G',
+        leitweg_id: '991-12345678-99',
+        buyer_reference: 'BESTELLUNG-9988',
+        positionen: [{ name: 'Leistung', menge: 1, preis: 100 }]
+    };
+    const resInvalidLid = InvoiceController.validateSaveDocument(docB2GInvalidLid);
+    assert.strictEqual(resInvalidLid.valid, false);
+    assert.ok(resInvalidLid.message.includes('Ungültige Leitweg-ID'));
+
+    // 3. EInvoiceEngine.buildCII / generateXRechnungXML wirft echten Fehler bei B2G ohne / mit ungültiger Leitweg-ID
+    const invB2G = {
+        id: 1,
+        status: 'Festgeschrieben',
+        isLocked: 1,
+        nr: 'RE-2026-B2G',
+        datum: '2026-08-01',
+        customer_type: 'B2G',
+        leitweg_id: '991-12345678-99', // ungültig
+        positionen: [{ name: 'Leistung', menge: 1, preis: 100 }]
+    };
+    const custB2G = { name: 'Behörde Berlin', ort: 'Berlin', customer_type: 'B2G' };
+    const seller = { firmenname: 'Bau GmbH', ort: 'Berlin', iban: 'DE123', ustId: 'DE123' };
+
+    assert.throws(() => {
+        EInvoiceEngine.generateXRechnungXML(invB2G, custB2G, seller);
+    }, /Leitweg-ID.*ungültig/);
+
+    const invB2GMissing = { ...invB2G, leitweg_id: '', buyer_reference: 'BESTELLUNG-123' };
+    assert.throws(() => {
+        EInvoiceEngine.generateXRechnungXML(invB2GMissing, custB2G, seller);
+    }, /Leitweg-ID fehlt/);
+
+    // 4. Gültige Leitweg-ID passiert sowohl Validierung als auch Export
+    const docB2GValid = {
+        ...invB2G,
+        kundeId: 10,
+        leitweg_id: '991-12345678-30'
+    };
+    assert.strictEqual(InvoiceController.validateSaveDocument(docB2GValid).valid, true);
+    assert.doesNotThrow(() => {
+        EInvoiceEngine.generateXRechnungXML(docB2GValid, custB2G, seller);
+    });
+});
+
+test('P0-4: § 13b Harmonisierung - isGlobal13b und unterliegt_13b werden einheitlich ausgewertet', () => {
+    const EInvoiceEngine = require('../js/einvoice.js');
+
+    const invGlobalFlag = {
+        unterliegt_13b: 1,
+        positionen: [{ name: 'Dachdeckerarbeiten', menge: 1, preis: 1000 }]
+    };
+    const invGlobalAlias = {
+        isGlobal13b: true,
+        positionen: [{ name: 'Dachdeckerarbeiten', menge: 1, preis: 1000 }]
+    };
+
+    const catFlag = EInvoiceEngine.resolvePositionCategory(invGlobalFlag, invGlobalFlag.positionen[0]);
+    const catAlias = EInvoiceEngine.resolvePositionCategory(invGlobalAlias, invGlobalAlias.positionen[0]);
+    assert.strictEqual(catFlag, 'AE', 'unterliegt_13b muss Steuercode AE liefern');
+    assert.strictEqual(catAlias, 'AE', 'isGlobal13b Alias muss ebenfalls Steuercode AE liefern');
+
+    const totFlag = InvoiceController.calculateTotals({ mode: 'netto', unterliegt_13b: true, positionen: [{ menge: 1, preis: 1000, mwst: 19 }] });
+    const totAlias = InvoiceController.calculateTotals({ mode: 'netto', isGlobal13b: true, positionen: [{ menge: 1, preis: 1000, mwst: 19 }] });
+    assert.strictEqual(totFlag.totalTax, 0);
+    assert.strictEqual(totAlias.totalTax, 0);
+    assert.strictEqual(totFlag.totals13bNetto, 1000);
+    assert.strictEqual(totAlias.totals13bNetto, 1000);
+});
+
+test('§ 13b Vorranglogik greift auch bei Rechnungsvorschau und Belegdruck', () => {
+    // Vorranglogik gem. js/einstellungen.js (Zeilen 493-494, 565-566, 1548):
+    // const global13b = Boolean(rech.unterliegt_13b || rech.isGlobal13b);
+    // const isPos13b = (pos.is13b !== undefined && pos.is13b !== null) ? Boolean(pos.is13b) : global13b;
+    // Vorschau MwSt: isPos13b ? '0%' : `${pos.mwst}%`;
+
+    const getPreviewMwstText = (rech, pos) => {
+        const global13b = Boolean(rech.unterliegt_13b || rech.isGlobal13b);
+        const isPos13b = (pos.is13b !== undefined && pos.is13b !== null) ? Boolean(pos.is13b) : global13b;
+        return isPos13b ? '0%' : `${pos.mwst}%`;
+    };
+
+    const rechGlobal = {
+        unterliegt_13b: true,
+        positionen: [
+            { name: 'Leistung ohne Positionsflag', menge: 1, preis: 500, mwst: 19 },
+            { name: 'Leistung mit explizitem is13b: false', menge: 1, preis: 200, mwst: 19, is13b: false }
+        ]
+    };
+
+    // 1. Rechnungsvorschau-Logik:
+    // - global gesetzt, Position ohne Flag -> 0% MwSt
+    assert.strictEqual(
+        getPreviewMwstText(rechGlobal, rechGlobal.positionen[0]),
+        '0%',
+        'Rechnungsvorschau: Position ohne Flag erbt globales 13b und muss 0% MwSt ausweisen'
+    );
+
+    // - Position explizit false trotz global -> Standard-MwSt
+    assert.strictEqual(
+        getPreviewMwstText(rechGlobal, rechGlobal.positionen[1]),
+        '19%',
+        'Rechnungsvorschau: Position mit is13b: false trotz global 13b muss Standard-MwSt (19%) ausweisen'
+    );
+
+    // 2. Gegenprobe mit isGlobal13b Alias:
+    const rechAlias = {
+        isGlobal13b: true,
+        positionen: [
+            { name: 'Leistung ohne Positionsflag', menge: 1, preis: 300, mwst: 7 },
+            { name: 'Leistung mit explizitem is13b: false', menge: 1, preis: 400, mwst: 19, is13b: false }
+        ]
+    };
+    assert.strictEqual(getPreviewMwstText(rechAlias, rechAlias.positionen[0]), '0%');
+    assert.strictEqual(getPreviewMwstText(rechAlias, rechAlias.positionen[1]), '19%');
+
+    // 3. Controller-Ebene spiegelt genau diese Vorschau-Werte wider
+    const totals = InvoiceController.calculateTotals({
+        mode: 'netto',
+        unterliegt_13b: true,
+        positionen: rechGlobal.positionen
+    });
+    assert.strictEqual(totals.processedPositions[0].pos13b, true);
+    assert.strictEqual(totals.processedPositions[0].tax, 0);
+    assert.strictEqual(totals.processedPositions[1].pos13b, false);
+    assert.strictEqual(totals.processedPositions[1].tax, 38);
+
+    // 4. Source-Code Regression-Check:
+    // Verifiziere, dass js/einstellungen.js nirgendwo mehr die alte UND-Logik verwendet
+    const fs = require('fs');
+    const path = require('path');
+    const einstellungenCode = fs.readFileSync(path.join(__dirname, '../js/einstellungen.js'), 'utf-8');
+    assert.ok(
+        !einstellungenCode.includes('rech.unterliegt_13b && pos.is13b'),
+        'Veraltete UND-Logik (rech.unterliegt_13b && pos.is13b) darf in js/einstellungen.js nicht mehr vorkommen'
+    );
+});
+
+

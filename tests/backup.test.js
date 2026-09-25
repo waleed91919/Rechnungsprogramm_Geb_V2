@@ -49,6 +49,7 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
     // -------------------------------------------------------------------------
     const Database = require('better-sqlite3');
     const BackupService = require('../main/backup');
+    const { createSchema, runMigrations } = require('../schema');
 
     test('1. Erstellung eines Online-Snapshots mit Gzip-Kompression & SHA-256 Hash', async () => {
         const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wlink-backup-test-1-'));
@@ -56,24 +57,10 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
         const backupDir = path.join(testDir, 'backups');
 
         const testDb = new Database(dbPath);
-        testDb.exec(`
-            PRAGMA journal_mode = WAL;
-            CREATE TABLE IF NOT EXISTS kunden (id INTEGER PRIMARY KEY, name TEXT);
-            CREATE TABLE IF NOT EXISTS backup_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                dateiname TEXT NOT NULL,
-                dateipfad TEXT NOT NULL,
-                trigger_typ TEXT NOT NULL,
-                file_size_bytes INTEGER NOT NULL,
-                uncompressed_size_bytes INTEGER,
-                sha256_hash TEXT NOT NULL,
-                gfs_generation TEXT DEFAULT 'S',
-                status TEXT DEFAULT 'SUCCESS',
-                bemerkung TEXT,
-                erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
-            INSERT INTO kunden (name) VALUES ('Musterbau GmbH'), ('Handwerk Partner AG');
-        `);
+        testDb.pragma('journal_mode = WAL');
+        createSchema(testDb);
+        runMigrations(testDb);
+        testDb.prepare("INSERT INTO kunden (id, name) VALUES (1, 'Musterbau GmbH'), (2, 'Handwerk Partner AG')").run();
 
         const backupService = new BackupService(testDb, {
             dbPath,
@@ -93,7 +80,11 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
         const row = testDb.prepare('SELECT * FROM backup_history WHERE id = ?').get(result.backupId);
         assert.ok(row, 'Eintrag in backup_history muss existieren');
         assert.strictEqual(row.sha256_hash, result.sha256);
-        assert.strictEqual(row.trigger_typ, 'MANUAL');
+        assert.strictEqual(row.trigger_type, 'MANUAL');
+        assert.strictEqual(row.integrity_status, 'OK');
+        assert.strictEqual(row.retention_category, result.category);
+        assert.ok(row.dateigroesse_bytes > 0, 'dateigroesse_bytes muss > 0 sein');
+        assert.ok(row.dateigroesse_komprimiert_bytes > 0, 'dateigroesse_komprimiert_bytes muss > 0 sein');
 
         testDb.close();
         fs.rmSync(testDir, { recursive: true, force: true });
@@ -105,24 +96,10 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
         const backupDir = path.join(testDir, 'backups');
 
         const testDb = new Database(dbPath);
-        testDb.exec(`
-            PRAGMA journal_mode = WAL;
-            CREATE TABLE IF NOT EXISTS kunden (id INTEGER PRIMARY KEY, name TEXT);
-            CREATE TABLE IF NOT EXISTS backup_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                dateiname TEXT NOT NULL,
-                dateipfad TEXT NOT NULL,
-                trigger_typ TEXT NOT NULL,
-                file_size_bytes INTEGER NOT NULL,
-                uncompressed_size_bytes INTEGER,
-                sha256_hash TEXT NOT NULL,
-                gfs_generation TEXT DEFAULT 'S',
-                status TEXT DEFAULT 'SUCCESS',
-                bemerkung TEXT,
-                erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
-            INSERT INTO kunden (name) VALUES ('Musterbau GmbH');
-        `);
+        testDb.pragma('journal_mode = WAL');
+        createSchema(testDb);
+        runMigrations(testDb);
+        testDb.prepare("INSERT INTO kunden (id, name) VALUES (1, 'Musterbau GmbH')").run();
 
         const backupService = new BackupService(testDb, {
             dbPath,
@@ -131,6 +108,13 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
         });
 
         const createRes = await backupService.createBackup('AUTO_INTERVAL', 'Test Intervall');
+        assert.ok(createRes.backupId > 0, 'AUTO_INTERVAL Backup muss erfolgreich in backup_history angelegt werden');
+
+        const row = testDb.prepare('SELECT * FROM backup_history WHERE id = ?').get(createRes.backupId);
+        assert.ok(row, 'Eintrag in backup_history muss existieren');
+        assert.strictEqual(row.trigger_type, 'AUTO_INTERVAL');
+        assert.strictEqual(row.integrity_status, 'OK');
+
         const verifyRes = await backupService.verifyBackup(createRes.backupId);
 
         assert.strictEqual(verifyRes.valid, true, 'Backup muss als valide verifiziert werden');
@@ -154,24 +138,10 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
         const backupDir = path.join(testDir, 'backups');
 
         const testDb = new Database(dbPath);
-        testDb.exec(`
-            PRAGMA journal_mode = WAL;
-            CREATE TABLE IF NOT EXISTS kunden (id INTEGER PRIMARY KEY, name TEXT);
-            CREATE TABLE IF NOT EXISTS backup_history (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                dateiname TEXT NOT NULL,
-                dateipfad TEXT NOT NULL,
-                trigger_typ TEXT NOT NULL,
-                file_size_bytes INTEGER NOT NULL,
-                uncompressed_size_bytes INTEGER,
-                sha256_hash TEXT NOT NULL,
-                gfs_generation TEXT DEFAULT 'S',
-                status TEXT DEFAULT 'SUCCESS',
-                bemerkung TEXT,
-                erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
-            );
-            INSERT INTO kunden (name) VALUES ('Original Kunde 1'), ('Original Kunde 2');
-        `);
+        testDb.pragma('journal_mode = WAL');
+        createSchema(testDb);
+        runMigrations(testDb);
+        testDb.prepare("INSERT INTO kunden (id, name) VALUES (1, 'Original Kunde 1'), (2, 'Original Kunde 2')").run();
 
         const backupService = new BackupService(testDb, {
             dbPath,

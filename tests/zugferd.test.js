@@ -469,3 +469,118 @@ test('Z13: Sicherheitseinbehalt erzeugt BT-20- und BT-22-Notizen sowie korrekte 
     assert.ok(xml.includes('<ram:TotalPrepaidAmount>595.00</ram:TotalPrepaidAmount>'), 'TotalPrepaidAmount muss Einbehalt enthalten');
     assert.ok(xml.includes('<ram:DuePayableAmount>11305.00</ram:DuePayableAmount>'), 'DuePayableAmount muss GrandTotal - Einbehalt sein');
 });
+
+test('Z14: Storno-Rechnung erzeugt TypeCode 381 und InvoiceReferencedDocument (BT-25 / BT-26)', () => {
+    const stornoInv = {
+        id: 304,
+        nr: 'STORNO - RE-2026-0001',
+        typ: 'STORNO',
+        isStorno: true,
+        storno_zu_nr: 'RE-2026-0001',
+        storno_zu_datum: '2026-08-01',
+        datum: '2026-08-15',
+        faellig: '2026-08-15',
+        netto: -1000,
+        steuer: -190,
+        brutto: -1190,
+        status: 'Festgeschrieben',
+        isLocked: 1,
+        positionen: [
+            { name: 'Stornierte Bauleistung', menge: -1, preis: 1000, mwst: 19 }
+        ]
+    };
+    const xml = EInvoiceEngine.generateZUGFeRDXML(stornoInv, customer, seller);
+
+    assert.ok(xml.includes('<ram:TypeCode>381</ram:TypeCode>'), 'Stornorechnung muss TypeCode 381 tragen');
+    assert.ok(xml.includes('<ram:InvoiceReferencedDocument>'), 'InvoiceReferencedDocument fehlt bei Storno');
+    assert.ok(xml.includes('<ram:IssuerAssignedID>RE-2026-0001</ram:IssuerAssignedID>'), 'BT-25 Ursprungsrechnungsnummer fehlt');
+    assert.ok(xml.includes('<qdt:DateTimeString format="102">20260801</qdt:DateTimeString>'), 'BT-26 Ursprungsrechnungsdatum fehlt');
+});
+
+test('Z15: ActualDeliverySupplyChainEvent (BT-72) und BillingSpecifiedPeriod (BT-73/74)', () => {
+    const invPeriod = {
+        id: 305,
+        nr: 'RE-PERIOD-TEST',
+        datum: '2026-08-31',
+        faellig: '2026-09-30',
+        leistungszeitraum_von: '2026-08-01',
+        leistungszeitraum_bis: '2026-08-31',
+        netto: 2000,
+        steuer: 380,
+        brutto: 2380,
+        status: 'Festgeschrieben',
+        isLocked: 1,
+        positionen: [
+            { name: 'Monatliche Wartungsarbeiten', menge: 1, preis: 2000, mwst: 19 }
+        ]
+    };
+    const xml = EInvoiceEngine.generateZUGFeRDXML(invPeriod, customer, seller);
+
+    // BT-72 Delivery date
+    assert.ok(xml.includes('<ram:ActualDeliverySupplyChainEvent>'), 'ActualDeliverySupplyChainEvent fehlt');
+    assert.ok(xml.includes('<ram:OccurrenceDateTime>'), 'OccurrenceDateTime fehlt');
+    assert.ok(xml.includes('<udt:DateTimeString format="102">20260801</udt:DateTimeString>'), 'BT-72 Lieferdatum/Leistungsdatum fehlt');
+
+    // BT-73/74 BillingSpecifiedPeriod
+    assert.ok(xml.includes('<ram:BillingSpecifiedPeriod>'), 'BillingSpecifiedPeriod fehlt');
+    assert.ok(xml.includes('<ram:StartDateTime>'), 'StartDateTime fehlt');
+    assert.ok(xml.includes('<ram:EndDateTime>'), 'EndDateTime fehlt');
+    assert.ok(xml.includes('<udt:DateTimeString format="102">20260831</udt:DateTimeString>'), 'BT-74 Enddatum fehlt');
+});
+
+test('Z16: B2G Verkäuferkontakt (KoSIT BR-DE-5/6/7, BT-34/BG-6)', () => {
+    const sellerWithContact = {
+        ...seller,
+        kontakt_name: 'Max Mustermann (Projektleiter)',
+        telefon: '+49 30 12345678',
+        email: 'rechnung@musterbau.de'
+    };
+    const xml = EInvoiceEngine.generateZUGFeRDXML(invoice, customer, sellerWithContact);
+
+    assert.ok(xml.includes('<ram:DefinedTradeContact>'), 'DefinedTradeContact fehlt');
+    assert.ok(xml.includes('<ram:PersonName>Max Mustermann (Projektleiter)</ram:PersonName>'), 'BT-41 PersonName fehlt');
+    assert.ok(xml.includes('<ram:CompleteNumber>+49 30 12345678</ram:CompleteNumber>'), 'BT-42 Telefonnummer fehlt');
+    assert.ok(xml.includes('<ram:URIID>rechnung@musterbau.de</ram:URIID>'), 'BT-43 E-Mail fehlt');
+});
+
+test('Z17: Skonto-Konditionen (BT-20 & ApplicableTradePaymentDiscountTerms BG-20)', () => {
+    const invSkonto = {
+        ...invoice,
+        skonto_tage: 14,
+        skonto_prozent: 2.0
+    };
+    const xml = EInvoiceEngine.generateZUGFeRDXML(invSkonto, customer, seller);
+
+    assert.ok(xml.includes('2% Skonto innerhalb von 14 Tagen'), 'BT-20 Skonto-Text fehlt');
+    assert.ok(xml.includes('<ram:ApplicableTradePaymentDiscountTerms>'), 'BG-20 DiscountTerms fehlen');
+    assert.ok(xml.includes('<ram:BasisPeriodMeasure unitCode="DAY">14</ram:BasisPeriodMeasure>'), 'Skonto Tage fehlen');
+    assert.ok(xml.includes('<ram:CalculationPercent>2.00</ram:CalculationPercent>'), 'Skonto Prozent fehlen');
+});
+
+test('Z18: Leitweg-ID ISO 7064 MOD 97-10 Validierung in E-Rechnung', () => {
+    // Gültige ID
+    assert.strictEqual(EInvoiceEngine.validateLeitwegId('04011000-1234567890-17').valid, true);
+    assert.strictEqual(EInvoiceEngine.validateLeitwegId('991-12345678-30').valid, true);
+
+    // Ungültige Prüfziffer
+    const invalid = EInvoiceEngine.validateLeitwegId('991-12345678-12');
+    assert.strictEqual(invalid.valid, false);
+    assert.ok(invalid.message.includes('Ungültige Prüfziffer'));
+    assert.ok(invalid.message.includes('Erwartet: 30'));
+
+    // B2G-Validierung
+    const b2gValid = EInvoiceEngine.validateForEN16931(
+        invoice,
+        { ...customer, customer_type: 'B2G', leitweg_id: '991-12345678-30' },
+        seller
+    );
+    assert.strictEqual(b2gValid.isValid, true);
+
+    const b2gInvalid = EInvoiceEngine.validateForEN16931(
+        invoice,
+        { ...customer, customer_type: 'B2G', leitweg_id: '991-12345678-12' },
+        seller
+    );
+    assert.strictEqual(b2gInvalid.isValid, false);
+    assert.ok(b2gInvalid.errors.some(e => e.includes('Ungültige Prüfziffer')));
+});

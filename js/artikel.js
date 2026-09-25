@@ -49,9 +49,14 @@ function renderArtikel(filterQuery = '') {
         tdKat.textContent = item.katalog || '-';
         tr.appendChild(tdKat);
 
+        const tdEinheit = document.createElement('td');
+        tdEinheit.className = 'px-4 py-3 text-center text-slate-600 text-xs font-medium';
+        tdEinheit.textContent = item.einheit || 'Stk.';
+        tr.appendChild(tdEinheit);
+
         const tdBestand = document.createElement('td');
         tdBestand.className = 'px-4 py-3 text-right font-mono ' + (item.bestand < 5 ? 'text-amber-500 font-bold' : 'text-slate-600');
-        tdBestand.textContent = `${item.bestand !== undefined ? item.bestand : 0} Stk.`;
+        tdBestand.textContent = `${item.bestand !== undefined ? item.bestand : 0} ${item.einheit || 'Stk.'}`;
         tr.appendChild(tdBestand);
 
         const tdVk = document.createElement('td');
@@ -66,6 +71,7 @@ function renderArtikel(filterQuery = '') {
         btnEdit.onclick = () => openArtikelModal(item.id);
         btnEdit.className = 'text-slate-400 hover:text-primary p-1 mx-1 transition-colors';
         btnEdit.title = 'Bearbeiten';
+        btnEdit.setAttribute('aria-label', `Artikel ${item.name || item.id} bearbeiten`);
         const spanEdit = document.createElement('span');
         spanEdit.className = 'material-symbols-outlined text-[18px]';
         spanEdit.textContent = 'edit';
@@ -76,6 +82,7 @@ function renderArtikel(filterQuery = '') {
         btnDel.onclick = () => deleteArtikel(item.id);
         btnDel.className = 'text-slate-400 hover:text-red-500 p-1 mx-1 transition-colors';
         btnDel.title = 'Löschen';
+        btnDel.setAttribute('aria-label', `Artikel ${item.name || item.id} löschen`);
         const spanDel = document.createElement('span');
         spanDel.className = 'material-symbols-outlined text-[18px]';
         spanDel.textContent = 'delete';
@@ -118,6 +125,8 @@ function renderArtikelBilderPreview() {
 
         const btn = document.createElement('button');
         btn.type = 'button';
+        btn.setAttribute('aria-label', 'Artikelbild entfernen');
+        btn.title = 'Artikelbild entfernen';
         btn.onclick = (e) => removeArtikelBild(index, e);
         btn.className = 'absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity';
 
@@ -186,11 +195,23 @@ function openArtikelModal(id = null) {
         document.getElementById('artikel-mwst').value = item.mwst;
         document.getElementById('artikel-katalog').value = item.katalog || '';
         document.getElementById('artikel-lieferant').value = item.lieferant || '';
+        const einheitEl = document.getElementById('artikel-einheit');
+        if (einheitEl) einheitEl.value = item.einheit || 'Stk.';
         document.getElementById('artikel-bestand').value = item.bestand !== undefined ? item.bestand : 0;
         document.getElementById('artikel-beschreibung').value = item.beschreibung || '';
         document.getElementById('artikel-ist-bauleistung').checked = !!item.ist_bauleistung;
         document.getElementById('artikel-kostenart').value = item.kostenart || 'MATERIAL';
         document.getElementById('artikel-lohnanteil').value = item.lohnanteil_prozent || 0;
+        const hNameEl = document.getElementById('artikel-hersteller-name');
+        if (hNameEl) hNameEl.value = item.hersteller_name || '';
+        const hKontaktEl = document.getElementById('artikel-hersteller-kontakt');
+        if (hKontaktEl) hKontaktEl.value = item.hersteller_kontakt || '';
+        const chargeEl = document.getElementById('artikel-charge-seriennummer');
+        if (chargeEl) chargeEl.value = item.charge_seriennummer || '';
+        const euRespEl = document.getElementById('artikel-eu-verantwortlicher');
+        if (euRespEl) euRespEl.value = item.eu_verantwortlicher || '';
+        const warnEl = document.getElementById('artikel-warnhinweis');
+        if (warnEl) warnEl.value = item.warnhinweis || '';
 
         renderArtikelBilderPreview();
     } else {
@@ -200,9 +221,21 @@ function openArtikelModal(id = null) {
         document.getElementById('artikel-id').value = '';
         // defaults
         document.getElementById('artikel-bestand').value = 0;
+        const einheitEl = document.getElementById('artikel-einheit');
+        if (einheitEl) einheitEl.value = 'Stk.';
         document.getElementById('artikel-ist-bauleistung').checked = false;
         document.getElementById('artikel-kostenart').value = 'MATERIAL';
         document.getElementById('artikel-lohnanteil').value = 0;
+        const hNameEl = document.getElementById('artikel-hersteller-name');
+        if (hNameEl) hNameEl.value = '';
+        const hKontaktEl = document.getElementById('artikel-hersteller-kontakt');
+        if (hKontaktEl) hKontaktEl.value = '';
+        const chargeEl = document.getElementById('artikel-charge-seriennummer');
+        if (chargeEl) chargeEl.value = '';
+        const euRespEl = document.getElementById('artikel-eu-verantwortlicher');
+        if (euRespEl) euRespEl.value = '';
+        const warnEl = document.getElementById('artikel-warnhinweis');
+        if (warnEl) warnEl.value = '';
 
         renderArtikelBilderPreview();
     }
@@ -240,10 +273,16 @@ async function saveArtikel() {
     const mwst = parseInt(document.getElementById('artikel-mwst').value);
     const katalog = document.getElementById('artikel-katalog').value;
     const lieferant = document.getElementById('artikel-lieferant').value;
+    const einheit = document.getElementById('artikel-einheit')?.value || 'Stk.';
     const bestand = parseInt(document.getElementById('artikel-bestand').value) || 0;
     const ist_bauleistung = document.getElementById('artikel-ist-bauleistung').checked ? 1 : 0;
     const kostenart = document.getElementById('artikel-kostenart').value;
     const lohnanteil_prozent = parseFloat(document.getElementById('artikel-lohnanteil').value) || 0;
+    const hersteller_name = document.getElementById('artikel-hersteller-name')?.value?.trim() || null;
+    const hersteller_kontakt = document.getElementById('artikel-hersteller-kontakt')?.value?.trim() || null;
+    const charge_seriennummer = document.getElementById('artikel-charge-seriennummer')?.value?.trim() || null;
+    const eu_verantwortlicher = document.getElementById('artikel-eu-verantwortlicher')?.value?.trim() || null;
+    const warnhinweis = document.getElementById('artikel-warnhinweis')?.value?.trim() || null;
     const bilder = [...currentArtikelBilder];
 
     if (!name || isNaN(ek) || isNaN(vk) || isNaN(bestand)) {
@@ -256,7 +295,27 @@ async function saveArtikel() {
         return;
     }
 
-    const artikelData = { name, ean, beschreibung, ek, vk, mwst, katalog, lieferant, bestand, bilder, ist_bauleistung, kostenart, lohnanteil_prozent };
+    const artikelData = {
+        name,
+        ean,
+        beschreibung,
+        ek,
+        vk,
+        mwst,
+        katalog,
+        lieferant,
+        einheit,
+        bestand,
+        bilder,
+        ist_bauleistung,
+        kostenart,
+        lohnanteil_prozent,
+        hersteller_name,
+        hersteller_kontakt,
+        charge_seriennummer,
+        eu_verantwortlicher,
+        warnhinweis
+    };
 
     if (id) {
         artikelData.id = parseInt(id);

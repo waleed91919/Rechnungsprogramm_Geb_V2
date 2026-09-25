@@ -55,7 +55,7 @@ const b2gKunde = {
     plz: '10178',
     ort: 'Berlin',
     customer_type: 'B2G',
-    leitweg_id: '991-12345678-12',
+    leitweg_id: '991-12345678-30',
     buyer_reference: 'AB-45001'
 };
 

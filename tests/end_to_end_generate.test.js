@@ -103,9 +103,9 @@ test('End-to-End Pipeline & Invoice Document Generation', async () => {
 
     const xmlContent = fs.readFileSync(b2gXmlPath, 'utf-8');
     assertXmlWellFormed(xmlContent, 'RE-2026-B2G-001.xml');
-    assert.ok(xmlContent.includes('991-12345678-12'), 'XRechnung XML must contain Leitweg-ID');
+    assert.ok(xmlContent.includes('991-12345678-30'), 'XRechnung XML must contain Leitweg-ID');
     assert.ok(
-        /<ram:BuyerReference>991-12345678-12<\/ram:BuyerReference>/.test(xmlContent),
+        /<ram:BuyerReference>991-12345678-30<\/ram:BuyerReference>/.test(xmlContent),
         'BT-10 BuyerReference muss die Leitweg-ID tragen (Vorrang vor buyer_reference)'
     );
     assert.ok(!xmlContent.includes('AB-45001'), 'buyer_reference darf nicht vor der Leitweg-ID in BT-10 landen');

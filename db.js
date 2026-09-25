@@ -145,8 +145,9 @@ function applyDocumentWrite(d, requestedLockedInt) {
         }
     }
 
-    // Datenintegrität: Belegnummer darf nur an DIESER Beleg selbst vergeben sein
-    const nrConflict = db.prepare('SELECT id FROM dokumente WHERE nr = ? AND id IS NOT ?').get(d.nr, docId == null ? null : docId);
+    // Datenintegrität: Belegnummer darf für denselben Belegtyp nicht doppelt vergeben sein
+    const docType = d.type || (existing ? existing.type : 'rechnung');
+    const nrConflict = db.prepare('SELECT id FROM dokumente WHERE type = ? AND nr = ? AND id IS NOT ?').get(docType, d.nr, docId == null ? null : docId);
     if (nrConflict) {
         throw new Error(`Die Belegnummer "${d.nr}" ist bereits vergeben (Dokument #${nrConflict.id}). Bitte verwenden Sie eine andere Nummer.`);
     }
@@ -494,8 +495,8 @@ const dbAPI = {
     // --- Initial Full State Load (for init.js) ---
     async getFullState() {
         const state = {
-            artikel: await dbQuery('SELECT * FROM artikel'),
-            kunden: await dbQuery('SELECT * FROM kunden'),
+            artikel: await dbQuery('SELECT * FROM artikel WHERE COALESCE(is_deleted, 0) = 0'),
+            kunden: await dbQuery('SELECT * FROM kunden WHERE COALESCE(is_deleted, 0) = 0'),
             rechnungen: [],
             angebote: [],
             projekte: await dbQuery('SELECT * FROM projekte'),
@@ -652,16 +653,23 @@ const dbAPI = {
 
     // --- Artikel ---
     async saveArtikel(artikel) {
+        const einheit = artikel.einheit || 'Stk.';
+        const herstellerName = artikel.hersteller_name || null;
+        const herstellerKontakt = artikel.hersteller_kontakt || null;
+        const chargeSeriennummer = artikel.charge_seriennummer || null;
+        const euVerantwortlicher = artikel.eu_verantwortlicher || null;
+        const warnhinweis = artikel.warnhinweis || null;
+
         if (artikel.id) {
             await dbRun(
-                'UPDATE artikel SET name=?, ean=?, beschreibung=?, ek=?, vk=?, mwst=?, bestand=?, lieferant=?, katalog=?, ist_bauleistung=?, kostenart=?, lohnanteil_prozent=? WHERE id=?',
-                [artikel.name, artikel.ean, artikel.beschreibung, artikel.ek, artikel.vk, artikel.mwst, artikel.bestand, artikel.lieferant, artikel.katalog, artikel.ist_bauleistung || 0, artikel.kostenart || 'MATERIAL', artikel.lohnanteil_prozent || 0, artikel.id]
+                'UPDATE artikel SET name=?, ean=?, beschreibung=?, ek=?, vk=?, mwst=?, bestand=?, lieferant=?, katalog=?, ist_bauleistung=?, kostenart=?, lohnanteil_prozent=?, einheit=?, hersteller_name=?, hersteller_kontakt=?, charge_seriennummer=?, eu_verantwortlicher=?, warnhinweis=? WHERE id=?',
+                [artikel.name, artikel.ean, artikel.beschreibung, artikel.ek, artikel.vk, artikel.mwst, artikel.bestand, artikel.lieferant, artikel.katalog, artikel.ist_bauleistung || 0, artikel.kostenart || 'MATERIAL', artikel.lohnanteil_prozent || 0, einheit, herstellerName, herstellerKontakt, chargeSeriennummer, euVerantwortlicher, warnhinweis, artikel.id]
             );
             return artikel.id;
         } else {
             const res = await dbRun(
-                'INSERT INTO artikel (name, ean, beschreibung, ek, vk, mwst, bestand, lieferant, katalog, ist_bauleistung, kostenart, lohnanteil_prozent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [artikel.name, artikel.ean, artikel.beschreibung, artikel.ek, artikel.vk, artikel.mwst, artikel.bestand, artikel.lieferant, artikel.katalog, artikel.ist_bauleistung || 0, artikel.kostenart || 'MATERIAL', artikel.lohnanteil_prozent || 0]
+                'INSERT INTO artikel (name, ean, beschreibung, ek, vk, mwst, bestand, lieferant, katalog, ist_bauleistung, kostenart, lohnanteil_prozent, einheit, hersteller_name, hersteller_kontakt, charge_seriennummer, eu_verantwortlicher, warnhinweis) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [artikel.name, artikel.ean, artikel.beschreibung, artikel.ek, artikel.vk, artikel.mwst, artikel.bestand, artikel.lieferant, artikel.katalog, artikel.ist_bauleistung || 0, artikel.kostenart || 'MATERIAL', artikel.lohnanteil_prozent || 0, einheit, herstellerName, herstellerKontakt, chargeSeriennummer, euVerantwortlicher, warnhinweis]
             );
             return res.id;
         }
@@ -791,7 +799,16 @@ const dbAPI = {
         // Wrap the document and position saving in a transaction for data integrity
         const saveTransaction = db.transaction((d) => applyDocumentWrite(d, requestedLockedInt));
 
-        return saveTransaction(doc);
+        try {
+            return saveTransaction(doc);
+        } catch (err) {
+            if (err.message && (err.message.includes('UNIQUE constraint failed') || err.code === 'SQLITE_CONSTRAINT_UNIQUE')) {
+                if (err.message.includes('dokumente.type') || err.message.includes('dokumente.nr') || err.message.includes('idx_dokumente')) {
+                    throw new Error(`Die Belegnummer "${doc.nr}" ist bereits vergeben. Bitte verwenden Sie eine andere Nummer.`);
+                }
+            }
+            throw err;
+        }
     },
 
 
@@ -809,7 +826,16 @@ const dbAPI = {
             return docIds;
         });
 
-        return bulkTransaction(docs);
+        try {
+            return bulkTransaction(docs);
+        } catch (err) {
+            if (err.message && (err.message.includes('UNIQUE constraint failed') || err.code === 'SQLITE_CONSTRAINT_UNIQUE')) {
+                if (err.message.includes('dokumente.type') || err.message.includes('dokumente.nr') || err.message.includes('idx_dokumente')) {
+                    throw new Error(`Eine Belegnummer ist bereits vergeben. Bitte überprüfen Sie die Nummernvergabe.`);
+                }
+            }
+            throw err;
+        }
     },
 
     async deleteDocument(id) {

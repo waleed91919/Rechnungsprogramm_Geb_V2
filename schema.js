@@ -14,7 +14,13 @@ function createSchema(db) {
         mwst INTEGER DEFAULT 19,
         bestand INTEGER DEFAULT 0,
         lieferant TEXT,
-        katalog TEXT
+        katalog TEXT,
+        einheit TEXT DEFAULT 'Stk.',
+        hersteller_name TEXT,
+        hersteller_kontakt TEXT,
+        charge_seriennummer TEXT,
+        eu_verantwortlicher TEXT,
+        warnhinweis TEXT
     )`);
 
     db.exec(`CREATE TABLE IF NOT EXISTS kunden (
@@ -684,7 +690,7 @@ function createSchema(db) {
         dateigroesse_bytes INTEGER NOT NULL,
         dateigroesse_komprimiert_bytes INTEGER NOT NULL,
         sha256_hash TEXT NOT NULL,
-        trigger_type TEXT NOT NULL CHECK(trigger_type IN ('MANUAL', 'AUTO_SHUTDOWN', 'CRON', 'PRE_MIGRATION', 'PRE_RESTORE')),
+        trigger_type TEXT NOT NULL CHECK(trigger_type IN ('MANUAL', 'AUTO_SHUTDOWN', 'CRON', 'PRE_MIGRATION', 'PRE_RESTORE', 'AUTO_INTERVAL', 'RESTORE_ROLLBACK')),
         retention_category TEXT NOT NULL CHECK(retention_category IN ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY', 'ARCHIVE')),
         integrity_status TEXT NOT NULL CHECK(integrity_status IN ('OK', 'CORRUPT', 'UNKNOWN')),
         erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -920,6 +926,8 @@ function createSchema(db) {
         status TEXT NOT NULL DEFAULT 'ERFASST' CHECK(status IN ('ERFASST', 'GEPRUEFT', 'FREIGEGEBEN', 'ABGERECHNET', 'STORNIERT')),
         device_id TEXT,
         sha256_hash TEXT,
+        is_verspaetet INTEGER DEFAULT 0,
+        status_milog TEXT DEFAULT 'PUENKTLICH',
         is_deleted INTEGER NOT NULL DEFAULT 0,
         deleted_at DATETIME,
         deleted_by TEXT,
@@ -1403,6 +1411,11 @@ function runMigrations(db) {
     } catch (e) {
         console.error('[DB Migration] Index idx_dokumente_objekt konnte nicht erstellt werden:', e.message);
     }
+    try {
+        db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_dokumente_type_nr ON dokumente(type, nr)`);
+    } catch (e) {
+        if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] idx_dokumente_type_nr:', e.message);
+    }
 
     // --- Migration Putzplan/Reinigungs-LV F3: Plan-Position ↔ LV-Position (kein FK-Enforcement, polymorpher Projektstil) ---
     try { db.exec(`ALTER TABLE abrechnungsplan_positionen ADD COLUMN lv_position_id INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
@@ -1477,13 +1490,37 @@ function runMigrations(db) {
             dateigroesse_bytes INTEGER NOT NULL,
             dateigroesse_komprimiert_bytes INTEGER NOT NULL,
             sha256_hash TEXT NOT NULL,
-            trigger_type TEXT NOT NULL CHECK(trigger_type IN ('MANUAL', 'AUTO_SHUTDOWN', 'CRON', 'PRE_MIGRATION', 'PRE_RESTORE')),
+            trigger_type TEXT NOT NULL CHECK(trigger_type IN ('MANUAL', 'AUTO_SHUTDOWN', 'CRON', 'PRE_MIGRATION', 'PRE_RESTORE', 'AUTO_INTERVAL', 'RESTORE_ROLLBACK')),
             retention_category TEXT NOT NULL CHECK(retention_category IN ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY', 'ARCHIVE')),
             integrity_status TEXT NOT NULL CHECK(integrity_status IN ('OK', 'CORRUPT', 'UNKNOWN')),
             erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
             bemerkung TEXT
         )`);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_backup_created ON backup_history(erstellt_am)`);
+
+        // Migration: Falls backup_history bereits mit veraltetem CHECK-Constraint existiert
+        const bkpTable = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='backup_history'").get();
+        if (bkpTable && !bkpTable.sql.includes('AUTO_INTERVAL')) {
+            db.exec(`
+                CREATE TABLE IF NOT EXISTS backup_history_mig_temp (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    dateiname TEXT NOT NULL,
+                    dateipfad TEXT NOT NULL,
+                    dateigroesse_bytes INTEGER NOT NULL,
+                    dateigroesse_komprimiert_bytes INTEGER NOT NULL,
+                    sha256_hash TEXT NOT NULL,
+                    trigger_type TEXT NOT NULL CHECK(trigger_type IN ('MANUAL', 'AUTO_SHUTDOWN', 'CRON', 'PRE_MIGRATION', 'PRE_RESTORE', 'AUTO_INTERVAL', 'RESTORE_ROLLBACK')),
+                    retention_category TEXT NOT NULL CHECK(retention_category IN ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY', 'ARCHIVE')),
+                    integrity_status TEXT NOT NULL CHECK(integrity_status IN ('OK', 'CORRUPT', 'UNKNOWN')),
+                    erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    bemerkung TEXT
+                );
+                INSERT INTO backup_history_mig_temp SELECT * FROM backup_history;
+                DROP TABLE backup_history;
+                ALTER TABLE backup_history_mig_temp RENAME TO backup_history;
+                CREATE INDEX IF NOT EXISTS idx_backup_created ON backup_history(erstellt_am);
+            `);
+        }
     } catch (e) {
         if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] backup_history:', e.message);
     }
@@ -1703,6 +1740,8 @@ function runMigrations(db) {
             status TEXT NOT NULL DEFAULT 'ERFASST' CHECK(status IN ('ERFASST', 'GEPRUEFT', 'FREIGEGEBEN', 'ABGERECHNET', 'STORNIERT')),
             device_id TEXT,
             sha256_hash TEXT,
+            is_verspaetet INTEGER DEFAULT 0,
+            status_milog TEXT DEFAULT 'PUENKTLICH',
             is_deleted INTEGER NOT NULL DEFAULT 0,
             deleted_at DATETIME,
             deleted_by TEXT,
@@ -2039,6 +2078,19 @@ function runMigrations(db) {
     try { db.exec(`ALTER TABLE zeiterfassung ADD COLUMN delete_reason TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_zeiterfassung_active ON zeiterfassung(is_deleted, zeit_von)`); } catch (e) { if (!e.message.includes('already exists')) console.warn('[DB Migration Warning]:', e.message); }
 
+    // 9. Phase 5: MiLoG § 17 7-Tage-Aufzeichnung & Mindestaufbewahrungsfrist
+    try { db.exec(`ALTER TABLE zeiterfassung ADD COLUMN is_verspaetet INTEGER DEFAULT 0`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE zeiterfassung ADD COLUMN status_milog TEXT DEFAULT 'PUENKTLICH'`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_zeit_milog ON zeiterfassung(is_verspaetet, status_milog)`); } catch (e) { if (!e.message.includes('already exists')) console.warn('[DB Migration Warning]:', e.message); }
+
+    // 10. Phase 5: Artikelstamm Einheit & GPSR (Art. 12 GPSR)
+    try { db.exec(`ALTER TABLE artikel ADD COLUMN einheit TEXT DEFAULT 'Stk.'`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE artikel ADD COLUMN hersteller_name TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE artikel ADD COLUMN hersteller_kontakt TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE artikel ADD COLUMN charge_seriennummer TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE artikel ADD COLUMN eu_verantwortlicher TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE artikel ADD COLUMN warnhinweis TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+
     // --- DB-4, DB-8, GOBD-3, GOBD-4: Indizes, Soft-Delete & SQLite Triggers ---
     ensureGoBDSchemaAndTriggers(db);
 
@@ -2131,6 +2183,12 @@ function ensureUniqueConstraints(db) {
         db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_dokumente_nr_unique ON dokumente(nr)`);
     } catch (e) {
         console.error('[DB Migration] UNIQUE-Index auf dokumente(nr) konnte nicht erstellt werden:', e.message);
+    }
+
+    try {
+        db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_dokumente_type_nr ON dokumente(type, nr)`);
+    } catch (e) {
+        console.error('[DB Migration] UNIQUE-Index auf dokumente(type, nr) konnte nicht erstellt werden:', e.message);
     }
 
     try {
@@ -2239,6 +2297,14 @@ function ensureGoBDSchemaAndTriggers(db) {
         ) IS NOT NULL
         BEGIN
             SELECT RAISE(ABORT, 'GoBD-Verstoß: Positionen festgeschriebener Belege dürfen nicht gelöscht werden.');
+        END;`,
+
+        `CREATE TRIGGER IF NOT EXISTS trg_prevent_zeiterfassung_early_delete
+        BEFORE DELETE ON zeiterfassung
+        FOR EACH ROW
+        WHEN datetime(OLD.zeit_von) > datetime('now', '-2 years')
+        BEGIN
+            SELECT RAISE(ABORT, 'Mindestaufbewahrungsfrist verletzt (§ 17 Abs. 2 MiLoG): Zeiterfassungsdaten müssen mindestens 2 Jahre aufbewahrt werden (kein physisches Löschen vor Ablauf von 24 Monaten).');
         END;`
     ];
 

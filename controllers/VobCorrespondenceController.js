@@ -578,8 +578,12 @@ ${cName}
     }
 
     /**
-     * 4. Förmliche Abnahmeaufforderung nach § 12 Abs. 1 & Abs. 5 VOB/B
-     * Mit 12-Werktage-Frist zur Durchführung und Hinweis auf Abnahmefiktion nach 6 Werktagen Benutzung bzw. § 640 BGB.
+     * 4. Förmliche Abnahmeaufforderung nach § 12 Abs. 1 & Abs. 5 VOB/B sowie § 640 BGB.
+     * Setzt 12-Werktage-Frist zur Durchführung und informiert über die Abnahmefiktionen:
+     * - § 12 Abs. 5 Nr. 1 VOB/B: 12 Werktage nach schriftlicher Fertigstellungsmeldung
+     * - § 12 Abs. 5 Nr. 2 VOB/B: 6 Werktage nach Beginn der Benutzung
+     * - § 640 Abs. 2 Satz 1 BGB: Fiktion bei Nichtverweigerung unter Angabe mindestens eines Mangels
+     * - § 640 Abs. 2 Satz 2 BGB: Zwingende gesetzliche Textform-Belehrung für Verbraucher (B2C)
      */
     static generateAbnahmeaufforderung({
         contractor = {},
@@ -588,12 +592,17 @@ ${cName}
         date = new Date(),
         completionDate = new Date(),
         proposedDates = [],
-        additionalNotes = ''
+        additionalNotes = '',
+        isConsumer = null
     }) {
         const formattedDate = this.formatDate(date);
         const formattedCompletion = this.formatDate(completionDate);
         const deadlineDate = this.addWorkingDays(date, 12);
         const formattedDeadline = this.formatDate(deadlineDate);
+
+        const isConsumerClient = isConsumer !== null
+            ? Boolean(isConsumer)
+            : Boolean(client.ist_verbraucher || client.ist_privatkunde || client.customer_type === 'B2C' || client.typ === 'PRIVAT');
 
         const cName = contractor.name || contractor.firmenname || 'Auftragnehmer';
         const clName = client.name || client.firmenname || client.kunden_name || 'Auftraggeber';
@@ -603,6 +612,14 @@ ${cName}
         const datesText = proposedDates.length > 0
             ? proposedDates.map((pd, i) => `  Vorschlag ${i + 1}: ${pd}`).join('\n')
             : `  Innerhalb der 12-Werktage-Frist bis zum ${formattedDeadline} nach vorheriger Terminabstimmung.`;
+
+        let consumerSectionText = '';
+        if (isConsumerClient) {
+            consumerSectionText = `
+GESETZLICHE BELEHRUNG FÜR VERBRAUCHER GEMÄSS § 640 ABS. 2 SATZ 2 BGB:
+Wir weisen Sie hiermit ausdrücklich in Textform darauf hin, dass das Werk als abgenommen gilt, wenn Sie die Abnahme nicht innerhalb der vorstehenden Frist (spätestens bis zum ${formattedDeadline}) unter Angabe mindestens eines Mangels verweigern oder die Erklärung der Abnahme grundlos unterlassen.
+Für die Wahrung der Frist ist der rechtzeitige Zugang der Mängelrüge in Textform bei uns vor Fristablauf maßgeblich.`;
+        }
 
         const text = `FERTIGSTELLUNGSMITTEILUNG & AUFFORDERUNG ZUR FÖRMLICHEN ABNAHME GEMÄSS § 12 VOB/B
 
@@ -631,11 +648,14 @@ Terminvorschläge für die gemeinsame Abnahmebegehung:
 ${datesText}
 
 WICHTIGE RECHTLICHE HINWEISE ZUR ABNAHMEFIKTION:
-1. Fiktive Abnahme nach Inbenutzungnahme (§ 12 Abs. 5 Nr. 1 VOB/B):
+1. Fiktive Abnahme nach schriftlicher Fertigstellungsmitteilung (§ 12 Abs. 5 Nr. 1 VOB/B):
+Wird keine Abnahme verlangt, so gilt die Leistung mit Ablauf von 12 Werktagen nach Zugang dieser schriftlichen Fertigstellungsmitteilung als abgenommen.
+2. Fiktive Abnahme nach Inbenutzungnahme (§ 12 Abs. 5 Nr. 2 VOB/B):
 Wird keine Abnahme verlangt und hat der Auftraggeber die Leistung oder einen Teil der Leistung in Benutzung genommen, so gilt die Abnahme nach Ablauf von 6 Werktagen nach Beginn der Benutzung als erfolgt.
-2. Fiktive Abnahme nach BGB (§ 640 Abs. 2 BGB):
-Verweigert der Besteller die Abnahme nicht innerhalb der gesetzten Frist unter Angabe mindestens eines Mangels, gilt das Werk ebenfalls kraft Gesetzes als abgenommen.
-3. Wirkungen der Abnahme:
+3. Fiktive Abnahme nach BGB (§ 640 Abs. 2 BGB):
+Verweigert der Besteller die Abnahme nicht innerhalb der gesetzten Frist unter Angabe mindestens eines Mangels (§ 640 Abs. 2 Satz 1 BGB), gilt das Werk ebenfalls kraft Gesetzes als abgenommen.
+${consumerSectionText}
+4. Wirkungen der Abnahme:
 Mit der Abnahme geht die Gefahr des zufälligen Untergangs auf Sie über (§ 644 BGB, § 12 Abs. 6 VOB/B), die Beweislast für Mängel kehrt sich um, die Fälligkeit der Schlussrechnung tritt ein (§ 16 Abs. 3 VOB/B) und die Frist für Mängelansprüche (§ 13 Abs. 4 VOB/B) beginnt zu laufen. Zudem ist eine einbehaltene Vertragserfüllungsbürgschaft unverzüglich freizugeben.
 
 Bitte bestätigen Sie uns den Abnahmetermin kurzfristig schriftlich.
@@ -645,6 +665,12 @@ Mit freundlichen Grüßen
 
 ${cName}
 (Rechtsverbindliche Unterschrift)`;
+
+        const consumerHtmlBox = isConsumerClient ? `
+    <div class="info-box" style="background: #eff6ff; border-left: 4px solid #2563eb; color: #1e3a8a; margin: 16px 0; padding: 12px 16px; border-radius: 0 4px 4px 0; font-size: 9pt;">
+        <strong>Gesetzliche Belehrung für Verbraucher gemäß § 640 Abs. 2 Satz 2 BGB:</strong><br>
+        Wir weisen Sie hiermit ausdrücklich in Textform darauf hin: Wenn Sie die Abnahme nicht innerhalb der gesetzten Frist bis zum <strong>${formattedDeadline}</strong> unter Angabe mindestens eines Mangels verweigern, gilt das Werk kraft Gesetzes als abgenommen. Zur Fristwahrung genügt der rechtzeitige Zugang der Mängelrüge in Textform vor Fristablauf.
+    </div>` : '';
 
         const html = `<!DOCTYPE html>
 <html lang="de">
@@ -692,11 +718,12 @@ ${cName}
 
     <p><strong>Terminvorschlag für die Abnahme:</strong><br>
     ${datesText.replace(/\n/g, '<br>')}</p>
-
+${consumerHtmlBox}
     <div class="warning-box">
         <strong>Rechtliche Wirkungen und Abnahmefiktion:</strong><br>
-        • <strong>Inbenutzungnahme (§ 12 Abs. 5 Nr. 1 VOB/B):</strong> Nehmen Sie das Bauwerk in Benutzung, gilt die Leistung nach Ablauf von 6 Werktagen als abgenommen.<br>
-        • <strong>BGB-Abnahmefiktion (§ 640 Abs. 2 BGB):</strong> Benennen Sie innerhalb der Frist keine wesentlichen Mängel, gilt die Abnahme kraft Gesetzes als erfolgt.<br>
+        • <strong>Schriftliche Fertigstellungsmeldung (§ 12 Abs. 5 Nr. 1 VOB/B):</strong> Wird keine förmliche Abnahme verlangt, gilt die Leistung mit Ablauf von 12 Werktagen nach Mitteilung als abgenommen.<br>
+        • <strong>Inbenutzungnahme (§ 12 Abs. 5 Nr. 2 VOB/B):</strong> Nehmen Sie das Bauwerk in Benutzung, gilt die Leistung nach Ablauf von 6 Werktagen nach Beginn der Benutzung als abgenommen.<br>
+        • <strong>BGB-Abnahmefiktion (§ 640 Abs. 2 BGB):</strong> Verweigern Sie die Abnahme nicht innerhalb der Frist unter Angabe mindestens eines Mangels (§ 640 Abs. 2 Satz 1 BGB), gilt das Werk kraft Gesetzes als abgenommen.<br>
         • Mit der Abnahme kehrt sich die Beweislast für Mängel um, die Verjährungsfrist für Mängelansprüche (§ 13 Abs. 4 VOB/B) beginnt zu laufen und etwaige Vertragserfüllungssicherheiten sind freizugeben.
     </div>
 
@@ -709,10 +736,11 @@ ${cName}
 
         return {
             type: 'ABNAHMEAUFFORDERUNG',
-            legalBasis: '§ 12 Abs. 1 & 5 VOB/B / § 640 BGB',
+            legalBasis: isConsumerClient ? '§ 12 Abs. 1 & 5 VOB/B / § 640 Abs. 1 & 2 BGB' : '§ 12 Abs. 1 & 5 VOB/B / § 640 BGB',
             date: formattedDate,
             completionDate: formattedCompletion,
             deadlineDate: formattedDeadline,
+            isConsumer: isConsumerClient,
             text,
             html
         };

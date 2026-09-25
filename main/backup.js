@@ -11,7 +11,40 @@ const crypto = require('crypto');
 const { pipeline } = require('stream/promises');
 const Database = require('better-sqlite3');
 
+/**
+ * Gesetzliche Aufbewahrungsfristen nach dem Bürokratieentlastungsgesetz IV (BEG IV, Stand 2025/2026):
+ * - Rechnungs- und Buchungsbelege: 8 Jahre gem. § 14b Abs. 1 Satz 1 UStG, § 147 Abs. 3 Satz 1 AO n.F. (durch BEG IV seit 01.01.2025).
+ * - Handelsbücher, Inventare, Eröffnungsbilanzen, Jahresabschlüsse: weiterhin 10 Jahre (§ 147 Abs. 3 Satz 1 AO n.F., § 257 Abs. 4 HGB).
+ * - Empfangene Handels- und Geschäftsbriefe sowie Wiedergaben abgesandter Briefe: 6 Jahre (§ 147 Abs. 3 Satz 1 AO n.F., § 257 Abs. 4 HGB).
+ * - Rechnungen an Privatpersonen für steuerpflichtige Leistungen im Zusammenhang mit Grundstücken: 2 Jahre (§ 14b Abs. 1 Satz 5 UStG).
+ * - Zeiterfassungsdaten: 2 Jahre (§ 17 Abs. 2 MiLoG).
+ *
+ * Fristbeginn: Die Frist beginnt stets mit dem Schluss des Kalenderjahres, in dem die letzte Eintragung gemacht,
+ * das Inventar aufgestellt, die Bilanz festgestellt, der Handelsbrief empfangen/abgesandt oder der Buchungsbeleg entstanden ist (§ 147 Abs. 4 AO, § 257 Abs. 5 HGB).
+ *
+ * Ablaufhemmung: Die Aufbewahrungsfrist läuft nicht ab, soweit und solange die Festsetzungsfrist für Steuern noch nicht
+ * abgelaufen ist (§ 147 Abs. 3 Satz 5 AO n.F.).
+ */
+const AUFBEWAHRUNGSFRISTEN_BEG_IV = {
+    RECHNUNGSBELEGE_JAHRE: 8,       // § 14b Abs. 1 Satz 1 UStG, § 147 Abs. 3 Satz 1 AO n.F.
+    BUCHUNGSBELEGE_JAHRE: 8,        // § 147 Abs. 3 Satz 1 AO n.F.
+    BUECHER_ABSCHLUESSE_JAHRE: 10,  // § 147 Abs. 3 Satz 1 AO n.F., § 257 Abs. 4 HGB
+    GESCHAEFTSBRIEFE_JAHRE: 6,      // § 147 Abs. 3 Satz 1 AO n.F., § 257 Abs. 4 HGB
+    PRIVATKUNDEN_GRUNDSTUECK_JAHRE: 2, // § 14b Abs. 1 Satz 5 UStG
+    ZEITERFASSUNG_MILOG_JAHRE: 2,   // § 17 Abs. 2 MiLoG
+
+    RECHNUNGEN_BUCHUNGSBELEGE: { jahre: 8, gesetz: '§ 14b Abs. 1 Satz 1 UStG, § 147 Abs. 3 Satz 1 AO n.F. (BEG IV seit 01.01.2025)' },
+    BUECHER_INVENTARE_JAHRESABSCHLUESSE: { jahre: 10, gesetz: '§ 147 Abs. 3 Satz 1 AO n.F., § 257 Abs. 4 HGB' },
+    HANDELSBRIEFE_KORRESPONDENZ: { jahre: 6, gesetz: '§ 147 Abs. 3 Satz 1 AO n.F., § 257 Abs. 4 HGB' },
+    B2C_GRUNDSTUECK_BAULEISTUNG: { jahre: 2, gesetz: '§ 14b Abs. 1 Satz 5 UStG' },
+    ZEITERFASSUNG_MILOG: { jahre: 2, gesetz: '§ 17 Abs. 2 MiLoG' },
+    
+    hinweisRechnungsempfaengerPrivat: 'Hinweis gem. § 14b Abs. 1 Satz 5 UStG: Als Privatperson sind Sie gesetzlich verpflichtet, diese Rechnung sowie den zugehörigen Zahlungsbeleg bei steuerpflichtigen Werkleistungen oder sonstigen Leistungen im Zusammenhang mit einem Grundstück mindestens zwei Jahre lang aufzubewahren (Fristbeginn: Schluss des Kalenderjahres der Ausstellung).',
+    hinweisUnternehmerBegIv: 'Aufbewahrungsfristen nach BEG IV: Rechnungs- und Buchungsbelege: 8 Jahre gem. § 14b Abs. 1 Satz 1 UStG, § 147 Abs. 3 Satz 1 AO n.F. (durch BEG IV seit 01.01.2025), Bücher und Bilanzen 10 Jahre (§ 147 Abs. 3 Satz 1 AO n.F.), Geschäftsbriefe 6 Jahre (§ 147 Abs. 3 Satz 1 AO n.F.). Fristbeginn mit Schluss des Kalenderjahres; Hemmung bei offener Steuerfestsetzung (§ 147 Abs. 3 Satz 5 AO n.F.).'
+};
+
 class BackupService {
+    static AUFBEWAHRUNGSFRISTEN = AUFBEWAHRUNGSFRISTEN_BEG_IV;
     /**
      * @param {Object} db - Aktive better-sqlite3 Instanz
      * @param {Object} options - Konfiguration { dbPath, backupDir, auditLogger }
@@ -65,7 +98,7 @@ class BackupService {
 
     /**
      * Erstellt ein atomares, komprimiertes Online-Backup mit SHA-256 Checksumme.
-     * @param {string} triggerType - 'MANUAL' | 'AUTO_SHUTDOWN' | 'CRON' | 'PRE_MIGRATION' | 'PRE_RESTORE'
+     * @param {string} triggerType - 'MANUAL' | 'AUTO_SHUTDOWN' | 'CRON' | 'PRE_MIGRATION' | 'PRE_RESTORE' | 'AUTO_INTERVAL' | 'RESTORE_ROLLBACK'
      * @param {string} bemerkung - Optionale Beschreibung
      */
     async createBackup(triggerType = 'MANUAL', bemerkung = '') {
@@ -127,11 +160,11 @@ class BackupService {
             try {
                 const insertStmt = this.db.prepare(`
                     INSERT INTO backup_history (
-                        dateiname, dateipfad, file_size_bytes, uncompressed_size_bytes,
-                        sha256_hash, trigger_typ, gfs_generation, status, bemerkung
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'SUCCESS', ?)
+                        dateiname, dateipfad, dateigroesse_bytes, dateigroesse_komprimiert_bytes,
+                        sha256_hash, trigger_type, retention_category, integrity_status, bemerkung
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'OK', ?)
                 `);
-                const info = insertStmt.run(finalGzName, finalGzPath, gzBytes, rawBytes, sha256Hash, triggerType, gfsGen, bemerkung);
+                const info = insertStmt.run(finalGzName, finalGzPath, rawBytes, gzBytes, sha256Hash, triggerType, category, bemerkung);
                 backupId = info.lastInsertRowid;
             } catch (dbErr) {
                 console.warn('[BackupService] Konnte Backup nicht in backup_history protokollieren:', dbErr.message);
@@ -232,13 +265,15 @@ class BackupService {
 
         for (const bkp of allBackups) {
             const ageDays = (now - new Date(bkp.erstellt_am).getTime()) / MS_PER_DAY;
-            const gen = bkp.gfs_generation || 'S';
+            const category = bkp.retention_category || '';
+            const gen = bkp.gfs_generation || (category === 'MONTHLY' || category === 'YEARLY' || category === 'ARCHIVE' ? 'G' : category === 'WEEKLY' ? 'F' : 'S');
+            const trigger = bkp.trigger_type || bkp.trigger_typ || '';
 
-            if (bkp.trigger_typ === 'MANUAL' || bkp.trigger_typ === 'RESTORE_ROLLBACK' || gen === 'G') {
+            if (trigger === 'MANUAL' || trigger === 'RESTORE_ROLLBACK' || gen === 'G' || category === 'YEARLY' || category === 'MONTHLY' || category === 'ARCHIVE') {
                 keepIds.add(bkp.id);
-            } else if (gen === 'F' && ageDays <= 56) {
+            } else if ((gen === 'F' || category === 'WEEKLY') && ageDays <= 56) {
                 keepIds.add(bkp.id);
-            } else if (gen === 'S' && ageDays <= 14) {
+            } else if ((gen === 'S' || category === 'DAILY') && ageDays <= 14) {
                 keepIds.add(bkp.id);
             }
         }
@@ -499,4 +534,6 @@ class BackupService {
     }
 }
 
+BackupService.AUFBEWAHRUNGSFRISTEN_BEG_IV = AUFBEWAHRUNGSFRISTEN_BEG_IV;
 module.exports = BackupService;
+module.exports.AUFBEWAHRUNGSFRISTEN_BEG_IV = AUFBEWAHRUNGSFRISTEN_BEG_IV;

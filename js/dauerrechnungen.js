@@ -1,4 +1,29 @@
 // Dauerrechnungen (F2): Rendering & Interaktion
+
+/**
+ * Gesetzliche Aufbewahrungsfristen nach dem Bürokratieentlastungsgesetz IV (BEG IV, Stand 2025/2026):
+ * - Rechnungs- und Buchungsbelege: 8 Jahre gem. § 14b Abs. 1 Satz 1 UStG, § 147 Abs. 3 Satz 1 AO n.F. (durch BEG IV seit 01.01.2025).
+ * - Handelsbücher, Inventare, Jahresabschlüsse: weiterhin 10 Jahre (§ 147 Abs. 3 Satz 1 AO n.F., § 257 Abs. 4 HGB).
+ * - Handels- und Geschäftsbriefe (inkl. Angebote ohne Auftrag): 6 Jahre (§ 147 Abs. 3 Satz 1 AO n.F., § 257 Abs. 4 HGB).
+ * - Hinweistext für Privatkunden bei grundstücksbezogenen Leistungen: 2 Jahre (§ 14b Abs. 1 Satz 5 UStG).
+ * - Zeiterfassungsdaten: 2 Jahre (§ 17 Abs. 2 MiLoG).
+ * Fristbeginn: Mit dem Schluss des Kalenderjahres, in dem die Rechnung ausgestellt wurde (§ 147 Abs. 4 AO).
+ * Ablaufhemmung: Bei offener Festsetzungsfrist oder laufender Betriebsprüfung (§ 147 Abs. 3 Satz 5 AO n.F.).
+ */
+const AUFBEWAHRUNGSFRISTEN_BEG_IV = (typeof window !== 'undefined' && window.AUFBEWAHRUNGSFRISTEN_BEG_IV) || {
+    RECHNUNGSBELEGE_JAHRE: 8,
+    BUCHUNGSBELEGE_JAHRE: 8,
+    BUECHER_ABSCHLUESSE_JAHRE: 10,
+    GESCHAEFTSBRIEFE_JAHRE: 6,
+    PRIVATKUNDEN_GRUNDSTUECK_JAHRE: 2,
+    ZEITERFASSUNG_MILOG_JAHRE: 2,
+    hinweisPrivatkunde: 'Hinweis gem. § 14b Abs. 1 Satz 5 UStG: Als Privatperson sind Sie gesetzlich verpflichtet, diese Rechnung sowie den zugehörigen Zahlungsbeleg bei steuerpflichtigen Werkleistungen oder sonstigen Leistungen im Zusammenhang mit einem Grundstück mindestens zwei Jahre lang aufzubewahren (Fristbeginn: Schluss des Kalenderjahres der Ausstellung).',
+    hinweisUnternehmer: 'Aufbewahrungsfristen nach BEG IV: Rechnungs- und Buchungsbelege: 8 Jahre gem. § 14b Abs. 1 Satz 1 UStG, § 147 Abs. 3 Satz 1 AO n.F. (durch BEG IV seit 01.01.2025), Bücher und Bilanzen 10 Jahre (§ 147 Abs. 3 Satz 1 AO n.F.), Geschäftsbriefe 6 Jahre (§ 147 Abs. 3 Satz 1 AO n.F.). Fristbeginn mit Schluss des Kalenderjahres; Hemmung bei offener Steuerfestsetzung (§ 147 Abs. 3 Satz 5 AO n.F.).'
+};
+if (typeof window !== 'undefined') {
+    window.AUFBEWAHRUNGSFRISTEN_BEG_IV = AUFBEWAHRUNGSFRISTEN_BEG_IV;
+}
+
 const DR_STATUS_BADGE = {
     aktiv: 'bg-green-100 text-green-800',
     pausiert: 'bg-amber-100 text-amber-800'

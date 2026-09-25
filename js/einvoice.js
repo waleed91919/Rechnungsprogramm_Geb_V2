@@ -29,6 +29,106 @@ class EInvoiceEngine {
     }
 
     /**
+     * Konvertiert Datumsangaben in das UN/ECE D16B Format 102 (CCYYMMDD).
+     */
+    static toDate102(dateStr) {
+        if (!dateStr) return '';
+        const str = String(dateStr).trim();
+        if (/^\d{8}$/.test(str)) return str;
+        if (/^\d{4}-\d{2}-\d{2}/.test(str)) return str.substring(0, 10).replace(/-/g, '');
+        if (/^\d{2}\.\d{2}\.\d{4}/.test(str)) {
+            const parts = str.substring(0, 10).split('.');
+            return `${parts[2]}${parts[1]}${parts[0]}`;
+        }
+        const d = new Date(dateStr);
+        if (!isNaN(d.getTime())) {
+            return d.toISOString().split('T')[0].replace(/-/g, '');
+        }
+        return '';
+    }
+
+    /**
+     * Berechnet die 2-stellige Prüfziffer für eine Basis-Leitweg-ID nach ISO 7064 MOD 97-10.
+     * @param {string} base - Leitweg-ID ohne Prüfziffer (z.B. "04011000-1234567890" oder "991-12345678")
+     * @returns {string} Zweistellige Prüfziffer (z.B. "17" bzw. "30")
+     */
+    static computeLeitwegIdChecksum(base) {
+        if (!base) return '';
+        const clean = String(base).replace(/[-\s]/g, '').toUpperCase();
+        if (!/^[0-9A-Z]+$/.test(clean)) return '';
+        let numericStr = '';
+        for (let i = 0; i < clean.length; i++) {
+            const code = clean.charCodeAt(i);
+            if (code >= 48 && code <= 57) {
+                numericStr += clean[i];
+            } else if (code >= 65 && code <= 90) {
+                numericStr += String(code - 55);
+            } else {
+                return '';
+            }
+        }
+        numericStr += '00';
+        const remainder = Number(BigInt(numericStr) % 97n);
+        const checksum = 98 - remainder;
+        return checksum < 10 ? `0${checksum}` : `${checksum}`;
+    }
+
+    /**
+     * Prüft eine Leitweg-ID nach ISO 7064 MOD 97-10.
+     * @param {string} leitwegId
+     * @returns {{ valid: boolean, message?: string }}
+     */
+    static validateLeitwegId(leitwegId) {
+        if (!leitwegId || typeof leitwegId !== 'string') {
+            return { valid: false, message: 'Leitweg-ID fehlt oder ist kein gültiger Text.' };
+        }
+        const trimmed = leitwegId.trim();
+        const parts = trimmed.split('-');
+        if (parts.length < 2 || parts.length > 3) {
+            return { valid: false, message: 'Format muss Grobadressierung[-Feinadressierung]-Prüfziffer entsprechen (z.B. 04011-00000-30).' };
+        }
+        const grob = parts[0];
+        const pruef = parts[parts.length - 1];
+        const fein = parts.length === 3 ? parts[1] : '';
+
+        if (!/^[0-9A-Za-z]{2,12}$/.test(grob)) {
+            return { valid: false, message: 'Grobadressierung muss 2 bis 12 alphanumerische Zeichen umfassen.' };
+        }
+        if (fein && !/^[0-9A-Za-z]{1,30}$/.test(fein)) {
+            return { valid: false, message: 'Feinadressierung darf maximal 30 alphanumerische Zeichen umfassen.' };
+        }
+        if (!/^\d{2}$/.test(pruef)) {
+            return { valid: false, message: 'Prüfziffer muss genau zwei Ziffern betragen.' };
+        }
+
+        const clean = trimmed.replace(/[-\s]/g, '').toUpperCase();
+        if (!/^[0-9A-Z]+$/.test(clean)) {
+            return { valid: false, message: 'Leitweg-ID enthält unzulässige Zeichen.' };
+        }
+        let numericStr = '';
+        for (let i = 0; i < clean.length; i++) {
+            const code = clean.charCodeAt(i);
+            if (code >= 48 && code <= 57) {
+                numericStr += clean[i];
+            } else if (code >= 65 && code <= 90) {
+                numericStr += String(code - 55);
+            }
+        }
+
+        const modResult = Number(BigInt(numericStr) % 97n);
+        if (modResult !== 1) {
+            const base = parts.slice(0, parts.length - 1).join('-');
+            const expectedPz = this.computeLeitwegIdChecksum(base);
+            return {
+                valid: false,
+                message: `Ungültige Prüfziffer der Leitweg-ID (ISO 7064 MOD 97-10). Angegeben: ${pruef}, Erwartet: ${expectedPz}.`
+            };
+        }
+
+        return { valid: true };
+    }
+
+    /**
      * Mappt freie Einheitsangaben auf UN/ECE Rec 20 Codes (BT-130 unitCode).
      */
     static mapUnitToUNECERec20(einheit) {
@@ -103,7 +203,7 @@ class EInvoiceEngine {
 
     /**
      * § 13b-Erkennung je Position wie InvoiceController.calculateTotals:
-     * Positionsflag gewinnt, sonst greift der globale Schalter invoice.unterliegt_13b.
+     * Positionsflag gewinnt, sonst greift der globale Schalter (unterliegt_13b / isGlobal13b).
      */
     static resolvePositionCategory(invoice, pos) {
         const flags = ['unterliegt_13b', 'is13b', 'ist13b'];
@@ -113,7 +213,8 @@ class EInvoiceEngine {
                 return (v === true || v === 1 || v === '1') ? 'AE' : 'S';
             }
         }
-        return Boolean(invoice.unterliegt_13b) ? 'AE' : 'S';
+        const global13b = Boolean(invoice && (invoice.unterliegt_13b || invoice.isGlobal13b));
+        return global13b ? 'AE' : 'S';
     }
 
     /**
@@ -154,9 +255,10 @@ class EInvoiceEngine {
             taxTotal = this.round2(groups.reduce((sum, g) => sum + g.tax, 0));
         } else {
             taxBasis = this.round2(parseFloat(invoice.netto) || 0);
-            taxTotal = invoice.unterliegt_13b ? 0 : this.round2(parseFloat(invoice.steuer) || 0);
+            const is13bInvoice = Boolean(invoice && (invoice.unterliegt_13b || invoice.isGlobal13b));
+            taxTotal = is13bInvoice ? 0 : this.round2(parseFloat(invoice.steuer) || 0);
             const rate = (taxBasis > 0 && taxTotal > 0) ? this.round2((taxTotal / taxBasis) * 100) : 0;
-            groups = [{ category: invoice.unterliegt_13b ? 'AE' : 'S', rate, basis: taxBasis, tax: taxTotal }];
+            groups = [{ category: is13bInvoice ? 'AE' : 'S', rate, basis: taxBasis, tax: taxTotal }];
         }
 
         const grandTotal = this.round2(taxBasis + taxTotal);
@@ -169,7 +271,8 @@ class EInvoiceEngine {
                 return sum + parseFloat(v.abzugsbetrag_brutto);
             }
             const net = parseFloat(v && v.abzugsbetrag_netto) || (v && parseFloat(v.betrag)) || 0;
-            const rate = invoice.unterliegt_13b ? 0 : (parseFloat(v && v.mwst) || 19.0);
+            const is13bInvoice = Boolean(invoice && (invoice.unterliegt_13b || invoice.isGlobal13b));
+            const rate = is13bInvoice ? 0 : (parseFloat(v && v.mwst) || 19.0);
             return sum + this.round2(net * (1 + rate / 100));
         }, 0));
 
@@ -283,8 +386,11 @@ class EInvoiceEngine {
                 const leitwegId = (invoice.leitweg_id || customer.leitweg_id || '').trim();
                 if (!leitwegId) {
                     errors.push('B2G-Pflichtfeld: Leitweg-ID fehlt für öffentlichen Auftraggeber.');
-                } else if (!/^[0-9A-Za-z-]+$/.test(leitwegId)) {
-                    errors.push('Ungültiges Format der Leitweg-ID.');
+                } else {
+                    const check = this.validateLeitwegId(leitwegId);
+                    if (!check.valid) {
+                        errors.push(`Ungültige Leitweg-ID: ${check.message}`);
+                    }
                 }
             }
             if (customerType === 'B2B' && !this.getBuyerVatId(customer) &&
@@ -388,9 +494,22 @@ class EInvoiceEngine {
         const s = seller || {};
         const t = this.computeTotals(invoice);
 
+        const customerType = (invoice && invoice.customer_type) || c.customer_type || '';
         const leitwegId = (invoice.leitweg_id || c.leitweg_id || '').trim();
-        if (leitwegId && !/^\d{1,4}-\d{1,9}-\d{1,2}$/.test(leitwegId)) {
-            console.warn(`[E-Rechnung] Leitweg-ID "${leitwegId}" weicht vom üblichen Format NN(N)-NNNNNNNNN-NN ab (BT-10).`);
+
+        if (customerType === 'B2G') {
+            if (!leitwegId) {
+                throw new Error('[E-Rechnung] Leitweg-ID fehlt: Rechnungen an öffentliche Auftraggeber (B2G) erfordern zwingend eine Leitweg-ID (BT-10 gemäß BR-DE-15).');
+            }
+            const check = this.validateLeitwegId(leitwegId);
+            if (!check.valid) {
+                throw new Error(`[E-Rechnung] Leitweg-ID "${leitwegId}" ungültig (BT-10 gemäß BR-DE-15): ${check.message}`);
+            }
+        } else if (leitwegId) {
+            const check = this.validateLeitwegId(leitwegId);
+            if (!check.valid) {
+                console.warn(`[E-Rechnung] Leitweg-ID "${leitwegId}" ungültig (BT-10): ${check.message}`);
+            }
         }
         // BT-10 BuyerReference: Leitweg-ID hat Vorrang vor buyer_reference
         const buyerRef = leitwegId || (invoice.buyer_reference || c.buyer_reference || '').trim();
@@ -398,9 +517,51 @@ class EInvoiceEngine {
         const today = new Date().toISOString().split('T')[0];
         const issueDateIso = invoice.datum || today;
         const dueDateIso = invoice.faellig || invoice.datum || today;
-        const issueDate = issueDateIso.replace(/-/g, '');
-        const dueDate = dueDateIso.replace(/-/g, '');
+        const issueDate = this.toDate102(issueDateIso);
+        const dueDate = this.toDate102(dueDateIso);
         const currency = (invoice.waehrung || s.waehrung || 'EUR').toUpperCase();
+
+        const deliveryDateStr = this.toDate102(invoice.leistungsdatum || invoice.leistungszeitraum_von || invoice.datum || today);
+        const periodStartStr = this.toDate102(invoice.leistungszeitraum_von);
+        const periodEndStr = this.toDate102(invoice.leistungszeitraum_bis);
+        const hasBillingPeriod = Boolean(periodStartStr && periodEndStr);
+
+        let billingPeriodXML = '';
+        if (hasBillingPeriod) {
+            billingPeriodXML = `
+      <ram:BillingSpecifiedPeriod>
+        <ram:StartDateTime>
+          <udt:DateTimeString format="102">${periodStartStr}</udt:DateTimeString>
+        </ram:StartDateTime>
+        <ram:EndDateTime>
+          <udt:DateTimeString format="102">${periodEndStr}</udt:DateTimeString>
+        </ram:EndDateTime>
+      </ram:BillingSpecifiedPeriod>`;
+        }
+
+        const isStorno = Boolean(
+            invoice.typ === 'STORNO' ||
+            invoice.typ === 'GUTSCHRIFT' ||
+            invoice.isStorno ||
+            invoice.storno_zu_nr ||
+            (typeof invoice.nr === 'string' && invoice.nr.startsWith('STORNO')) ||
+            invoice.rechnungsart === 'STORNO' ||
+            invoice.rechnungsart === 'GUTSCHRIFT'
+        );
+        const origNr = (invoice.storno_zu_nr || invoice.storno_urspruengliche_nr ||
+            (typeof invoice.nr === 'string' && invoice.nr.startsWith('STORNO - ') ? invoice.nr.replace('STORNO - ', '') : '') || '').trim();
+        const origDateStr = this.toDate102(invoice.storno_zu_datum || invoice.urspruengliches_datum);
+
+        let invoiceReferencedXML = '';
+        if (isStorno && origNr) {
+            invoiceReferencedXML = `
+      <ram:InvoiceReferencedDocument>
+        <ram:IssuerAssignedID>${this.escapeXML(origNr)}</ram:IssuerAssignedID>${origDateStr ? `
+        <ram:FormattedIssueDateTime>
+          <qdt:DateTimeString format="102">${origDateStr}</qdt:DateTimeString>
+        </ram:FormattedIssueDateTime>` : ''}
+      </ram:InvoiceReferencedDocument>`;
+        }
 
         const sellerAddr = this.resolveAddress(s);
         const buyerAddr = this.resolveAddress(c);
@@ -411,6 +572,21 @@ class EInvoiceEngine {
         const sellerBank = (s.bankname || '').trim();
         const sellerEmail = (s.email || '').trim();
         const buyerEmail = (c.email || '').trim();
+
+        // B2G Verkäuferkontakt (KoSIT BR-DE-5/6/7, BT-34/BG-6)
+        const contactPerson = (s.kontakt_name || s.kontaktperson || s.ansprechpartner || s.inhaber || s.firmenname || s.name || 'Buchhaltung').trim();
+        const contactPhone = (s.telefon || s.tel || s.phone || '+49 000 000000').trim();
+        const contactEmail = (s.kontakt_email || s.email || 'rechnung@example.com').trim();
+        const definedContactXML = `
+        <ram:DefinedTradeContact>
+          <ram:PersonName>${this.escapeXML(contactPerson)}</ram:PersonName>
+          <ram:TelephoneUniversalCommunication>
+            <ram:CompleteNumber>${this.escapeXML(contactPhone)}</ram:CompleteNumber>
+          </ram:TelephoneUniversalCommunication>
+          <ram:EmailURIUniversalCommunication>
+            <ram:URIID>${this.escapeXML(contactEmail)}</ram:URIID>
+          </ram:EmailURIUniversalCommunication>
+        </ram:DefinedTradeContact>`;
 
         let lineItemsXML = '';
         t.lines.forEach((line, idx) => {
@@ -483,7 +659,16 @@ class EInvoiceEngine {
         }
 
         const faelligTeile = dueDateIso.split('-');
-        let paymentTermsDescription = `Zahlbar ohne Abzug bis zum ${faelligTeile[2]}.${faelligTeile[1]}.${faelligTeile[0]}.`;
+        const skontoTage = parseInt(invoice.skonto_tage || invoice.skontoTage, 10) || 0;
+        const skontoProzent = parseFloat(invoice.skonto_prozent || invoice.skontoProzent) || 0;
+        const hasSkonto = skontoTage > 0 && skontoProzent > 0;
+
+        let paymentTermsDescription = '';
+        if (hasSkonto) {
+            paymentTermsDescription = `${skontoProzent}% Skonto innerhalb von ${skontoTage} Tagen, rein netto zahlbar bis zum ${faelligTeile[2]}.${faelligTeile[1]}.${faelligTeile[0]}.`;
+        } else {
+            paymentTermsDescription = `Zahlbar ohne Abzug bis zum ${faelligTeile[2]}.${faelligTeile[1]}.${faelligTeile[0]}.`;
+        }
         if (t.einbehalt > 0) {
             const prozentVal = invoice.sicherheitseinbehalt_prozent ? parseFloat(invoice.sicherheitseinbehalt_prozent).toFixed(2) : ((t.einbehalt / (t.grandTotal || 1)) * 100).toFixed(2);
             paymentTermsDescription += ` #EINBEHALT#PROZENT=${prozentVal}#BETRAG=${t.einbehalt.toFixed(2)}#GRUND=VOB/B § 17#ABLOESBAR=Buergschaft#`;
@@ -493,7 +678,11 @@ class EInvoiceEngine {
         <ram:Description>${this.escapeXML(paymentTermsDescription)}</ram:Description>
         <ram:DueDateDateTime>
           <udt:DateTimeString format="102">${dueDate}</udt:DateTimeString>
-        </ram:DueDateDateTime>
+        </ram:DueDateDateTime>${hasSkonto ? `
+        <ram:ApplicableTradePaymentDiscountTerms>
+          <ram:BasisPeriodMeasure unitCode="DAY">${skontoTage}</ram:BasisPeriodMeasure>
+          <ram:CalculationPercent>${Number(skontoProzent).toFixed(2)}</ram:CalculationPercent>
+        </ram:ApplicableTradePaymentDiscountTerms>` : ''}
       </ram:SpecifiedTradePaymentTerms>`;
 
         const sellerRegsXML = this.getSellerTaxRegistrations(s).map(r =>
@@ -511,6 +700,7 @@ class EInvoiceEngine {
         return `<?xml version="1.0" encoding="UTF-8"?>
 <rsm:CrossIndustryInvoice xmlns:rsm="urn:un:unece:uncefact:data:standard:CrossIndustryInvoice:100"
                           xmlns:ram="urn:un:unece:uncefact:data:standard:ReusableAggregateBusinessInformationEntity:100"
+                          xmlns:qdt="urn:un:unece:uncefact:data:standard:QualifiedDataType:100"
                           xmlns:udt="urn:un:unece:uncefact:data:standard:UnqualifiedDataType:100">
   <rsm:ExchangedDocumentContext>
     <ram:GuidelineSpecifiedDocumentContextParameter>
@@ -519,7 +709,7 @@ class EInvoiceEngine {
   </rsm:ExchangedDocumentContext>
   <rsm:ExchangedDocument>
     <ram:ID>${this.escapeXML(invoice.nr)}</ram:ID>
-    <ram:TypeCode>380</ram:TypeCode>
+    <ram:TypeCode>${isStorno ? '381' : '380'}</ram:TypeCode>
     <ram:IssueDateTime>
       <udt:DateTimeString format="102">${issueDate}</udt:DateTimeString>
     </ram:IssueDateTime>${t.einbehalt > 0 ? `
@@ -532,15 +722,21 @@ class EInvoiceEngine {
     <ram:ApplicableHeaderTradeAgreement>
       <ram:BuyerReference>${this.escapeXML(buyerRef)}</ram:BuyerReference>
       <ram:SellerTradeParty>
-        <ram:Name>${sellerName}</ram:Name>${this.buildPostalAddressXML(sellerAddr)}${this.buildElectronicAddressXML(sellerEmail)}${sellerRegsXML}
+        <ram:Name>${sellerName}</ram:Name>${definedContactXML}${this.buildPostalAddressXML(sellerAddr)}${this.buildElectronicAddressXML(sellerEmail)}${sellerRegsXML}
       </ram:SellerTradeParty>
       <ram:BuyerTradeParty>
         <ram:Name>${buyerName}</ram:Name>${this.buildPostalAddressXML(buyerAddr)}${this.buildElectronicAddressXML(buyerEmail)}${buyerRegXML}
       </ram:BuyerTradeParty>
     </ram:ApplicableHeaderTradeAgreement>
-    <ram:ApplicableHeaderTradeDelivery/>
+    <ram:ApplicableHeaderTradeDelivery>
+      <ram:ActualDeliverySupplyChainEvent>
+        <ram:OccurrenceDateTime>
+          <udt:DateTimeString format="102">${deliveryDateStr}</udt:DateTimeString>
+        </ram:OccurrenceDateTime>
+      </ram:ActualDeliverySupplyChainEvent>
+    </ram:ApplicableHeaderTradeDelivery>
     <ram:ApplicableHeaderTradeSettlement>
-      <ram:InvoiceCurrencyCode>${currency}</ram:InvoiceCurrencyCode>${paymentMeansXML}${tradeTaxXML}${paymentTermsXML}
+      <ram:InvoiceCurrencyCode>${currency}</ram:InvoiceCurrencyCode>${paymentMeansXML}${tradeTaxXML}${billingPeriodXML}${paymentTermsXML}${invoiceReferencedXML}
       <ram:SpecifiedTradeSettlementHeaderMonetarySummation>
         <ram:LineTotalAmount>${t.lineNettoSum.toFixed(2)}</ram:LineTotalAmount>
         <ram:TaxBasisTotalAmount>${t.taxBasis.toFixed(2)}</ram:TaxBasisTotalAmount>

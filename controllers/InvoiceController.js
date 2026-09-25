@@ -25,6 +25,7 @@ class InvoiceController {
         positionen = [],
         mode = 'netto',
         isGlobal13b = false,
+        unterliegt_13b = false,
         globalRabatt = { value: 0, type: '%' },
         sicherheitseinbehaltProzent = 0,
         retentionMode = 'WARRANTY',
@@ -37,6 +38,7 @@ class InvoiceController {
         previousInvoices = [],
         totalPerformanceNet = null
     }) {
+        const global13b = Boolean(isGlobal13b || unterliegt_13b);
         // EINE Einbehalt-Quelle (P0.2): Vorgänger-Einbehalte aus gespeicherten
         // Belegen ableiten, nie aus Formular-State raten. previousInvoices hat
         // Vorrang, previousRetentionTotal ist der explizite Fallback.
@@ -49,13 +51,20 @@ class InvoiceController {
         let totalsNormalNetto = 0;
         const taxBases = {};
 
-        // 1. Einzelpositionen durchlaufen
+        // 1. Einzelpositionen durchlaufen (Vorranglogik: Positionsflag gewinnt, sonst globaler Belegstatus)
         const processedPositions = positionen.map(pos => {
             const menge = parseFloat(pos.menge) || 0;
             const preis = parseFloat(pos.preis) || 0;
             const rabatt = parseFloat(pos.rabatt) || 0;
             const mwstRate = parseFloat(pos.mwst) || 0;
-            const pos13b = isGlobal13b && Boolean(pos.is13b);
+            const explicit13b = (pos.is13b !== undefined && pos.is13b !== null)
+                ? pos.is13b
+                : ((pos.unterliegt_13b !== undefined && pos.unterliegt_13b !== null)
+                    ? pos.unterliegt_13b
+                    : (pos.ist13b !== undefined && pos.ist13b !== null ? pos.ist13b : undefined));
+            const pos13b = (explicit13b !== undefined && explicit13b !== null)
+                ? Boolean(explicit13b)
+                : global13b;
 
             let rowNetto = 0;
             let rowBrutto = 0;
@@ -108,7 +117,7 @@ class InvoiceController {
                 return sum + parseFloat(v.abzugsbetrag_brutto);
             }
             const net = parseFloat(v && v.abzugsbetrag_netto) || (v && parseFloat(v.betrag)) || 0;
-            const rate = isGlobal13b ? 0 : (parseFloat(v && v.mwst) || 19.0);
+            const rate = global13b ? 0 : (parseFloat(v && v.mwst) || 19.0);
             return sum + this.round2(net * (1 + rate / 100));
         }, 0));
 
@@ -136,10 +145,10 @@ class InvoiceController {
                     : 0);
 
             // H-1 & VOB/B § 17 Abs. 6 S. 2: Bei 13b zwingend Netto, sonst vertraglich Netto oder Brutto
-            const effectiveBaseMode = isGlobal13b ? 'netto' : String(retentionBase || 'netto').toLowerCase();
+            const effectiveBaseMode = global13b ? 'netto' : String(retentionBase || 'netto').toLowerCase();
             let effectiveBase = cumulativeBaseNet;
             if (effectiveBaseMode === 'brutto') {
-                const avgTaxRate = (nettoNachRabatt > 0 && totalTax > 0) ? (totalTax / nettoNachRabatt) : (isGlobal13b ? 0 : 0.19);
+                const avgTaxRate = (nettoNachRabatt > 0 && totalTax > 0) ? (totalTax / nettoNachRabatt) : (global13b ? 0 : 0.19);
                 effectiveBase = this.round2(cumulativeBaseNet * (1 + avgTaxRate));
             }
 
@@ -244,7 +253,7 @@ class InvoiceController {
             sicherheitseinbehaltNetto,
             sicherheitseinbehaltProzent,
             retentionMode,
-            retentionBase: isGlobal13b ? 'netto' : String(retentionBase || 'netto').toLowerCase(),
+            retentionBase: global13b ? 'netto' : String(retentionBase || 'netto').toLowerCase(),
             isCapped,
             maxRetentionCap,
             contractTotalNet: parseFloat(contractTotalNet) || 0,
@@ -327,9 +336,16 @@ class InvoiceController {
         if (doc.customer_type === 'B2G' && doc.eingabemodus === 'brutto') {
             return { valid: false, message: 'Rechnungen an öffentliche Auftraggeber (B2G) erfordern zwingend Netto-Einzelpreise gemäß EU-Norm EN 16931.' };
         }
-        // Compliance-Check 3: B2G erfordert Leitweg-ID gem. XRechnung / ZUGFeRD
-        if (doc.customer_type === 'B2G' && !doc.leitweg_id && !doc.buyer_reference) {
-            return { valid: false, message: 'Rechnungen an öffentliche Auftraggeber (B2G) erfordern zwingend eine Leitweg-ID oder Buyer-Reference.' };
+        // Compliance-Check 3: B2G erfordert Leitweg-ID gem. XRechnung / ZUGFeRD inkl. ISO 7064 MOD 97-10 Prüfziffer (BR-DE-15)
+        if (doc.customer_type === 'B2G') {
+            const lid = (doc.leitweg_id || '').trim();
+            if (!lid) {
+                return { valid: false, message: 'Rechnungen an öffentliche Auftraggeber (B2G) erfordern zwingend eine Leitweg-ID (BT-10 gemäß BR-DE-15).' };
+            }
+            const check = this.validateLeitwegId(lid);
+            if (!check.valid) {
+                return { valid: false, message: `Ungültige Leitweg-ID: ${check.message}` };
+            }
         }
 
         // Datum-Normalisierung auf ISO YYYY-MM-DD
@@ -525,6 +541,87 @@ class InvoiceController {
     }
 
     /**
+     * Berechnet die 2-stellige Prüfziffer für eine Basis-Leitweg-ID nach ISO 7064 MOD 97-10.
+     * @param {string} base - Leitweg-ID ohne Prüfziffer (z.B. "04011000-1234567890" oder "991-12345678")
+     * @returns {string} Zweistellige Prüfziffer (z.B. "17" bzw. "30")
+     */
+    static computeLeitwegIdChecksum(base) {
+        if (!base) return '';
+        const clean = String(base).replace(/[-\s]/g, '').toUpperCase();
+        if (!/^[0-9A-Z]+$/.test(clean)) return '';
+        let numericStr = '';
+        for (let i = 0; i < clean.length; i++) {
+            const code = clean.charCodeAt(i);
+            if (code >= 48 && code <= 57) {
+                numericStr += clean[i];
+            } else if (code >= 65 && code <= 90) {
+                numericStr += String(code - 55);
+            } else {
+                return '';
+            }
+        }
+        numericStr += '00';
+        const remainder = Number(BigInt(numericStr) % 97n);
+        const checksum = 98 - remainder;
+        return checksum < 10 ? `0${checksum}` : `${checksum}`;
+    }
+
+    /**
+     * Prüft eine Leitweg-ID nach ISO 7064 MOD 97-10.
+     * @param {string} leitwegId
+     * @returns {{ valid: boolean, message?: string }}
+     */
+    static validateLeitwegId(leitwegId) {
+        if (!leitwegId || typeof leitwegId !== 'string') {
+            return { valid: false, message: 'Leitweg-ID fehlt oder ist kein gültiger Text.' };
+        }
+        const trimmed = leitwegId.trim();
+        const parts = trimmed.split('-');
+        if (parts.length < 2 || parts.length > 3) {
+            return { valid: false, message: 'Format muss Grobadressierung[-Feinadressierung]-Prüfziffer entsprechen (z.B. 04011-00000-30).' };
+        }
+        const grob = parts[0];
+        const pruef = parts[parts.length - 1];
+        const fein = parts.length === 3 ? parts[1] : '';
+
+        if (!/^[0-9A-Za-z]{2,12}$/.test(grob)) {
+            return { valid: false, message: 'Grobadressierung muss 2 bis 12 alphanumerische Zeichen umfassen.' };
+        }
+        if (fein && !/^[0-9A-Za-z]{1,30}$/.test(fein)) {
+            return { valid: false, message: 'Feinadressierung darf maximal 30 alphanumerische Zeichen umfassen.' };
+        }
+        if (!/^\d{2}$/.test(pruef)) {
+            return { valid: false, message: 'Prüfziffer muss genau zwei Ziffern betragen.' };
+        }
+
+        const clean = trimmed.replace(/[-\s]/g, '').toUpperCase();
+        if (!/^[0-9A-Z]+$/.test(clean)) {
+            return { valid: false, message: 'Leitweg-ID enthält unzulässige Zeichen.' };
+        }
+        let numericStr = '';
+        for (let i = 0; i < clean.length; i++) {
+            const code = clean.charCodeAt(i);
+            if (code >= 48 && code <= 57) {
+                numericStr += clean[i];
+            } else if (code >= 65 && code <= 90) {
+                numericStr += String(code - 55);
+            }
+        }
+
+        const modResult = Number(BigInt(numericStr) % 97n);
+        if (modResult !== 1) {
+            const base = parts.slice(0, parts.length - 1).join('-');
+            const expectedPz = this.computeLeitwegIdChecksum(base);
+            return {
+                valid: false,
+                message: `Ungültige Prüfziffer der Leitweg-ID (ISO 7064 MOD 97-10). Angegeben: ${pruef}, Erwartet: ${expectedPz}.`
+            };
+        }
+
+        return { valid: true };
+    }
+
+    /**
      * Erzeugt die Datenobjekte für eine Stornorechnung (Gutschrift).
      */
     static createStornoData(originalInvoice) {
@@ -547,6 +644,11 @@ class InvoiceController {
         const stornoDoc = {
             id: null,
             type: 'rechnung',
+            typ: 'STORNO',
+            rechnungsart: 'STORNO',
+            isStorno: true,
+            storno_zu_nr: originalInvoice.nr,
+            storno_zu_datum: originalInvoice.datum,
             nr: stornoNr,
             datum: today,
             faellig: today,

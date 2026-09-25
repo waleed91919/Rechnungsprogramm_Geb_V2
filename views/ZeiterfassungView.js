@@ -87,10 +87,14 @@ class ZeiterfassungView {
                 const bis = z.zeit_bis ? new Date(z.zeit_bis).toLocaleString('de-DE') : '<span class="badge badge-warning">LÄUFT</span>';
                 const dauerStd = z.dauer_min ? (z.dauer_min / 60).toFixed(2) + ' h' : '-';
                 const maName = `${z.mitarbeiter_vorname || ''} ${z.mitarbeiter_nachname || ''} (${z.personalnummer || ''})`;
+                const isMilogLate = Number(z.is_verspaetet) === 1 || z.status_milog === 'VERSPAETET';
+                const milogBadge = isMilogLate
+                    ? `<span class="badge" style="background:#fee2e2; color:#b91c1c; font-size:11px; margin-left:6px;" title="Achtung: Erfassung erfolgte nach Ablauf der 7-Tage-Frist gem. § 17 Abs. 1 MiLoG (Ordnungswidrigkeit nach § 21 MiLoG).">⚠️ MiLoG verspätet</span>`
+                    : '';
 
                 rows += `
                     <tr>
-                        <td><strong>${escapeHtml(maName)}</strong></td>
+                        <td><strong>${escapeHtml(maName)}</strong>${milogBadge}</td>
                         <td>${z.projekt_name ? escapeHtml(z.projekt_name) : '<span style="color:#94a3b8;">Allgemein</span>'}</td>
                         <td><span class="badge" style="background:#e2e8f0; color:#334155;">${escapeHtml(z.taetigkeit_typ)}</span></td>
                         <td>${von}</td>
@@ -98,7 +102,7 @@ class ZeiterfassungView {
                         <td><strong>${dauerStd}</strong> (Pause: ${z.pause_min || 0}m)</td>
                         <td>${z.wegezeit_eur ? parseFloat(z.wegezeit_eur).toFixed(2) + ' €' : '-'}</td>
                         <td>
-                            <button class="btn-icon" onclick="ZeiterfassungView.deleteZeiteintrag('${escapeHtml(z.uuid)}')" title="Löschen">🗑️</button>
+                            <button class="btn-icon" onclick="ZeiterfassungView.deleteZeiteintrag('${escapeHtml(z.uuid)}')" title="Löschen" aria-label="Zeiteintrag stornieren">🗑️</button>
                         </td>
                     </tr>
                 `;
@@ -141,8 +145,8 @@ class ZeiterfassungView {
                     <td>${m.telefon || '-'}</td>
                     <td><span class="badge" style="background:${m.aktiv ? '#dcfce7; color:#15803d;' : '#fee2e2; color:#b91c1c;'}">${m.aktiv ? 'Aktiv' : 'Inaktiv'}</span></td>
                     <td>
-                        <button class="btn-icon" onclick="ZeiterfassungView.editMitarbeiter(${m.id})" title="Bearbeiten">✏️</button>
-                        <button class="btn-icon" onclick="ZeiterfassungView.deleteMitarbeiter(${m.id})" title="Löschen">🗑️</button>
+                        <button class="btn-icon" onclick="ZeiterfassungView.editMitarbeiter(${m.id})" title="Bearbeiten" aria-label="Mitarbeiter bearbeiten">✏️</button>
+                        <button class="btn-icon" onclick="ZeiterfassungView.deleteMitarbeiter(${m.id})" title="Löschen" aria-label="Mitarbeiter löschen">🗑️</button>
                     </td>
                 </tr>
             `;
@@ -233,8 +237,8 @@ class ZeiterfassungView {
                         <td>${m.auswirkung_bauzeit_tage ? m.auswirkung_bauzeit_tage + ' Tage' : '-'}</td>
                         <td><span class="badge" style="background:#e2e8f0; color:#334155;">${m.status}</span></td>
                         <td>
-                            <button class="btn btn-secondary" onclick="ZeiterfassungView.viewVobPdf(${m.id})" style="padding: 4px 8px; font-size: 11px;">📄 PDF</button>
-                            <button class="btn-icon" onclick="ZeiterfassungView.deleteVobMeldung(${m.id})" title="Löschen">🗑️</button>
+                            <button class="btn btn-secondary" onclick="ZeiterfassungView.viewVobPdf(${m.id})" style="padding: 4px 8px; font-size: 11px;" aria-label="VOB/B Meldung als PDF anzeigen">📄 PDF</button>
+                            <button class="btn-icon" onclick="ZeiterfassungView.deleteVobMeldung(${m.id})" title="Löschen" aria-label="VOB/B Meldung löschen">🗑️</button>
                         </td>
                     </tr>
                 `;

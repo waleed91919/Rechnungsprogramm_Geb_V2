@@ -130,6 +130,11 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             }
             assert.ok(threw, 'Roher SQL-Insert mit Duplikatnummer muss am UNIQUE-Index scheitern');
         });
+
+        await t.test('(a3) Composite UNIQUE-Index idx_dokumente_type_nr existiert physisch in der DB', () => {
+            const idx = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_dokumente_type_nr'").get();
+            assert.ok(idx, 'Index idx_dokumente_type_nr muss existieren');
+        });
     });
 
     test('Doppelverrechnungs-Schutz', async (t) => {
@@ -563,6 +568,32 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             } finally {
                 mem.close();
             }
+        });
+    });
+
+    test('Soft-Delete Filter in getFullState() (P0-9)', async (t) => {
+        await t.test('(j) geloeschte Kunden und Artikel werden von getFullState() ignoriert', async () => {
+            // Aktive und geloeschte Artikel anlegen
+            const artActiveId = await dbAPI.saveArtikel({ name: 'Aktiver Artikel P09', vk: 10 });
+            const artDeletedId = await dbAPI.saveArtikel({ name: 'Geloeschter Artikel P09', vk: 20 });
+            db.prepare('UPDATE artikel SET is_deleted = 1 WHERE id = ?').run(artDeletedId);
+
+            // Aktive und geloeschte Kunden anlegen
+            const kdActiveId = await dbAPI.saveKunde({ name: 'Aktiver Kunde P09' });
+            const kdDeletedId = await dbAPI.saveKunde({ name: 'Geloeschter Kunde P09' });
+            db.prepare('UPDATE kunden SET is_deleted = 1 WHERE id = ?').run(kdDeletedId);
+
+            const state = await dbAPI.getFullState();
+
+            const foundActiveArt = state.artikel.find(a => a.id === artActiveId);
+            const foundDeletedArt = state.artikel.find(a => a.id === artDeletedId);
+            assert.ok(foundActiveArt, 'Aktiver Artikel muss im State geladen werden');
+            assert.equal(foundDeletedArt, undefined, 'Geloeschter Artikel darf nicht geladen werden');
+
+            const foundActiveKd = state.kunden.find(k => k.id === kdActiveId);
+            const foundDeletedKd = state.kunden.find(k => k.id === kdDeletedId);
+            assert.ok(foundActiveKd, 'Aktiver Kunde muss im State geladen werden');
+            assert.equal(foundDeletedKd, undefined, 'Geloeschter Kunde darf nicht geladen werden');
         });
     });
 

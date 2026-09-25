@@ -101,4 +101,92 @@ describe('EFB 222 (Endsummenkalkulation) nach VHB-Bund', () => {
         assert.ok(html.includes('Netto-Angebotssumme'), 'Muss Angebotssumme enthalten');
         assert.ok(html.includes('Sanierung Altbau Leipzig'), 'Muss Projektnamen enthalten');
     });
+
+    it('4. K2-17: 0% AGK und 0% Leistungswagnis werden nicht durch Defaults überschrieben', () => {
+        const project = { id: 2, name: 'Projekt mit 0% AGK' };
+        const positions = [
+            {
+                id: 201,
+                name: 'Montagearbeiten',
+                menge: 10,
+                preis: 50.00,
+                zeitansatz_h: 1.0,
+                kostenart: 'LOHN'
+            }
+        ];
+
+        const profile = {
+            mittellohn_eur: 30.00,
+            agk_endsumme_prozent: 0.00,
+            wug_gewinn_prozent: 3.00,
+            wug_betriebswagnis_prozent: 1.00,
+            wug_leistungswagnis_prozent: 0.00
+        };
+
+        const res = EFBController.calculateEFB222(project, positions, {}, profile);
+
+        assert.strictEqual(res.abschnitt2.agkProzent, 0.00, 'AGK 0% darf nicht zu 12% werden');
+        assert.strictEqual(res.abschnitt2.wugAufteilung.leistungswagnisProzent, 0.00, 'Leistungswagnis 0% darf nicht zu 1.80% werden');
+        assert.strictEqual(res.abschnitt2.wugAufteilung.gewinnProzent, 3.00);
+        assert.strictEqual(res.abschnitt2.wugAufteilung.betriebswagnisProzent, 1.00);
+        assert.strictEqual(res.abschnitt2.wugAufteilung.gesamtProzent, 4.00);
+    });
+
+    it('5. P0-2: EFB 221 mit 0,00% AGK und 0,00% W&G wird nicht durch Fallback-Defaults überschrieben', () => {
+        const project = { id: 3, name: 'Projekt EFB 221 mit 0% AGK' };
+        const positions = [
+            {
+                id: 301,
+                name: 'Estricharbeiten',
+                menge: 50,
+                preis: 40.00,
+                zeitansatz_h: 0.5,
+                kostenart: 'LOHN'
+            }
+        ];
+
+        // Profil mit expliziten 0,00% AGK über alle Kostenarten und 0% Leistungswagnis
+        const profile = {
+            mittellohn_eur: 26.00,
+            lohngebundene_kosten_prozent: 80.00,
+            lohnnebenkosten_prozent: 10.00,
+            zuschlag_lohn_bgk: 15.00,
+            zuschlag_lohn_agk: 0.00,
+            zuschlag_stoff_agk: 0.00,
+            zuschlag_geraet_agk: 0.00,
+            zuschlag_sonst_agk: 0.00,
+            zuschlag_nu_agk: 0.00,
+            zuschlag_lohn_wug: 5.00,
+            wug_gewinn_prozent: 3.00,
+            wug_betriebswagnis_prozent: 2.00,
+            wug_leistungswagnis_prozent: 0.00
+        };
+
+        const res = EFBController.calculateEFB221(project, positions, profile);
+
+        assert.strictEqual(res.abschnitt2.zuschlaege.lohn.agk, 0.00, 'Lohn-AGK 0% darf nicht zu 22% werden');
+        assert.strictEqual(res.abschnitt2.zuschlaege.stoffe.agk, 0.00, 'Stoff-AGK 0% darf nicht zu 14% werden');
+        assert.strictEqual(res.abschnitt2.zuschlaege.geraete.agk, 0.00, 'Geräte-AGK 0% darf nicht zu 16% werden');
+        assert.strictEqual(res.abschnitt2.zuschlaege.sonstige.agk, 0.00, 'Sonstige-AGK 0% darf nicht zu 12% werden');
+        assert.strictEqual(res.abschnitt2.zuschlaege.nu.agk, 0.00, 'NU-AGK 0% darf nicht zu 10% werden');
+
+        // Lohn Gesamt = 15% (BGK) + 0% (AGK) + 5% (W&G) = 20%
+        assert.strictEqual(res.abschnitt2.zuschlaege.lohn.gesamt, 20.00);
+
+        // W&G Leistungswagnis 0.00%
+        assert.strictEqual(res.abschnitt2.wugAufteilung.leistungswagnis, 0.00, 'Leistungswagnis 0% darf nicht zu 1.8% werden');
+        assert.strictEqual(res.abschnitt2.wugAufteilung.gewinn, 3.00);
+        assert.strictEqual(res.abschnitt2.wugAufteilung.betriebswagnis, 2.00);
+
+        // Auch mit globalem agk_endsumme_prozent / agk_prozent Vererbung
+        const profileGlobalAgk = {
+            agk_endsumme_prozent: 0.00,
+            wug_leistungswagnis_prozent: 0.00
+        };
+        const resGlobal = EFBController.calculateEFB221(project, positions, profileGlobalAgk);
+        assert.strictEqual(resGlobal.abschnitt2.zuschlaege.lohn.agk, 0.00, 'Globales AGK 0% muss in EFB 221 übernommen werden');
+        assert.strictEqual(resGlobal.abschnitt2.zuschlaege.stoffe.agk, 0.00);
+        assert.strictEqual(resGlobal.abschnitt2.wugAufteilung.leistungswagnis, 0.00);
+    });
 });
+

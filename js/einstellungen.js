@@ -1,4 +1,29 @@
 // Settings Logic
+
+/**
+ * Gesetzliche Aufbewahrungsfristen nach dem Bürokratieentlastungsgesetz IV (BEG IV, Stand 2025/2026):
+ * - Rechnungs- und Buchungsbelege: 8 Jahre gem. § 14b Abs. 1 Satz 1 UStG, § 147 Abs. 3 Satz 1 AO n.F. (durch BEG IV seit 01.01.2025).
+ * - Handelsbücher, Inventare, Jahresabschlüsse: weiterhin 10 Jahre (§ 147 Abs. 3 Satz 1 AO n.F., § 257 Abs. 4 HGB).
+ * - Handels- und Geschäftsbriefe (inkl. Angebote ohne Auftrag): 6 Jahre (§ 147 Abs. 3 Satz 1 AO n.F., § 257 Abs. 4 HGB).
+ * - Hinweistext für Privatkunden bei grundstücksbezogenen Leistungen: 2 Jahre (§ 14b Abs. 1 Satz 5 UStG).
+ * - Zeiterfassungsdaten: 2 Jahre (§ 17 Abs. 2 MiLoG).
+ * Fristbeginn: Mit dem Schluss des Kalenderjahres, in dem die Rechnung ausgestellt wurde (§ 147 Abs. 4 AO).
+ * Ablaufhemmung: Bei offener Festsetzungsfrist oder laufender Betriebsprüfung (§ 147 Abs. 3 Satz 5 AO n.F.).
+ */
+const AUFBEWAHRUNGSFRISTEN_BEG_IV = {
+    RECHNUNGSBELEGE_JAHRE: 8,
+    BUCHUNGSBELEGE_JAHRE: 8,
+    BUECHER_ABSCHLUESSE_JAHRE: 10,
+    GESCHAEFTSBRIEFE_JAHRE: 6,
+    PRIVATKUNDEN_GRUNDSTUECK_JAHRE: 2,
+    ZEITERFASSUNG_MILOG_JAHRE: 2,
+    hinweisPrivatkunde: 'Hinweis gem. § 14b Abs. 1 Satz 5 UStG: Als Privatperson sind Sie gesetzlich verpflichtet, diese Rechnung sowie den zugehörigen Zahlungsbeleg bei steuerpflichtigen Werkleistungen oder sonstigen Leistungen im Zusammenhang mit einem Grundstück mindestens zwei Jahre lang aufzubewahren (Fristbeginn: Schluss des Kalenderjahres der Ausstellung).',
+    hinweisUnternehmer: 'Aufbewahrungsfristen nach BEG IV: Rechnungs- und Buchungsbelege: 8 Jahre gem. § 14b Abs. 1 Satz 1 UStG, § 147 Abs. 3 Satz 1 AO n.F. (durch BEG IV seit 01.01.2025), Bücher und Bilanzen 10 Jahre (§ 147 Abs. 3 Satz 1 AO n.F.), Geschäftsbriefe 6 Jahre (§ 147 Abs. 3 Satz 1 AO n.F.). Fristbeginn mit Schluss des Kalenderjahres; Hemmung bei offener Steuerfestsetzung (§ 147 Abs. 3 Satz 5 AO n.F.).'
+};
+if (typeof window !== 'undefined') {
+    window.AUFBEWAHRUNGSFRISTEN_BEG_IV = AUFBEWAHRUNGSFRISTEN_BEG_IV;
+}
+
 function loadEinstellungenToForm() {
     document.getElementById('setting-firma').value = state.einstellungen.firmenname || '';
     document.getElementById('setting-adresse').value = state.einstellungen.adresse || '';
@@ -465,7 +490,8 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
         const rabatt = parseFloat(pos.rabatt) || 0;
         const gesamt = (pos.menge * pos.preis) * (1 - rabatt / 100);
 
-        const isPos13b = (rech.unterliegt_13b && pos.is13b) || pos.is13b;
+        const global13b = Boolean(rech.unterliegt_13b || rech.isGlobal13b);
+        const isPos13b = (pos.is13b !== undefined && pos.is13b !== null) ? Boolean(pos.is13b) : global13b;
         const descText = pos.beschreibung || pos.text || art.beschreibung || '';
 
         const tr = document.createElement('tr');
@@ -536,7 +562,8 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
         let rowBrutto = 0;
         let tax = 0;
 
-        const isPos13b = rech.unterliegt_13b && pos.is13b;
+        const global13b = Boolean(rech.unterliegt_13b || rech.isGlobal13b);
+        const isPos13b = (pos.is13b !== undefined && pos.is13b !== null) ? Boolean(pos.is13b) : global13b;
 
         if (mode === 'netto') {
             rowNetto = (pos.menge * pos.preis) * (1 - rabatt / 100);
@@ -578,7 +605,8 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
 
     let taxHtml = '';
     
-    if (rech.unterliegt_13b && taxes['13b_netto'] > 0 && taxes['normal_netto'] > 0) {
+    const global13b = Boolean(rech.unterliegt_13b || rech.isGlobal13b);
+    if (global13b && taxes['13b_netto'] > 0 && taxes['normal_netto'] > 0) {
         const netto13b = taxes['13b_netto'] * rabattFaktor * taxableRatio;
         const nettoNormal = taxes['normal_netto'] * rabattFaktor * taxableRatio;
         
@@ -698,7 +726,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
         legalTextsHtml += `<p class="italic">Das Liefer- und Leistungsdatum entspricht, sofern nicht anders angegeben, dem Rechnungsdatum.</p>`;
     }
     
-    const isReverseCharge = rech.unterliegt_13b || (Object.keys(taxes).length === 0 && positionenNetto > 0 && kunde.ist_bauleistender_13b);
+    const isReverseCharge = Boolean(rech.unterliegt_13b || rech.isGlobal13b) || (Object.keys(taxes).length === 0 && positionenNetto > 0 && kunde && kunde.ist_bauleistender_13b);
     if (isReverseCharge) {
         legalTextsHtml += `<p><strong>Steuerschuldnerschaft des Leistungsempfängers:</strong> Leistungen unterliegen gemäß § 13b UStG dem Reverse-Charge-Verfahren. Die Steuerschuldnerschaft geht auf den Leistungsempfänger über.</p>`;
     }
@@ -716,13 +744,48 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
     }
     
     if (rech.ist_privatkunde || rech.customer_type === 'B2C' || (kunde && kunde.customer_type === 'B2C')) {
-        legalTextsHtml += `<p><strong>Hinweis gem. § 14b Abs. 1 Satz 5 UStG:</strong> Als Privatperson sind Sie gesetzlich verpflichtet, diese Rechnung sowie den zugehörigen Zahlungsbeleg für steuerliche Zwecke mindestens zwei Jahre lang aufzubewahren.</p>`;
+        legalTextsHtml += `<p><strong>Hinweis gem. § 14b Abs. 1 Satz 5 UStG:</strong> Als Privatperson sind Sie gesetzlich verpflichtet, diese Rechnung sowie den zugehörigen Zahlungsbeleg bei steuerpflichtigen Werkleistungen oder sonstigen Leistungen im Zusammenhang mit einem Grundstück mindestens zwei Jahre lang aufzubewahren (Fristbeginn: Schluss des Kalenderjahres der Ausstellung).</p>`;
     }
     
-    if (rech.ausweis_35a_erforderlich && rech.summe_lohnkosten_brutto > 0) {
-        const lohnNetto = rech.summe_lohnkosten_brutto / 1.19; 
-        const lohnSteuer = rech.summe_lohnkosten_brutto - lohnNetto;
-        legalTextsHtml += `<p><strong>Hinweis zur Steuerermäßigung nach § 35a EStG:</strong> In dem oben ausgewiesenen Rechnungsbetrag sind steuerbegünstigte Arbeits-, Fahrt- und Maschinenkosten in Höhe von ${formatCurrency(lohnNetto)} (netto) zzgl. ${formatCurrency(lohnSteuer)} Umsatzsteuer, somit insgesamt ${formatCurrency(rech.summe_lohnkosten_brutto)} (brutto) enthalten.</p>`;
+    if (rech.ausweis_35a_erforderlich) {
+        let sumLohnNetto = 0;
+        let sumLohnSteuer = 0;
+        let sumLohnBrutto = 0;
+
+        if (Array.isArray(rech.positionen) && rech.positionen.length > 0) {
+            const lohnPos = rech.positionen.filter(p => {
+                const ct = String(p.cost_type || p.kostenart || '').toUpperCase();
+                return ct === 'LOHN' || ct === 'FAHRT' || Boolean(p.is_tax_deductible_35a);
+            });
+            if (lohnPos.length > 0) {
+                lohnPos.forEach(p => {
+                    const menge = parseFloat(p.menge) || 0;
+                    const preis = parseFloat(p.preis) || 0;
+                    const rabatt = parseFloat(p.rabatt) || 0;
+                    const mwstRate = parseFloat(p.mwst !== undefined ? p.mwst : (rech.mwst !== undefined ? rech.mwst : 19)) || 0;
+                    const net = Math.round((menge * preis * (1 - rabatt / 100)) * 100) / 100;
+                    const tax = Math.round((net * (mwstRate / 100)) * 100) / 100;
+                    sumLohnNetto += net;
+                    sumLohnSteuer += tax;
+                    sumLohnBrutto += (net + tax);
+                });
+                sumLohnNetto = Math.round(sumLohnNetto * 100) / 100;
+                sumLohnSteuer = Math.round(sumLohnSteuer * 100) / 100;
+                sumLohnBrutto = Math.round(sumLohnBrutto * 100) / 100;
+            }
+        }
+
+        // Fallback falls keine Positionen kategorisiert sind, aber ein Gesamtwert übergeben wurde
+        if (sumLohnBrutto === 0 && rech.summe_lohnkosten_brutto > 0) {
+            const mwstRate = parseFloat(rech.mwst !== undefined ? rech.mwst : (rech.netto > 0 ? (rech.steuer / rech.netto * 100) : 19)) || 19;
+            sumLohnNetto = Math.round((rech.summe_lohnkosten_brutto / (1 + mwstRate / 100)) * 100) / 100;
+            sumLohnSteuer = Math.round((rech.summe_lohnkosten_brutto - sumLohnNetto) * 100) / 100;
+            sumLohnBrutto = parseFloat(rech.summe_lohnkosten_brutto);
+        }
+
+        if (sumLohnBrutto > 0) {
+            legalTextsHtml += `<p><strong>Hinweis zur Steuerermäßigung nach § 35a EStG:</strong> In dem oben ausgewiesenen Rechnungsbetrag sind steuerbegünstigte Arbeits-, Fahrt- und Maschinenkosten in Höhe von ${formatCurrency(sumLohnNetto)} (netto) zzgl. ${formatCurrency(sumLohnSteuer)} Umsatzsteuer, somit insgesamt ${formatCurrency(sumLohnBrutto)} (brutto) enthalten.</p>`;
+        }
     }
     
     legalTextsHtml += '</div>';
@@ -1482,7 +1545,8 @@ function generateMahnungItemsHtml(rech, MAHNGEBUHR) {
         tdPreis.textContent = formatCurrency(pos.preis);
         tr.appendChild(tdPreis);
 
-        const isPos13b = (rech.unterliegt_13b && pos.is13b) || pos.is13b;
+        const global13b = Boolean(rech.unterliegt_13b || rech.isGlobal13b);
+        const isPos13b = (pos.is13b !== undefined && pos.is13b !== null) ? Boolean(pos.is13b) : global13b;
 
         const tdMwst = document.createElement('td');
         tdMwst.className = 'py-2 px-2 text-right tabular-nums text-slate-500 font-mono';

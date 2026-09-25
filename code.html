@@ -654,6 +654,7 @@
                                         <th class="px-4 font-semibold w-16 whitespace-nowrap">ID</th>
                                         <th class="px-4 font-semibold whitespace-nowrap">Artikelname</th>
                                         <th class="px-4 font-semibold whitespace-nowrap">Katalog</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap text-center">Einheit</th>
                                         <th class="px-4 font-semibold whitespace-nowrap text-right">Bestand</th>
                                         <th class="px-4 font-semibold text-right whitespace-nowrap">VK-Preis</th>
                                         <th class="px-4 font-semibold text-right w-24 whitespace-nowrap">Aktionen</th>
@@ -674,10 +675,10 @@
         <div id="artikel-modal"
             class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
             <div
-                class="bg-white rounded-lg shadow-xl w-full max-w-md border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                class="bg-white rounded-lg shadow-xl w-full max-w-xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
                 <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
                     <h3 id="modal-title" class="text-lg font-semibold text-slate-800">Neuer Artikel</h3>
-                    <button onclick="closeArtikelModal()" class="text-slate-400 hover:text-slate-600">
+                    <button onclick="closeArtikelModal()" aria-label="Schließen" class="text-slate-400 hover:text-slate-600">
                         <span class="material-symbols-outlined">close</span>
                     </button>
                 </div>
@@ -732,11 +733,25 @@
                                 class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-y"></textarea>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-4">
+                        <div class="grid grid-cols-3 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Lieferant</label>
                                 <input type="text" id="artikel-lieferant" placeholder="z.B. Großhandel GmbH"
                                     class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Einheit</label>
+                                <select id="artikel-einheit"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                    <option value="Stk.">Stk. (Stück)</option>
+                                    <option value="Std.">Std. (Stunden)</option>
+                                    <option value="m">m (Meter)</option>
+                                    <option value="m²">m² (Quadratmeter)</option>
+                                    <option value="m³">m³ (Kubikmeter)</option>
+                                    <option value="psch.">psch. (Pauschal)</option>
+                                    <option value="kg">kg (Kilogramm)</option>
+                                    <option value="l">l (Liter)</option>
+                                </select>
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Aktueller Bestand</label>
@@ -786,6 +801,43 @@
                             <div>
                                 <label class="block text-sm font-medium text-slate-700 mb-1">Lohnanteil (%)</label>
                                 <input type="number" step="1" min="0" max="100" value="0" id="artikel-lohnanteil" class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm" placeholder="0">
+                            </div>
+                        </div>
+
+                        <!-- GPSR Produktsicherheitsangaben (EU 2023/988 / Art. 12 GPSR) -->
+                        <div class="border-t border-slate-200 pt-3 mt-1 bg-slate-50 p-3 rounded-md border border-slate-200">
+                            <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                                <span class="material-symbols-outlined text-[16px] text-slate-500">verified_user</span>
+                                Produktsicherheit &amp; GPSR (EU 2023/988)
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Hersteller Name</label>
+                                    <input type="text" id="artikel-hersteller-name" placeholder="z.B. Mustermann GmbH"
+                                        class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Hersteller Kontakt / Adresse</label>
+                                    <input type="text" id="artikel-hersteller-kontakt" placeholder="z.B. post@mustermann.de, Musterstr. 1"
+                                        class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-xs">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3 mt-2">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Charge / Seriennummer / Typ</label>
+                                    <input type="text" id="artikel-charge-seriennummer" placeholder="z.B. Lot 2026-X, Art.-Nr. Type"
+                                        class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">EU-Verantwortlicher (Drittland)</label>
+                                    <input type="text" id="artikel-eu-verantwortlicher" placeholder="z.B. EU Importer GmbH, Berlin"
+                                        class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-xs">
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Sicherheits- &amp; Warnhinweise</label>
+                                <textarea id="artikel-warnhinweis" rows="2" placeholder="z.B. Augenschutz tragen, nicht über 50°C lagern..."
+                                    class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-xs resize-y"></textarea>
                             </div>
                         </div>
                     </form>

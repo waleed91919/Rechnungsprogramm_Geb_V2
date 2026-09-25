@@ -339,7 +339,70 @@ class ZeiterfassungController {
     // =========================================================================
 
     /**
-     * Speichert einen Arbeitszeiteintrag in SQLite (mit ArbZG-Prüfung und Audit).
+     * Prüft die Einhaltung der 7-Tage-Aufzeichnungsfrist nach § 17 Abs. 1 MiLoG i.V.m. § 2a SchwarzArbG.
+     * Arbeitszeiten müssen spätestens bis zum Ablauf des 7. auf den Tag der Arbeitsleistung folgenden
+     * Kalendertages aufgezeichnet werden.
+     * @param {Date|string} zeitVon - Tag/Beginn der Arbeitsleistung
+     * @param {Date|string} createdAt - Tag/Zeitpunkt der Erfassung (Default: now)
+     * @returns {Object} { isLate, fristAbgelaufen, diffDays, statusMilog, warnung }
+     */
+    static checkMilogAufzeichnungsfrist(zeitVon, createdAt = new Date()) {
+        if (!zeitVon) return { isLate: false, fristAbgelaufen: false, diffDays: 0, statusMilog: 'PUENKTLICH', warnung: null };
+        const dVon = new Date(zeitVon);
+        const dCreate = new Date(createdAt);
+        if (isNaN(dVon.getTime()) || isNaN(dCreate.getTime())) {
+            return { isLate: false, fristAbgelaufen: false, diffDays: 0, statusMilog: 'PUENKTLICH', warnung: null };
+        }
+
+        // Kalendertagsberechnung (Midnight Kalendertag)
+        const dateVon = new Date(dVon.getFullYear(), dVon.getMonth(), dVon.getDate());
+        const dateCreate = new Date(dCreate.getFullYear(), dCreate.getMonth(), dCreate.getDate());
+        const diffMs = dateCreate.getTime() - dateVon.getTime();
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const isLate = diffDays > 7;
+
+        return {
+            isLate,
+            fristAbgelaufen: isLate,
+            diffDays,
+            statusMilog: isLate ? 'VERSPAETET' : 'PUENKTLICH',
+            warnung: isLate
+                ? 'Achtung: Erfassung erfolgt nach Ablauf der 7-Tage-Frist gem. § 17 Abs. 1 MiLoG (Ordnungswidrigkeit nach § 21 MiLoG).'
+                : null
+        };
+    }
+
+    /**
+     * Prüft die Einhaltung der 2-jährigen Mindestaufbewahrungsfrist nach § 17 Abs. 2 MiLoG.
+     * Stempel- und Arbeitszeitdaten dürfen vor Ablauf von 24 Monaten (2 Jahren) nicht physisch gelöscht werden.
+     * @param {Date|string} zeitVon - Tag der Arbeitsleistung
+     * @param {Date|string} referenceDate - Prüfdatum (Default: now)
+     * @returns {Object} { darfGeloeschtWerden, minRetentionDate, error }
+     */
+    static checkMilogAufbewahrungsfrist(zeitVon, referenceDate = new Date()) {
+        if (!zeitVon) return { darfGeloeschtWerden: false, error: 'Kein Leistungsdatum vorhanden.' };
+        const dVon = new Date(zeitVon);
+        const dRef = new Date(referenceDate);
+        if (isNaN(dVon.getTime()) || isNaN(dRef.getTime())) {
+            return { darfGeloeschtWerden: false, error: 'Ungültiges Datum.' };
+        }
+
+        // 2 Jahre = 24 Monate
+        const minRetentionDate = new Date(dVon);
+        minRetentionDate.setFullYear(minRetentionDate.getFullYear() + 2);
+
+        const darfGeloeschtWerden = dRef.getTime() >= minRetentionDate.getTime();
+        return {
+            darfGeloeschtWerden,
+            canHardDelete: darfGeloeschtWerden,
+            withinRetentionPeriod: !darfGeloeschtWerden,
+            minRetentionDate: minRetentionDate.toISOString(),
+            error: darfGeloeschtWerden ? null : 'Mindestaufbewahrungsfrist nicht abgelaufen: Zeiterfassungsdaten müssen gem. § 17 Abs. 2 MiLoG mindestens 2 Jahre (24 Monate) aufbewahrt werden.'
+        };
+    }
+
+    /**
+     * Speichert einen Arbeitszeiteintrag in SQLite (mit ArbZG-Prüfung, MiLoG 7-Tage-Check und Audit).
      */
     static saveZeiteintrag(db, data, auditLogger = null) {
         if (!db) throw new Error('Database instance required.');
@@ -359,6 +422,12 @@ class ZeiterfassungController {
             }
         }
 
+        // MiLoG § 17 Abs. 1 7-Tage-Aufzeichnungsprüfung
+        const createdAt = data.created_at || new Date().toISOString();
+        const milogCheck = this.checkMilogAufzeichnungsfrist(data.zeit_von, createdAt);
+        const isVerspaetet = milogCheck.isLate ? 1 : (data.is_verspaetet ? 1 : 0);
+        const statusMilog = milogCheck.isLate ? 'VERSPAETET' : (data.status_milog || 'PUENKTLICH');
+
         const existing = db.prepare('SELECT * FROM zeiterfassung WHERE uuid = ?').get(uuid);
         if (existing && (existing.status === 'FREIGEGEBEN' || existing.status === 'ABGERECHNET')) {
             if (data.status !== existing.status && (data.status === 'ABGERECHNET' || data.status === 'FREIGEGEBEN')) {
@@ -372,11 +441,13 @@ class ZeiterfassungController {
             INSERT INTO zeiterfassung (
                 uuid, mitarbeiter_id, projekt_id, liegenschaft_id, gebaeude_id, raum_id,
                 taetigkeit_typ, zeit_von, zeit_bis, dauer_min, pause_min, qr_code_scanned,
-                geo_lat, geo_lng, bemerkung, wegezeit_eur, status, device_id, created_at, updated_at
+                geo_lat, geo_lng, bemerkung, wegezeit_eur, status, device_id,
+                is_verspaetet, status_milog, created_at, updated_at
             ) VALUES (
                 @uuid, @mitarbeiter_id, @projekt_id, @liegenschaft_id, @gebaeude_id, @raum_id,
                 @taetigkeit_typ, @zeit_von, @zeit_bis, @dauer_min, @pause_min, @qr_code_scanned,
-                @geo_lat, @geo_lng, @bemerkung, @wegezeit_eur, @status, @device_id, @created_at, CURRENT_TIMESTAMP
+                @geo_lat, @geo_lng, @bemerkung, @wegezeit_eur, @status, @device_id,
+                @is_verspaetet, @status_milog, @created_at, CURRENT_TIMESTAMP
             ) ON CONFLICT(uuid) DO UPDATE SET
                 mitarbeiter_id = excluded.mitarbeiter_id,
                 projekt_id = excluded.projekt_id,
@@ -394,6 +465,8 @@ class ZeiterfassungController {
                 bemerkung = excluded.bemerkung,
                 wegezeit_eur = excluded.wegezeit_eur,
                 status = excluded.status,
+                is_verspaetet = excluded.is_verspaetet,
+                status_milog = excluded.status_milog,
                 updated_at = CURRENT_TIMESTAMP
         `);
 
@@ -416,7 +489,9 @@ class ZeiterfassungController {
             wegezeit_eur: parseFloat(data.wegezeit_eur) || 0.0,
             status: data.status || 'ERFASST',
             device_id: data.device_id || 'DESKTOP',
-            created_at: data.created_at || new Date().toISOString()
+            is_verspaetet: isVerspaetet,
+            status_milog: statusMilog,
+            created_at: createdAt
         };
 
         const res = stmt.run(params);
@@ -426,15 +501,47 @@ class ZeiterfassungController {
                 entityType: 'ZEITERFASSUNG',
                 entityId: res.lastInsertRowid || 0,
                 action: 'ZEITERFASSUNG_GESPEICHERT',
-                details: { uuid, mitarbeiter_id: params.mitarbeiter_id, zeit_von: params.zeit_von, dauer_min: dauerMin }
+                details: {
+                    uuid,
+                    mitarbeiter_id: params.mitarbeiter_id,
+                    zeit_von: params.zeit_von,
+                    dauer_min: dauerMin,
+                    is_verspaetet: isVerspaetet,
+                    status_milog: statusMilog,
+                    milog_warnung: milogCheck.warnung
+                }
             });
+
+            if (isVerspaetet === 1) {
+                auditLogger.appendAuditLog({
+                    entityType: 'ZEITERFASSUNG',
+                    entityId: res.lastInsertRowid || 0,
+                    action: 'ZEITERFASSUNG_MILOG_DELAY_WARNING',
+                    details: {
+                        uuid,
+                        mitarbeiter_id: params.mitarbeiter_id,
+                        zeit_von: params.zeit_von,
+                        created_at: createdAt,
+                        diffDays: milogCheck.diffDays,
+                        tage_verspaetung: milogCheck.diffDays,
+                        warnung: milogCheck.warnung
+                    }
+                });
+            }
         }
 
         return {
             success: true,
             uuid,
             id: res.lastInsertRowid,
-            arbzg: arbzgCheck
+            arbzg: arbzgCheck,
+            milog: {
+                isLate: isVerspaetet === 1,
+                statusMilog,
+                diffDays: milogCheck.diffDays,
+                warnung: milogCheck.warnung
+            },
+            warnung: milogCheck.warnung || (arbzgCheck.hasVerstoss ? arbzgCheck.verstoesse.join(' ') : null)
         };
     }
 
@@ -545,6 +652,47 @@ class ZeiterfassungController {
         }
 
         return { success: res.changes > 0, softDeleted: true };
+    }
+
+    /**
+     * Physisches Löschen (Hard-Delete) - STRIKT GESPERRT vor Ablauf der gesetzlichen
+     * 2-jährigen Mindestaufbewahrungsfrist (§ 17 Abs. 2 MiLoG).
+     * @param {Object} db - SQLite Datenbank
+     * @param {number|string} idOrUuid - ID oder UUID des Zeiteintrags
+     * @param {Date|string} referenceDate - Referenzdatum (Default: now)
+     * @param {Object|null} auditLogger - AuditLogger
+     */
+    static hardDeleteZeiteintrag(db, idOrUuid, referenceDate = new Date(), auditLogger = null) {
+        if (!db) throw new Error('Database instance required.');
+        const selector = typeof idOrUuid === 'number' ? 'id = ?' : 'uuid = ?';
+        const entry = db.prepare(`SELECT * FROM zeiterfassung WHERE ${selector}`).get(idOrUuid);
+        if (!entry) return { success: false, error: 'Zeiteintrag nicht gefunden.' };
+
+        // Mindestaufbewahrungsfrist nach § 17 Abs. 2 MiLoG prüfen
+        const check = this.checkMilogAufbewahrungsfrist(entry.zeit_von, referenceDate);
+        if (!check.darfGeloeschtWerden) {
+            throw new Error(
+                `Mindestaufbewahrungsfrist verletzt: Zeiterfassungsdaten müssen gem. § 17 Abs. 2 MiLoG mindestens 2 Jahre aufbewahrt werden (kein physisches Löschen vor Ablauf von 24 Monaten).`
+            );
+        }
+
+        const res = db.prepare(`DELETE FROM zeiterfassung WHERE ${selector}`).run(idOrUuid);
+
+        if (auditLogger && auditLogger.appendAuditLog) {
+            auditLogger.appendAuditLog({
+                entityType: 'ZEITERFASSUNG',
+                entityId: entry.id,
+                action: 'ZEITERFASSUNG_HARD_DELETED_AFTER_RETENTION',
+                details: {
+                    uuid: entry.uuid,
+                    mitarbeiter_id: entry.mitarbeiter_id,
+                    zeit_von: entry.zeit_von,
+                    minRetentionDate: check.minRetentionDate
+                }
+            });
+        }
+
+        return { success: res.changes > 0, hardDeleted: true };
     }
 }
 

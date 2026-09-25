@@ -304,6 +304,7 @@ function createRechnungRow(rech, kundenMap) {
     };
     btnPdf.className = 'text-slate-400 hover:text-indigo-600 p-1 transition-colors flex items-center justify-center';
     btnPdf.title = 'PDF herunterladen';
+    btnPdf.setAttribute('aria-label', `PDF für Rechnung ${rech.nr} herunterladen`);
     btnPdf.innerHTML = '<span class="material-symbols-outlined text-[18px]">picture_as_pdf</span>';
     divActions.appendChild(btnPdf);
 
@@ -317,6 +318,7 @@ function createRechnungRow(rech, kundenMap) {
     };
     btnXml.className = 'text-slate-400 hover:text-blue-600 p-1 transition-colors flex items-center justify-center';
     btnXml.title = 'XRechnung XML (EN 16931) herunterladen';
+    btnXml.setAttribute('aria-label', `XRechnung XML für Rechnung ${rech.nr} herunterladen`);
     btnXml.innerHTML = '<span class="material-symbols-outlined text-[18px]">code</span>';
     divActions.appendChild(btnXml);
 
@@ -330,6 +332,7 @@ function createRechnungRow(rech, kundenMap) {
     };
     btnZugferd.className = 'text-slate-400 hover:text-violet-600 p-1 transition-colors flex items-center justify-center';
     btnZugferd.title = 'ZUGFeRD 2.x PDF/A-3 (E-Rechnung) herunterladen';
+    btnZugferd.setAttribute('aria-label', `ZUGFeRD E-Rechnung für Rechnung ${rech.nr} herunterladen`);
     btnZugferd.innerHTML = '<span class="material-symbols-outlined text-[18px]">receipt_long</span>';
     divActions.appendChild(btnZugferd);
 
@@ -342,6 +345,7 @@ function createRechnungRow(rech, kundenMap) {
         };
         btnPaid.className = 'text-slate-400 hover:text-emerald-600 p-1 transition-colors flex items-center justify-center';
         btnPaid.title = 'Zahlungsbestätigung';
+        btnPaid.setAttribute('aria-label', `Rechnung ${rech.nr} als bezahlt markieren`);
         const spanPaid = document.createElement('span');
         spanPaid.className = 'material-symbols-outlined text-[18px]';
         spanPaid.textContent = 'payments';
@@ -359,6 +363,7 @@ function createRechnungRow(rech, kundenMap) {
             };
             btnStorno.className = 'text-slate-400 hover:text-red-500 p-1 transition-colors flex items-center justify-center';
             btnStorno.title = 'Stornieren (GoBD)';
+            btnStorno.setAttribute('aria-label', `Rechnung ${rech.nr} stornieren`);
             const spanStorno = document.createElement('span');
             spanStorno.className = 'material-symbols-outlined text-[18px]';
             spanStorno.textContent = 'undo';
@@ -368,6 +373,7 @@ function createRechnungRow(rech, kundenMap) {
         const btnLock = document.createElement('button');
         btnLock.className = 'text-slate-400 hover:text-amber-600 p-1 transition-colors flex items-center justify-center';
         btnLock.title = 'Rechnung ist gesperrt (GoBD) - Klicken zum Entsperren (wird protokolliert)';
+        btnLock.setAttribute('aria-label', `Rechnung ${rech.nr} entsperren`);
         btnLock.onclick = async (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -397,6 +403,7 @@ function createRechnungRow(rech, kundenMap) {
         };
         btnEdit.className = 'text-slate-400 hover:text-primary p-1 transition-colors flex items-center justify-center';
         btnEdit.title = 'Bearbeiten';
+        btnEdit.setAttribute('aria-label', `Rechnung ${rech.nr} bearbeiten`);
         const spanEdit = document.createElement('span');
         spanEdit.className = 'material-symbols-outlined text-[18px]';
         spanEdit.textContent = 'edit';
@@ -411,6 +418,7 @@ function createRechnungRow(rech, kundenMap) {
         };
         btnDel.className = 'text-slate-400 hover:text-red-500 p-1 transition-colors flex items-center justify-center';
         btnDel.title = 'Löschen';
+        btnDel.setAttribute('aria-label', `Rechnung ${rech.nr} löschen`);
         const spanDel = document.createElement('span');
         spanDel.className = 'material-symbols-outlined text-[18px]';
         spanDel.textContent = 'delete';
@@ -422,6 +430,7 @@ function createRechnungRow(rech, kundenMap) {
         const btnExtend = document.createElement('button');
         btnExtend.className = 'text-slate-400 hover:text-primary p-1 transition-colors flex items-center justify-center';
         btnExtend.title = 'Zahlungsziel verlängern';
+        btnExtend.setAttribute('aria-label', `Zahlungsziel für Rechnung ${rech.nr} verlängern`);
         btnExtend.innerHTML = '<span class="material-symbols-outlined text-[18px]">calendar_month</span>';
         btnExtend.onclick = (e) => {
             e.preventDefault();
@@ -437,6 +446,7 @@ function createRechnungRow(rech, kundenMap) {
         
         btnMahn.className = `${btnMahnClass} p-1 transition-colors relative flex items-center justify-center`;
         btnMahn.title = rech.mahnungLevel > 0 ? `${rech.mahnungLevel}. Mahnung bereits erstellt` : 'Mahnung generieren';
+        btnMahn.setAttribute('aria-label', `Mahnung für Rechnung ${rech.nr} generieren`);
         btnMahn.onclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -787,6 +797,7 @@ function renderAngebote(searchQuery = '') {
         btnEdit.onclick = () => openAngebotModal(ang.id);
         btnEdit.className = 'text-slate-400 hover:text-blue-500 p-1 transition-colors flex items-center justify-center';
         btnEdit.title = 'Angebot bearbeiten';
+        btnEdit.setAttribute('aria-label', `Angebot ${ang.nr} bearbeiten`);
         const spanEdit = document.createElement('span');
         spanEdit.className = 'material-symbols-outlined text-[20px]';
         spanEdit.textContent = 'edit';
@@ -797,6 +808,7 @@ function renderAngebote(searchQuery = '') {
         btnConv.onclick = () => convertToRechnung(ang.id);
         btnConv.className = 'text-slate-400 hover:text-emerald-500 p-1 transition-colors flex items-center justify-center';
         btnConv.title = 'In Rechnung umwandeln';
+        btnConv.setAttribute('aria-label', `Angebot ${ang.nr} in Rechnung umwandeln`);
         const spanConv = document.createElement('span');
         spanConv.className = 'material-symbols-outlined text-[20px]';
         spanConv.textContent = 'post_add';
@@ -807,6 +819,7 @@ function renderAngebote(searchQuery = '') {
         btnPdf.onclick = () => generatePdf(ang.id, true);
         btnPdf.className = 'text-slate-400 hover:text-primary p-1 transition-colors flex items-center justify-center';
         btnPdf.title = 'PDF generieren';
+        btnPdf.setAttribute('aria-label', `PDF für Angebot ${ang.nr} generieren`);
         const spanPdf = document.createElement('span');
         spanPdf.className = 'material-symbols-outlined text-[20px]';
         spanPdf.textContent = 'picture_as_pdf';

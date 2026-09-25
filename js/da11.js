@@ -14,6 +14,9 @@ class DA11Service {
     /**
      * Transliteriert deutsche Umlaute und Sonderzeichen für REB-ASCII-Kompatibilität,
      * damit Zeichenlänge und Byte-Länge (80 Bytes) identisch bleiben.
+     * WICHTIG: Muss IMMER vor dem Abschneiden / Auffüllen (Padding) auf feste
+     * Feldbreiten ausgeführt werden, da die Transliteration (z. B. 'ä' -> 'ae')
+     * die Zeichenanzahl erhöht und sonst Spaltenversatz erzeugen würde.
      */
     static cleanAscii(str) {
         if (!str) return '';
@@ -22,12 +25,17 @@ class DA11Service {
             .replace(/ö/g, 'oe').replace(/Ö/g, 'Oe')
             .replace(/ü/g, 'ue').replace(/Ü/g, 'Ue')
             .replace(/ß/g, 'ss')
-            .replace(/[\r\n]/g, ' ');
+            .replace(/²/g, '2').replace(/³/g, '3')
+            .replace(/°/g, 'Grad')
+            .replace(/€/g, 'EUR')
+            .replace(/[\r\n\t]/g, ' ')
+            .replace(/[^\x20-\x7E]/g, ' ');
     }
 
     /**
      * Formatiert einen String auf exakte Länge (Fixed-Width, Padding links/rechts).
-     * Schneidet bei Überschreitung strikt ab.
+     * Transliteriert zuerst alle Umlaute und Sonderzeichen zu ASCII, prüft erst danach
+     * die Länge und schneidet bei Überschreitung strikt ab.
      */
     static pad(str, length, padChar = ' ', align = 'left') {
         const s = this.cleanAscii(str !== undefined && str !== null ? str : '');
@@ -39,13 +47,13 @@ class DA11Service {
     }
 
     /**
-     * Formatiert eine Ordnungszahl (OZ) in das standardisierte 9-stellige DA11-Format.
+     * Formatiert eine Ordnungszahl (OZ) in das standardisierte 9-stellige DA11-Format (Spalte 3-11).
      * Entfernt alle Trennpunkte und Sonderzeichen, füllt auf 9 Zeichen linksbündig auf.
      * Beispiel: "01.02.0030" -> "01020030 "
      */
     static formatOZ(oz) {
         if (!oz) return '01010010 ';
-        const cleaned = String(oz).replace(/[^0-9A-Za-z]/g, '');
+        const cleaned = this.cleanAscii(oz).replace(/[^0-9A-Za-z]/g, '');
         return this.pad(cleaned, 9, ' ', 'left');
     }
 
@@ -56,7 +64,7 @@ class DA11Service {
      * - I:    Zeilenindex '0'-'9' (1 Stelle)
      */
     static formatAddress(blattNummer, zeilenIndex) {
-        const cleanBlatt = String(blattNummer || '1').replace(/[^0-9A-Za-z]/g, '');
+        const cleanBlatt = this.cleanAscii(blattNummer || '1').replace(/[^0-9A-Za-z]/g, '');
         const blattPart = this.pad(cleanBlatt, 4, '0', 'right');
 
         const idx = Math.max(1, parseInt(zeilenIndex, 10) || 1) - 1;
@@ -82,6 +90,17 @@ class DA11Service {
 
     /**
      * Generiert eine vollständige, REB 23.003-konforme DA11-Datei aus Aufmaßblättern.
+     * Hält den offiziellen Stellenplan nach REB-VB 23.003 (Satzart 11) strikt ein:
+     * - Spalte 01-02: Satzart "11" (2)
+     * - Spalte 03-11: Ordnungszahl OZ (9)
+     * - Spalte 12-13: Index (2)
+     * - Spalte 14-19: Blattnummer (6)
+     * - Spalte 20-21: Zeilennummer (2)
+     * - Spalte 22:    Kennzeichen (1)
+     * - Spalte 23-80: Erläuterung / Rechenansatz / Formelnummer / Ergebnis (58):
+     *                 Spalte 23-24: Formelnummer (2)
+     *                 Spalte 25-69: Rechenansatz / Erläuterung (45)
+     *                 Spalte 70-80: Ergebniswert (11)
      * @param {Object} projektInfo - { name: string, projektNr?: string, ozMaske?: string }
      * @param {Array} blaetter - Liste von Aufmaßblättern mit zeilen
      * @returns {string} Der DA11-Dateiinhalt (80 Zeichen je Zeile mit CRLF)
@@ -101,51 +120,71 @@ class DA11Service {
         const header00 = `001123003${ozMaske}  ${projName}`;
         lines.push(header00.substring(0, 80));
 
-        // 2. Satzart 11: Aufmaßzeilen
+        // 2. Satzart 11: Aufmaßzeilen nach REB-VB 23.003 Stellenplan
         for (const blatt of blaetter) {
-            const blattNr = blatt.blatt_nummer || '0001';
+            const blattNr = blatt.blatt_nummer || '000001';
             const zeilen = blatt.zeilen || [];
 
             let lineCounter = 1;
             for (const z of zeilen) {
-                // Spalte 01-02: '11' (Aufmaßzeile)
+                // Spalte 01-02: Satzart '11' (2 Zeichen)
                 const satzart = '11';
 
-                // Spalte 03-11: Ordnungszahl (9 Zeichen)
+                // Spalte 03-11: Ordnungszahl OZ (9 Zeichen)
                 const oz = this.formatOZ(z.oz_code);
 
-                // Spalte 12-17: Blattadresse BBBBZI (6 Zeichen)
-                const adresse = this.formatAddress(blattNr, z.zeilen_nr || lineCounter++);
+                // Spalte 12-13: Index (2 Zeichen)
+                const index = this.pad(z.index || z.oz_index || '', 2, ' ', 'left');
 
-                // Spalte 18-19: Formelnummer (2 Zeichen, Standard 91 für freie Formel)
+                // Spalte 14-19: Blattnummer (6 Zeichen)
+                const cleanBlatt = this.cleanAscii(blattNr).replace(/[^0-9A-Za-z]/g, '');
+                const blattFormatted = this.pad(cleanBlatt, 6, /^\d+$/.test(cleanBlatt) ? '0' : ' ', 'right');
+
+                // Spalte 20-21: Zeilennummer (2 Zeichen)
+                const zNr = z.zeilen_nr !== undefined && z.zeilen_nr !== null ? z.zeilen_nr : lineCounter;
+                const zeileFormatted = this.pad(String(zNr), 2, '0', 'right');
+
+                // Spalte 22: Kennzeichen (1 Zeichen)
+                const kennzeichen = this.pad(z.kennzeichen || '', 1, ' ', 'left');
+
+                // Spalte 23-24: Formelnummer (2 Zeichen, z. B. 01, 04, 91)
                 const formelReb = this.pad(z.formel_reb || '91', 2, '0', 'right');
 
-                // Spalte 20-69: Rechenansatz / Text (50 Zeichen)
-                let rechenansatz = String(z.rechenansatz || '').trim();
+                // Spalte 25-69: Rechenansatz & Erläuterung (45 Zeichen)
+                // Wichtig: Transliteration VOR dem Zusammensetzen / Padding!
+                const descClean = this.cleanAscii(z.bezeichnung || '').replace(/"/g, "'").trim();
+                let ansatzClean = this.cleanAscii(z.rechenansatz || z.formel || '').trim();
 
-                // Falls Erläuterung vorhanden und nicht bereits in Anführungszeichen:
-                if (z.bezeichnung && !rechenansatz.startsWith('"')) {
-                    const descSafe = this.cleanAscii(z.bezeichnung).replace(/"/g, "'").trim();
-                    const combined = `"${descSafe}" ${rechenansatz}`.trim();
-                    if (combined.length <= 49) {
-                        rechenansatz = combined;
+                let combined = ansatzClean;
+                if (descClean && !ansatzClean.startsWith('"')) {
+                    if (ansatzClean) {
+                        combined = `"${descClean}" ${ansatzClean}`.trim();
+                    } else {
+                        combined = `"${descClean}"`;
                     }
                 }
 
-                // REB-Regel: Ein Rechenansatz sollte mit '=' abschließen, sofern noch Platz ist
-                if (rechenansatz.length > 0 && !rechenansatz.endsWith('=') && rechenansatz.length < 50) {
-                    rechenansatz += '=';
+                // REB-Regel: Rechenansatz sollte mit '=' abschließen, sofern noch Platz ist (max 45 Zeichen)
+                if (combined.length > 0 && !combined.endsWith('=') && combined.length < 45) {
+                    combined += '=';
                 }
-                const ansatzFormatted = this.pad(rechenansatz, 50, ' ', 'left');
+                const ansatzFormatted = this.pad(combined, 45, ' ', 'left');
 
                 // Spalte 70-80: Ergebniswert (11 Zeichen)
+                // Vorzeichen-Fix nach Sanierungsplan P0-8:
+                // Math.abs(raw) * (vorzeichen < 0 ? -1 : 1)
+                // Verhindert, dass bereits negative Ergebnisse aus Abzugsflächen bei vorzeichen = -1 ins Positive gedreht werden.
                 const vorzeichen = z.vorzeichen !== undefined ? parseInt(z.vorzeichen, 10) : 1;
-                const effectiveResult = (parseFloat(z.ergebnis) || 0) * vorzeichen;
+                const raw = parseFloat(z.ergebnis) || 0;
+                const effectiveResult = Math.abs(raw) * (vorzeichen < 0 ? -1 : 1);
                 const resultFormatted = this.formatResult(effectiveResult);
 
-                // Gesamtzeile zusammensetzen (2 + 9 + 6 + 2 + 50 + 11 = 80 Zeichen)
-                const da11Line = `${satzart}${oz}${adresse}${formelReb}${ansatzFormatted}${resultFormatted}`;
+                // Zusammensetzen nach REB-VB 23.003 Stellenplan:
+                // Spalte 01-02 (2) + 03-11 (9) + 12-13 (2) + 14-19 (6) + 20-21 (2) + 22 (1) + 23-24 (2) + 25-69 (45) + 70-80 (11) = 80 Zeichen
+                const da11Line = `${satzart}${oz}${index}${blattFormatted}${zeileFormatted}${kennzeichen}${formelReb}${ansatzFormatted}${resultFormatted}`;
                 lines.push(da11Line.substring(0, 80));
+
+                lineCounter++;
             }
         }
 
@@ -161,8 +200,8 @@ class DA11Service {
 
     /**
      * Parst eine DA11-Datei und wandelt sie in strukturierte Aufmaßblätter & Zeilen um.
-     * Unterstützt Satzart 00 (Vorlaufsatz), Satzart 11 (Mengenansätze), Satzart 99
-     * sowie abwärtskompatibel Satzart 12 (historische Fehlbelegung).
+     * Unterstützt Satzart 00 (Vorlaufsatz), Satzart 11 nach REB-VB 23.003 Stellenplan,
+     * Satzart 99 sowie abwärtskompatibel historische / alternative Feldlayouts.
      * @param {string} da11Content
      * @returns {Object} { success: boolean, projektName, ozMaske, blaetter: Array }
      */
@@ -204,30 +243,50 @@ class DA11Service {
                 // Spalte 03-11: Ordnungszahl (9 Zeichen)
                 const ozRaw = line.substring(2, 11).trim();
 
-                // Spalte 12-17: Adresse (BBBBZI)
-                let blattNr = '0001';
+                let blattNr = '000001';
                 let zeilenNr = parsedZeilenCount + 1;
+                let formelReb = '91';
+                let rechenansatzRaw = '';
+                let ergebnisRaw = '';
 
-                if (line.length >= 17) {
-                    const addrPart = line.substring(11, 17);
-                    const bPart = addrPart.substring(0, 4).trim();
-                    if (bPart) blattNr = bPart;
+                // Prüfe ob Standard REB-VB 23.003 Stellenplan vorliegt:
+                // Spalte 14-19 (Index 13..19): Blattnummer (6 Zeichen)
+                // Spalte 20-21 (Index 19..21): Zeilennummer (2 Zeichen)
+                // Spalte 22 (Index 21..22): Kennzeichen (1 Zeichen)
+                // Spalte 23-24 (Index 22..24): Formelnummer (2 Zeichen)
+                // Spalte 25-69 (Index 24..69): Rechenansatz / Erläuterung (45 Zeichen)
+                // Spalte 70-80 (Index 69..80): Ergebnis (11 Zeichen)
+                if (line.length >= 24) {
+                    const formelCandidate = line.substring(22, 24).trim();
+                    const blattCandidate = line.substring(13, 19).trim();
+                    
+                    if (formelCandidate && /^\d{2}$/.test(formelCandidate)) {
+                        // Standard REB-VB 23.003 Stellenplan
+                        blattNr = blattCandidate || '000001';
+                        const zNrPart = line.substring(19, 21).trim();
+                        zeilenNr = parseInt(zNrPart, 10) || zNrPart || (parsedZeilenCount + 1);
+                        formelReb = formelCandidate;
+                        rechenansatzRaw = line.length >= 69 ? line.substring(24, 69).trim() : line.substring(24).trim();
+                        ergebnisRaw = line.length >= 80 ? line.substring(69, 80).trim() : '';
+                    } else {
+                        // Fallback für Legacy DA11 Format (BBBBZI in Spalte 12-17, Formel in Spalte 18-19)
+                        const addrPart = line.substring(11, 17);
+                        const bPart = addrPart.substring(0, 4).trim();
+                        if (bPart) blattNr = bPart;
 
-                    const letterPart = addrPart.substring(4, 5).toUpperCase();
-                    const indexPart = parseInt(addrPart.substring(5, 6), 10) || 0;
-                    if (letterPart >= 'A' && letterPart <= 'Z') {
-                        zeilenNr = ((letterPart.charCodeAt(0) - 65) + 1) + (indexPart * 26);
+                        const letterPart = addrPart.substring(4, 5).toUpperCase();
+                        const indexPart = parseInt(addrPart.substring(5, 6), 10) || 0;
+                        if (letterPart >= 'A' && letterPart <= 'Z') {
+                            zeilenNr = ((letterPart.charCodeAt(0) - 65) + 1) + (indexPart * 26);
+                        }
+                        formelReb = line.substring(17, 19).trim() || '91';
+                        rechenansatzRaw = line.length >= 69 ? line.substring(19, 69).trim() : line.substring(19).trim();
+                        ergebnisRaw = line.length >= 80 ? line.substring(69, 80).trim() : '';
                     }
+                } else {
+                    rechenansatzRaw = line.substring(19).trim();
                 }
 
-                // Spalte 18-19: Formel-Nr.
-                const formelReb = line.length >= 19 ? line.substring(17, 19).trim() || '91' : '91';
-
-                // Spalte 20-69: Rechenansatz & Erläuterung (50 Zeichen)
-                let rechenansatzRaw = line.length >= 69 ? line.substring(19, 69).trim() : line.substring(19).trim();
-
-                // Spalte 70-80: Ergebniswert (11 Zeichen)
-                let ergebnisRaw = line.length >= 80 ? line.substring(69, 80).trim() : '';
                 let ergebnisNum = parseFloat(ergebnisRaw);
 
                 // Erläuterung aus Text in Anführungszeichen separieren

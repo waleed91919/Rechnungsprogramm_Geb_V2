@@ -191,9 +191,9 @@ class DATEVExporter {
                 r.rechnungsart === 'STORNO' ||
                 r.rechnungsart === 'GUTSCHRIFT';
 
-            // Prüfung auf § 13b UStG
-            const hasTax = Math.abs(parseFloat(r.steuer || 0)) > 0.01 || Math.abs(parseFloat(r.brutto || 0) - parseFloat(r.netto || 0)) > 0.01;
-            const is13b = Boolean(r.unterliegt_13b || (kunde.customer_type === 'B2B' && kunde.ist_bauleistender_13b && !hasTax));
+            // Prüfung auf § 13b UStG (K1-11): Eine Buchung auf 13b (Konto 8337/4337) darf NUR erfolgen,
+            // wenn der Beleg selbst explizit unterliegt_13b = 1 markiert ist (keine Heuristik über Kundenstammdaten).
+            const is13b = Boolean(r.unterliegt_13b);
 
             // Steuersatz-Ermittlung & Aufteilung (DAT-2)
             const steuer7 = parseFloat(r.steuer_7 || 0);

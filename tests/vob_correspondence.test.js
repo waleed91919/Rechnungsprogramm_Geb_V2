@@ -121,8 +121,35 @@ describe('VOB/B & BGB Schriftverkehr-Generator (VobCorrespondenceController)', (
         assert.ok(res.text.includes('§ 12 Abs. 1 VOB/B'));
         assert.ok(res.text.includes('12 Werktagen'));
         assert.ok(res.text.includes('§ 12 Abs. 5 Nr. 1 VOB/B'));
+        assert.ok(res.text.includes('§ 12 Abs. 5 Nr. 2 VOB/B'));
         assert.ok(res.text.includes('6 Werktagen'));
         assert.ok(res.text.includes('§ 640 Abs. 2 BGB'));
+        assert.ok(res.text.includes('mindestens eines Mangels'));
         assert.ok(res.html.includes('15.09.2026 um 10:00 Uhr'));
     });
+
+    it('5. K2-7 & K2-8: B2C-Verbraucherbelehrung (§ 640 Abs. 2 Satz 2 BGB) mit Textform-Hinweis', () => {
+        const consumerClient = {
+            name: 'Familie Schneider',
+            strasse: 'Gartenstr. 12',
+            plz: '14482',
+            ort: 'Potsdam',
+            ist_verbraucher: true
+        };
+
+        const res = VobCorrespondenceController.generateAbnahmeaufforderung({
+            contractor,
+            client: consumerClient,
+            project,
+            date: '2026-09-10',
+            completionDate: '2026-09-09'
+        });
+
+        assert.strictEqual(res.isConsumer, true);
+        assert.ok(res.text.includes('GESETZLICHE BELEHRUNG FÜR VERBRAUCHER GEMÄSS § 640 ABS. 2 SATZ 2 BGB'));
+        assert.ok(res.text.includes('mindestens eines Mangels'));
+        assert.ok(res.text.includes('rechtzeitige Zugang der Mängelrüge in Textform'));
+        assert.ok(res.html.includes('Gesetzliche Belehrung für Verbraucher gemäß § 640 Abs. 2 Satz 2 BGB'));
+    });
 });
+

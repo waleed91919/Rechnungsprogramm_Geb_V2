@@ -154,3 +154,26 @@ test('T-DAT-6: CSV Sanitization verhindert Formel-Injection', () => {
     assert.equal(DATEVExporter.sanitizeCsvField('Normaler Text'), 'Normaler Text');
 });
 
+test('T-DAT-7: DATEV EXTF 700 - Keine pauschale 13b-Zuordnung nur aufgrund von kunde.ist_bauleistender_13b (K1-11)', () => {
+    const rechnungen = [
+        {
+            id: 5,
+            nr: 'RE-2026-0005',
+            kundeId: 20,
+            datum: '2026-08-28',
+            netto: 2000.00,
+            steuer: 380.00,
+            brutto: 2380.00,
+            unterliegt_13b: false,
+            status: 'Gestellt'
+        }
+    ];
+    // Kunde ist Bauleistender, aber Beleg unterliegt NICHT 13b
+    const kunden = [{ id: 20, name: 'Bauunternehmen Müller GmbH', ist_bauleistender_13b: true }];
+
+    const csv03 = DATEVExporter.generateEXTFContent(rechnungen, kunden, { skr: 'SKR03' });
+    const line03 = csv03.trim().split('\n')[2].split(';');
+    assert.equal(line03[6], '"8400"', 'Muss Erlöskonto 8400 sein, NICHT 8337');
+    assert.equal(line03[8], '""', 'BU-Schlüssel darf nicht 19 sein');
+});
+

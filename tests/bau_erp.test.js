@@ -102,7 +102,7 @@ test('4. EN 16931-1 XRechnung & ZUGFeRD Generator & B2G Leitweg-ID Check', () =>
         adresse: 'Müllerstraße 147',
         plz: '13349',
         ort: 'Berlin',
-        leitweg_id: '991-12345678-12'
+        leitweg_id: '991-12345678-30'
     };
 
     const invoice = {
@@ -132,8 +132,8 @@ test('4. EN 16931-1 XRechnung & ZUGFeRD Generator & B2G Leitweg-ID Check', () =>
     assert.strictEqual(valResult.isValid, true);
 
     const xml = EInvoiceEngine.generateXRechnungXML(invoice, b2gCustomer, seller);
-    assert.ok(xml.includes('991-12345678-12'));
-    assert.ok(xml.includes('<ram:BuyerReference>991-12345678-12</ram:BuyerReference>'), 'BT-10 muss die Leitweg-ID tragen');
+    assert.ok(xml.includes('991-12345678-30'));
+    assert.ok(xml.includes('<ram:BuyerReference>991-12345678-30</ram:BuyerReference>'), 'BT-10 muss die Leitweg-ID tragen');
     assert.ok(!xml.includes('DE000000000'), 'Keine Fake-USt-IdNr mehr erlaubt');
     assert.ok(xml.includes('<ram:CalculatedAmount>190.00</ram:CalculatedAmount>'), 'BG-23 Steuerbetrag fehlt');
     assert.ok(xml.includes('<ram:BasisAmount>1000.00</ram:BasisAmount>'), 'BG-23 BasisAmount fehlt');
@@ -175,7 +175,8 @@ test('5. GAEB X83 Import & X84 Export Engine', () => {
     assert.strictEqual(parsed.items[0].einheit, 'm²');
 
     const x84XML = GAEBEngine.generateGAEBX84XML('Neubau Grundschule', parsed.items);
-    assert.ok(x84XML.includes('<DP>X84</DP>'));
+    assert.ok(x84XML.includes('xmlns="http://www.gaeb.de/GAEB_DA_XML/DA_XML_3.3"'));
+    assert.ok(x84XML.includes('<DP>84</DP>'));
     assert.ok(x84XML.includes('01.01.0010'));
 });
 

@@ -1,4 +1,4 @@
-"EXTF";700;21;"Buchungsstapel";13;20260922220104570;"";"RE";"";"";1001;10001;20260101;4;20260701;20260705;"Rechnungsstapel W-Link ERP";"";1;0;0;"EUR";"";"";"";"";"03";"";"";"";""
+"EXTF";700;21;"Buchungsstapel";13;20260925202107346;"";"RE";"";"";1001;10001;20260101;4;20260701;20260705;"Rechnungsstapel W-Link ERP";"";1;0;0;"EUR";"";"";"";"";"03";"";"";"";""
 "Umsatz (ohne Soll/Haben-Kz)";"Soll/Haben-Kennzeichen";"WKZ Umsatz";"Kurs";"Basis-Umsatz";"WKZ Basis-Umsatz";"Konto";"Gegenkonto (ohne BU-Schlüssel)";"BU-Schlüssel";"Belegdatum";"Belegfeld 1";"Belegfeld 2";"Skonto";"Buchungstext"
 "29750,00";"H";"EUR";"";"29750,00";"EUR";"8400";"10101";"";"0107";"RE-2026-B2G-001";"";"";"Rechnung RE-2026-B2G-001 - Stadtverwaltung Berlin - Tiefbauamt"
 "5000,00";"H";"EUR";"";"5000,00";"EUR";"8337";"10102";"19";"0507";"RE-2026-B2B-AB1";"";"";"Rechnung RE-2026-B2B-AB1 - Muster Subunternehmer Rohbau GmbH"

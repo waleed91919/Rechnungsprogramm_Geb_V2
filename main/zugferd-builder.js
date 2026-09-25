@@ -1,15 +1,16 @@
 /**
- * zugferd-builder.js - PDF/A-3-Hybrid-Builder für ZUGFeRD 2.x / Factur-X.
+ * zugferd-builder.js - PDF/A-3-Hybrid-Builder für ZUGFeRD 2.5.2 / Factur-X 1.09.2.
  * Electron-frei: nur @cantoo/pdf-lib, fontkit und Node-Buffer -> via node --test lauffähig.
+ * Stand: 04.08.2026 (ZUGFeRD 2.5.2 / Factur-X 1.09.2, voll EN 16931-konform).
  */
 const fs = require('fs');
 const path = require('path');
 const { PDFDocument, rgb, embedFacturX } = require('@cantoo/pdf-lib');
 const fontkit = require('fontkit');
 
-// /Alternative ist der von ZUGFeRD/Factur-X (Profil EN 16931, Deutschland) geforderte
+// /Alternative ist der von ZUGFeRD 2.5.2 / Factur-X 1.09.2 (Profil EN 16931, Deutschland) geforderte
 // AFRelationship-Wert: XML und PDF sind zwei gleichwertige Darstellungen desselben Inhalts.
-// Quelle: ZUGFeRD 2.x Spezialfall RE / Factur-X 1.0.07 Spezifikation, Abschnitt 6.4.
+// Quelle: ZUGFeRD 2.5.2 / Factur-X 1.09.2 Spezifikation (veröffentlicht 04.08.2026).
 const AF_RELATIONSHIP_ALTERNATIVE = 'Alternative';
 
 const FONT_CANDIDATES_WIN = ['segoeui.ttf', 'arial.ttf', 'calibri.ttf'];
@@ -89,7 +90,7 @@ class ZugferdBuilder {
                 conformanceLevel,
                 documentType: 'INVOICE',
                 version: '1.0',
-                description: 'ZUGFeRD-Rechnungsdaten (maschinenlesbare E-Rechnung)',
+                description: 'ZUGFeRD 2.5.2 / Factur-X 1.09.2 Rechnungsdaten (maschinenlesbare E-Rechnung nach EN 16931)',
                 afRelationship: AF_RELATIONSHIP_ALTERNATIVE,
                 modificationDate: new Date()
             });

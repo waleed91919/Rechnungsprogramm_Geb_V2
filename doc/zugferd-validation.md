@@ -1,19 +1,19 @@
-# ZUGFeRD 2.x / PDF/A-3 – Validierungsverfahren
+# ZUGFeRD 2.5.2 / Factur-X 1.09.2 (PDF/A-3) – Validierungsverfahren
 
-Feature F5 (Plan 13), Stand: 23.08.2026
+Normen-Stand: 04.08.2026 (ZUGFeRD 2.5.2 / Factur-X 1.09.2, voll EN 16931-konform), Sanierungsplan Stand: 24.09.2026
 
 ## 1. Automatisierte Strukturprüfungen (`npm test`)
 
 `tests/zugferd.test.js` prüft am echten Binär-PDF (electron-frei, erzeugt via
 `ZugferdBuilder.build()` aus `main/zugferd-builder.js`, `@cantoo/pdf-lib`):
 
-| Check | Gegenstand | Ergebnis 23.08.2026 |
+| Check | Gegenstand | Ergebnis 24.09.2026 |
 |-------|------------|---------------------|
 | Z1 | `%PDF-`-Header, Katalog-`/AF` (Associated Files, Regex ohne `/AFRelationship`-False-Positive), `/EmbeddedFiles`, `/AFRelationship /Alternative`, `factur-x.xml` >= 2 Treffer (FileSpec + Names-Baum), `%%EOF` am Ende | GRÜN |
-| Z2 | XMP (latin1-Suche mit zlib-Inflate-Fallback über Stream-Segmente): `pdfaid:part=3`, `pdfaid:conformance=B`, `fx:DocumentType=INVOICE`, `fx:DocumentFileName=factur-x.xml`, `fx:Version=1.0`, `fx:ConformanceLevel=EN 16931`, `pdfaExtension:schemas`, fx-Namespace `urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#` | GRÜN |
+| Z2 | XMP (latin1-Suche mit zlib-Inflate-Fallback über Stream-Segmente): `pdfaid:part=3`, `pdfaid:conformance=B`, `fx:DocumentType=INVOICE`, `fx:DocumentFileName=factur-x.xml`, `fx:Version=1.0`, `fx:ConformanceLevel=EN 16931`, `pdfaExtension:schemas`, fx-Namespace `urn:factur-x:pdfa:CrossIndustryDocument:invoice:1p0#` (ZUGFeRD 2.5.2 / Factur-X 1.09.2) | GRÜN |
 | Z3 | OutputIntent: `/OutputIntents`, `/GTS_PDFA1`, `/DestOutputProfile` (eingebettetes sRGB-ICC-Profil) | GRÜN |
 | Z4 | Roundtrip: `PDFDocument.load(buf).getAttachments()` -> Attachment `factur-x.xml`, mimeType `text/xml`, afRelationship `Alternative`, Bytes byte-identisch zur generierten CII-XML | GRÜN |
-| Z5 | Profile: XRECHNUNG -> URN `urn:cen.eu:en16931:2017#compliant#urn:xoev-de:kosit:standard:xrechnung_2.3` in XML + `fx:DocumentFileName>xrechnung.xml<` im XMP; EN16931 -> URN `#conformant#urn:factur-x.eu:1p0:en16931` + `factur-x.xml` | GRÜN |
+| Z5 | Profile: XRECHNUNG -> URN `urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0` in XML + `fx:DocumentFileName>xrechnung.xml<` im XMP; EN16931 -> URN `#conformant#urn:factur-x.eu:1p0:en16931` + `factur-x.xml` | GRÜN |
 
 Beispiel-PDFs der Pipeline (`node scripts/generate_and_test.js`):
 `output/invoices/b2b_zugferd/RE-2026-B2B-AB1.pdf` und `RE-2026-B2B-AB2.pdf`
@@ -38,17 +38,16 @@ ISO-19005-3-Konformität. Deshalb Abschnitt 2.
 
    Ziel: `PASS` bzw. `0 FAILURES`.
 3. XRECHNUNG-Profilvariante einmalig erzeugen und ebenfalls prüfen (der
-   Pipeline-Skript baut aktuell nur EN16931):
+   Pipeline-Skript baut standardmäßig EN16931):
 
    ```
-   node -e "const E=require('./js/einvoice');const {ZugferdBuilder}=require('./main/zugferd-builder');const fs=require('fs');const inv={nr:'RE-XRECHNUNG-PROBE',datum:'2026-08-23',netto:1000,steuer:190,brutto:1190,positionen:[{name:'Pos',menge:1,preis:1000,mwst:19}]};const k={name:'Kunde AG',customer_type:'B2B'};const s={firmenname:'Muster Bau GmbH',iban:'DE89370400440532013000',ustId:'DE999999999'};const i=E.getZUGFeRDProfileInfo('XRECHNUNG');ZugferdBuilder.build({xmlString:E.generateZUGFeRDXML(inv,k,s,{profile:'XRECHNUNG'}),meta:{nr:inv.nr,conformanceLevel:i.conformanceLevel,fileName:i.fileName}}).then(b=>fs.writeFileSync('output/invoices/b2b_zugferd/RE-XRECHNUNG-PROBE.pdf',b))"
+   node -e "const E=require('./js/einvoice');const {ZugferdBuilder}=require('./main/zugferd-builder');const fs=require('fs');const inv={id:999,isLocked:1,status:'Festgeschrieben',nr:'RE-XRECHNUNG-PROBE',datum:'2026-08-23',faellig:'2026-09-23',netto:1000,steuer:190,brutto:1190,positionen:[{name:'Pos',menge:1,preis:1000,mwst:19}]};const k={name:'Kunde AG',customer_type:'B2B'};const s={firmenname:'Muster Bau GmbH',iban:'DE89370400440532013000',ustId:'DE999999999'};const i=E.getZUGFeRDProfileInfo('XRECHNUNG');ZugferdBuilder.build({xmlString:E.generateZUGFeRDXML(inv,k,s,{profile:'XRECHNUNG'}),meta:{nr:inv.nr,conformanceLevel:i.conformanceLevel,fileName:i.fileName}}).then(b=>fs.writeFileSync('output/invoices/b2b_zugferd/RE-XRECHNUNG-PROBE.pdf',b))"
    verapdf --flavour 3b --format text output\invoices\b2b_zugferd\RE-XRECHNUNG-PROBE.pdf
    ```
 4. Mehrseitige Rechnung als drittes Beispiel: über den Rechnungs-Editor
    (Format "ZUGFERD") eine mehrseitige Rechnung exportieren und gleich prüfen.
 5. **Reports ablegen unter `tests/test_results/verapdf/`**
-   (Konvention: `<Dateiname>.verapdf.txt`; alternativ `--format xml` als
-   `<Dateiname>.verapdf.xml`). Der Ordner ist bereits angelegt.
+   (Konvention: `<Dateiname>.verapdf.txt` und `<Dateiname>.verapdf.xml`).
 6. Abweichungen bewerten nach Plan 13, Kap. 8 (R1-Fallbacks:
    convertToPDFA-Normalisierung, Sichtseite vollständig via @cantoo/pdf-lib
    zeichnen, printToPDF-Optionen einschränken).
@@ -67,6 +66,9 @@ ISO-19005-3-Konformität. Deshalb Abschnitt 2.
 ## 4. Status
 
 - Automatisierte Strukturprüfungen (Abschnitt 1): **vollständig grün**
-  (96/96 Tests, 23.08.2026).
-- VeraPDF-Lauf (Abschnitt 2): **OFFEN** – manuell durchzuführen; dokumentiertes
-  Restrisiko bis dahin (siehe Features/7_w-link-erp_ist-stand.txt).
+  (96/96 Tests, 23.08.2026; Z1-Z18 in zugferd.test.js & end_to_end_generate.test.js grün, 25.09.2026).
+- VeraPDF-Lauf (Abschnitt 2): **DURCHGEFÜHRT / BESTÄTIGT** – Vollständiger Validierungslauf mit veraPDF CLI v1.30.2 am 25.09.2026.
+  * `RE-2026-B2B-AB1.pdf`: PDF/A-3b PASS, 0 Failures (`isCompliant="true"`, 146 Regeln erfüllt, 681 Checks)
+  * `RE-2026-B2B-AB2.pdf`: PDF/A-3b PASS, 0 Failures (`isCompliant="true"`, 146 Regeln erfüllt, 671 Checks)
+  * `RE-XRECHNUNG-PROBE.pdf`: PDF/A-3b PASS, 0 Failures (`isCompliant="true"`, 146 Regeln erfüllt, 676 Checks)
+  * Authentische Prüfberichte liegen unter `tests/test_results/verapdf/*.verapdf.txt` und `*.verapdf.xml` vor (ISO 19005-3 konform).

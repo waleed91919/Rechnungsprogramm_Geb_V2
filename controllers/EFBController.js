@@ -55,6 +55,35 @@ class EFBController {
     }
 
     /**
+     * Sicheres Parsen von Prozent- und Zahlenwerten unter Berücksichtigung von 0.00%.
+     * Verhindert die falsche Fallback-Aktivierung bei legitimen 0-Werten (||-Falle).
+     * @param {any} val - Zu prüfender Wert
+     * @param {number} defaultVal - Fallback-Standardwert
+     * @returns {number} Geparselter numerischer Wert
+     */
+    static parsePct(val, defaultVal) {
+        return (val !== undefined && val !== null && !isNaN(parseFloat(val))) ? parseFloat(val) : defaultVal;
+    }
+
+    /**
+     * Führt ein übergebenes Zuschlagsprofil mit den Standard-Defaults zusammen,
+     * ohne legitime 0-Werte zu überschreiben.
+     * @param {Object} profile - Benutzerdefiniertes Profil
+     * @returns {Object} Gemergtes Profil
+     */
+    static mergeProfile(profile = {}) {
+        const defaults = EFBController.getDefaultProfile();
+        if (!profile || typeof profile !== 'object') return { ...defaults };
+        const merged = { ...defaults };
+        for (const [key, val] of Object.entries(profile)) {
+            if (val !== undefined && val !== null && val !== '') {
+                merged[key] = val;
+            }
+        }
+        return merged;
+    }
+
+    /**
      * Berechnet die vollständige EFB 221 Struktur für ein Projekt.
      * @param {Object} project - Projekt-Datensatz
      * @param {Array} positions - Liste der Positionen mit Kostenarten & Zeitansätzen
@@ -62,47 +91,54 @@ class EFBController {
      * @returns {Object} EFB 221 Berechnungsergebnis
      */
     static calculateEFB221(project = {}, positions = [], profile = {}) {
-        const mergedProfile = { ...EFBController.getDefaultProfile(), ...profile };
+        const mergedProfile = EFBController.mergeProfile(profile);
+        const parsePct = EFBController.parsePct;
 
         // 1. Angaben über den Verrechnungslohn (Abschnitt 1)
-        const ml = parseFloat(mergedProfile.mittellohn_eur) || 24.50;
-        const lohngebPct = parseFloat(mergedProfile.lohngebundene_kosten_prozent) || 85.00;
-        const lohnnebenPct = parseFloat(mergedProfile.lohnnebenkosten_prozent) || 12.50;
+        const ml = parsePct(mergedProfile.mittellohn_eur, 24.50);
+        const lohngebPct = parsePct(mergedProfile.lohngebundene_kosten_prozent, 85.00);
+        const lohnnebenPct = parsePct(mergedProfile.lohnnebenkosten_prozent, 12.50);
 
         const lohngebEur = Math.round((ml * (lohngebPct / 100)) * 100) / 100;
         const lohnnebenEur = Math.round((ml * (lohnnebenPct / 100)) * 100) / 100;
         const kalkulationslohn = Math.round((ml + lohngebEur + lohnnebenEur) * 100) / 100;
 
         // 2. Zuschläge auf Einzelkosten der Teilleistungen (Abschnitt 2)
+        // Falls ein globaler AGK-Wert übergeben wurde (z.B. agk_endsumme_prozent oder agk_prozent),
+        // dient dieser als Default für die Kostenarten, sofern keine spezifischen Zuschläge definiert sind.
+        const rawGlobalAgk = profile.agk_endsumme_prozent ?? profile.agk_prozent ?? profile.agk;
+        const hasGlobalAgk = rawGlobalAgk !== undefined && rawGlobalAgk !== null && !isNaN(parseFloat(rawGlobalAgk));
+        const fallbackAgk = hasGlobalAgk ? parseFloat(rawGlobalAgk) : null;
+
         const zuschlaege = {
             lohn: {
-                bgk: parseFloat(mergedProfile.zuschlag_lohn_bgk) || 18.0,
-                agk: parseFloat(mergedProfile.zuschlag_lohn_agk) || 22.0,
-                wug: parseFloat(mergedProfile.zuschlag_lohn_wug) || 8.8,
+                bgk: parsePct(profile.zuschlag_lohn_bgk ?? mergedProfile.zuschlag_lohn_bgk, 18.0),
+                agk: parsePct(profile.zuschlag_lohn_agk ?? fallbackAgk ?? mergedProfile.zuschlag_lohn_agk, 22.0),
+                wug: parsePct(profile.zuschlag_lohn_wug ?? mergedProfile.zuschlag_lohn_wug, 8.8),
                 gesamt: 0
             },
             stoffe: {
-                bgk: parseFloat(mergedProfile.zuschlag_stoff_bgk) || 12.0,
-                agk: parseFloat(mergedProfile.zuschlag_stoff_agk) || 14.0,
-                wug: parseFloat(mergedProfile.zuschlag_stoff_wug) || 6.0,
+                bgk: parsePct(profile.zuschlag_stoff_bgk ?? mergedProfile.zuschlag_stoff_bgk, 12.0),
+                agk: parsePct(profile.zuschlag_stoff_agk ?? fallbackAgk ?? mergedProfile.zuschlag_stoff_agk, 14.0),
+                wug: parsePct(profile.zuschlag_stoff_wug ?? mergedProfile.zuschlag_stoff_wug, 6.0),
                 gesamt: 0
             },
             geraete: {
-                bgk: parseFloat(mergedProfile.zuschlag_geraet_bgk) || 15.0,
-                agk: parseFloat(mergedProfile.zuschlag_geraet_agk) || 16.0,
-                wug: parseFloat(mergedProfile.zuschlag_geraet_wug) || 6.0,
+                bgk: parsePct(profile.zuschlag_geraet_bgk ?? mergedProfile.zuschlag_geraet_bgk, 15.0),
+                agk: parsePct(profile.zuschlag_geraet_agk ?? fallbackAgk ?? mergedProfile.zuschlag_geraet_agk, 16.0),
+                wug: parsePct(profile.zuschlag_geraet_wug ?? mergedProfile.zuschlag_geraet_wug, 6.0),
                 gesamt: 0
             },
             sonstige: {
-                bgk: parseFloat(mergedProfile.zuschlag_sonst_bgk) || 10.0,
-                agk: parseFloat(mergedProfile.zuschlag_sonst_agk) || 12.0,
-                wug: parseFloat(mergedProfile.zuschlag_sonst_wug) || 5.0,
+                bgk: parsePct(profile.zuschlag_sonst_bgk ?? mergedProfile.zuschlag_sonst_bgk, 10.0),
+                agk: parsePct(profile.zuschlag_sonst_agk ?? fallbackAgk ?? mergedProfile.zuschlag_sonst_agk, 12.0),
+                wug: parsePct(profile.zuschlag_sonst_wug ?? mergedProfile.zuschlag_sonst_wug, 5.0),
                 gesamt: 0
             },
             nu: {
-                bgk: parseFloat(mergedProfile.zuschlag_nu_bgk) || 8.0,
-                agk: parseFloat(mergedProfile.zuschlag_nu_agk) || 10.0,
-                wug: parseFloat(mergedProfile.zuschlag_nu_wug) || 4.0,
+                bgk: parsePct(profile.zuschlag_nu_bgk ?? mergedProfile.zuschlag_nu_bgk, 8.0),
+                agk: parsePct(profile.zuschlag_nu_agk ?? fallbackAgk ?? mergedProfile.zuschlag_nu_agk, 10.0),
+                wug: parsePct(profile.zuschlag_nu_wug ?? mergedProfile.zuschlag_nu_wug, 4.0),
                 gesamt: 0
             }
         };
@@ -164,9 +200,9 @@ class EFBController {
             abschnitt2: {
                 zuschlaege,
                 wugAufteilung: {
-                    gewinn: parseFloat(mergedProfile.wug_gewinn_prozent) || 5.0,
-                    betriebswagnis: parseFloat(mergedProfile.wug_betriebswagnis_prozent) || 2.0,
-                    leistungswagnis: parseFloat(mergedProfile.wug_leistungswagnis_prozent) || 1.8
+                    gewinn: parsePct(mergedProfile.wug_gewinn_prozent, 5.0),
+                    betriebswagnis: parsePct(mergedProfile.wug_betriebswagnis_prozent, 2.0),
+                    leistungswagnis: parsePct(mergedProfile.wug_leistungswagnis_prozent, 1.8)
                 }
             },
             abschnitt3: {
@@ -555,23 +591,24 @@ class EFBController {
      * @returns {Object} EFB 222 Berechnungsergebnis
      */
     static calculateEFB222(project = {}, positions = [], bgkDetails = {}, profile = {}) {
-        const mergedProfile = { ...EFBController.getDefaultProfile(), ...profile };
+        const mergedProfile = EFBController.mergeProfile(profile);
         const mergedBgk = { ...EFBController.getDefaultBgkDetails(), ...bgkDetails };
+        const parsePct = EFBController.parsePct;
 
         // 1. Angaben über den Lohn (Mittellohn -> Kalkulationslohn)
-        const ml = parseFloat(mergedProfile.mittellohn_eur) || 24.50;
-        const lohngebPct = parseFloat(mergedProfile.lohngebundene_kosten_prozent) || 85.00;
-        const lohnnebenPct = parseFloat(mergedProfile.lohnnebenkosten_prozent) || 12.50;
+        const ml = parsePct(mergedProfile.mittellohn_eur, 24.50);
+        const lohngebPct = parsePct(mergedProfile.lohngebundene_kosten_prozent, 85.00);
+        const lohnnebenPct = parsePct(mergedProfile.lohnnebenkosten_prozent, 12.50);
 
         const lohngebEur = Math.round((ml * (lohngebPct / 100)) * 100) / 100;
         const lohnnebenEur = Math.round((ml * (lohnnebenPct / 100)) * 100) / 100;
         const kalkulationslohn = Math.round((ml + lohngebEur + lohnnebenEur) * 100) / 100;
 
         // 2. Feste Umlagesätze auf Sachkosten
-        const umlageStoffePct = parseFloat(mergedProfile.umlage_stoff_prozent) || 20.00;
-        const umlageGeraetePct = parseFloat(mergedProfile.umlage_geraet_prozent) || 10.00;
-        const umlageSonstigePct = parseFloat(mergedProfile.umlage_sonst_prozent) || 5.00;
-        const umlageNuPct = parseFloat(mergedProfile.umlage_nu_prozent) || 10.00;
+        const umlageStoffePct = parsePct(mergedProfile.umlage_stoff_prozent, 20.00);
+        const umlageGeraetePct = parsePct(mergedProfile.umlage_geraet_prozent, 10.00);
+        const umlageSonstigePct = parsePct(mergedProfile.umlage_sonst_prozent, 5.00);
+        const umlageNuPct = parsePct(mergedProfile.umlage_nu_prozent, 10.00);
 
         // 3. Auftragsbezogene Baustellengemeinkosten (Abschnitt 3 VHB 222)
         const bgk311 = Math.round((parseFloat(mergedBgk.lohnkosten_baustelleneinrichtung) || 0) * 100) / 100;
@@ -654,13 +691,17 @@ class EFBController {
         // 6. Allgemeine Geschäftskosten (AGK) & Wagnis & Gewinn (W&G)
         // Herstellkosten vor AGK: HK = EKT + BGK
         const herstellkosten = Math.round((summeEkt + summeBgk) * 100) / 100;
-        const agkPct = parseFloat(mergedProfile.agk_endsumme_prozent || mergedProfile.zuschlag_lohn_agk) || 12.00;
+        const rawAgk = mergedProfile.agk_endsumme_prozent ?? mergedProfile.agk_prozent ?? mergedProfile.zuschlag_lohn_agk;
+        const agkPct = (rawAgk !== undefined && rawAgk !== null && !isNaN(parseFloat(rawAgk))) ? parseFloat(rawAgk) : 12.00;
         const agkBetrag = Math.round((herstellkosten * (agkPct / 100)) * 100) / 100;
         const selbstkosten = Math.round((herstellkosten + agkBetrag) * 100) / 100;
 
-        const wugGewinnPct = parseFloat(mergedProfile.wug_gewinn_prozent) || 5.00;
-        const wugBetriebswagnisPct = parseFloat(mergedProfile.wug_betriebswagnis_prozent) || 2.00;
-        const wugLeistungswagnisPct = parseFloat(mergedProfile.wug_leistungswagnis_prozent) || 1.80;
+        const rawGewinn = mergedProfile.wug_gewinn_prozent;
+        const wugGewinnPct = (rawGewinn !== undefined && rawGewinn !== null && !isNaN(parseFloat(rawGewinn))) ? parseFloat(rawGewinn) : 5.00;
+        const rawBetriebswagnis = mergedProfile.wug_betriebswagnis_prozent;
+        const wugBetriebswagnisPct = (rawBetriebswagnis !== undefined && rawBetriebswagnis !== null && !isNaN(parseFloat(rawBetriebswagnis))) ? parseFloat(rawBetriebswagnis) : 2.00;
+        const rawLeistungswagnis = mergedProfile.wug_leistungswagnis_prozent;
+        const wugLeistungswagnisPct = (rawLeistungswagnis !== undefined && rawLeistungswagnis !== null && !isNaN(parseFloat(rawLeistungswagnis))) ? parseFloat(rawLeistungswagnis) : 1.80;
         const wugGesamtPct = Math.round((wugGewinnPct + wugBetriebswagnisPct + wugLeistungswagnisPct) * 100) / 100;
 
         const wugBetrag = Math.round((selbstkosten * (wugGesamtPct / 100)) * 100) / 100;
