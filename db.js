@@ -493,6 +493,9 @@ const dbAPI = {
     },
 
     // --- Initial Full State Load (for init.js) ---
+    getDokumente: async () => await dbQuery('SELECT * FROM dokumente WHERE COALESCE(is_deleted, 0) = 0'),
+
+    // --- Initial Full State Load (for init.js) ---
     async getFullState() {
         const state = {
             artikel: await dbQuery('SELECT * FROM artikel WHERE COALESCE(is_deleted, 0) = 0'),

@@ -211,6 +211,7 @@ function setupIpc() {
     };
 
     ipcMain.handle('db:getFullState', wrapHandler(async () => await dbAPI.getFullState()));
+    ipcMain.handle('db:getDokumente', wrapHandler(async () => await dbAPI.getDokumente()));
 
     // Artikel
     ipcMain.handle('db:saveArtikel', wrapHandler(async (e, artikel) => {
