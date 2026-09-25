@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
     getFullState: () => ipcRenderer.invoke('db:getFullState'),
+    getDokumente: () => ipcRenderer.invoke('db:getDokumente'),
 
     saveArtikel: (artikel) => ipcRenderer.invoke('db:saveArtikel', artikel),
     deleteArtikel: (id) => ipcRenderer.invoke('db:deleteArtikel', id),

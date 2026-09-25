@@ -342,11 +342,12 @@ test('T-SEP-1: pain.008.001.08 strukturiertes PstlAdr in exakter XSD-Reihenfolge
     assert.ok(xml.includes('<Ctry>DE</Ctry>'));
 
     // Prüfe strikte XSD-Reihenfolge: StrtNm vor BldgNb vor PstCd vor TwnNm vor Ctry
-    const idxStrt = xml.indexOf('<StrtNm>Musterstraße</StrtNm>');
-    const idxBldg = xml.indexOf('<BldgNb>12</BldgNb>');
-    const idxPstCd = xml.indexOf('<PstCd>10115</PstCd>');
-    const idxTwnNm = xml.indexOf('<TwnNm>Berlin</TwnNm>');
-    const idxCtry = xml.indexOf('<Ctry>DE</Ctry>');
+    const debtorIdx = xml.indexOf('<Dbtr>');
+    const idxStrt = xml.indexOf('<StrtNm>Musterstraße</StrtNm>', debtorIdx);
+    const idxBldg = xml.indexOf('<BldgNb>12</BldgNb>', debtorIdx);
+    const idxPstCd = xml.indexOf('<PstCd>10115</PstCd>', debtorIdx);
+    const idxTwnNm = xml.indexOf('<TwnNm>Berlin</TwnNm>', debtorIdx);
+    const idxCtry = xml.indexOf('<Ctry>DE</Ctry>', debtorIdx);
 
     assert.ok(idxStrt < idxBldg, 'StrtNm vor BldgNb');
     assert.ok(idxBldg < idxPstCd, 'BldgNb vor PstCd');

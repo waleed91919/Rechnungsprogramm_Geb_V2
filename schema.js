@@ -181,6 +181,7 @@ function createSchema(db) {
 
     db.exec(`CREATE TABLE IF NOT EXISTS aufmass_zeilen (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid TEXT UNIQUE,
         blatt_id INTEGER NOT NULL,
         oz_code TEXT NOT NULL,
         zeilen_nr INTEGER NOT NULL,
@@ -228,6 +229,7 @@ function createSchema(db) {
     // 3. Bautagebuch
     db.exec(`CREATE TABLE IF NOT EXISTS bautagebuch (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        uuid TEXT UNIQUE,
         project_id INTEGER NOT NULL,
         bericht_nr INTEGER,
         datum DATE NOT NULL,
@@ -2059,6 +2061,8 @@ function runMigrations(db) {
     try { db.exec(`ALTER TABLE maengel ADD COLUMN plan_id INTEGER REFERENCES bauplaene(id) ON DELETE SET NULL`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
     try { db.exec(`ALTER TABLE maengel ADD COLUMN x_pct REAL DEFAULT 0.0`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
     try { db.exec(`ALTER TABLE maengel ADD COLUMN y_pct REAL DEFAULT 0.0`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+
+    try { db.exec(`ALTER TABLE bautagebuch ADD COLUMN uuid TEXT`); db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_bautagebuch_uuid ON bautagebuch(uuid)`); } catch (e) { if (!e.message.includes('duplicate column') && !e.message.includes('already exists')) console.warn('[DB Migration Warning]:', e.message); }
 
     // 7. REB 23.003 Aufmaßzeilen Erweiterungen
     try { db.exec(`ALTER TABLE aufmass_zeilen ADD COLUMN uuid TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }

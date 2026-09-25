@@ -354,7 +354,7 @@ function createRechnungRow(rech, kundenMap) {
     }
 
     if (rech.isLocked) {
-        if (rech.status !== 'Storniert' && !rech.nr.startsWith('STORNO')) {
+        if (rech.status !== 'Storniert' && (!rech.nr || !rech.nr.startsWith('STORNO'))) {
             const btnStorno = document.createElement('button');
             btnStorno.onclick = (e) => {
                 e.preventDefault();
