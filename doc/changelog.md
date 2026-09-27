@@ -10,10 +10,12 @@
     * Erweiterung Tabelle `dokumente`: `version`, `parent_angebot_id`, `angebot_status` (`ENTWURF`, `VERSENDET`, `ANGENOMMEN`, `ABGELEHNT`), `freeze_snapshot_json`, `auftraggeber_typ`, `vergabe_verfahren`, `vertragsgrundlage`, `angenommen_am`, `angenommene_version`.
     * Erweiterung Tabelle `positionen`: `titel`, `positionstyp` (`NORMAL`, `ALTERNATIV`, `BEDARF`, `PAUSCHALE`), `in_endsumme_enthalten`, `bieterangabe_wert`.
     * Erweiterung Tabelle `projekte`: `source_angebot_id`, `source_angebot_version`.
+    * **Partieller UNIQUE INDEX auf Datenbankebene:** `idx_projekte_unique_source_angebot` auf `projekte(source_angebot_id, source_angebot_version) WHERE source_angebot_id IS NOT NULL AND source_angebot_version IS NOT NULL` sowohl in `createSchema` als auch in `runMigrations`. Dies garantiert die Eindeutigkeit auf SQLite-Engine-Ebene bei unbeschränkter Anzahl normaler Nicht-Angebots-Projekte.
+    * **Altdaten-Migration für bestehende Angebote:** In `runMigrations` werden Altdatenbanken mit historischem Text-Status (`'Angenommen'`, `'Versendet'`, `'Abgelehnt'`, `'ACCEPTED'`, `'SENT'`, etc.) automatisch und idempotent in die neue Spalte `angebot_status` migriert (`'ANGENOMMEN'`, `'VERSENDET'`, `'ABGELEHNT'`), anstatt sie blind auf `'ENTWURF'` zu setzen.
     * Neue Tabelle `projekt_positionen`: Zur dauerhaften Persistenz der aus Angeboten abgeleiteten Projektpositionen mit `source_angebot_pos_id`, OZ, Kostenarten, Einheitspreisen und EKT-Feldern (`ON DELETE CASCADE`).
     * State-Transition-Guard in `document_repo.js`: Fixierte Angebote mit Freeze-Snapshot können unter keinen Umständen auf `ENTWURF` zurückgesetzt werden; `freeze_snapshot_json` kann nicht geleert werden. Nur gültige Vorwärtsübergänge (`VERSENDET` -> `ANGENOMMEN` / `ABGELEHNT`) sind erlaubt.
     * Stabile Identität in `controlling_bautagebuch_repo.js`: In `saveProjekt()` wurde das destruktive `DELETE + INSERT` auf `projekt_positionen` durch ein idempotentes Differenz-Upsert (Diff & Sync) ersetzt. Bestehende Positionen behalten ihre Primärschlüssel-ID dauerhaft bei, was für spätere Aufmaße und Abrechnungen essenziell ist.
-    * Doppel-Projektanlagen-Schutz: In `saveProjekt()` wird geprüft, ob für dieselbe Kombination aus `source_angebot_id` und `source_angebot_version` bereits ein Projekt existiert. Doppelklicks und versehentliche Mehrfachanlagen werden zuverlässig abgewiesen.
+    * Doppel-Projektanlagen-Schutz & Constraint-Handling: In `saveProjekt()` fängt der Try-Catch-Block `SQLITE_CONSTRAINT_UNIQUE` für `idx_projekte_unique_source_angebot` sauber ab und liefert eine verständliche Fehlermeldung (`Doppel-Projektanlage verhindert...`), zusätzlich zur bestehenden Vorprüfung.
   - **Neuer Controller (`controllers/AngebotController.js`):**
     * `normalizeInEndsumme`: Einheitliche Normalisierung von `in_endsumme_enthalten` (String `'0'` und `0` werden verlässlich als `0` gewertet, `'1'` und `1` als `1`).
     * `calculateTotals`: Getrennte Summenberechnung für Normal-, Alternativ- und Bedarfspositionen sowie MwSt-Aufschlüsselung (19%, 7%).
@@ -23,7 +25,7 @@
     * `createProjektFromAngebot`: 1-Klick-Projektanlage mit eigenständigen Projektpositions-IDs und stabiler `sourceOfferPositionId`- / `source_angebot_pos_id`-Referenz.
     * `validateAngebot`: Kontextbezogene Vollständigkeits- und Risikoprüfung.
   - **Automatisierte Testsuite (`tests/angebot_lifecycle.test.js`):**
-    * 10 umfassende Tests (Summenberechnung, Freeze-Snapshot, Versionierung, Projektübernahme, Risikoprüfung, SQLite-Persistenz & Reload von `projekt_positionen`, Foreign Key & Cascade, Offensive Attacken-Tests gegen den Freeze-Lock, String-`'0'`-Normalisierung, ID-Erhaltung bei Projekt-Updates, Blockade von Doppel-Projektanlagen und realer Legacy-DB-Migrationstest). 100% Tests bestanden.
+    * 11 umfassende Tests (Summenberechnung, Freeze-Snapshot, Versionierung, Projektübernahme, Risikoprüfung, SQLite-Persistenz & Reload von `projekt_positionen`, Foreign Key & Cascade, Offensive Attacken-Tests gegen den Freeze-Lock, String-`'0'`-Normalisierung, ID-Erhaltung bei Projekt-Updates, Blockade von Doppel-Projektanlagen, erweiterter Legacy-DB-Migrationstest mit Status-Übernahme und SQLite-Unique-Index, sowie Test 11 zur Aufmaß-Referenzstabilität über Projekt-Updates hinweg). 100% Tests bestanden.
 
 ## 27.09.2026 (Bugfix PDF-Druck & ZUGFeRD-Sichtseite sowie DOM-Print-Reparatur)
 - **Behebung PDF-Druck blockiert (Klick auf PDF-Symbol im Dashboard ohne Reaktion):**

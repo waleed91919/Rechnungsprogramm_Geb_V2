@@ -12,6 +12,7 @@
  * 8. Stabile Identität bei Projekt-Updates (Kein ID-Wechsel)
  * 9. Verhindern von Doppel-Projektanlagen (Idempotenz / Double-Click Guard)
  * 10. Legacy-DB Migrationstest
+ * 11. Stabile Aufmaß-Referenz über Projekt-Updates hinweg
  */
 
 const test = require('node:test');
@@ -1016,7 +1017,7 @@ test('Test 10: Legacy-DB Migrationstest', async () => {
             VALUES (1, 1, 'Abbruch Estrich Altbau', 60, 'm²', 50.0, 19)
         `).run();
 
-        // Altes Angebot (vor V2):
+        // Altes Angebot 2 (vor V2, Status: Versendet):
         db.prepare(`
             INSERT INTO dokumente (id, type, nr, datum, faellig, kundeId, status, netto, steuer, brutto)
             VALUES (2, 'angebot', 'ANG-2024-0012', '2024-10-05', '2024-11-05', 1, 'Versendet', 4500.0, 855.0, 5355.0)
@@ -1024,6 +1025,34 @@ test('Test 10: Legacy-DB Migrationstest', async () => {
         db.prepare(`
             INSERT INTO positionen (id, dokumentId, name, menge, einheit, preis, mwst)
             VALUES (2, 2, 'Neuer Estrich Einbau', 60, 'm²', 75.0, 19)
+        `).run();
+
+        // Altes Angebot 3 (Status: Angenommen):
+        db.prepare(`
+            INSERT INTO dokumente (id, type, nr, datum, faellig, kundeId, status, netto, steuer, brutto)
+            VALUES (3, 'angebot', 'ANG-2024-0013', '2024-10-06', '2024-11-06', 1, 'Angenommen', 6200.0, 1178.0, 7378.0)
+        `).run();
+        db.prepare(`
+            INSERT INTO positionen (id, dokumentId, name, menge, einheit, preis, mwst)
+            VALUES (3, 3, 'Fliesenarbeiten', 40, 'm²', 80.0, 19)
+        `).run();
+
+        // Altes Angebot 4 (Status: Abgelehnt):
+        db.prepare(`
+            INSERT INTO dokumente (id, type, nr, datum, faellig, kundeId, status, netto, steuer, brutto)
+            VALUES (4, 'angebot', 'ANG-2024-0014', '2024-10-07', '2024-11-07', 1, 'Abgelehnt', 1200.0, 228.0, 1428.0)
+        `).run();
+
+        // Altes Angebot 5 (Status: Entwurf):
+        db.prepare(`
+            INSERT INTO dokumente (id, type, nr, datum, faellig, kundeId, status, netto, steuer, brutto)
+            VALUES (5, 'angebot', 'ANG-2024-0015', '2024-10-08', '2024-11-08', 1, 'Entwurf', 800.0, 152.0, 952.0)
+        `).run();
+
+        // Altes Angebot 6 (Status: ACCEPTED - englisch):
+        db.prepare(`
+            INSERT INTO dokumente (id, type, nr, datum, faellig, kundeId, status, netto, steuer, brutto)
+            VALUES (6, 'angebot', 'ANG-2024-0016', '2024-10-09', '2024-11-09', 1, 'ACCEPTED', 900.0, 171.0, 1071.0)
         `).run();
 
         // Altes Projekt:
@@ -1081,9 +1110,23 @@ test('Test 10: Legacy-DB Migrationstest', async () => {
         assert.equal(projPost.budget, 60000.0);
         assert.equal(projPost.status, 'In Ausführung');
 
-        // 10.5: Validierung 2: Neue Spalten mit Defaultwerten vorhanden
+        // 10.5: Validierung 2: Altdaten-Migration für historischen Status verifizieren
         assert.equal(angebotPost.version, 1, 'Default version muss 1 sein');
-        assert.equal(angebotPost.angebot_status, 'ENTWURF', 'Default angebot_status muss ENTWURF sein');
+        // Altdaten-Migration: 'Versendet' muss sauber nach 'VERSENDET' migriert sein!
+        assert.equal(angebotPost.angebot_status, 'VERSENDET', 'Altdaten-Migration: Historischer Status "Versendet" muss in angebot_status="VERSENDET" überführt werden');
+        
+        const ang3Post = db.prepare('SELECT * FROM dokumente WHERE id = 3').get();
+        assert.equal(ang3Post.angebot_status, 'ANGENOMMEN', 'Altdaten-Migration: Historischer Status "Angenommen" muss in angebot_status="ANGENOMMEN" überführt werden');
+
+        const ang4Post = db.prepare('SELECT * FROM dokumente WHERE id = 4').get();
+        assert.equal(ang4Post.angebot_status, 'ABGELEHNT', 'Altdaten-Migration: Historischer Status "Abgelehnt" muss in angebot_status="ABGELEHNT" überführt werden');
+
+        const ang5Post = db.prepare('SELECT * FROM dokumente WHERE id = 5').get();
+        assert.equal(ang5Post.angebot_status, 'ENTWURF', 'Altdaten-Migration: Status "Entwurf" bleibt angebot_status="ENTWURF"');
+
+        const ang6Post = db.prepare('SELECT * FROM dokumente WHERE id = 6').get();
+        assert.equal(ang6Post.angebot_status, 'ANGENOMMEN', 'Altdaten-Migration: Historischer Status "ACCEPTED" muss in angebot_status="ANGENOMMEN" überführt werden');
+
         assert.equal(angebotPost.auftraggeber_typ, 'PRIVAT', 'Default auftraggeber_typ muss PRIVAT sein');
         assert.equal(angebotPost.vergabe_verfahren, 'DIREKT', 'Default vergabe_verfahren muss DIREKT sein');
         assert.equal(angebotPost.vertragsgrundlage, 'BGB_WERKVERTRAG', 'Default vertragsgrundlage muss BGB_WERKVERTRAG sein');
@@ -1100,7 +1143,11 @@ test('Test 10: Legacy-DB Migrationstest', async () => {
         assert.equal(projPost.source_angebot_id, null);
         assert.equal(projPost.source_angebot_version, null);
 
-        // 10.6: Validierung 3: Neue Tabelle projekt_positionen existiert und ist sofort für neue Projekte nutzbar
+        // 10.6: Validierung 3: Echter partieller UNIQUE INDEX auf SQLite-Ebene existiert
+        const idxPost = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_projekte_unique_source_angebot'").get();
+        assert.ok(idxPost, 'idx_projekte_unique_source_angebot muss in migrierter DB existieren');
+
+        // 10.7: Validierung 4: Neue Tabelle projekt_positionen existiert und ist sofort für neue Projekte nutzbar
         const ppTablePost = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='projekt_positionen'").get();
         assert.ok(ppTablePost, 'Tabelle projekt_positionen muss nach Migration existieren');
 
@@ -1143,6 +1190,198 @@ test('Test 10: Legacy-DB Migrationstest', async () => {
         assert.equal(reloadedNewProj.positionen[0].name, 'Estrich Zusatzversiegelung');
         assert.equal(reloadedNewProj.positionen[0].preis, 25.0);
         assert.ok(reloadedNewProj.positionen[0].id > 0, 'projekt_positionen Primärschlüssel muss erzeugt worden sein');
+
+        // Validierung 5: Unique-Constraint auf SQLite-Ebene blockiert Duplikat
+        assert.throws(
+            () => {
+                db.prepare(`
+                    INSERT INTO projekte (name, source_angebot_id, source_angebot_version)
+                    VALUES ('Duplikat-Projekt', 2, 1)
+                `).run();
+            },
+            (err) => {
+                assert.ok(
+                    err.message.includes('UNIQUE constraint failed') || err.code === 'SQLITE_CONSTRAINT_UNIQUE',
+                    `Fehler muss UNIQUE-Constraint-Verletzung sein, war: ${err.message}`
+                );
+                return true;
+            },
+            'SQLite Engine muss Duplikat für selbe source_angebot_id und version hart abweisen'
+        );
+    } finally {
+        try {
+            db.close();
+            if (fs.existsSync(tmpDbPath)) fs.unlinkSync(tmpDbPath);
+        } catch (_err) {}
+    }
+});
+
+test('Test 11: Aufmaß-Referenz bleibt über Projekt-Updates hinweg stabil und intakt', async () => {
+    const tmpDbPath = path.join(os.tmpdir(), `angebot-lifecycle-test11-${Date.now()}-${process.pid}.sqlite`);
+    const Database = require('better-sqlite3');
+    const { createSchema, runMigrations } = require('../schema.js');
+    const createControllingBautagebuchRepo = require('../db/repositories/controlling_bautagebuch_repo');
+    const createAufmassRepo = require('../db/repositories/aufmass_repo');
+
+    const db = new Database(tmpDbPath);
+    db.pragma('foreign_keys = ON');
+    createSchema(db);
+    runMigrations(db);
+
+    const controllingRepo = createControllingBautagebuchRepo({
+        db,
+        dbQuery: async (s, p) => db.prepare(s).all(p),
+        dbRun: async (s, p) => db.prepare(s).run(p),
+        appendAuditLog: () => {},
+        auditLogger: null,
+        getEinstellung: () => null
+    });
+
+    const aufmassRepo = createAufmassRepo({
+        db,
+        dbQuery: async (s, p) => db.prepare(s).all(p),
+        dbRun: async (s, p) => db.prepare(s).run(p),
+        appendAuditLog: () => {}
+    });
+
+    try {
+        // 11.1: Erstelle Angebot, friere es ein, nehme es an
+        const offer = {
+            type: 'angebot',
+            nr: 'ANG-2026-AUFMASS-01',
+            datum: '2026-03-01',
+            faellig: '2026-03-31',
+            status: 'Entwurf',
+            version: 1,
+            angebot_status: 'ENTWURF'
+        };
+        const resOffer = db.prepare(`
+            INSERT INTO dokumente (type, nr, datum, faellig, status, version, angebot_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(offer.type, offer.nr, offer.datum, offer.faellig, offer.status, offer.version, offer.angebot_status);
+        const offerId = Number(resOffer.lastInsertRowid);
+        offer.id = offerId;
+
+        const offerPositions = [
+            { name: 'Erdaushub Baugrube', menge: 150, einheit: 'm³', preis: 45.0, positionstyp: 'NORMAL', in_endsumme_enthalten: 1 },
+            { name: 'Bewehrungsstahl B500B', menge: 8, einheit: 't', preis: 1250.0, positionstyp: 'NORMAL', in_endsumme_enthalten: 1 },
+            { name: 'Ortbeton C25/30', menge: 60, einheit: 'm³', preis: 140.0, positionstyp: 'NORMAL', in_endsumme_enthalten: 1 }
+        ];
+
+        for (const p of offerPositions) {
+            const insRes = db.prepare(`
+                INSERT INTO positionen (dokumentId, name, menge, einheit, preis, positionstyp, in_endsumme_enthalten)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            `).run(offerId, p.name, p.menge, p.einheit, p.preis, p.positionstyp, p.in_endsumme_enthalten);
+            p.id = Number(insRes.lastInsertRowid);
+        }
+
+        // Einfrieren
+        AngebotController.freezeAngebot(offer, offerPositions);
+        assert.ok(offer.freeze_snapshot_json, 'Freeze Snapshot muss erzeugt worden sein');
+
+        // Annehmen
+        AngebotController.acceptAngebot(offer, 1);
+        assert.equal(offer.angebot_status, 'ANGENOMMEN');
+        assert.equal(offer.angenommene_version, 1);
+
+        db.prepare(`
+            UPDATE dokumente
+            SET freeze_snapshot_json = ?, angebot_status = ?, angenommene_version = ?, angenommen_am = ?, status = ?
+            WHERE id = ?
+        `).run(offer.freeze_snapshot_json, offer.angebot_status, offer.angenommene_version, offer.angenommen_am, 'ANGENOMMEN', offerId);
+
+        // 11.2: Erstelle Projekt mit projekt_positionen via saveProjekt
+        const projData = AngebotController.createProjektFromAngebot(offer, offerPositions, {
+            name: 'Bauvorhaben Wohnpark Rheinblick'
+        });
+
+        const projId = await controllingRepo.saveProjekt(projData);
+        assert.ok(projId > 0, 'Projekt muss erfolgreich angelegt werden');
+
+        // Positionen laden und posId merken
+        const loadedProj = controllingRepo.getProjektMitPositionen(projId);
+        assert.equal(loadedProj.positionen.length, 3, 'Projekt muss 3 Positionen aus dem Angebot besitzen');
+
+        const pos1 = loadedProj.positionen[0];
+        const posId = pos1.id;
+        assert.ok(Number.isInteger(posId) && posId > 0, 'Projektposition 1 muss eine gültige numerische ID besitzen');
+        assert.equal(pos1.name, 'Erdaushub Baugrube');
+
+        // 11.3: Erstelle ein Aufmaß, das explizit auf posId referenziert
+        const aufmassId = await aufmassRepo.saveAufmassForPosition(posId, {
+            titel: 'Aufmaß Erdaushub Baugrube Achse 1-4',
+            projekt_id: projId,
+            bemerkung: 'Aufmaß vor Ort mit Bauleitung abgestimmt',
+            einheit: 'm³',
+            positionen: [
+                { raum: 'Baugrube Nord', formel: '20*5*2', ergebnis: 200, einheit: 'm³' },
+                { raum: 'Baugrube Süd', formel: '15*4*1.5', ergebnis: 90, einheit: 'm³' }
+            ]
+        });
+        assert.ok(aufmassId > 0, 'Aufmaß muss erfolgreich angelegt werden');
+
+        // 11.4: Führe ein Projekt-Update durch (Projektname ändern, Position 2 Preis ändern, neue Position 4 hinzufügen)
+        loadedProj.name = 'Bauvorhaben Wohnpark Rheinblick - Bauabschnitt 1';
+        loadedProj.positionen[1].preis = 1320.0;
+        loadedProj.positionen.push({
+            name: 'Sauberkeitsschicht C12/15',
+            menge: 80,
+            einheit: 'm²',
+            preis: 26.50,
+            positionstyp: 'NORMAL',
+            in_endsumme_enthalten: 1
+        });
+
+        const updatedProjId = await controllingRepo.saveProjekt(loadedProj);
+        assert.equal(updatedProjId, projId, 'Projekt-ID muss unverändert bleiben');
+
+        // 11.5: Lade das Aufmaß und die Projektposition neu aus SQLite
+        const reloadedProj = controllingRepo.getProjektMitPositionen(projId);
+        assert.equal(reloadedProj.name, 'Bauvorhaben Wohnpark Rheinblick - Bauabschnitt 1');
+        assert.equal(reloadedProj.positionen.length, 4, 'Projekt muss nach Update 4 Positionen besitzen');
+
+        // Assert 1: posId der Projektposition ist exakt unverändert geblieben
+        const reloadedPos1 = reloadedProj.positionen.find(p => p.name === 'Erdaushub Baugrube');
+        assert.ok(reloadedPos1, 'Erdaushub-Position muss vorhanden sein');
+        assert.equal(reloadedPos1.id, posId, 'posId der Projektposition muss exakt unverändert geblieben sein!');
+
+        // Assert 2: Das Aufmaß verweist weiterhin fehlerfrei auf die exakt selbe Position und alle Werte sind konsistent
+        const reloadedAufmass = await aufmassRepo.getAufmassById(aufmassId);
+        assert.ok(reloadedAufmass, 'Aufmaß muss weiterhin existieren');
+        assert.equal(reloadedAufmass.position_id, String(posId), 'Aufmaß position_id muss exakt posId bleiben');
+        assert.equal(reloadedAufmass.projekt_id, projId, 'Aufmaß projekt_id muss exakt projId bleiben');
+        assert.equal(reloadedAufmass.titel, 'Aufmaß Erdaushub Baugrube Achse 1-4');
+        assert.equal(reloadedAufmass.bemerkung, 'Aufmaß vor Ort mit Bauleitung abgestimmt');
+        assert.equal(reloadedAufmass.positionen.length, 2, 'Aufmaß muss beide Teilpositionen behalten haben');
+        assert.equal(reloadedAufmass.positionen[0].raum, 'Baugrube Nord');
+        assert.equal(reloadedAufmass.positionen[0].ergebnis, 200);
+        assert.equal(reloadedAufmass.positionen[1].raum, 'Baugrube Süd');
+        assert.equal(reloadedAufmass.positionen[1].ergebnis, 90);
+
+        // Aufmaß lässt sich weiterhin direkt über posId auflösen
+        const aufmassByPos = await aufmassRepo.getAufmassByPositionId(posId);
+        assert.ok(aufmassByPos, 'Aufmaß muss über die Projektpositions-ID auffindbar sein');
+        assert.equal(aufmassByPos.id, aufmassId);
+
+        // Relationaler SQL-Join zwischen aufmass und projekt_positionen ist konsistent
+        const joinCheck = db.prepare(`
+            SELECT a.id AS aufmass_id, a.titel AS aufmass_titel, p.id AS pos_id, p.name AS pos_name, p.menge AS pos_menge
+            FROM aufmass a
+            JOIN projekt_positionen p ON CAST(a.position_id AS INTEGER) = p.id
+            WHERE a.id = ?
+        `).get(aufmassId);
+        assert.ok(joinCheck, 'SQL-Join zwischen Aufmaß und projekt_positionen muss matchen');
+        assert.equal(joinCheck.pos_id, posId);
+        assert.equal(joinCheck.pos_name, 'Erdaushub Baugrube');
+        assert.equal(joinCheck.pos_menge, 150);
+
+        // Weitere Validierungen der Projektpositionen
+        const reloadedPos2 = reloadedProj.positionen.find(p => p.name === 'Bewehrungsstahl B500B');
+        assert.equal(reloadedPos2.preis, 1320.0, 'Preisänderung an Position 2 muss gespeichert worden sein');
+        const reloadedPos4 = reloadedProj.positionen.find(p => p.name === 'Sauberkeitsschicht C12/15');
+        assert.ok(reloadedPos4 && reloadedPos4.id > 0, 'Neue Position 4 muss persistiert worden sein');
+        assert.notEqual(reloadedPos4.id, posId);
     } finally {
         try {
             db.close();

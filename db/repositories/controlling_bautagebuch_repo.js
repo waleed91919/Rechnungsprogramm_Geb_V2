@@ -593,7 +593,28 @@ function createControllingBautagebuchRepo(deps) {
             return projId;
         });
 
-        return tx(projekt);
+        try {
+            return tx(projekt);
+        } catch (err) {
+            if (err && typeof err.message === 'string' && err.message.startsWith('Doppel-Projektanlage verhindert')) {
+                throw err;
+            }
+            if (
+                err &&
+                (err.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
+                 err.code === 'SQLITE_CONSTRAINT' ||
+                 (typeof err.message === 'string' && (err.message.includes('UNIQUE constraint failed') || err.message.includes('SQLITE_CONSTRAINT_UNIQUE'))))
+            ) {
+                const sId = projekt && projekt.source_angebot_id;
+                const sVer = (projekt && projekt.source_angebot_version) || 1;
+                if (sId) {
+                    const existing = db.prepare('SELECT id, name FROM projekte WHERE source_angebot_id = ? AND source_angebot_version = ?').get(sId, sVer);
+                    const existingInfo = existing ? ` existiert bereits Projekt #${existing.id} ("${existing.name}").` : '.';
+                    throw new Error(`Doppel-Projektanlage verhindert: Für Angebot #${sId} (Version ${sVer})${existingInfo}`);
+                }
+            }
+            throw err;
+        }
     },
 
     getProjektMitPositionen(projektId) {

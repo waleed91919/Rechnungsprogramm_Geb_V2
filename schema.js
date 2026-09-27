@@ -212,6 +212,13 @@ function createSchema(db) {
 
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_projekt_positionen_projekt_id ON projekt_positionen(projekt_id)`); } catch (e) { console.error('[DB Schema] Index idx_projekt_positionen_projekt_id:', e.message); }
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_projekt_positionen_source_pos ON projekt_positionen(source_angebot_pos_id)`); } catch (e) { console.error('[DB Schema] Index idx_projekt_positionen_source_pos:', e.message); }
+    try {
+        db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_projekte_unique_source_angebot 
+        ON projekte(source_angebot_id, source_angebot_version) 
+        WHERE source_angebot_id IS NOT NULL AND source_angebot_version IS NOT NULL`);
+    } catch (e) {
+        console.error('[DB Schema] Index idx_projekte_unique_source_angebot:', e.message);
+    }
 
 
     // 1. Aufmaßblätter & Zeilen (REB 23.003 & DA11)
@@ -1456,6 +1463,22 @@ function runMigrations(db) {
     try { db.exec(`ALTER TABLE dokumente ADD COLUMN angenommen_am TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
     try { db.exec(`ALTER TABLE dokumente ADD COLUMN angenommene_version INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
 
+    // Altdaten-Migration für den Status bestehender Angebote (Alte Datenbanken)
+    try {
+        db.exec(`
+            UPDATE dokumente
+            SET angebot_status = CASE 
+                WHEN UPPER(COALESCE(status, '')) IN ('ANGENOMMEN', 'ACCEPTED') THEN 'ANGENOMMEN'
+                WHEN UPPER(COALESCE(status, '')) IN ('VERSENDET', 'SENT', 'ABGESENDET') THEN 'VERSENDET'
+                WHEN UPPER(COALESCE(status, '')) IN ('ABGELEHNT', 'REJECTED') THEN 'ABGELEHNT'
+                ELSE 'ENTWURF'
+            END
+            WHERE type = 'angebot' AND (angebot_status IS NULL OR angebot_status = 'ENTWURF') AND status IS NOT NULL AND status != 'Entwurf';
+        `);
+    } catch (e) {
+        console.warn('[DB Migration Warning] angebot_status Altdaten-Migration:', e.message);
+    }
+
     // Tabelle positionen:
     try { db.exec(`ALTER TABLE positionen ADD COLUMN titel TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
     try { db.exec(`ALTER TABLE positionen ADD COLUMN positionstyp TEXT DEFAULT 'NORMAL'`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
@@ -1468,6 +1491,13 @@ function runMigrations(db) {
 
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_dokumente_parent_angebot ON dokumente(parent_angebot_id)`); } catch (e) { if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] idx_dokumente_parent_angebot:', e.message); }
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_projekte_source_angebot ON projekte(source_angebot_id)`); } catch (e) { if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] idx_projekte_source_angebot:', e.message); }
+    try {
+        db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_projekte_unique_source_angebot 
+        ON projekte(source_angebot_id, source_angebot_version) 
+        WHERE source_angebot_id IS NOT NULL AND source_angebot_version IS NOT NULL`);
+    } catch (e) {
+        if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] idx_projekte_unique_source_angebot:', e.message);
+    }
 
     // Tabelle projekt_positionen:
     try {
