@@ -1255,7 +1255,7 @@ test('Test 10: Legacy-DB Migrationstest', async () => {
     }
 });
 
-test('Test 10 (Erweiterung): Migration einer Altdatenbank mit Duplikaten bei source_angebot_id (Bereinigung vor Unique-Index & Revisionssichere Archivierung)', () => {
+test('Test 10 (Erweiterung): Migration einer Altdatenbank mit Duplikaten bei source_angebot_id (Hinterlegung in Archivfeldern & Migrationstabelle vor Entkopplung)', () => {
     const tmpDbPath = path.join(os.tmpdir(), `angebot-lifecycle-dup-mig-${Date.now()}-${process.pid}.sqlite`);
     const Database = require('better-sqlite3');
     const { runMigrations } = require('../schema.js');
@@ -1315,7 +1315,7 @@ test('Test 10 (Erweiterung): Migration einer Altdatenbank mit Duplikaten bei sou
             VALUES (12, 'Malerarbeiten für Duplikat 12', 120, 18.5);
         `);
 
-        // Migration ausführen: Muss fehlerfrei durchlaufen und Duplikate revisionssicher archivieren
+        // Migration ausführen: Muss fehlerfrei durchlaufen, Quelldaten hinterlegen und Duplikate entkoppeln
         runMigrations(db);
 
         // 1. Prüfen, dass der Unique-Index tatsächlich in sqlite_master existiert
@@ -1329,7 +1329,7 @@ test('Test 10 (Erweiterung): Migration einer Altdatenbank mit Duplikaten bei sou
         assert.equal(p10.archived_source_angebot_id, null, 'Erst-Projekt ist kein Duplikat und darf nicht archiviert werden');
 
         // 3. Duplikate wurden sauber vom operativen Angebot entkoppelt,
-        // und die ursprünglichen Quelldaten wurden revisionssicher in den Archivfeldern gespeichert
+        // und die ursprünglichen Quelldaten wurden in den projektbezogenen Feldern (archived_source_...) hinterlegt
         const p11 = db.prepare('SELECT * FROM projekte WHERE id = 11').get();
         assert.ok(p11, 'Projekt 11 muss weiterhin existieren');
         assert.equal(p11.name, 'Projekt Alt 11 (Version NULL Duplikat)');
@@ -1361,7 +1361,7 @@ test('Test 10 (Erweiterung): Migration einer Altdatenbank mit Duplikaten bei sou
         assert.equal(pos12[0].name, 'Malerarbeiten für Duplikat 12');
         assert.equal(pos12[0].menge, 120);
 
-        // 5. Revisionssichere Migrationstabelle: projekt_source_migrations
+        // 5. Migrationstabelle: projekt_source_migrations
         const migLogs = db.prepare('SELECT * FROM projekt_source_migrations ORDER BY projekt_id ASC').all();
         assert.equal(migLogs.length, 2, 'Genau zwei Protokolleinträge in projekt_source_migrations');
         assert.equal(migLogs[0].projekt_id, 11);
@@ -1383,7 +1383,7 @@ test('Test 10 (Erweiterung): Migration einer Altdatenbank mit Duplikaten bei sou
         assert.equal(p20.archived_source_angebot_id, null);
         assert.equal(p20.archived_source_at, null);
 
-        // 7. Idempotenz: Zweiter Aufruf von runMigrations() darf KEINE weiteren Projekte entkoppeln und KEINE doppelten Archiveinträge erzeugen!
+        // 7. Idempotenz: Zweiter Aufruf von runMigrations() darf KEINE weiteren Projekte entkoppeln und KEINE doppelten Protokolleinträge erzeugen!
         runMigrations(db);
 
         const migLogsAfterRun2 = db.prepare('SELECT * FROM projekt_source_migrations ORDER BY projekt_id ASC').all();

@@ -1577,7 +1577,8 @@ function runMigrations(db) {
     try {
         const hasProjekte = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='projekte'").get();
         if (hasProjekte) {
-            // Revisionssichere Archivierung und Entkopplung überzähliger historischer Projekt-Duplikate:
+            // Quelle duplizierter Projekte vor der Entkopplung in projektbezogenen Feldern (archived_source_...)
+            // und der Migrationstabelle (projekt_source_migrations) hinterlegen:
             // p2 hat dasselbe source_angebot_id und dieselbe normalisierte Version (COALESCE(version, 1)) wie p1,
             // wobei p1.id < p2.id und p2.source_angebot_id IS NOT NULL ist.
             const duplicates = db.prepare(`
