@@ -196,7 +196,8 @@ app.whenReady().then(async () => {
                         hasLeistungsdatum: containerHtml.includes('Leistungsdatum'),
                         hasZahlungsaufforderung: containerHtml.includes('Bitte überweisen Sie den Betrag'),
                         hasAngebotssumme: containerHtml.includes('Angebotssumme'),
-                        hasZahlbetrag: containerHtml.includes('Zahlbetrag')
+                        hasZahlbetrag: containerHtml.includes('Zahlbetrag'),
+                        html: containerHtml
                     };
                 })()
             `);
@@ -214,6 +215,13 @@ app.whenReady().then(async () => {
             assert.strictEqual(step2Result.hasZahlungsaufforderung, false, 'PDF-Vorschau des Angebots darf keine Zahlungsaufforderung ("Bitte überweisen Sie den Betrag") enthalten');
             assert.ok(step2Result.hasAngebotssumme, 'PDF-Vorschau des Angebots muss "Angebotssumme" statt "Zahlbetrag" verwenden');
             assert.strictEqual(step2Result.hasZahlbetrag, false, 'PDF-Vorschau des Angebots darf NICHT "Zahlbetrag" verwenden');
+
+            // Baurechtliche und vertragliche Präzisierung (liesen.txt: BGB § 148 & Vertragsgrundlage)
+            const html = step2Result.html;
+            assert.ok(html.includes('Dieses Angebot kann bis zum'), 'Muss verbindliche Annahmefrist ausweisen');
+            assert.ok(!html.includes('freibleibend'), 'Darf kein widersprüchliches freibleibend enthalten');
+            assert.ok(!html.includes('bzw. BGB-Werkvertrag'), 'Darf keine generische Entweder-Oder-Klausel enthalten');
+            assert.ok(html.includes('Vertragsgrundlage: BGB-Werkvertrag'), 'Muss die gewählte Vertragsgrundlage konkret ausweisen');
 
             // Zusätzliche Verifikation: Angebot MIT Ausführungszeitraum rendert "Voraussichtl. Ausführung"
             const mitAusfuehrungHtml = await win.webContents.executeJavaScript(`

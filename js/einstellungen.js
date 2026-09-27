@@ -453,6 +453,46 @@ function formatIban(iban) {
     return iban.replace(/\s+/g, '').replace(/(.{4})/g, '$1 ').trim();
 }
 
+/**
+ * Ermittelt den rechtskonformen Annahmefrist- und Konditionentext für Angebote (§ 148 BGB / konkrete Vertragsgrundlage).
+ * Schließt widersprüchliche "freibleibend"-Klauseln und generische "bzw. BGB-Werkvertrag"-Floskeln aus.
+ *
+ * @param {Object} rech - Das Angebotsdokument
+ * @param {string} faelligStr - Formatiertes Fälligkeits-/Annahmedatum (ggf. bereits HTML-gewrappt)
+ * @param {string} [customKonditionen] - Individuell erfasste Zahlungsbedingungen / Konditionen
+ * @returns {string} Vollständiger Hinweistext
+ */
+function getAngebotKonditionenText(rech, faelligStr, customKonditionen) {
+    const rawCustom = (typeof customKonditionen === 'string' && customKonditionen)
+        ? customKonditionen
+        : (rech ? ((typeof rech.zahlungsbedingungen === 'string' && rech.zahlungsbedingungen) || (typeof rech.konditionen === 'string' && rech.konditionen) || '') : '');
+    const cleanCustom = rawCustom ? (typeof sanitize === 'function' ? sanitize(rawCustom).trim() : String(rawCustom).trim()) : '';
+
+    let konditionenText = '';
+    if (cleanCustom) {
+        konditionenText = cleanCustom;
+    } else {
+        const vg = (rech && (rech.vertragsgrundlage || (rech.vob_vereinbart ? 'VOB_B' : 'BGB_WERKVERTRAG'))) || 'BGB_WERKVERTRAG';
+        if (vg === 'VOB_B') {
+            konditionenText = 'Vertragsgrundlage: VOB/B (Vergabe- und Vertragsordnung für Bauleistungen, Teil B). Zahlungsbedingungen: Abschlagszahlungen nach Leistungsfortschritt gemäß § 16 VOB/B.';
+        } else if (vg === 'BGB_VERBRAUCHERBAU') {
+            konditionenText = 'Vertragsgrundlage: Verbraucherbauvertrag (§ 650i BGB). Zahlungsbedingungen: Abschlagszahlungen nach Baufortschritt gemäß § 650m BGB.';
+        } else {
+            konditionenText = 'Vertragsgrundlage: BGB-Werkvertrag (§§ 631 ff. BGB). Zahlungsbedingungen: Abschlagszahlungen nach Leistungsstand gemäß § 632a BGB.';
+        }
+    }
+
+    const faelligDisplay = (faelligStr && String(faelligStr).includes('<strong'))
+        ? faelligStr
+        : `<strong>${faelligStr || ''}</strong>`;
+
+    return `Dieses Angebot kann bis zum ${faelligDisplay} angenommen werden. ${konditionenText}`;
+}
+
+if (typeof window !== 'undefined') {
+    window.getAngebotKonditionenText = getAngebotKonditionenText;
+}
+
 // PDF Generation
 // Baut die vollständige Sichtseiten-HTML (alle Vorlagen) aus einem explizit übergebenen
 // Dokumentobjekt. Bewusst von window.generatePdf entkoppelt, damit der ZUGFeRD-Export
@@ -852,7 +892,9 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
 
     const formattedIban = formatIban(state.einstellungen.iban);
     const vorlage = state.einstellungen.rechnungsvorlage || 'klassisch';
-    const customKonditionen = (rech.zahlungsbedingungen || rech.konditionen) ? sanitize(rech.zahlungsbedingungen || rech.konditionen).trim() : '';
+    const customKonditionen = (typeof rech.zahlungsbedingungen === 'string' && rech.zahlungsbedingungen.trim())
+        ? sanitize(rech.zahlungsbedingungen).trim()
+        : ((typeof rech.konditionen === 'string' && rech.konditionen.trim()) ? sanitize(rech.konditionen).trim() : '');
     const datumLabel = isAngebot ? 'Angebotsdatum:' : 'Rechnungsdatum:';
     const totalBoxLabel = isAngebot ? 'Angebotssumme (Brutto)' : 'Zahlbetrag';
     
@@ -973,7 +1015,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                                 ${isAngebot ? `
                                 <div class="text-xs text-slate-600 bg-blue-50/50 p-2.5 rounded-xl border border-blue-100 leading-relaxed">
                                     <p class="font-semibold text-blue-900 mb-0.5">Konditionen &amp; Gültigkeit:</p>
-                                    <p>Dieses Angebot ist freibleibend gültig bis zum <strong class="text-slate-900">${faelligStr}</strong>. Zahlungsbedingungen: ${customKonditionen || 'Nach Vereinbarung und Leistungsfortschritt (gemäß VOB/B bzw. BGB-Werkvertrag).'}</p>
+                                    <p>${getAngebotKonditionenText(rech, `<strong class="text-slate-900">${faelligStr}</strong>`, customKonditionen)}</p>
                                 </div>
                                 ` : `
                                 <div class="text-xs text-slate-600 bg-blue-50/50 p-2.5 rounded-xl border border-blue-100 leading-relaxed">
@@ -1100,7 +1142,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                                 ${isAngebot ? `
                                 <div class="text-xs text-gray-700 border-l-2 border-black pl-3 leading-relaxed">
                                     <p class="font-bold text-black mb-0.5">Konditionen &amp; Gültigkeit:</p>
-                                    <p>Dieses Angebot ist freibleibend gültig bis zum <strong>${faelligStr}</strong>. Zahlungsbedingungen: ${customKonditionen || 'Nach Vereinbarung und Leistungsfortschritt (gemäß VOB/B bzw. BGB-Werkvertrag).'}</p>
+                                    <p>${getAngebotKonditionenText(rech, `<strong>${faelligStr}</strong>`, customKonditionen)}</p>
                                 </div>
                                 ` : `
                                 <div class="text-xs text-gray-700 border-l-2 border-black pl-3 leading-relaxed">
@@ -1258,7 +1300,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                                 ${isAngebot ? `
                                 <div class="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-200/70 leading-relaxed">
                                     <p class="font-semibold text-slate-800 mb-0.5">Konditionen &amp; Gültigkeit:</p>
-                                    <p>Dieses Angebot ist freibleibend gültig bis zum <strong class="text-slate-900">${faelligStr}</strong>. Zahlungsbedingungen: ${customKonditionen || 'Nach Vereinbarung und Leistungsfortschritt (gemäß VOB/B bzw. BGB-Werkvertrag).'}</p>
+                                    <p>${getAngebotKonditionenText(rech, `<strong class="text-slate-900">${faelligStr}</strong>`, customKonditionen)}</p>
                                 </div>
                                 ` : `
                                 <div class="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-200/70 leading-relaxed">

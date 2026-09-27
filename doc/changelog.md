@@ -1,5 +1,29 @@
 # Changelog / Fortschritt
 
+## 27.09.2026 (liesen.txt: Baurechtliche und vertragliche Präzisierung von Annahmefrist & Vertragsgrundlage)
+- **Rechtssichere Annahmefrist gem. § 148 BGB (`js/einstellungen.js`):**
+  - **Beseitigung des Widerspruchs "freibleibend" vs. Frist:** Die juristisch widersprüchliche Formulierung *"Dieses Angebot ist freibleibend gültig bis zum [Datum]"* wurde eliminiert (§§ 145, 148 BGB). Ein mit Annahmefrist versehenes Angebot bindet den Anbieter nach deutschem Recht bis zum Ablauf der Frist; die gleichzeitige Verwendung von "freibleibend" erzeugt unzulässige Rechtsunsicherheit.
+  - **Präzise Formulierung:** In allen drei Druckvorlagen (*modern*, *klassisch*, *minimalistisch*) lautet der Text nun: `"Dieses Angebot kann bis zum [faelligStr] angenommen werden."`.
+- **Konkrete Ausweisung der Vertragsgrundlage (`js/einstellungen.js`):**
+  - **Beseitigung der pauschalen Alternativklausel:** Die pauschale Entweder-Oder-Klausel *"gemäß VOB/B bzw. BGB-Werkvertrag"* wurde entfernt, da die VOB/B im BGB-Recht nicht automatisch Vertragsbestandteil wird.
+  - **Zentrale Hilfsfunktion `getAngebotKonditionenText(rech, faelligStr, customKonditionen)`:**
+    * Ermittelt die im Angebot tatsächlich gewählte Vertragsgrundlage (`rech.vertragsgrundlage` bzw. `rech.vob_vereinbart`):
+      - `VOB_B`: `"Vertragsgrundlage: VOB/B (Vergabe- und Vertragsordnung für Bauleistungen, Teil B). Zahlungsbedingungen: Abschlagszahlungen nach Leistungsfortschritt gemäß § 16 VOB/B."`
+      - `BGB_VERBRAUCHERBAU`: `"Vertragsgrundlage: Verbraucherbauvertrag (§ 650i BGB). Zahlungsbedingungen: Abschlagszahlungen nach Baufortschritt gemäß § 650m BGB."`
+      - `BGB_WERKVERTRAG` (Standard): `"Vertragsgrundlage: BGB-Werkvertrag (§§ 631 ff. BGB). Zahlungsbedingungen: Abschlagszahlungen nach Leistungsstand gemäß § 632a BGB."`
+    * Sofern individuelle `customKonditionen` bzw. `rech.zahlungsbedingungen` erfasst wurden, werden diese als individuelle Vereinbarung herangezogen.
+- **Erweiterung der automatisierten Electron DOM- und PDF-Tests (`tests/test_electron_runner.js`):**
+  - Testfall 2 prüft die PDF-Vorschau im echten Chromium DOM nun strikt auf:
+    * Ausweisung der verbindlichen Annahmefrist (`Dieses Angebot kann bis zum`).
+    * Vollständige Abwesenheit von `freibleibend`.
+    * Vollständige Abwesenheit von `bzw. BGB-Werkvertrag`.
+    * Konkrete Ausweisung der gewählten Vertragsgrundlage (`Vertragsgrundlage: BGB-Werkvertrag`).
+- **Testverifikation:**
+  - `node --test tests/angebot_true_ui_and_pdf.test.js`
+  - `node --test tests/angebot_ui_workflow.test.js`
+  - `node --test tests/angebot_lifecycle.test.js`
+  Alle Tests erfolgreich bestanden (3/3 grün).
+
 ## 27.09.2026 (liesen.txt: Vollständige Trennung des Angebots-PDF-Templates vom Rechnungs-Template)
 - **Vollständige Trennung Angebot vs. Rechnung in den PDF-Vorlagen (`js/einstellungen.js`):**
   - **Erkennung `isAngebot`:** `buildInvoiceDocumentHtml(rech, kunde, isAngebot = false)` erkennt Angebote nun auch automatisch anhand von Dokumenteigenschaften (`rech.type === 'angebot' || rech.doc_type === 'angebot'`), selbst wenn das Flag nicht explizit übergeben wird.
