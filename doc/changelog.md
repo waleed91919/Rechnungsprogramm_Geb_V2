@@ -1,6 +1,29 @@
 # Changelog / Fortschritt
 
-## 27.09.2026 (Härtung des Angebots- & Projekt-Kerns: NULL-Version Unique Guard, Altdaten-Deduplizierung & Aufmaß-Löschschutz)
+## 27.09.2026 (liesen.txt: Revisionssichere Archivierung von Altdaten-Duplikaten, Aufmaß-Schutz & Disambiguierung)
+- **Revisionssichere Archivierung von Altdaten-Duplikaten (`schema.js` & `tests/angebot_lifecycle.test.js`):**
+  - Migrationstabelle `projekt_source_migrations` implementiert (`projekt_id`, `original_angebot_id`, `original_angebot_version`, `reason`, `migrated_at`), um jeden Entkopplungsschritt lückenlos und revisionssicher zu protokollieren.
+  - Archivfelder auf Tabelle `projekte` ergänzt: `archived_source_angebot_id`, `archived_source_angebot_version`, `archived_source_note`, `archived_source_at`.
+  - In `runMigrations()` werden Duplikate vor dem Entkoppeln in `projekt_source_migrations` erfasst und ihre historischen Angebotsdaten in den Archivfeldern auf `projekte` gesichert, bevor `source_angebot_id = NULL, source_angebot_version = NULL` gesetzt wird.
+  - Das Projekt, seine Positionen und Rechnungen bleiben zu 100% erhalten.
+  - Bei bereits historisch ungebundenen Projekten (`source_angebot_id IS NULL`) wird keine Quelle geraten.
+  - Idempotenz: Zweiter Migrationslauf ist idempotent – keine weiteren Trennungen und keine doppelten Protokolleinträge.
+- **Gehärteter Aufmaß-Schutz & Vermeidung von Falschtreffern (`schema.js`, `controlling_bautagebuch_repo.js`, `tests/angebot_lifecycle.test.js`):**
+  - Spalte `projekt_position_id INTEGER REFERENCES projekt_positionen(id) ON DELETE RESTRICT` inklusive Index `idx_aufmass_projekt_position_id` in Tabelle `aufmass` integriert (sowohl in `createSchema` als auch in `runMigrations`).
+  - Sichere Datenmigration für bestehende Altdaten: `projekt_position_id` wird nur bei eindeutiger Übereinstimmung von `projekt_id` und `position_id` befüllt.
+  - Datenbank-Integritätsprüfung nach Migration via `PRAGMA foreign_key_check` sichergestellt.
+  - **Disambiguierung & Falschtreffer-Vermeidung:**
+    * In Trigger `trg_prevent_delete_pos_with_aufmass` wird explizit nach `(projekt_position_id = OLD.id) OR (projekt_position_id IS NULL AND projekt_id = OLD.projekt_id AND (position_id = OLD.id OR position_id = CAST(OLD.id AS TEXT)))` geprüft.
+    * In `controlling_bautagebuch_repo.js` (`saveProjekt`) prüft die Löschabfrage `toDelete` analog mit Projektkontext (`WHERE (projekt_position_id IS NOT NULL AND projekt_position_id = ?) OR (projekt_position_id IS NULL AND projekt_id = ? AND (CAST(position_id AS INTEGER) = ? OR position_id = ?))`). Ein Aufmaß aus Projekt A verhindert niemals das Löschen einer Position gleichen Werts in Projekt B!
+  - **Harte Trigger-Garantie:**
+    * Die Installation der Schutz-Trigger `trg_prevent_delete_pos_with_aufmass` und `trg_prevent_delete_projekt_with_aufmass` ist Pflicht. Scheitert das Anlegen oder fehlt der Trigger in `sqlite_master`, bricht `runMigrations()` mit einem harten Error ab.
+- **Vollständige Testabdeckung in `tests/angebot_lifecycle.test.js` (16/16 Tests bestanden):**
+  - Test 10 (Erweiterung): Migration von Duplikaten, Erhaltung aller Positionen, Revisionsarchivierung in `projekt_source_migrations`, Archivspalten und Idempotenz.
+  - Test 12: Trigger-Fehler führt zum harten Migrationsabbruch.
+  - Test 13: Disambiguation – Position in Projekt B wird nicht durch Aufmaß in Projekt A blockiert.
+  - Test 14: Löschtests über alle 3 Pfade (SQL DELETE Position, saveProjekt(), SQL DELETE Projekt).
+  - Test 15: Fresh DB & Legacy Upgraded DB Integrität und `PRAGMA foreign_key_check` (0 Fehler).
+
 - **NULL-Version im Unique-Index und beim Speichern abgesichert (`schema.js` & `controlling_bautagebuch_repo.js`):**
   - Partieller UNIQUE INDEX `idx_projekte_unique_source_angebot` auf `projekte(source_angebot_id, COALESCE(source_angebot_version, 1)) WHERE source_angebot_id IS NOT NULL` definiert (sowohl in `createSchema` als auch in `runMigrations`). Verhindert zuverlässig Duplikate selbst bei manuellen SQL-Inserts mit `source_angebot_version = NULL`.
   - In `saveProjekt()` wird die Angebotsversion bei vorhandener `source_angebot_id` stets auf mindestens Version 1 normalisiert (`const sVer = p.source_angebot_id ? (parseInt(p.source_angebot_version, 10) || 1) : null;`) und konsistent für `INSERT`, `UPDATE` und die Idempotenz-Vorprüfung verwendet.

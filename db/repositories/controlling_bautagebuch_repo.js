@@ -591,8 +591,10 @@ function createControllingBautagebuchRepo(deps) {
                         const posId = Number(posToDelete.id);
                         const posName = posToDelete.name || '';
                         const linkedAufmass = db.prepare(`
-                            SELECT id, titel FROM aufmass WHERE CAST(position_id AS INTEGER) = ? OR position_id = ?
-                        `).get(posId, String(posId));
+                            SELECT id, titel FROM aufmass
+                            WHERE (projekt_position_id IS NOT NULL AND projekt_position_id = ?)
+                               OR (projekt_position_id IS NULL AND projekt_id = ? AND (CAST(position_id AS INTEGER) = ? OR position_id = ?))
+                        `).get(posId, projId, posId, String(posId));
 
                         if (linkedAufmass) {
                             throw new Error('Löschen der Projektposition verhindert: Auf Position #' + posId + ' ("' + posName + '") verweisen bereits Aufmaße. Löschen Sie zuerst die zugehörigen Aufmaße.');

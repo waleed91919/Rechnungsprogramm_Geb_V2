@@ -1255,15 +1255,16 @@ test('Test 10: Legacy-DB Migrationstest', async () => {
     }
 });
 
-test('Test 10 (Erweiterung): Migration einer Altdatenbank mit Duplikaten bei source_angebot_id (Bereinigung vor Unique-Index)', () => {
+test('Test 10 (Erweiterung): Migration einer Altdatenbank mit Duplikaten bei source_angebot_id (Bereinigung vor Unique-Index & Revisionssichere Archivierung)', () => {
     const tmpDbPath = path.join(os.tmpdir(), `angebot-lifecycle-dup-mig-${Date.now()}-${process.pid}.sqlite`);
     const Database = require('better-sqlite3');
     const { runMigrations } = require('../schema.js');
 
     const db = new Database(tmpDbPath);
     try {
-        // Altdatenbank-Zustand: Tabelle projekte enthält BEREITS ZWEI PROJEKTE mit demselben source_angebot_id
-        // (Projekt 1 mit Version 1, Projekt 2 mit NULL, Projekt 3 mit Version 1 als weiteres Duplikat)
+        // Altdatenbank-Zustand: Tabelle projekte enthält BEREITS DREI PROJEKTE mit demselben source_angebot_id
+        // (Projekt 10 mit Version 1, Projekt 11 mit NULL, Projekt 12 mit Version 1 als weiteres Duplikat)
+        // und Projektpositionen für Projekt 11 & 12
         db.exec(`
             CREATE TABLE IF NOT EXISTS einstellungen (
                 key TEXT PRIMARY KEY,
@@ -1280,6 +1281,20 @@ test('Test 10 (Erweiterung): Migration einer Altdatenbank mit Duplikaten bei sou
                 source_angebot_version INTEGER
             );
 
+            CREATE TABLE projekt_positionen (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                projekt_id INTEGER NOT NULL REFERENCES projekte(id) ON DELETE CASCADE,
+                source_angebot_id INTEGER,
+                source_angebot_version INTEGER,
+                source_angebot_pos_id INTEGER,
+                oz_code TEXT,
+                titel TEXT,
+                name TEXT NOT NULL,
+                menge REAL DEFAULT 1,
+                einheit TEXT DEFAULT 'Stk.',
+                preis REAL DEFAULT 0
+            );
+
             INSERT INTO projekte (id, name, source_angebot_id, source_angebot_version)
             VALUES (10, 'Projekt Alt 10 (Version 1)', 55, 1);
 
@@ -1291,39 +1306,93 @@ test('Test 10 (Erweiterung): Migration einer Altdatenbank mit Duplikaten bei sou
 
             INSERT INTO projekte (id, name, source_angebot_id, source_angebot_version)
             VALUES (20, 'Projekt Normal ohne Angebot', NULL, NULL);
+
+            -- Positionen für Duplikat 11 und 12 einfügen (müssen zu 100% erhalten bleiben)
+            INSERT INTO projekt_positionen (projekt_id, name, menge, preis)
+            VALUES (11, 'Bodenbelag Flur für Duplikat 11', 25, 45.0);
+
+            INSERT INTO projekt_positionen (projekt_id, name, menge, preis)
+            VALUES (12, 'Malerarbeiten für Duplikat 12', 120, 18.5);
         `);
 
-        // Migration ausführen: Muss fehlerfrei durchlaufen (Duplikate werden auf -id gesetzt)
+        // Migration ausführen: Muss fehlerfrei durchlaufen und Duplikate revisionssicher archivieren
         runMigrations(db);
 
         // 1. Prüfen, dass der Unique-Index tatsächlich in sqlite_master existiert
         const idxCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_projekte_unique_source_angebot'").get();
         assert.ok(idxCheck, 'idx_projekte_unique_source_angebot muss nach Migration in sqlite_master existieren');
 
-        // 2. Erstes Projekt hat Version 1 behalten
+        // 2. Erstes Projekt hat operative Verknüpfung behalten
         const p10 = db.prepare('SELECT * FROM projekte WHERE id = 10').get();
+        assert.equal(p10.source_angebot_id, 55, 'Erst-Projekt muss source_angebot_id behalten');
         assert.equal(p10.source_angebot_version, 1, 'Erst-Projekt muss Version 1 behalten');
+        assert.equal(p10.archived_source_angebot_id, null, 'Erst-Projekt ist kein Duplikat und darf nicht archiviert werden');
 
-        // 3. Duplikate wurden sauber vom Angebot entkoppelt (source_angebot_id = NULL, source_angebot_version = NULL),
-        // sodass historische Projektdaten vollständig erhalten bleiben, ohne Versionsnummern mit negativen Werten zu korrumpieren
+        // 3. Duplikate wurden sauber vom operativen Angebot entkoppelt,
+        // und die ursprünglichen Quelldaten wurden revisionssicher in den Archivfeldern gespeichert
         const p11 = db.prepare('SELECT * FROM projekte WHERE id = 11').get();
         assert.ok(p11, 'Projekt 11 muss weiterhin existieren');
         assert.equal(p11.name, 'Projekt Alt 11 (Version NULL Duplikat)');
-        assert.equal(p11.source_angebot_id, null, 'Duplikat 11 muss sauber vom Angebot entkoppelt sein (source_angebot_id IS NULL)');
+        assert.equal(p11.source_angebot_id, null, 'Duplikat 11 muss operativ entkoppelt sein (source_angebot_id IS NULL)');
         assert.equal(p11.source_angebot_version, null, 'Duplikat 11 muss source_angebot_version IS NULL haben');
+        assert.equal(p11.archived_source_angebot_id, 55, 'Duplikat 11 muss archived_source_angebot_id = 55 haben');
+        assert.equal(p11.archived_source_angebot_version, null, 'Duplikat 11 muss archived_source_angebot_version = NULL haben');
+        assert.equal(p11.archived_source_note, 'Duplikat bei Migration entkoppelt');
+        assert.ok(p11.archived_source_at, 'Duplikat 11 muss archived_source_at Zeitstempel besitzen');
 
         const p12 = db.prepare('SELECT * FROM projekte WHERE id = 12').get();
         assert.ok(p12, 'Projekt 12 muss weiterhin existieren');
         assert.equal(p12.name, 'Projekt Alt 12 (Version 1 Duplikat)');
-        assert.equal(p12.source_angebot_id, null, 'Duplikat 12 muss sauber vom Angebot entkoppelt sein (source_angebot_id IS NULL)');
+        assert.equal(p12.source_angebot_id, null, 'Duplikat 12 muss operativ entkoppelt sein (source_angebot_id IS NULL)');
         assert.equal(p12.source_angebot_version, null, 'Duplikat 12 muss source_angebot_version IS NULL haben');
+        assert.equal(p12.archived_source_angebot_id, 55, 'Duplikat 12 muss archived_source_angebot_id = 55 haben');
+        assert.equal(p12.archived_source_angebot_version, 1, 'Duplikat 12 muss archived_source_angebot_version = 1 haben');
+        assert.equal(p12.archived_source_note, 'Duplikat bei Migration entkoppelt');
+        assert.ok(p12.archived_source_at, 'Duplikat 12 muss archived_source_at Zeitstempel besitzen');
 
-        // 4. Normales Projekt ohne source_angebot_id bleibt unverändert
+        // 4. Positionen der Duplikat-Projekte sind zu 100% erhalten geblieben
+        const pos11 = db.prepare('SELECT * FROM projekt_positionen WHERE projekt_id = 11').all();
+        assert.equal(pos11.length, 1);
+        assert.equal(pos11[0].name, 'Bodenbelag Flur für Duplikat 11');
+        assert.equal(pos11[0].menge, 25);
+
+        const pos12 = db.prepare('SELECT * FROM projekt_positionen WHERE projekt_id = 12').all();
+        assert.equal(pos12.length, 1);
+        assert.equal(pos12[0].name, 'Malerarbeiten für Duplikat 12');
+        assert.equal(pos12[0].menge, 120);
+
+        // 5. Revisionssichere Migrationstabelle: projekt_source_migrations
+        const migLogs = db.prepare('SELECT * FROM projekt_source_migrations ORDER BY projekt_id ASC').all();
+        assert.equal(migLogs.length, 2, 'Genau zwei Protokolleinträge in projekt_source_migrations');
+        assert.equal(migLogs[0].projekt_id, 11);
+        assert.equal(migLogs[0].original_angebot_id, 55);
+        assert.equal(migLogs[0].original_angebot_version, null);
+        assert.equal(migLogs[0].reason, 'DUPLICATE_SOURCE_ANGEBOT_UNLINK');
+        assert.ok(migLogs[0].migrated_at);
+
+        assert.equal(migLogs[1].projekt_id, 12);
+        assert.equal(migLogs[1].original_angebot_id, 55);
+        assert.equal(migLogs[1].original_angebot_version, 1);
+        assert.equal(migLogs[1].reason, 'DUPLICATE_SOURCE_ANGEBOT_UNLINK');
+        assert.ok(migLogs[1].migrated_at);
+
+        // 6. Normales historisch ungebundenes Projekt (source_angebot_id IS NULL) bleibt unberührt, keine geratene Quelle!
         const p20 = db.prepare('SELECT * FROM projekte WHERE id = 20').get();
         assert.equal(p20.source_angebot_id, null);
         assert.equal(p20.source_angebot_version, null);
+        assert.equal(p20.archived_source_angebot_id, null);
+        assert.equal(p20.archived_source_at, null);
 
-        // 5. Index ist aktiv: Neues Duplikat für Angebot 55 (Version 1 oder NULL) wird blockiert
+        // 7. Idempotenz: Zweiter Aufruf von runMigrations() darf KEINE weiteren Projekte entkoppeln und KEINE doppelten Archiveinträge erzeugen!
+        runMigrations(db);
+
+        const migLogsAfterRun2 = db.prepare('SELECT * FROM projekt_source_migrations ORDER BY projekt_id ASC').all();
+        assert.equal(migLogsAfterRun2.length, 2, 'Idempotenz verletzt: Es dürfen keine doppelten Einträge in projekt_source_migrations entstehen!');
+
+        const p10_afterRun2 = db.prepare('SELECT * FROM projekte WHERE id = 10').get();
+        assert.equal(p10_afterRun2.source_angebot_id, 55, 'Erst-Projekt muss auch nach zweitem Lauf verbunden bleiben');
+
+        // 8. Index ist aktiv: Neues Duplikat für Angebot 55 (Version 1 oder NULL) wird blockiert
         assert.throws(
             () => {
                 db.prepare("INSERT INTO projekte (name, source_angebot_id, source_angebot_version) VALUES ('Neues Duplikat v1', 55, 1)").run();
@@ -1615,7 +1684,358 @@ test('Test 11: Aufmaß-Referenz bleibt über Projekt-Updates hinweg stabil und i
     }
 });
 
+test('Test 12: Trigger-Fehler führt zum harten Migrationsabbruch (Pflicht-Trigger Garantie)', () => {
+    const tmpDbPath = path.join(os.tmpdir(), `angebot-lifecycle-trg-fail-${Date.now()}-${process.pid}.sqlite`);
+    const Database = require('better-sqlite3');
+    const { runMigrations } = require('../schema.js');
+
+    const db = new Database(tmpDbPath);
+    try {
+        db.exec(`
+            CREATE TABLE aufmass (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                position_id TEXT,
+                titel TEXT,
+                projekt_id INTEGER
+            );
+            CREATE TABLE projekt_positionen (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                projekt_id INTEGER,
+                name TEXT
+            );
+            CREATE TABLE projekte (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT
+            );
+        `);
+
+        // Simuliere einen Fehler beim Anlegen des Pflicht-Triggers:
+        // Früher wurde dieser Fehler mit console.warn abgefangen und ignoriert.
+        // Jetzt MUSS runMigrations hart abbrechen!
+        const originalExec = db.exec.bind(db);
+        db.exec = function(sql) {
+            if (typeof sql === 'string' && sql.includes('CREATE TRIGGER trg_prevent_delete_pos_with_aufmass')) {
+                throw new Error('SQLite Engine Error: Trigger creation failed due to hardware/permission error');
+            }
+            return originalExec(sql);
+        };
+
+        assert.throws(
+            () => {
+                runMigrations(db);
+            },
+            (err) => {
+                assert.ok(
+                    err.message.includes('Trigger creation failed due to hardware/permission error') ||
+                    err.message.includes('trg_prevent_delete_pos_with_aufmass'),
+                    `Migrationsfehler muss Pflicht-Trigger Abbruch signalisieren, war: ${err.message}`
+                );
+                return true;
+            },
+            'runMigrations muss hart abbrechen, wenn ein Pflicht-Trigger nicht angelegt werden kann'
+        );
+
+        // Fall 2: Trigger fehlt in sqlite_master (Verifikation schlägt fehl)
+        db.exec = function(sql) {
+            if (typeof sql === 'string' && sql.includes('CREATE TRIGGER trg_prevent_delete_pos_with_aufmass')) {
+                // Führe das SQL nicht aus -> Trigger fehlt
+                return;
+            }
+            return originalExec(sql);
+        };
+
+        assert.throws(
+            () => {
+                runMigrations(db);
+            },
+            (err) => {
+                assert.ok(
+                    err.message.includes('Pflicht-Trigger trg_prevent_delete_pos_with_aufmass fehlt nach Migration in sqlite_master'),
+                    `Verifikationsfehler muss gemeldet werden, war: ${err.message}`
+                );
+                return true;
+            },
+            'runMigrations muss hart abbrechen, wenn ein Pflicht-Trigger nach Erstellung in sqlite_master fehlt'
+        );
+    } finally {
+        try {
+            db.close();
+            if (fs.existsSync(tmpDbPath)) fs.unlinkSync(tmpDbPath);
+        } catch (_err) {}
+    }
+});
+
+test('Test 13: Disambiguation - Position ohne Aufmaß in Projekt B wird nicht durch Aufmaß in Projekt A blockiert', async () => {
+    const tmpDbPath = path.join(os.tmpdir(), `angebot-lifecycle-disambig-${Date.now()}-${process.pid}.sqlite`);
+    const Database = require('better-sqlite3');
+    const { createSchema, runMigrations } = require('../schema.js');
+    const createControllingBautagebuchRepo = require('../db/repositories/controlling_bautagebuch_repo');
+
+    const db = new Database(tmpDbPath);
+    db.pragma('foreign_keys = ON');
+    createSchema(db);
+    runMigrations(db);
+
+    const controllingRepo = createControllingBautagebuchRepo({
+        db,
+        dbQuery: async (s, p) => db.prepare(s).all(p),
+        dbRun: async (s, p) => db.prepare(s).run(p),
+        appendAuditLog: () => {},
+        auditLogger: null,
+        getEinstellung: () => null
+    });
+
+    try {
+        // Projekt A anlegen
+        const resA = db.prepare("INSERT INTO projekte (name) VALUES ('Projekt A')").run();
+        const projAId = Number(resA.lastInsertRowid);
+        const resPosA = db.prepare("INSERT INTO projekt_positionen (projekt_id, name) VALUES (?, 'Position A 1')").run(projAId);
+        const posAId = Number(resPosA.lastInsertRowid);
+
+        // Projekt B anlegen
+        const resB = db.prepare("INSERT INTO projekte (name) VALUES ('Projekt B')").run();
+        const projBId = Number(resB.lastInsertRowid);
+        const resPosB = db.prepare("INSERT INTO projekt_positionen (projekt_id, name) VALUES (?, 'Position B 1')").run(projBId);
+        const posBId = Number(resPosB.lastInsertRowid);
+
+        const resPosB2 = db.prepare("INSERT INTO projekt_positionen (projekt_id, name) VALUES (?, 'Position B 2')").run(projBId);
+        const posB2Id = Number(resPosB2.lastInsertRowid);
+
+        // Simuliere historische Aufmaße in Projekt A, bei denen legacy position_id
+        // den String-Wert von posBId bzw. posB2Id hat, aber projekt_id = projAId ist!
+        db.prepare(`
+            INSERT INTO aufmass (titel, projekt_id, position_id, projekt_position_id)
+            VALUES ('Aufmaß Projekt A mit posBId', ?, ?, NULL)
+        `).run(projAId, String(posBId));
+
+        db.prepare(`
+            INSERT INTO aufmass (titel, projekt_id, position_id, projekt_position_id)
+            VALUES ('Aufmaß Projekt A mit posB2Id', ?, ?, NULL)
+        `).run(projAId, String(posB2Id));
+
+        // 1. Direkter SQL DELETE auf Position B2 darf NICHT blockiert werden,
+        // da das Aufmaß zu Projekt A gehört und nicht zu Projekt B!
+        assert.doesNotThrow(() => {
+            db.prepare('DELETE FROM projekt_positionen WHERE id = ?').run(posB2Id);
+        }, 'Löschen von Position B2 darf nicht durch Aufmaß von Projekt A blockiert werden!');
+        const deletedPosB2 = db.prepare('SELECT * FROM projekt_positionen WHERE id = ?').get(posB2Id);
+        assert.equal(deletedPosB2, undefined, 'Position B2 muss erfolgreich gelöscht worden sein');
+
+        // 2. Löschen über saveProjekt(): Speichere Projekt B ohne posBId
+        const projBData = controllingRepo.getProjektMitPositionen(projBId);
+        assert.equal(projBData.positionen.length, 1);
+        assert.equal(projBData.positionen[0].id, posBId);
+
+        // Speichern mit leerem Positionen-Array (posBId soll gelöscht werden)
+        await assert.doesNotReject(async () => {
+            await controllingRepo.saveProjekt({
+                ...projBData,
+                positionen: []
+            });
+        }, 'saveProjekt auf Projekt B darf nicht durch Aufmaß von Projekt A blockiert werden!');
+
+        const projBAfter = controllingRepo.getProjektMitPositionen(projBId);
+        assert.equal(projBAfter.positionen.length, 0, 'Position in Projekt B muss gelöscht sein');
+
+        // Projekt A und seine Aufmaße sind 100% unberührt geblieben
+        const aufmassA = db.prepare('SELECT * FROM aufmass WHERE projekt_id = ?').all(projAId);
+        assert.equal(aufmassA.length, 2, 'Aufmaße von Projekt A müssen vollständig erhalten sein');
+        const posA = db.prepare('SELECT * FROM projekt_positionen WHERE id = ?').get(posAId);
+        assert.ok(posA, 'Position von Projekt A muss unberührt bleiben');
+    } finally {
+        try {
+            db.close();
+            if (fs.existsSync(tmpDbPath)) fs.unlinkSync(tmpDbPath);
+        } catch (_err) {}
+    }
+});
+
+test('Test 14: Löschtests über alle 3 Pfade mit Aufmaß-Schutz (SQL DELETE Pos, saveProjekt, SQL DELETE Projekt)', async () => {
+    const tmpDbPath = path.join(os.tmpdir(), `angebot-lifecycle-delete-paths-${Date.now()}-${process.pid}.sqlite`);
+    const Database = require('better-sqlite3');
+    const { createSchema, runMigrations } = require('../schema.js');
+    const createControllingBautagebuchRepo = require('../db/repositories/controlling_bautagebuch_repo');
+
+    const db = new Database(tmpDbPath);
+    db.pragma('foreign_keys = ON');
+    createSchema(db);
+    runMigrations(db);
+
+    const controllingRepo = createControllingBautagebuchRepo({
+        db,
+        dbQuery: async (s, p) => db.prepare(s).all(p),
+        dbRun: async (s, p) => db.prepare(s).run(p),
+        appendAuditLog: () => {},
+        auditLogger: null,
+        getEinstellung: () => null
+    });
+
+    try {
+        const resProj = db.prepare("INSERT INTO projekte (name) VALUES ('Testprojekt Löschpfade')").run();
+        const projId = Number(resProj.lastInsertRowid);
+        const resPos = db.prepare("INSERT INTO projekt_positionen (projekt_id, name) VALUES (?, 'Geschützte Position')").run(projId);
+        const posId = Number(resPos.lastInsertRowid);
+
+        // Aufmaß mit neuem projekt_position_id anlegen
+        const resAufmass = db.prepare(`
+            INSERT INTO aufmass (titel, projekt_id, position_id, projekt_position_id)
+            VALUES ('Aufmaß zu geschützter Position', ?, ?, ?)
+        `).run(projId, String(posId), posId);
+        const aufmassId = Number(resAufmass.lastInsertRowid);
+
+        // Pfad 1: Direkter SQL DELETE auf projekt_positionen
+        assert.throws(
+            () => {
+                db.prepare('DELETE FROM projekt_positionen WHERE id = ?').run(posId);
+            },
+            /Löschen der Projektposition verhindert: Es existieren bereits Aufmaße/,
+            'Pfad 1: Direkter SQL DELETE auf Projektposition muss durch Trigger verhindert werden'
+        );
+
+        // Pfad 2: Löschen via saveProjekt()
+        const proj = controllingRepo.getProjektMitPositionen(projId);
+        await assert.rejects(
+            async () => {
+                await controllingRepo.saveProjekt({
+                    ...proj,
+                    positionen: [] // Löschen provozieren
+                });
+            },
+            /Löschen der Projektposition verhindert/,
+            'Pfad 2: Löschen via saveProjekt() muss verhindert werden'
+        );
+
+        // Pfad 3: Direkter SQL DELETE auf projekte
+        assert.throws(
+            () => {
+                db.prepare('DELETE FROM projekte WHERE id = ?').run(projId);
+            },
+            /Projekt kann nicht gelöscht werden: Es existieren bereits Aufmaße/,
+            'Pfad 3: Direkter SQL DELETE auf Projekt muss durch Trigger verhindert werden'
+        );
+
+        // Datenintegrität nach allen Abbrüchen
+        const projCheck = db.prepare('SELECT * FROM projekte WHERE id = ?').get(projId);
+        assert.ok(projCheck, 'Projekt muss nach allen fehlgeschlagenen Löschversuchen existieren');
+
+        const posCheck = db.prepare('SELECT * FROM projekt_positionen WHERE id = ?').get(posId);
+        assert.ok(posCheck, 'Position muss nach allen fehlgeschlagenen Löschversuchen existieren');
+
+        const aufmassCheck = db.prepare('SELECT * FROM aufmass WHERE id = ?').get(aufmassId);
+        assert.ok(aufmassCheck, 'Aufmaß muss nach allen fehlgeschlagenen Löschversuchen existieren');
+        assert.equal(aufmassCheck.projekt_position_id, posId);
+    } finally {
+        try {
+            db.close();
+            if (fs.existsSync(tmpDbPath)) fs.unlinkSync(tmpDbPath);
+        } catch (_err) {}
+    }
+});
+
+test('Test 15: Fresh DB & Legacy Upgraded DB - Integrität, Datenmigration und PRAGMA foreign_key_check', () => {
+    const Database = require('better-sqlite3');
+    const { createSchema, runMigrations } = require('../schema.js');
+
+    // 15.1: Frische Datenbank
+    const freshDbPath = path.join(os.tmpdir(), `angebot-lifecycle-fresh-db-${Date.now()}-${process.pid}.sqlite`);
+    const freshDb = new Database(freshDbPath);
+    freshDb.pragma('foreign_keys = ON');
+
+    try {
+        createSchema(freshDb);
+        runMigrations(freshDb);
+
+        const fkErrorsFresh = freshDb.pragma('foreign_key_check');
+        assert.equal(fkErrorsFresh.length, 0, 'Frische DB darf keine Fremdschlüsselverletzungen aufweisen');
+
+        // Prüfe Trigger-Existenz
+        const trigPosFresh = freshDb.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name='trg_prevent_delete_pos_with_aufmass'").get();
+        assert.ok(trigPosFresh, 'Trigger trg_prevent_delete_pos_with_aufmass muss in frischer DB existieren');
+
+        const trigProjFresh = freshDb.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name='trg_prevent_delete_projekt_with_aufmass'").get();
+        assert.ok(trigProjFresh, 'Trigger trg_prevent_delete_projekt_with_aufmass muss in frischer DB existieren');
+    } finally {
+        try {
+            freshDb.close();
+            if (fs.existsSync(freshDbPath)) fs.unlinkSync(freshDbPath);
+        } catch (_err) {}
+    }
+
+    // 15.2: Legacy DB (Altdatenbank mit unmigrierten Aufmaßen ohne projekt_position_id)
+    const legacyDbPath = path.join(os.tmpdir(), `angebot-lifecycle-legacy-upgrade-${Date.now()}-${process.pid}.sqlite`);
+    const legacyDb = new Database(legacyDbPath);
+    legacyDb.pragma('foreign_keys = ON');
+
+    try {
+        legacyDb.exec(`
+            CREATE TABLE einstellungen (key TEXT PRIMARY KEY, value TEXT);
+            CREATE TABLE projekte (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                source_angebot_id INTEGER,
+                source_angebot_version INTEGER
+            );
+            CREATE TABLE projekt_positionen (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                projekt_id INTEGER NOT NULL REFERENCES projekte(id) ON DELETE CASCADE,
+                name TEXT NOT NULL
+            );
+            CREATE TABLE aufmass (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                position_id TEXT,
+                titel TEXT NOT NULL,
+                projekt_id INTEGER REFERENCES projekte(id)
+            );
+
+            INSERT INTO projekte (id, name) VALUES (1, 'Altes Projekt 1');
+            INSERT INTO projekte (id, name) VALUES (2, 'Altes Projekt 2');
+
+            INSERT INTO projekt_positionen (id, projekt_id, name) VALUES (10, 1, 'Alt-Position 10 in Projekt 1');
+            INSERT INTO projekt_positionen (id, projekt_id, name) VALUES (20, 2, 'Alt-Position 20 in Projekt 2');
+
+            -- Aufmaß mit passender position_id und projekt_id
+            INSERT INTO aufmass (id, position_id, titel, projekt_id) VALUES (100, '10', 'Aufmaß passend zu Pos 10', 1);
+
+            -- Aufmaß ohne passende Position (sollte NULL bleiben)
+            INSERT INTO aufmass (id, position_id, titel, projekt_id) VALUES (101, '999', 'Aufmaß ohne existierende Pos', 1);
+        `);
+
+        // Migration auf Altdatenbank ausführen
+        runMigrations(legacyDb);
+
+        // 1. Spalte projekt_position_id wurde bei sicherem Match befüllt
+        const aufmass100 = legacyDb.prepare('SELECT * FROM aufmass WHERE id = 100').get();
+        assert.equal(aufmass100.projekt_position_id, 10, 'projekt_position_id muss bei sicherem Match auf 10 gesetzt werden');
+
+        // 2. Aufmaß ohne passenden Match bleibt NULL (keine falsche Zuordnung)
+        const aufmass101 = legacyDb.prepare('SELECT * FROM aufmass WHERE id = 101').get();
+        assert.equal(aufmass101.projekt_position_id, null, 'projekt_position_id darf bei unsicherem Match nicht geraten werden');
+
+        // 3. foreign_key_check muss 0 Fehler melden
+        const fkErrorsLegacy = legacyDb.pragma('foreign_key_check');
+        assert.equal(fkErrorsLegacy.length, 0, 'Migrierte Legacy-DB darf keine Fremdschlüsselverletzungen aufweisen');
+
+        // 4. Trigger existieren und funktionieren auf der migrierten DB
+        const trigPosLegacy = legacyDb.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name='trg_prevent_delete_pos_with_aufmass'").get();
+        assert.ok(trigPosLegacy, 'Trigger trg_prevent_delete_pos_with_aufmass muss in migrierter Legacy-DB existieren');
+
+        // Löschen der gematchten Position 10 wird durch Trigger verhindert
+        assert.throws(
+            () => {
+                legacyDb.prepare('DELETE FROM projekt_positionen WHERE id = 10').run();
+            },
+            /Löschen der Projektposition verhindert/
+        );
+    } finally {
+        try {
+            legacyDb.close();
+            if (fs.existsSync(legacyDbPath)) fs.unlinkSync(legacyDbPath);
+        } catch (_err) {}
+    }
+});
+
 if (IS_ELECTRON_AS_NODE) {
     console.log('ANGEBOT_LIFECYCLE_TESTS_PASSED');
 }
+
 
