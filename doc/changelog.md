@@ -1,5 +1,39 @@
 # Changelog / Fortschritt
 
+## 27.09.2026 (liesen.txt: Saubere Trennung und Neugestaltung des Handwerks- und Baubereichs für Angebote)
+- **Dedizierte Sektion "Bauvorhaben & Vertragsbedingungen" für Angebote (`views/modals/rechnung-modal.html` & `js/modal-loader.js`):**
+  - **Beseitigung von `Handwerk & Erweiterte Angaben (VOB/GoBD)` im Angebot:** Der für Rechnungen gedachte Abschnitt mit Rechnungsart, Bauabzugsteuer (§ 48 EStG) und GoBD-Hinweisen wurde für Angebote vollständig eliminiert.
+  - **Neue Kernsektion `#angebot-bauvorhaben-section`:**
+    * **Titel:** `Bauvorhaben & Vertragsbedingungen`
+    * **Baustellen-Adresse (`angebot-baustellen-adresse`):** Beibehalten zur Erfassung des Bauorts.
+    * **Voraussichtlicher Ausführungszeitraum (`angebot-ausfuehrung-von`, `angebot-ausfuehrung-bis`):** Umbenannt von "Leistungszeitraum" in "Voraussichtlicher Ausführungszeitraum", da die Bauausführung erst künftig stattfindet.
+    * **Auftraggeber-Typ (`angebot-auftraggeber-typ`) & Vertragsgrundlage (`angebot-vertragsgrundlage`):** Integriert mit dynamischem Warnhinweis zu § 650m BGB (Verbraucherbauvertrag).
+    * **Einklappbare Erweiterte Vertragsbedingungen (`<details>`):**
+      - **Sicherheitseinbehalt (%) (`angebot-sicherheitseinbehalt`):** Als optionale Bedingung ausgelagert, synchronisiert mit den internen Kalkulationsfeldern.
+      - **§ 13b UStG Reverse Charge (`angebot-13b-ustg`):** Als erweiterte Option für B2B-Bauleistungen verfügbar, steuert die Steuerausweisung und ist für Privatkunden (B2C) automatisch gesperrt.
+- **Zustands- & Sichtbarkeitssteuerung (`js/editor.js`):**
+  - `setupRechnungModalUI()`: Zeigt `#rechnung-handwerk-section` an und blendet `#angebot-bauvorhaben-section` aus.
+  - `setupAngebotModalUI()` & `applyAngebotEditMode()`: Blenden `#rechnung-handwerk-section` strikt aus und zeigen `#angebot-bauvorhaben-section` an. Rechnungsart ist im Angebot nicht mehr sichtbar.
+  - `applyUnternehmensartVisibility()`: Beachtet `state.isAngebotMode` und verhindert, dass das Handwerksmodul im Angebotsmodus wieder eingeblendet wird.
+  - **Automatische Synchronisation:**
+    * Änderung an `angebot-auftraggeber-typ`: `PRIVAT` setzt `ist_privatkunde = 1` und aktiviert B2C (inkl. Brutto-Zwang nach PAngV); `GEWERBLICH` setzt `ist_privatkunde = 0` und aktiviert B2B; `OEFFENTLICH` aktiviert B2G.
+    * Änderung an `angebot-vertragsgrundlage`: `VOB_B` setzt automatisch `vob_vereinbart = 1`; andere Grundlagen setzen `vob_vereinbart = 0`.
+  - `collectAngebotFormData()`: Liest alle Felder aus `#angebot-bauvorhaben-section` sauber aus und persistiert sie im Belegobjekt.
+- **Automatisierte Electron UI-Tests (`tests/test_electron_runner.js`):**
+  - Testfall 1 & 2 verifizieren im echten Chromium-DOM:
+    * Im Angebotsmodus ist `#rechnung-handwerk-section` ausgeblendet.
+    * `#angebot-bauvorhaben-section` ist sichtbar mit Überschrift `Bauvorhaben & Vertragsbedingungen`.
+    * Kein `rechnung-art` im Angebotsmodus sichtbar.
+    * Beschriftung `Voraussichtlicher Ausführungszeitraum` vorhanden.
+    * `auftraggeber_typ` steuert `ist_privatkunde` automatisch.
+    * `vertragsgrundlage` steuert `vob_vereinbart` automatisch.
+    * Modus-Trennung: Wechsel zwischen Angebots- und Rechnungsmodus blendet die jeweils richtige Sektion ein/aus.
+- **Verifikation:**
+  - `node --test tests/angebot_true_ui_and_pdf.test.js`
+  - `node --test tests/angebot_ui_workflow.test.js`
+  - `node --test tests/angebot_lifecycle.test.js`
+  Alle Tests zu 100% grün.
+
 ## 27.09.2026 (liesen.txt: Baurechtliche und vertragliche Präzisierung von Annahmefrist & Vertragsgrundlage)
 - **Rechtssichere Annahmefrist gem. § 148 BGB (`js/einstellungen.js`):**
   - **Beseitigung des Widerspruchs "freibleibend" vs. Frist:** Die juristisch widersprüchliche Formulierung *"Dieses Angebot ist freibleibend gültig bis zum [Datum]"* wurde eliminiert (§§ 145, 148 BGB). Ein mit Annahmefrist versehenes Angebot bindet den Anbieter nach deutschem Recht bis zum Ablauf der Frist; die gleichzeitige Verwendung von "freibleibend" erzeugt unzulässige Rechtsunsicherheit.

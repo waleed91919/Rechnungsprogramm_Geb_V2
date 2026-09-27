@@ -106,8 +106,10 @@ function setupRechnungModalUI() {
         modalStatus.className = 'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200';
         modalStatus.textContent = 'Entwurf';
     }
-    const metaSection = document.getElementById('angebot-metadaten-section');
-    if (metaSection) metaSection.classList.add('hidden');
+    const bauvorhabenSection = document.getElementById('angebot-bauvorhaben-section') || document.getElementById('angebot-metadaten-section');
+    if (bauvorhabenSection) bauvorhabenSection.classList.add('hidden');
+    const handwerkSection = document.getElementById('rechnung-handwerk-section');
+    if (handwerkSection) handwerkSection.classList.remove('hidden');
 
     const leftActions = document.getElementById('angebot-modal-actions-left');
     if (leftActions) leftActions.innerHTML = '';
@@ -659,15 +661,70 @@ function openRechnungModal() {
     applyUnternehmensartVisibility();
 }
 
+function syncAngebotFieldToRechnung(srcId, targetId) {
+    const src = document.getElementById(srcId);
+    const target = document.getElementById(targetId);
+    if (src && target && target.value !== src.value) {
+        target.value = src.value;
+    }
+}
+window.syncAngebotFieldToRechnung = syncAngebotFieldToRechnung;
+
+function handleAngebot13bChange() {
+    const ang13b = document.getElementById('angebot-13b-ustg');
+    const rech13b = document.getElementById('rechnung-13b-ustg');
+    if (ang13b && rech13b) {
+        rech13b.checked = ang13b.checked;
+    }
+    if (typeof handleRechtlicheCheckboxes === 'function') {
+        handleRechtlicheCheckboxes();
+    }
+    if (typeof calculateRechnungTotals === 'function') {
+        calculateRechnungTotals();
+    }
+}
+window.handleAngebot13bChange = handleAngebot13bChange;
+
 function handleAngebotMetaChange() {
-    const vg = document.getElementById('angebot-vertragsgrundlage')?.value;
+    const auftraggeberTypEl = document.getElementById('angebot-auftraggeber-typ');
+    const vertragsgrundlageEl = document.getElementById('angebot-vertragsgrundlage');
     const alertBox = document.getElementById('bgb-650m-alert-box');
+
+    const auftraggeberTyp = auftraggeberTypEl ? auftraggeberTypEl.value : 'PRIVAT';
+    const vertragsgrundlage = vertragsgrundlageEl ? vertragsgrundlageEl.value : 'BGB_WERKVERTRAG';
+
+    // 1. § 650m BGB Alert
     if (alertBox) {
-        if (vg === 'BGB_VERBRAUCHERBAU') {
+        if (vertragsgrundlage === 'BGB_VERBRAUCHERBAU') {
             alertBox.classList.remove('hidden');
         } else {
             alertBox.classList.add('hidden');
         }
+    }
+
+    // 2. Synchronisation Auftraggeber-Typ -> ist_privatkunde & Customer Type
+    const pKunde = document.getElementById('rechnung-ist-privatkunde');
+    if (auftraggeberTyp === 'PRIVAT') {
+        if (pKunde) pKunde.checked = true;
+        if (typeof setRechnungCustomerType === 'function') {
+            setRechnungCustomerType('B2C');
+        }
+    } else if (auftraggeberTyp === 'GEWERBLICH') {
+        if (pKunde) pKunde.checked = false;
+        if (typeof setRechnungCustomerType === 'function') {
+            setRechnungCustomerType('B2B');
+        }
+    } else if (auftraggeberTyp === 'OEFFENTLICH') {
+        if (pKunde) pKunde.checked = false;
+        if (typeof setRechnungCustomerType === 'function') {
+            setRechnungCustomerType('B2G');
+        }
+    }
+
+    // 3. Synchronisation Vertragsgrundlage -> vob_vereinbart
+    const vobCb = document.getElementById('rechnung-vob-vereinbart');
+    if (vobCb) {
+        vobCb.checked = (vertragsgrundlage === 'VOB_B');
     }
 }
 window.handleAngebotMetaChange = handleAngebotMetaChange;
@@ -694,10 +751,14 @@ function setupAngebotModalUI() {
         modalStatus.innerHTML = '<span class="material-symbols-outlined text-[14px]">edit_document</span>ENTWURF';
     }
 
-    // Angebots-Metadaten Section
-    const metaSection = document.getElementById('angebot-metadaten-section');
-    if (metaSection) {
-        metaSection.classList.remove('hidden');
+    // Handwerk Section im Angebotsmodus strikt verbergen
+    const handwerkSection = document.getElementById('rechnung-handwerk-section');
+    if (handwerkSection) handwerkSection.classList.add('hidden');
+
+    // Bauvorhaben & Vertragsbedingungen Section
+    const bauvorhabenSection = document.getElementById('angebot-bauvorhaben-section') || document.getElementById('angebot-metadaten-section');
+    if (bauvorhabenSection) {
+        bauvorhabenSection.classList.remove('hidden');
         const selAuftraggeber = document.getElementById('angebot-auftraggeber-typ');
         if (selAuftraggeber) {
             selAuftraggeber.disabled = false;
@@ -712,6 +773,34 @@ function setupAngebotModalUI() {
         if (alertBox) alertBox.classList.add('hidden');
         const freezeBadge = document.getElementById('angebot-freeze-badge');
         if (freezeBadge) freezeBadge.classList.add('hidden');
+
+        const adresseEl = document.getElementById('angebot-baustellen-adresse');
+        if (adresseEl) {
+            adresseEl.disabled = false;
+            adresseEl.value = '';
+        }
+        const ausfVonEl = document.getElementById('angebot-ausfuehrung-von');
+        if (ausfVonEl) {
+            ausfVonEl.disabled = false;
+            ausfVonEl.value = '';
+        }
+        const ausfBisEl = document.getElementById('angebot-ausfuehrung-bis');
+        if (ausfBisEl) {
+            ausfBisEl.disabled = false;
+            ausfBisEl.value = '';
+        }
+        const sichEl = document.getElementById('angebot-sicherheitseinbehalt');
+        if (sichEl) {
+            sichEl.disabled = false;
+            sichEl.value = '';
+        }
+        const cb13b = document.getElementById('angebot-13b-ustg');
+        if (cb13b) {
+            cb13b.disabled = false;
+            cb13b.checked = false;
+        }
+
+        handleAngebotMetaChange();
     }
 
     // Status select for offer
@@ -740,8 +829,10 @@ function setupAngebotModalUI() {
     document.getElementById('rechnung-id').value = '';
     const sichEl1Ang = document.getElementById('rechnung-sicherheitseinbehalt-prozent');
     const sichEl2Ang = document.getElementById('rechnung-handwerk-sicherheitseinbehalt');
+    const sichEl3Ang = document.getElementById('angebot-sicherheitseinbehalt');
     if (sichEl1Ang) sichEl1Ang.value = '';
     if (sichEl2Ang) sichEl2Ang.value = '';
+    if (sichEl3Ang) sichEl3Ang.value = '';
     document.getElementById('rechnung-modal').classList.remove('hidden');
 
     // Reset specific UI
@@ -910,10 +1001,14 @@ function applyAngebotEditMode(existing, form, submitBtn) {
         }
     }
 
-    // Angebots-Metadaten Section
-    const metaSection = document.getElementById('angebot-metadaten-section');
-    if (metaSection) {
-        metaSection.classList.remove('hidden');
+    // Handwerk Section im Angebotsmodus strikt verbergen
+    const handwerkSection = document.getElementById('rechnung-handwerk-section');
+    if (handwerkSection) handwerkSection.classList.add('hidden');
+
+    // Bauvorhaben & Vertragsbedingungen Section
+    const bauvorhabenSection = document.getElementById('angebot-bauvorhaben-section') || document.getElementById('angebot-metadaten-section');
+    if (bauvorhabenSection) {
+        bauvorhabenSection.classList.remove('hidden');
         const selAuftraggeber = document.getElementById('angebot-auftraggeber-typ');
         if (selAuftraggeber) {
             selAuftraggeber.disabled = isFrozen;
@@ -934,6 +1029,37 @@ function applyAngebotEditMode(existing, form, submitBtn) {
             if (isFrozen) freezeBadge.classList.remove('hidden');
             else freezeBadge.classList.add('hidden');
         }
+
+        const adresseEl = document.getElementById('angebot-baustellen-adresse');
+        if (adresseEl) {
+            adresseEl.value = existing.baustellen_adresse || '';
+            adresseEl.disabled = isFrozen;
+        }
+        const ausfVonEl = document.getElementById('angebot-ausfuehrung-von');
+        if (ausfVonEl) {
+            ausfVonEl.value = existing.leistungszeitraum_von || '';
+            ausfVonEl.disabled = isFrozen;
+        }
+        const ausfBisEl = document.getElementById('angebot-ausfuehrung-bis');
+        if (ausfBisEl) {
+            ausfBisEl.value = existing.leistungszeitraum_bis || '';
+            ausfBisEl.disabled = isFrozen;
+        }
+        const sichEl = document.getElementById('angebot-sicherheitseinbehalt');
+        if (sichEl) {
+            const sichVal = (existing.sicherheitseinbehalt_prozent !== undefined && existing.sicherheitseinbehalt_prozent !== null && existing.sicherheitseinbehalt_prozent !== 0)
+                ? existing.sicherheitseinbehalt_prozent
+                : ((existing.sicherheitseinbehalt && existing.netto) ? (Math.round((existing.sicherheitseinbehalt / existing.netto) * 1000) / 10) : '');
+            sichEl.value = sichVal;
+            sichEl.disabled = isFrozen;
+        }
+        const cb13b = document.getElementById('angebot-13b-ustg');
+        if (cb13b) {
+            cb13b.checked = !!existing.unterliegt_13b;
+            cb13b.disabled = isFrozen;
+        }
+
+        handleAngebotMetaChange();
     }
 
     const addRowBtn = form.querySelector('button[onclick="addRechnungPosition()"]');
@@ -1037,6 +1163,17 @@ function collectAngebotFormData() {
     const auftraggeber_typ = auftraggeberTypEl ? auftraggeberTypEl.value : (existing?.auftraggeber_typ || 'PRIVAT');
     const vertragsgrundlage = vertragsgrundlageEl ? vertragsgrundlageEl.value : (existing?.vertragsgrundlage || 'BGB_WERKVERTRAG');
 
+    const baustellen_adresse = document.getElementById('angebot-baustellen-adresse')?.value || document.getElementById('rechnung-baustellen-adresse')?.value || existing?.baustellen_adresse || '';
+    const leistungszeitraum_von = document.getElementById('angebot-ausfuehrung-von')?.value || document.getElementById('rechnung-leistungszeitraum-von')?.value || existing?.leistungszeitraum_von || '';
+    const leistungszeitraum_bis = document.getElementById('angebot-ausfuehrung-bis')?.value || document.getElementById('rechnung-leistungszeitraum-bis')?.value || existing?.leistungszeitraum_bis || '';
+
+    const rawSicherheit = document.getElementById('angebot-sicherheitseinbehalt')?.value || document.getElementById('rechnung-sicherheitseinbehalt-prozent')?.value || document.getElementById('rechnung-handwerk-sicherheitseinbehalt')?.value;
+    const sicherheitseinbehalt_prozent = (rawSicherheit !== undefined && rawSicherheit !== null && rawSicherheit !== '') ? parseFloat(rawSicherheit) : (existing?.sicherheitseinbehalt_prozent || 0);
+
+    const unterliegt_13b = (document.getElementById('angebot-13b-ustg')?.checked || document.getElementById('rechnung-13b-ustg')?.checked) ? 1 : (existing?.unterliegt_13b ? 1 : 0);
+    const ist_privatkunde = (auftraggeber_typ === 'PRIVAT') ? 1 : 0;
+    const vob_vereinbart = (vertragsgrundlage === 'VOB_B') ? 1 : 0;
+
     const positions = (state.currentRechnungPositionen || []).map((p, idx) => {
         const rawPreis = (p.preis !== undefined && p.preis !== null) ? String(p.preis).trim() : '';
         const parsedPreis = (rawPreis === '' || isNaN(parseFloat(p.preis))) ? null : parseFloat(p.preis);
@@ -1091,6 +1228,14 @@ function collectAngebotFormData() {
         freeze_snapshot_json: existing?.freeze_snapshot_json || null,
         auftraggeber_typ,
         vertragsgrundlage,
+        baustellen_adresse,
+        leistungszeitraum_von,
+        leistungszeitraum_bis,
+        sicherheitseinbehalt_prozent,
+        sicherheitseinbehalt: (totals.netto && sicherheitseinbehalt_prozent) ? Math.round(totals.netto * sicherheitseinbehalt_prozent) / 100 : (existing?.sicherheitseinbehalt || 0),
+        unterliegt_13b,
+        ist_privatkunde,
+        vob_vereinbart,
         vergabe_verfahren: existing?.vergabe_verfahren || 'DIREKT',
         angenommen_am: existing?.angenommen_am || null,
         angenommene_version: existing?.angenommene_version || null,
@@ -1098,8 +1243,6 @@ function collectAngebotFormData() {
         fusstext: document.getElementById('rechnung-fusstext')?.value || '',
         skonto_tage: document.getElementById('rechnung-skonto-tage')?.value ? parseInt(document.getElementById('rechnung-skonto-tage').value, 10) : null,
         skonto_prozent: document.getElementById('rechnung-skonto-prozent')?.value ? parseFloat(document.getElementById('rechnung-skonto-prozent').value) : null,
-        leistungszeitraum_von: document.getElementById('rechnung-leistungszeitraum-von')?.value || existing?.leistungszeitraum_von || '',
-        leistungszeitraum_bis: document.getElementById('rechnung-leistungszeitraum-bis')?.value || existing?.leistungszeitraum_bis || '',
         ausfuehrungszeitraum: existing?.ausfuehrungszeitraum || '',
         zahlungsbedingungen: existing?.zahlungsbedingungen || '',
         konditionen: existing?.konditionen || '',
@@ -1583,6 +1726,28 @@ function handleKundeSelect(event) {
             const cb13b = document.getElementById('rechnung-13b-ustg');
             if (cb13b) cb13b.checked = true;
         }
+
+        if (state.isAngebotMode) {
+            const angebotAuftraggeberEl = document.getElementById('angebot-auftraggeber-typ');
+            if (angebotAuftraggeberEl) {
+                if (cType === 'B2C' || kunde.ist_privatkunde) {
+                    angebotAuftraggeberEl.value = 'PRIVAT';
+                } else if (cType === 'B2G') {
+                    angebotAuftraggeberEl.value = 'OEFFENTLICH';
+                } else {
+                    angebotAuftraggeberEl.value = 'GEWERBLICH';
+                }
+            }
+            const cb13bAng = document.getElementById('angebot-13b-ustg');
+            if (cb13bAng) {
+                if (cType === 'B2B' && kunde.ist_bauleistender_13b) {
+                    cb13bAng.checked = true;
+                } else if (cType === 'B2C') {
+                    cb13bAng.checked = false;
+                }
+            }
+        }
+
         handleRechtlicheCheckboxes();
 
         // § 48b Subunternehmer Warning Check
@@ -2219,12 +2384,18 @@ function syncSicherheitseinbehalt(sourceId) {
     const src = document.getElementById(sourceId);
     if (!src) return;
     const val = src.value;
-    const targetId = sourceId === 'rechnung-sicherheitseinbehalt-prozent'
-        ? 'rechnung-handwerk-sicherheitseinbehalt'
-        : 'rechnung-sicherheitseinbehalt-prozent';
-    const target = document.getElementById(targetId);
-    if (target && target.value !== val) {
-        target.value = val;
+    const allIds = [
+        'rechnung-sicherheitseinbehalt-prozent',
+        'rechnung-handwerk-sicherheitseinbehalt',
+        'angebot-sicherheitseinbehalt'
+    ];
+    for (const id of allIds) {
+        if (id !== sourceId) {
+            const target = document.getElementById(id);
+            if (target && target.value !== val) {
+                target.value = val;
+            }
+        }
     }
     if (typeof calculateRechnungTotals === 'function') {
         calculateRechnungTotals();
@@ -2870,26 +3041,33 @@ function applyUnternehmensartVisibility() {
     const isB2GSpezialist = art === 'b2g_spezialist' || art === 'bauhauptgewerbe';
 
     const handwerkSection = document.getElementById('rechnung-handwerk-section');
+    const bauvorhabenSection = document.getElementById('angebot-bauvorhaben-section') || document.getElementById('angebot-metadaten-section');
     const b2gSection = document.getElementById('rechnung-b2g-section');
     const currentCustomerType = document.getElementById('rechnung-customer-type')?.value || 'B2B';
 
-    if (handwerkSection) {
-        if (isHandwerkOrBau) {
-            handwerkSection.classList.remove('hidden');
-            if (typeof toggleAbschlagsKumulationUI === 'function') {
-                toggleAbschlagsKumulationUI();
-            }
-        } else {
-            handwerkSection.classList.add('hidden');
-            const kumulationSection = document.getElementById('rechnung-kumulation-section');
-            if (kumulationSection) {
-                kumulationSection.classList.add('hidden');
+    if (state.isAngebotMode) {
+        if (handwerkSection) handwerkSection.classList.add('hidden');
+        if (bauvorhabenSection) bauvorhabenSection.classList.remove('hidden');
+    } else {
+        if (bauvorhabenSection) bauvorhabenSection.classList.add('hidden');
+        if (handwerkSection) {
+            if (isHandwerkOrBau) {
+                handwerkSection.classList.remove('hidden');
+                if (typeof toggleAbschlagsKumulationUI === 'function') {
+                    toggleAbschlagsKumulationUI();
+                }
+            } else {
+                handwerkSection.classList.add('hidden');
+                const kumulationSection = document.getElementById('rechnung-kumulation-section');
+                if (kumulationSection) {
+                    kumulationSection.classList.add('hidden');
+                }
             }
         }
     }
 
     if (b2gSection) {
-        if (currentCustomerType === 'B2G') {
+        if (!state.isAngebotMode && currentCustomerType === 'B2G') {
             b2gSection.classList.remove('hidden');
         } else {
             b2gSection.classList.add('hidden');
@@ -2952,6 +3130,16 @@ function handleRechtlicheCheckboxes(triggeredById) {
         applyCheckboxRule(pKunde, false, 'Privatkunde kann bei Geschäftskunden oder Behörden (B2B/B2G) nicht gewählt werden.');
         applyCheckboxRule(bauabzug, true);
         applyCheckboxRule(ustg13b, true);
+    }
+
+    const ang13b = document.getElementById('angebot-13b-ustg');
+    if (ang13b) {
+        if (currentType === 'B2C') {
+            ang13b.checked = false;
+            ang13b.disabled = true;
+        } else {
+            ang13b.disabled = isReadOnly;
+        }
     }
 
     if (typeof renderRechnungPositionen === 'function') {

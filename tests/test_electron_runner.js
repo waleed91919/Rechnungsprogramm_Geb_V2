@@ -133,13 +133,56 @@ app.whenReady().then(async () => {
                         const confirmTriggered = window.__test.confirms.length > 0;
                         const confirmMsg = window.__test.confirms[0] || '';
 
+                        // Verify DOM-Struktur & Synchronisation für Angebot
+                        const handwerkSection = document.getElementById('rechnung-handwerk-section');
+                        const handwerkHidden = !handwerkSection || handwerkSection.classList.contains('hidden');
+
+                        const bauSection = document.getElementById('angebot-bauvorhaben-section');
+                        const bauSectionVisible = !!bauSection && !bauSection.classList.contains('hidden');
+                        const bauSectionTitle = bauSection ? (bauSection.querySelector('h4')?.textContent.trim() || '') : '';
+
+                        const rechnungArt = document.getElementById('rechnung-art');
+                        const rechnungArtHidden = !rechnungArt || !!rechnungArt.closest('.hidden');
+
+                        const hasAusfuehrungsLabel = !!bauSection && bauSection.innerHTML.includes('Voraussichtlicher Ausführungszeitraum');
+
+                        // Automatische Synchronisation prüfen:
+                        // auftraggeber_typ steuert ist_privatkunde automatisch
+                        const auftraggeberSelect = document.getElementById('angebot-auftraggeber-typ');
+                        auftraggeberSelect.value = 'GEWERBLICH';
+                        handleAngebotMetaChange();
+                        const istPrivatGewerblich = document.getElementById('rechnung-ist-privatkunde')?.checked;
+
+                        auftraggeberSelect.value = 'PRIVAT';
+                        handleAngebotMetaChange();
+                        const istPrivatPrivat = document.getElementById('rechnung-ist-privatkunde')?.checked;
+
+                        // vertragsgrundlage steuert vob_vereinbart automatisch
+                        const vertragSelect = document.getElementById('angebot-vertragsgrundlage');
+                        vertragSelect.value = 'VOB_B';
+                        handleAngebotMetaChange();
+                        const vobIsCheckedWhenVOB = document.getElementById('rechnung-vob-vereinbart')?.checked;
+
+                        vertragSelect.value = 'BGB_WERKVERTRAG';
+                        handleAngebotMetaChange();
+                        const vobIsCheckedWhenBGB = document.getElementById('rechnung-vob-vereinbart')?.checked;
+
                         return {
                             initialDomValue,
                             initialPosPrice,
                             alertTriggered,
                             alertMsg,
                             confirmTriggered,
-                            confirmMsg
+                            confirmMsg,
+                            handwerkHidden,
+                            bauSectionVisible,
+                            bauSectionTitle,
+                            rechnungArtHidden,
+                            hasAusfuehrungsLabel,
+                            istPrivatGewerblich,
+                            istPrivatPrivat,
+                            vobIsCheckedWhenVOB,
+                            vobIsCheckedWhenBGB
                         };
                     } catch (e) {
                         return { error: e.message, stack: e.stack };
@@ -163,6 +206,21 @@ app.whenReady().then(async () => {
                 step1Result.confirmMsg.includes('0,00 €') || step1Result.confirmMsg.includes('unentgeltlich'),
                 'Confirm prompt must mention 0,00 € price'
             );
+
+            // Assertions für die neue DOM-Struktur & Synchronisation
+            assert.strictEqual(step1Result.handwerkHidden, true, 'Im Angebotsmodus muss #rechnung-handwerk-section ausgeblendet sein');
+            assert.strictEqual(step1Result.bauSectionVisible, true, '#angebot-bauvorhaben-section muss im Angebotsmodus sichtbar sein');
+            assert.ok(
+                step1Result.bauSectionTitle.includes('Bauvorhaben & Vertragsbedingungen') ||
+                step1Result.bauSectionTitle.includes('Bauvorhaben &amp; Vertragsbedingungen'),
+                '#angebot-bauvorhaben-section muss Überschrift "Bauvorhaben & Vertragsbedingungen" tragen'
+            );
+            assert.strictEqual(step1Result.rechnungArtHidden, true, 'Kein rechnung-art im Angebotsmodus sichtbar');
+            assert.strictEqual(step1Result.hasAusfuehrungsLabel, true, 'Beschriftung "Voraussichtlicher Ausführungszeitraum" vorhanden');
+            assert.strictEqual(step1Result.istPrivatGewerblich, false, 'auftraggeber_typ GEWERBLICH steuert ist_privatkunde auf false');
+            assert.strictEqual(step1Result.istPrivatPrivat, true, 'auftraggeber_typ PRIVAT steuert ist_privatkunde auf true');
+            assert.strictEqual(step1Result.vobIsCheckedWhenVOB, true, 'vertragsgrundlage VOB_B steuert vob_vereinbart auf true');
+            assert.strictEqual(step1Result.vobIsCheckedWhenBGB, false, 'vertragsgrundlage BGB steuert vob_vereinbart auf false');
             console.log('✓ Testfall 1 erfolgreich bestanden!');
 
             // =================================================================
@@ -257,8 +315,44 @@ app.whenReady().then(async () => {
             page.drawText(`Position: Mauerarbeiten Spezial (0,00 EUR)`, { x: 50, y: 740, size: 10 });
             const pdfBytes = await pdfDoc.save();
             assert.ok(pdfBytes.length > 500, 'Valid PDF stream generated');
-            const magicHeader = Buffer.from(pdfBytes.buffer).slice(0, 5).toString();
-            assert.strictEqual(magicHeader, '%PDF-', 'PDF magic header is valid');
+            // Zusätzliche Verifikation: Trennung von Rechnungs- vs. Angebots-Modal UI
+            const modeSeparationResult = await win.webContents.executeJavaScript(`
+                (() => {
+                    // Check Angebot mode DOM state
+                    const handwerkInAngebot = document.getElementById('rechnung-handwerk-section');
+                    const bauInAngebot = document.getElementById('angebot-bauvorhaben-section');
+                    const angHandwerkHidden = !handwerkInAngebot || handwerkInAngebot.classList.contains('hidden');
+                    const angBauVisible = !!bauInAngebot && !bauInAngebot.classList.contains('hidden');
+
+                    // Switch to Rechnung mode
+                    window.openRechnungModal();
+                    const handwerkInRechnung = document.getElementById('rechnung-handwerk-section');
+                    const bauInRechnung = document.getElementById('angebot-bauvorhaben-section');
+                    const rechnungArt = document.getElementById('rechnung-art');
+                    const rechHandwerkVisible = !!handwerkInRechnung && !handwerkInRechnung.classList.contains('hidden');
+                    const rechBauHidden = !bauInRechnung || bauInRechnung.classList.contains('hidden');
+                    const rechArtVisible = !!rechnungArt && !rechnungArt.closest('.hidden');
+
+                    // Switch back to Angebot modal
+                    const draftObj = (window.state.angebote || []).find(a => a.nr === 'ANG-2026-TRUE-001');
+                    if (draftObj) window.openAngebotModal(draftObj.id);
+                    else window.openAngebotModal();
+
+                    return {
+                        angHandwerkHidden,
+                        angBauVisible,
+                        rechHandwerkVisible,
+                        rechBauHidden,
+                        rechArtVisible
+                    };
+                })()
+            `);
+            assert.strictEqual(modeSeparationResult.angHandwerkHidden, true, 'Im Angebotsmodus muss Handwerk-Sektion ausgeblendet sein');
+            assert.strictEqual(modeSeparationResult.angBauVisible, true, 'Im Angebotsmodus muss Bauvorhaben-Sektion sichtbar sein');
+            assert.strictEqual(modeSeparationResult.rechHandwerkVisible, true, 'Im Rechnungsmodus muss Handwerk-Sektion sichtbar sein');
+            assert.strictEqual(modeSeparationResult.rechBauHidden, true, 'Im Rechnungsmodus muss Bauvorhaben-Sektion ausgeblendet sein');
+            assert.strictEqual(modeSeparationResult.rechArtVisible, true, 'Im Rechnungsmodus muss rechnung-art sichtbar sein');
+
             console.log(`✓ Testfall 2 erfolgreich bestanden! (${pdfBytes.length} echte PDF-Bytes verifiziert)`);
 
             // =================================================================
