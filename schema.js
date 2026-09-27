@@ -220,6 +220,31 @@ function createSchema(db) {
         console.error('[DB Schema] Index idx_projekte_unique_source_angebot:', e.message);
     }
 
+    // Engine-Level Löschschutz für verknüpfte Aufmaße über alle Pfade
+    try {
+        db.exec(`CREATE TRIGGER IF NOT EXISTS trg_prevent_delete_pos_with_aufmass
+        BEFORE DELETE ON projekt_positionen
+        FOR EACH ROW
+        WHEN EXISTS (SELECT 1 FROM aufmass WHERE CAST(position_id AS INTEGER) = OLD.id OR position_id = OLD.id)
+        BEGIN
+            SELECT RAISE(ABORT, 'Löschen der Projektposition verhindert: Es existieren bereits Aufmaße, die auf diese Position verweisen.');
+        END;`);
+    } catch (e) {
+        console.error('[DB Schema] Trigger trg_prevent_delete_pos_with_aufmass:', e.message);
+    }
+
+    try {
+        db.exec(`CREATE TRIGGER IF NOT EXISTS trg_prevent_delete_projekt_with_aufmass
+        BEFORE DELETE ON projekte
+        FOR EACH ROW
+        WHEN EXISTS (SELECT 1 FROM aufmass WHERE projekt_id = OLD.id)
+        BEGIN
+            SELECT RAISE(ABORT, 'Projekt kann nicht gelöscht werden: Es existieren bereits Aufmaße für dieses Projekt.');
+        END;`);
+    } catch (e) {
+        console.error('[DB Schema] Trigger trg_prevent_delete_projekt_with_aufmass:', e.message);
+    }
+
 
     // 1. Aufmaßblätter & Zeilen (REB 23.003 & DA11)
     db.exec(`CREATE TABLE IF NOT EXISTS aufmass_blaetter (
@@ -1499,18 +1524,21 @@ function runMigrations(db) {
         const hasProjekte = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='projekte'").get();
         if (hasProjekte) {
             // Finde und bereinige Duplikate in bestehenden Altdatenbanken:
-            // Für Duplikate (ab dem 2. Eintrag) wird die Version auf einen negativen Wert (-id) gesetzt,
-            // damit historische Projekte nicht gelöscht werden, der Unique-Index aber erfolgreich angelegt werden kann.
+            // Entkopple überzählige historische Projekt-Duplikate sauber vom Angebot (SET source_angebot_id = NULL, source_angebot_version = NULL),
+            // falls vor dieser Migration Duplikate in einer Altdatenbank existierten.
+            // Dadurch bleibt das Projekt als eigenständiges Projekt mit allen Positionen, Budget und Rechnungen 100% erhalten,
+            // die Versionsnummer wird nicht mit negativen Zahlen korrumpiert, und der Unique-Index kann fehlerfrei angelegt werden.
             db.exec(`
-                UPDATE projekte
-                SET source_angebot_version = -id
-                WHERE source_angebot_id IS NOT NULL
-                  AND id NOT IN (
-                      SELECT MIN(id)
-                      FROM projekte
-                      WHERE source_angebot_id IS NOT NULL
-                      GROUP BY source_angebot_id, COALESCE(source_angebot_version, 1)
-                  );
+                UPDATE projekte 
+                SET source_angebot_id = NULL, source_angebot_version = NULL 
+                WHERE id IN (
+                    SELECT p2.id
+                    FROM projekte p1
+                    JOIN projekte p2 ON p1.source_angebot_id = p2.source_angebot_id 
+                                    AND COALESCE(p1.source_angebot_version, 1) = COALESCE(p2.source_angebot_version, 1)
+                                    AND p1.id < p2.id
+                    WHERE p1.source_angebot_id IS NOT NULL
+                );
             `);
 
             // Alten Index verwerfen, falls er noch die alte Definition (ohne COALESCE) hatte
@@ -1564,6 +1592,37 @@ function runMigrations(db) {
     } catch (e) {
         if (!e.message.includes('already exists')) {
             console.warn('[DB Migration Warning] projekt_positionen:', e.message);
+        }
+    }
+
+    // Engine-Level Löschschutz für verknüpfte Aufmaße via SQLite-Trigger
+    try {
+        const hasAufmass = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='aufmass'").get();
+        const hasProjPos = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='projekt_positionen'").get();
+        const hasProjekteTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='projekte'").get();
+
+        if (hasAufmass && hasProjPos) {
+            db.exec(`CREATE TRIGGER IF NOT EXISTS trg_prevent_delete_pos_with_aufmass
+            BEFORE DELETE ON projekt_positionen
+            FOR EACH ROW
+            WHEN EXISTS (SELECT 1 FROM aufmass WHERE CAST(position_id AS INTEGER) = OLD.id OR position_id = OLD.id)
+            BEGIN
+                SELECT RAISE(ABORT, 'Löschen der Projektposition verhindert: Es existieren bereits Aufmaße, die auf diese Position verweisen.');
+            END;`);
+        }
+
+        if (hasAufmass && hasProjekteTable) {
+            db.exec(`CREATE TRIGGER IF NOT EXISTS trg_prevent_delete_projekt_with_aufmass
+            BEFORE DELETE ON projekte
+            FOR EACH ROW
+            WHEN EXISTS (SELECT 1 FROM aufmass WHERE projekt_id = OLD.id)
+            BEGIN
+                SELECT RAISE(ABORT, 'Projekt kann nicht gelöscht werden: Es existieren bereits Aufmaße für dieses Projekt.');
+            END;`);
+        }
+    } catch (e) {
+        if (!e.message.includes('already exists')) {
+            console.warn('[DB Migration Warning] aufmass triggers:', e.message);
         }
     }
 
@@ -2482,6 +2541,32 @@ function ensureGoBDSchemaAndTriggers(db) {
             SELECT RAISE(ABORT, 'Mindestaufbewahrungsfrist verletzt (§ 17 Abs. 2 MiLoG): Zeiterfassungsdaten müssen mindestens 2 Jahre aufbewahrt werden (kein physisches Löschen vor Ablauf von 24 Monaten).');
         END;`
     ];
+
+    try {
+        const hasAufmass = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='aufmass'").get();
+        if (hasAufmass) {
+            const hasPP = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='projekt_positionen'").get();
+            if (hasPP) {
+                triggers.push(`CREATE TRIGGER IF NOT EXISTS trg_prevent_delete_pos_with_aufmass
+                BEFORE DELETE ON projekt_positionen
+                FOR EACH ROW
+                WHEN EXISTS (SELECT 1 FROM aufmass WHERE CAST(position_id AS INTEGER) = OLD.id OR position_id = OLD.id)
+                BEGIN
+                    SELECT RAISE(ABORT, 'Löschen der Projektposition verhindert: Es existieren bereits Aufmaße, die auf diese Position verweisen.');
+                END;`);
+            }
+            const hasProj = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='projekte'").get();
+            if (hasProj) {
+                triggers.push(`CREATE TRIGGER IF NOT EXISTS trg_prevent_delete_projekt_with_aufmass
+                BEFORE DELETE ON projekte
+                FOR EACH ROW
+                WHEN EXISTS (SELECT 1 FROM aufmass WHERE projekt_id = OLD.id)
+                BEGIN
+                    SELECT RAISE(ABORT, 'Projekt kann nicht gelöscht werden: Es existieren bereits Aufmaße für dieses Projekt.');
+                END;`);
+            }
+        }
+    } catch (_e) {}
 
     for (const sql of triggers) {
         try {

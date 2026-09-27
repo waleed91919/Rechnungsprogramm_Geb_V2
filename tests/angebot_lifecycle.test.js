@@ -1304,12 +1304,19 @@ test('Test 10 (Erweiterung): Migration einer Altdatenbank mit Duplikaten bei sou
         const p10 = db.prepare('SELECT * FROM projekte WHERE id = 10').get();
         assert.equal(p10.source_angebot_version, 1, 'Erst-Projekt muss Version 1 behalten');
 
-        // 3. Duplikate wurden auf negative Version (-id) gesetzt, sodass historische Daten erhalten bleiben
+        // 3. Duplikate wurden sauber vom Angebot entkoppelt (source_angebot_id = NULL, source_angebot_version = NULL),
+        // sodass historische Projektdaten vollständig erhalten bleiben, ohne Versionsnummern mit negativen Werten zu korrumpieren
         const p11 = db.prepare('SELECT * FROM projekte WHERE id = 11').get();
-        assert.equal(p11.source_angebot_version, -11, 'Duplikat 11 muss auf -11 umgesetzt worden sein');
+        assert.ok(p11, 'Projekt 11 muss weiterhin existieren');
+        assert.equal(p11.name, 'Projekt Alt 11 (Version NULL Duplikat)');
+        assert.equal(p11.source_angebot_id, null, 'Duplikat 11 muss sauber vom Angebot entkoppelt sein (source_angebot_id IS NULL)');
+        assert.equal(p11.source_angebot_version, null, 'Duplikat 11 muss source_angebot_version IS NULL haben');
 
         const p12 = db.prepare('SELECT * FROM projekte WHERE id = 12').get();
-        assert.equal(p12.source_angebot_version, -12, 'Duplikat 12 muss auf -12 umgesetzt worden sein');
+        assert.ok(p12, 'Projekt 12 muss weiterhin existieren');
+        assert.equal(p12.name, 'Projekt Alt 12 (Version 1 Duplikat)');
+        assert.equal(p12.source_angebot_id, null, 'Duplikat 12 muss sauber vom Angebot entkoppelt sein (source_angebot_id IS NULL)');
+        assert.equal(p12.source_angebot_version, null, 'Duplikat 12 muss source_angebot_version IS NULL haben');
 
         // 4. Normales Projekt ohne source_angebot_id bleibt unverändert
         const p20 = db.prepare('SELECT * FROM projekte WHERE id = 20').get();
@@ -1548,6 +1555,58 @@ test('Test 11: Aufmaß-Referenz bleibt über Projekt-Updates hinweg stabil und i
         assert.equal(aufmassStillIntact.position_id, String(posId), 'Aufmaß position_id muss weiterhin unverändert auf posId verweisen');
         assert.equal(aufmassStillIntact.projekt_id, projId, 'Aufmaß projekt_id muss intakt bleiben');
         assert.equal(aufmassStillIntact.positionen.length, 2, 'Aufmaß-Unterpositionen müssen intakt bleiben');
+
+        // 11.7: Direkter SQL-Delete auf Projektposition mit verknüpftem Aufmaß (Engine-Level Löschschutz via SQLite-Trigger trg_prevent_delete_pos_with_aufmass)
+        assert.throws(
+            () => {
+                db.prepare('DELETE FROM projekt_positionen WHERE id = ?').run(posId);
+            },
+            (err) => {
+                assert.ok(
+                    err.message.includes('Löschen der Projektposition verhindert: Es existieren bereits Aufmaße, die auf diese Position verweisen.'),
+                    `SQLite-Trigger trg_prevent_delete_pos_with_aufmass muss anspringen, war: ${err.message}`
+                );
+                return true;
+            },
+            'Direkter SQL-Delete auf projekt_positionen mit verknüpftem Aufmaß muss durch Trigger hart abgebrochen werden'
+        );
+
+        // Verifikation: Position weiterhin unversehrt in DB
+        const pos1AfterDirectSql = db.prepare('SELECT * FROM projekt_positionen WHERE id = ?').get(posId);
+        assert.ok(pos1AfterDirectSql, 'Position pos1 muss nach abgebrochenem SQL-Delete unversehrt in DB verbleiben');
+        assert.equal(pos1AfterDirectSql.id, posId);
+
+        // 11.8: Direkter SQL-Delete auf Projekt mit verknüpftem Aufmaß (Engine-Level Löschschutz via SQLite-Trigger trg_prevent_delete_projekt_with_aufmass)
+        assert.throws(
+            () => {
+                db.prepare('DELETE FROM projekte WHERE id = ?').run(projId);
+            },
+            (err) => {
+                assert.ok(
+                    err.message.includes('Projekt kann nicht gelöscht werden: Es existieren bereits Aufmaße für dieses Projekt.'),
+                    `SQLite-Trigger trg_prevent_delete_projekt_with_aufmass muss anspringen, war: ${err.message}`
+                );
+                return true;
+            },
+            'Direkter SQL-Delete auf projekte mit verknüpften Aufmaßen muss durch Trigger hart abgebrochen werden'
+        );
+
+        // Verifikation: Projekt, Positionen und Aufmaße weiterhin vollständig unversehrt
+        const projAfterDirectSql = db.prepare('SELECT * FROM projekte WHERE id = ?').get(projId);
+        assert.ok(projAfterDirectSql, 'Projekt projId muss nach abgebrochenem SQL-Delete unversehrt existieren');
+        assert.equal(projAfterDirectSql.id, projId);
+
+        const aufmassAfterDirectSql = await aufmassRepo.getAufmassById(aufmassId);
+        assert.ok(aufmassAfterDirectSql, 'Aufmaß muss nach versuchtem Projekt-Delete weiterhin existieren');
+        assert.equal(aufmassAfterDirectSql.position_id, String(posId));
+        assert.equal(aufmassAfterDirectSql.projekt_id, projId);
+
+        // 11.9: Gegenprobe: Löschen einer unbeteiligten Position (ohne Aufmaß) funktioniert wie vorgesehen
+        assert.doesNotThrow(() => {
+            db.prepare('DELETE FROM projekt_positionen WHERE id = ?').run(reloadedPos4.id);
+        }, 'Löschen einer Projektposition OHNE Aufmaß darf vom Trigger nicht behindert werden');
+        const deletedPos4 = db.prepare('SELECT * FROM projekt_positionen WHERE id = ?').get(reloadedPos4.id);
+        assert.equal(deletedPos4, undefined, 'Unbeteiligte Position muss erfolgreich gelöscht worden sein');
     } finally {
         try {
             db.close();

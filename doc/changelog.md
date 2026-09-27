@@ -4,14 +4,17 @@
 - **NULL-Version im Unique-Index und beim Speichern abgesichert (`schema.js` & `controlling_bautagebuch_repo.js`):**
   - Partieller UNIQUE INDEX `idx_projekte_unique_source_angebot` auf `projekte(source_angebot_id, COALESCE(source_angebot_version, 1)) WHERE source_angebot_id IS NOT NULL` definiert (sowohl in `createSchema` als auch in `runMigrations`). Verhindert zuverlässig Duplikate selbst bei manuellen SQL-Inserts mit `source_angebot_version = NULL`.
   - In `saveProjekt()` wird die Angebotsversion bei vorhandener `source_angebot_id` stets auf mindestens Version 1 normalisiert (`const sVer = p.source_angebot_id ? (parseInt(p.source_angebot_version, 10) || 1) : null;`) und konsistent für `INSERT`, `UPDATE` und die Idempotenz-Vorprüfung verwendet.
-- **Bereinigung von Altdaten-Duplikaten vor Index-Erstellung & Index-Verifikation (`schema.js` & `tests/angebot_lifecycle.test.js`):**
-  - In `runMigrations()` wird vor Erstellung des Unique-Index eine Deduplizierung durchgeführt: Für etwaige Duplikate ab dem 2. Eintrag wird die Version auf `-id` umgesetzt. Dadurch gehen historische Projektdaten nicht verloren, während der Unique-Index fehlerfrei und manipulationssicher angelegt werden kann.
-  - Verifikation nach Index-Erstellung via `sqlite_master`: Stellt sicher, dass `idx_projekte_unique_source_angebot` nach Migration aktiv ist, andernfalls wird ein harter Fehler geloggt und geworfen.
-  - Migrationstest erweitert um Altdatenbank mit bereits bestehenden Duplikaten (Version 1 und Version NULL), welche fehlerfrei migriert wird.
-- **Löschschutz für Projektpositionen mit verknüpftem Aufmaß (Aufmaß-Integritätsschutz):**
-  - In `saveProjekt()` wird beim Diff & Sync vor dem Löschen verwaister Positionen geprüft, ob Aufmaße auf eine der zu löschenden Positionen verweisen (`SELECT id, titel FROM aufmass WHERE CAST(position_id AS INTEGER) = ? OR position_id = ?`).
-  - Falls verknüpfte Aufmaße existieren, wird das Löschen verhindert und ein klarer Fehler geworfen (`Löschen der Projektposition verhindert: Auf Position #... verweisen bereits Aufmaße. Löschen Sie zuerst die zugehörigen Aufmaße.`), wodurch die gesamte Transaktion zurückrollt.
-  - Test 11 um Negativ-Szenario erweitert: Verifiziert das Werfen des Fehlers, den Rollback (Position bleibt in SQLite erhalten) und den fortbestehenden relationalen Bezug des Aufmaßes.
+- **Bereinigung von Altdaten-Duplikaten OHNE Verfälschung von Versionsnummern (`schema.js` & `tests/angebot_lifecycle.test.js`):**
+  - In `runMigrations()` wurde der provisorische Hack `SET source_angebot_version = -id` vollständig entfernt, da negative Versionsnummern Geschäftsdaten verfälschen würden.
+  - Stattdessen werden überzählige historische Projekt-Duplikate sauber vom Angebot entkoppelt (`SET source_angebot_id = NULL, source_angebot_version = NULL`), falls vor dieser Migration Duplikate in einer Altdatenbank existierten (`WHERE id IN (SELECT p2.id FROM projekte p1 JOIN projekte p2 ON p1.source_angebot_id = p2.source_angebot_id AND COALESCE(p1.source_angebot_version, 1) = COALESCE(p2.source_angebot_version, 1) AND p1.id < p2.id WHERE p1.source_angebot_id IS NOT NULL)`).
+  - Dadurch bleibt das Projekt als eigenständiges Projekt mit allen Positionen, Budget und Rechnungen 100% erhalten, während die Versionsnummern unverfälscht bleiben und der partielle UNIQUE-Index `idx_projekte_unique_source_angebot` fehlerfrei angelegt werden kann.
+  - Test 10 (Erweiterung) angepasst: Prüft explizit, dass Duplikate nach der Migration `source_angebot_id IS NULL` und `source_angebot_version IS NULL` tragen und alle Projektdaten erhalten bleiben.
+- **Umfassender Engine-Level Löschschutz für verknüpfte Aufmaße via SQLite-Trigger (`schema.js` & `tests/angebot_lifecycle.test.js`):**
+  - Ergänzend zum anwendungsinternen Schutz in `saveProjekt()` wurden native SQLite-Engine-Trigger implementiert (sowohl in `createSchema` als auch in `runMigrations` und `ensureGoBDSchemaAndTriggers`):
+    * `trg_prevent_delete_pos_with_aufmass`: Verhindert das Löschen einer `projekt_positionen`, wenn in `aufmass` Einträge auf diese Position verweisen (`WHEN EXISTS (SELECT 1 FROM aufmass WHERE CAST(position_id AS INTEGER) = OLD.id OR position_id = OLD.id)`).
+    * `trg_prevent_delete_projekt_with_aufmass`: Verhindert das Löschen eines Datensatzes in `projekte`, wenn verknüpfte Aufmaße für das Projekt existieren (`WHEN EXISTS (SELECT 1 FROM aufmass WHERE projekt_id = OLD.id)`).
+  - Damit ist der Aufmaß-Schutz über ausnahmslos JEDEN Löschpfad (direkte SQL-Deletes, Foreign-Key-CASCADE-Deletes, IPC-Handler) auf Datenbank-Engine-Ebene manipulationssicher garantiert.
+  - Test 11 erweitert: Führt direkte SQL-Deletes auf Projektposition und Projekt aus und verifiziert, dass die Trigger den Delete hart abbrechen, die Fehlermeldungen exakt anschlagen und sämtliche Daten unversehrt bleiben.
 
 ## 27.09.2026 (Neuer Angebots-Kern: Direktangebot, Versionierung, Freeze-Snapshot, Risiko-Check & Projektübergabe)
 - **Implementierung des neuen modularen Angebots-Kerns (gemäß `doc/angebot_checkliste_bau_2026-09-27.md` & `liesen.txt`):**
