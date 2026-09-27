@@ -423,7 +423,8 @@ test('Test 6: DB-Persistenz im SQLite Test-DB über document_repo', async () => 
         const parsedSnapshot = JSON.parse(frozenDoc.freeze_snapshot_json);
         assert.equal(parsedSnapshot.positionen.length, 2);
 
-        // 6.3: Änderungssperre prüfen: Versuch, gefrorene Positionen zu mutieren, MUSS scheitern!
+        // 6.3: Änderungssperre & Offensive State-Transition-Attacken
+        // 6.3.1: Direkter Mutationsversuch: Versuch, gefrorene Positionen zu mutieren, MUSS scheitern!
         const mutierterDoc = {
             ...frozenDoc,
             positionen: [
@@ -442,8 +443,69 @@ test('Test 6: DB-Persistenz im SQLite Test-DB über document_repo', async () => 
             'Mutation eines gefrorenen Angebots muss blockiert werden'
         );
 
+        // 6.3.2: Offensive Attacke A: Versuch, gefrorenes Angebot per Statuswechsel auf ENTWURF zurückzusetzen
+        await assert.rejects(
+            async () => {
+                await docRepo.saveDocument({
+                    ...frozenDoc,
+                    angebot_status: 'ENTWURF'
+                });
+            },
+            (err) => {
+                assert.ok(err.message.includes('Unzulässiger Statusübergang'), `Fehlermeldung muss Unzulässiger Statusübergang enthalten, war: ${err.message}`);
+                return true;
+            },
+            'Statuswechsel von VERSENDET auf ENTWURF muss abgewiesen werden'
+        );
+
+        // 6.3.3: Offensive Attacke B: Versuch, gefrorenes Angebot per status='Entwurf' oder 'DRAFT' zurückzusetzen
+        await assert.rejects(
+            async () => {
+                await docRepo.saveDocument({
+                    ...frozenDoc,
+                    status: 'Entwurf'
+                });
+            },
+            (err) => {
+                assert.ok(err.message.includes('Unzulässiger Statusübergang'), `Fehlermeldung muss Unzulässiger Statusübergang enthalten, war: ${err.message}`);
+                return true;
+            },
+            'Statuswechsel per status=Entwurf muss abgewiesen werden'
+        );
+
+        // 6.3.4: Offensive Attacke C: Versuch, freeze_snapshot_json zu leeren/löschen
+        await assert.rejects(
+            async () => {
+                await docRepo.saveDocument({
+                    ...frozenDoc,
+                    freeze_snapshot_json: null
+                });
+            },
+            (err) => {
+                assert.ok(err.message.includes('Freeze-Snapshot') || err.message.includes('Unzulässige Operation'), `Fehlermeldung muss Freeze-Snapshot-Verbot enthalten, war: ${err.message}`);
+                return true;
+            },
+            'Löschen des Freeze-Snapshots muss abgewiesen werden'
+        );
+
+        // 6.3.5: Offensive Attacke D: Unzulässiger Vorwärtsübergang (z.B. nach UNGUELTIG)
+        await assert.rejects(
+            async () => {
+                await docRepo.saveDocument({
+                    ...frozenDoc,
+                    angebot_status: 'UNGUELTIG'
+                });
+            },
+            (err) => {
+                assert.ok(err.message.includes('Unzulässiger Statusübergang'), `Fehlermeldung muss Unzulässiger Statusübergang enthalten, war: ${err.message}`);
+                return true;
+            },
+            'Unzulässiger Vorwärtsübergang muss abgewiesen werden'
+        );
+
         // DB-Inhalt muss unverändert geblieben sein
         const nachVerbot = docRepo.getDocumentById(docId);
+        assert.equal(nachVerbot.angebot_status, 'VERSENDET', 'Status muss unverändert VERSENDET sein');
         assert.equal(nachVerbot.positionen[0].preis, 50.00, 'Originalpreis 50.00 muss intakt sein');
 
         // 6.4: Neue Version v2 erzeugen und persistieren
@@ -482,6 +544,21 @@ test('Test 6: DB-Persistenz im SQLite Test-DB über document_repo', async () => 
         assert.equal(acceptedV1.angenommene_version, 1);
         assert.ok(acceptedV1.angenommen_am);
 
+        // 6.5.1: Versuch, ein bereits angenommenes Angebot wieder auf VERSENDET oder ENTWURF zurückzusetzen
+        await assert.rejects(
+            async () => {
+                await docRepo.saveDocument({
+                    ...acceptedV1,
+                    angebot_status: 'VERSENDET'
+                });
+            },
+            (err) => {
+                assert.ok(err.message.includes('Unzulässiger Statusübergang'), `Fehlermeldung muss Unzulässiger Statusübergang enthalten, war: ${err.message}`);
+                return true;
+            },
+            'Statuswechsel von ANGENOMMEN nach VERSENDET muss abgewiesen werden'
+        );
+
         // Löschsperre prüfen: Angenommenes Angebot darf nicht gelöscht werden
         await assert.rejects(
             async () => {
@@ -505,12 +582,108 @@ test('Test 6: DB-Persistenz im SQLite Test-DB über document_repo', async () => 
         assert.equal(projekt.positionen[0].sourceOfferPositionId, acceptedPos1.id);
         assert.notEqual(projekt.positionen[0].id, acceptedPos1.id);
 
+        // 6.7: SQLite DB-Persistenz & Reload-Test für Projekt und projekt_positionen
+        const controllingRepo = repositories.controllingBautagebuchRepo || dbAPI;
+        const projId = await controllingRepo.saveProjekt(projekt);
+        assert.ok(projId > 0, 'Projekt muss erfolgreich mit ID in SQLite gespeichert worden sein');
+
+        // Reload per direktem DB-SELECT
+        const dbProjekt = db.prepare('SELECT * FROM projekte WHERE id = ?').get(projId);
+        assert.equal(dbProjekt.id, projId);
+        assert.equal(dbProjekt.name, 'Projekt Fliesen Bad & Flur');
+        assert.equal(dbProjekt.source_angebot_id, docId, 'source_angebot_id muss in projekte Tabelle gespeichert sein');
+        assert.equal(dbProjekt.source_angebot_version, 1, 'source_angebot_version muss in projekte Tabelle gespeichert sein');
+
+        const dbPositions = db.prepare('SELECT * FROM projekt_positionen WHERE projekt_id = ? ORDER BY id ASC').all(projId);
+        assert.equal(dbPositions.length, projekt.positionen.length, 'Alle Projektpositionen müssen in projekt_positionen gespeichert sein');
+        assert.equal(dbPositions[0].projekt_id, projId);
+        assert.equal(dbPositions[0].source_angebot_id, docId);
+        assert.equal(dbPositions[0].source_angebot_version, 1);
+        assert.equal(dbPositions[0].source_angebot_pos_id, acceptedPos1.id, 'source_angebot_pos_id muss identisch zur Ursprungsangebotsposition sein');
+        assert.equal(dbPositions[0].in_endsumme_enthalten, 1);
+        assert.equal(dbPositions[0].preis, 50.00);
+
+        // Reload per getProjektMitPositionen
+        const reloadedProj = controllingRepo.getProjektMitPositionen(projId);
+        assert.ok(reloadedProj, 'Projekt muss über getProjektMitPositionen geladen werden können');
+        assert.equal(reloadedProj.positionen.length, dbPositions.length);
+        assert.equal(reloadedProj.positionen[0].source_angebot_pos_id, acceptedPos1.id);
+        assert.equal(reloadedProj.positionen[0].sourceOfferPositionId, acceptedPos1.id);
+
+        // 6.8: Foreign Key & Cascade Test mit PRAGMA foreign_keys = ON
+        const fkPragma = db.pragma('foreign_keys', { simple: true });
+        assert.equal(fkPragma, 1, 'PRAGMA foreign_keys muss aktiviert sein (1)');
+
+        // Cascade-Delete Test: Löschen des Projekts muss automatisch alle projekt_positionen kaskadierend löschen
+        db.prepare('DELETE FROM projekte WHERE id = ?').run(projId);
+        const orphanedPositions = db.prepare('SELECT COUNT(*) as cnt FROM projekt_positionen WHERE projekt_id = ?').get(projId);
+        assert.equal(orphanedPositions.cnt, 0, 'projekt_positionen müssen durch ON DELETE CASCADE gelöscht worden sein');
+
+        // FK-Constraint Test: Einfügen einer projekt_position mit ungültiger projekt_id muss scheitern
+        assert.throws(
+            () => {
+                db.prepare(`
+                    INSERT INTO projekt_positionen (projekt_id, name, preis)
+                    VALUES (999999, 'Ungültige FK-Position', 10.0)
+                `).run();
+            },
+            (err) => {
+                assert.ok(err.message.includes('FOREIGN KEY') || err.message.includes('constraint failed'));
+                return true;
+            },
+            'Einfügen mit ungültigem Foreign Key muss von SQLite abgewiesen werden'
+        );
+
     } finally {
         try {
             db.close();
             if (fs.existsSync(tmpDbPath)) fs.unlinkSync(tmpDbPath);
         } catch (_cleanupErr) {}
     }
+});
+
+test('Test 7: String "0" vs "1" Test & einheitliche Normalisierung von in_endsumme_enthalten', () => {
+    // 7.1: Direkte Normalisierungsprüfungen (AngebotController.normalizeInEndsumme)
+    assert.equal(AngebotController.normalizeInEndsumme(1), 1);
+    assert.equal(AngebotController.normalizeInEndsumme('1'), 1);
+    assert.equal(AngebotController.normalizeInEndsumme(true), 1);
+
+    assert.equal(AngebotController.normalizeInEndsumme(0), 0);
+    assert.equal(AngebotController.normalizeInEndsumme('0'), 0, "'0' als String muss strikt als 0 normalisiert werden");
+    assert.equal(AngebotController.normalizeInEndsumme(false), 0);
+
+    // Standardwerte je nach Positionstyp bei undefined / null
+    assert.equal(AngebotController.normalizeInEndsumme(undefined, 'NORMAL'), 1);
+    assert.equal(AngebotController.normalizeInEndsumme(null, 'PAUSCHALE'), 1);
+    assert.equal(AngebotController.normalizeInEndsumme(undefined, 'ALTERNATIV'), 0);
+    assert.equal(AngebotController.normalizeInEndsumme(null, 'BEDARF'), 0);
+
+    // 7.2: calculateTotals mit String '0' vs '1'
+    const testPositions = [
+        { name: 'Pos A', menge: 1, preis: 100.00, mwst: 19, positionstyp: 'NORMAL', in_endsumme_enthalten: '0' },
+        { name: 'Pos B', menge: 1, preis: 200.00, mwst: 19, positionstyp: 'NORMAL', in_endsumme_enthalten: '1' }
+    ];
+    const totals = AngebotController.calculateTotals(testPositions);
+    assert.equal(totals.netto, 200.00, "Pos A mit in_endsumme_enthalten='0' darf nicht in die Endsumme einfließen");
+    assert.equal(totals.inEndsummeCount, 1);
+
+    // 7.3: freezeAngebot mit String '0' vs '1'
+    const angebot = { id: 88, nr: 'ANG-STR-0' };
+    const frozen = AngebotController.freezeAngebot(angebot, testPositions);
+    const snap = JSON.parse(frozen.freeze_snapshot_json);
+    assert.equal(snap.positionen[0].in_endsumme_enthalten, 0, "Snapshot für Pos A mit '0' muss 0 sein");
+    assert.equal(snap.positionen[1].in_endsumme_enthalten, 1, "Snapshot für Pos B mit '1' muss 1 sein");
+    assert.equal(snap.totals.netto, 200.00);
+
+    // 7.4: createProjektFromAngebot mit String '0' vs '1'
+    const projDefault = AngebotController.createProjektFromAngebot(frozen, testPositions);
+    assert.equal(projDefault.positionen.length, 1, "Standardmäßig nur in_endsumme_enthalten=1 im Projekt");
+    assert.equal(projDefault.positionen[0].name, 'Pos B');
+
+    const projAll = AngebotController.createProjektFromAngebot(frozen, testPositions, { includeAll: true });
+    assert.equal(projAll.positionen.length, 2);
+    assert.equal(projAll.positionen[0].in_endsumme_enthalten, 0, "Projektposition A muss in_endsumme_enthalten=0 haben");
+    assert.equal(projAll.positionen[1].in_endsumme_enthalten, 1, "Projektposition B muss in_endsumme_enthalten=1 haben");
 });
 
 if (IS_ELECTRON_AS_NODE) {

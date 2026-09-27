@@ -3,6 +3,7 @@
  * Belege (Rechnungen, Angebote, Gutschriften), GoBD-Schutz, Statusverwaltung, Audit
  */
 const { calculateDocumentContentHash } = require('../../main/audit.js');
+const AngebotController = require('../../controllers/AngebotController');
 
 function createDocumentRepo(deps) {
     const { db, dbQuery, dbRun, appendAuditLog, auditLogger } = deps;
@@ -81,18 +82,63 @@ function applyDocumentWrite(d, requestedLockedInt) {
             return docId; // Beende hier atomar, ohne DELETE auf Positionen auszuführen!
         }
 
-        // Angebot-Freeze-Schutz: Wenn ein Angebot bereits den Status 'VERSENDET' oder 'ANGENOMMEN' hat und freeze_snapshot_json gesetzt ist,
-        // darf der Snapshot/Inhalt nicht stillschweigend mutiert werden (Änderungssperre für die gefrorene Version;
-        // Änderungen erfordern createVersion).
-        const isFrozenAngebot = (existing.type === 'angebot' || Boolean(existing.freeze_snapshot_json)) &&
-            (existing.angebot_status === 'VERSENDET' || existing.angebot_status === 'ANGENOMMEN') &&
-            Boolean(existing.freeze_snapshot_json);
+        // Angebot-Freeze-Schutz & State-Transition-Guard:
+        // Wenn ein Angebot den Status 'VERSENDET', 'ANGENOMMEN' oder 'ABGELEHNT' hat
+        // oder freeze_snapshot_json gesetzt ist, darf der Snapshot/Inhalt nicht mutiert werden
+        // und es darf kein Statuswechsel auf ENTWURF/DRAFT erfolgen.
+        const FROZEN_ANGEBOT_STATUSES = ['VERSENDET', 'ANGENOMMEN', 'ABGELEHNT'];
+        const isFrozenAngebot = Boolean(existing.freeze_snapshot_json) ||
+            FROZEN_ANGEBOT_STATUSES.includes(existing.angebot_status);
 
         if (isFrozenAngebot) {
+            // 1. Verbiete jeglichen Rückfall auf ENTWURF oder DRAFT
+            const reqAngebotStatus = typeof d.angebot_status === 'string' ? d.angebot_status.toUpperCase().trim() : null;
+            const reqStatus = typeof d.status === 'string' ? d.status.toUpperCase().trim() : null;
+
+            if (
+                reqAngebotStatus === 'ENTWURF' ||
+                reqAngebotStatus === 'DRAFT' ||
+                reqStatus === 'ENTWURF' ||
+                reqStatus === 'DRAFT' ||
+                d.angebot_status === 'ENTWURF' ||
+                d.status === 'Entwurf' ||
+                d.status === 'DRAFT'
+            ) {
+                throw new Error('Unzulässiger Statusübergang: Ein fixiertes Angebot kann nicht auf ENTWURF zurückgesetzt werden.');
+            }
+
+            // 2. Verbiete das Leeren oder Löschen von freeze_snapshot_json
+            if (existing.freeze_snapshot_json && (d.freeze_snapshot_json === null || d.freeze_snapshot_json === '' || d.freeze_snapshot_json === false)) {
+                throw new Error('Unzulässige Operation: Der Freeze-Snapshot eines fixierten Angebots darf nicht gelöscht oder geleert werden.');
+            }
+
             // Prüfung: Wurde versucht, den Freeze-Snapshot zu manipulieren?
             const snapshotModified = d.freeze_snapshot_json !== undefined &&
                 d.freeze_snapshot_json !== null &&
                 d.freeze_snapshot_json !== existing.freeze_snapshot_json;
+
+            if (snapshotModified) {
+                throw new Error(`Änderungssperre: Freeze-Snapshot von Angebot ${existing.nr} darf nicht manipuliert werden.`);
+            }
+
+            // 3. Erlaube nur gültige Vorwärtsübergänge: VERSENDET -> ANGENOMMEN oder ABGELEHNT
+            const currentStatus = (existing.angebot_status || 'VERSENDET').toUpperCase().trim();
+            const nextAngebotStatus = (d.angebot_status || currentStatus).toUpperCase().trim();
+
+            if (currentStatus === 'VERSENDET') {
+                const allowedNext = ['VERSENDET', 'ANGENOMMEN', 'ABGELEHNT'];
+                if (!allowedNext.includes(nextAngebotStatus)) {
+                    throw new Error(`Unzulässiger Statusübergang: Von VERSENDET kann nur nach ANGENOMMEN oder ABGELEHNT gewechselt werden (angefordert: ${nextAngebotStatus}).`);
+                }
+            } else if (currentStatus === 'ANGENOMMEN') {
+                if (nextAngebotStatus !== 'ANGENOMMEN') {
+                    throw new Error(`Unzulässiger Statusübergang: Ein bereits angenommenes Angebot kann nicht mehr geändert werden (angefordert: ${nextAngebotStatus}).`);
+                }
+            } else if (currentStatus === 'ABGELEHNT') {
+                if (nextAngebotStatus !== 'ABGELEHNT') {
+                    throw new Error(`Unzulässiger Statusübergang: Ein abgelehntes Angebot kann nicht mehr geändert werden (angefordert: ${nextAngebotStatus}).`);
+                }
+            }
 
             // Prüfung: Wurden Beträge mutiert?
             const amountsModified = (d.netto !== undefined && Math.abs(parseFloat(d.netto) - parseFloat(existing.netto)) > 0.001) ||
@@ -122,7 +168,7 @@ function applyDocumentWrite(d, requestedLockedInt) {
                 }
             }
 
-            if (snapshotModified || amountsModified || positionsModified) {
+            if (amountsModified || positionsModified) {
                 throw new Error(`Änderungssperre: Angebot ${existing.nr} (Status: ${existing.angebot_status || existing.status}) ist mit Freeze-Snapshot fixiert. Inhaltliche Mutationen sind nicht zulässig; bitte erstellen Sie eine neue Version.`);
             }
 
@@ -133,11 +179,11 @@ function applyDocumentWrite(d, requestedLockedInt) {
                 WHERE id=?
             `);
             const targetAngebotStatus = d.angebot_status || existing.angebot_status;
-            const targetStatus = d.status || existing.status;
+            const targetGeneralStatus = d.status || existing.status;
             const targetAngenommenAm = d.angenommen_am !== undefined ? d.angenommen_am : existing.angenommen_am;
             const targetAngenommeneVersion = d.angenommene_version !== undefined ? d.angenommene_version : existing.angenommene_version;
 
-            updateAngebotStatusOnlyStmt.run(targetAngebotStatus, targetStatus, targetAngenommenAm, targetAngenommeneVersion, docId);
+            updateAngebotStatusOnlyStmt.run(targetAngebotStatus, targetGeneralStatus, targetAngenommenAm, targetAngenommeneVersion, docId);
 
             appendAuditLog({
                 entityType: 'DOCUMENT',
@@ -215,7 +261,7 @@ function applyDocumentWrite(d, requestedLockedInt) {
                     p.is_tax_deductible_35a ? 1 : 0,
                     p.titel || null,
                     p.positionstyp || 'NORMAL',
-                    p.in_endsumme_enthalten !== undefined && p.in_endsumme_enthalten !== null ? (p.in_endsumme_enthalten ? 1 : 0) : 1,
+                    AngebotController.normalizeInEndsumme(p.in_endsumme_enthalten, p.positionstyp),
                     p.bieterangabe_wert || null
                 );
 
@@ -287,7 +333,7 @@ function applyDocumentWrite(d, requestedLockedInt) {
                     p.is_tax_deductible_35a ? 1 : 0,
                     p.titel || null,
                     p.positionstyp || 'NORMAL',
-                    p.in_endsumme_enthalten !== undefined && p.in_endsumme_enthalten !== null ? (p.in_endsumme_enthalten ? 1 : 0) : 1,
+                    AngebotController.normalizeInEndsumme(p.in_endsumme_enthalten, p.positionstyp),
                     p.bieterangabe_wert || null
                 );
 

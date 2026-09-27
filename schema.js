@@ -183,6 +183,37 @@ function createSchema(db) {
         FOREIGN KEY(source_angebot_id) REFERENCES dokumente(id)
     )`);
 
+    db.exec(`CREATE TABLE IF NOT EXISTS projekt_positionen (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        projekt_id INTEGER NOT NULL REFERENCES projekte(id) ON DELETE CASCADE,
+        source_angebot_id INTEGER REFERENCES dokumente(id),
+        source_angebot_version INTEGER,
+        source_angebot_pos_id INTEGER REFERENCES positionen(id),
+        oz_code TEXT,
+        titel TEXT,
+        name TEXT NOT NULL,
+        menge REAL DEFAULT 1,
+        einheit TEXT DEFAULT 'Stk.',
+        preis REAL DEFAULT 0,
+        cost_type TEXT DEFAULT 'MATERIAL',
+        positionstyp TEXT DEFAULT 'NORMAL',
+        in_endsumme_enthalten INTEGER DEFAULT 1,
+        zeitansatz_h REAL DEFAULT 0.0,
+        lohn_ep REAL DEFAULT 0.0,
+        stoff_ep REAL DEFAULT 0.0,
+        geraet_ep REAL DEFAULT 0.0,
+        sonst_ep REAL DEFAULT 0.0,
+        ekt_stoff_je_me REAL DEFAULT 0.0,
+        ekt_geraet_je_me REAL DEFAULT 0.0,
+        ekt_sonst_je_me REAL DEFAULT 0.0,
+        ekt_nu_je_me REAL DEFAULT 0.0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_projekt_positionen_projekt_id ON projekt_positionen(projekt_id)`); } catch (e) { console.error('[DB Schema] Index idx_projekt_positionen_projekt_id:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_projekt_positionen_source_pos ON projekt_positionen(source_angebot_pos_id)`); } catch (e) { console.error('[DB Schema] Index idx_projekt_positionen_source_pos:', e.message); }
+
+
     // 1. Aufmaßblätter & Zeilen (REB 23.003 & DA11)
     db.exec(`CREATE TABLE IF NOT EXISTS aufmass_blaetter (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1437,6 +1468,42 @@ function runMigrations(db) {
 
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_dokumente_parent_angebot ON dokumente(parent_angebot_id)`); } catch (e) { if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] idx_dokumente_parent_angebot:', e.message); }
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_projekte_source_angebot ON projekte(source_angebot_id)`); } catch (e) { if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] idx_projekte_source_angebot:', e.message); }
+
+    // Tabelle projekt_positionen:
+    try {
+        db.exec(`CREATE TABLE IF NOT EXISTS projekt_positionen (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            projekt_id INTEGER NOT NULL REFERENCES projekte(id) ON DELETE CASCADE,
+            source_angebot_id INTEGER REFERENCES dokumente(id),
+            source_angebot_version INTEGER,
+            source_angebot_pos_id INTEGER REFERENCES positionen(id),
+            oz_code TEXT,
+            titel TEXT,
+            name TEXT NOT NULL,
+            menge REAL DEFAULT 1,
+            einheit TEXT DEFAULT 'Stk.',
+            preis REAL DEFAULT 0,
+            cost_type TEXT DEFAULT 'MATERIAL',
+            positionstyp TEXT DEFAULT 'NORMAL',
+            in_endsumme_enthalten INTEGER DEFAULT 1,
+            zeitansatz_h REAL DEFAULT 0.0,
+            lohn_ep REAL DEFAULT 0.0,
+            stoff_ep REAL DEFAULT 0.0,
+            geraet_ep REAL DEFAULT 0.0,
+            sonst_ep REAL DEFAULT 0.0,
+            ekt_stoff_je_me REAL DEFAULT 0.0,
+            ekt_geraet_je_me REAL DEFAULT 0.0,
+            ekt_sonst_je_me REAL DEFAULT 0.0,
+            ekt_nu_je_me REAL DEFAULT 0.0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_projekt_positionen_projekt_id ON projekt_positionen(projekt_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_projekt_positionen_source_pos ON projekt_positionen(source_angebot_pos_id)`);
+    } catch (e) {
+        if (!e.message.includes('already exists')) {
+            console.warn('[DB Migration Warning] projekt_positionen:', e.message);
+        }
+    }
 
     // --- Datenintegrität: §48b / Subunternehmer-Felder auf kunden ---
     // Bug A: kunden.sec48b_valid_until wird von getEingangsrechnungen()/saveEingangsrechnung()

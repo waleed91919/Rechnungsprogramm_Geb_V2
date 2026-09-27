@@ -10,16 +10,18 @@
     * Erweiterung Tabelle `dokumente`: `version`, `parent_angebot_id`, `angebot_status` (`ENTWURF`, `VERSENDET`, `ANGENOMMEN`, `ABGELEHNT`), `freeze_snapshot_json`, `auftraggeber_typ`, `vergabe_verfahren`, `vertragsgrundlage`, `angenommen_am`, `angenommene_version`.
     * Erweiterung Tabelle `positionen`: `titel`, `positionstyp` (`NORMAL`, `ALTERNATIV`, `BEDARF`, `PAUSCHALE`), `in_endsumme_enthalten`, `bieterangabe_wert`.
     * Erweiterung Tabelle `projekte`: `source_angebot_id`, `source_angebot_version`.
-    * Freeze-Mutationssperre & Löschsperre in `document_repo.js`: Versendete und angenommene Angebote sind durch ihren Freeze-Snapshot unveränderlich fixiert; Änderungen erfordern eine neue Version.
+    * Neue Tabelle `projekt_positionen`: Zur dauerhaften Persistenz der aus Angeboten abgeleiteten Projektpositionen mit `source_angebot_pos_id`, OZ, Kostenarten, Einheitspreisen und EKT-Feldern (`ON DELETE CASCADE`).
+    * State-Transition-Guard in `document_repo.js`: Fixierte Angebote mit Freeze-Snapshot können unter keinen Umständen auf `ENTWURF` zurückgesetzt werden; `freeze_snapshot_json` kann nicht geleert werden. Nur gültige Vorwärtsübergänge (`VERSENDET` -> `ANGENOMMEN` / `ABGELEHNT`) sind erlaubt.
   - **Neuer Controller (`controllers/AngebotController.js`):**
+    * `normalizeInEndsumme`: Einheitliche Normalisierung von `in_endsumme_enthalten` (String `'0'` und `0` werden verlässlich als `0` gewertet, `'1'` und `1` als `1`).
     * `calculateTotals`: Getrennte Summenberechnung für Normal-, Alternativ- und Bedarfspositionen sowie MwSt-Aufschlüsselung (19%, 7%).
     * `freezeAngebot`: Erstellung des unveränderlichen Snapshots bei Status `VERSENDET`.
     * `createVersion`: Nachverhandlungen erzeugen `v2` (mit Belegnummern-Suffix wie `-V2`), während `v1` im Snapshot intakt bleibt.
     * `acceptAngebot`: Protokollierung von Annahmezeitpunkt und angenommener Version.
-    * `createProjektFromAngebot`: 1-Klick-Projektanlage mit eigenständigen Projektpositions-IDs und stabiler `sourceOfferPositionId`-Referenz (keine ID-Konflikte).
+    * `createProjektFromAngebot`: 1-Klick-Projektanlage mit eigenständigen Projektpositions-IDs und stabiler `sourceOfferPositionId`- / `source_angebot_pos_id`-Referenz.
     * `validateAngebot`: Kontextbezogene Vollständigkeits- und Risikoprüfung.
   - **Automatisierte Testsuite (`tests/angebot_lifecycle.test.js`):**
-    * 6 vollständige Testfälle (Summenberechnung, Freeze-Snapshot, Versionierung, Projektübernahme mit Positionsreferenz, Risikoprüfung, SQLite-Persistenz via `document_repo`). Alle 6 Tests erfolgreich bestanden.
+    * 7 umfassende Testsuiten (Summenberechnung, Freeze-Snapshot, Versionierung, Projektübernahme, Risikoprüfung, SQLite-Persistenz & Reload von `projekt_positionen`, Foreign Key & Cascade, Offensive Attacken-Tests gegen den Freeze-Lock und String-`'0'`-Normalisierung). 100% Tests bestanden.
 
 ## 27.09.2026 (Bugfix PDF-Druck & ZUGFeRD-Sichtseite sowie DOM-Print-Reparatur)
 - **Behebung PDF-Druck blockiert (Klick auf PDF-Symbol im Dashboard ohne Reaktion):**

@@ -3,6 +3,7 @@
  * Nachträge (VOB/B), Bautagebuch, Abnahmeprotokolle, Eingangsrechnungen, Projekt-Controlling & VOB-Meldungen
  */
 const BautagebuchMobileController = require('../../controllers/BautagebuchMobileController');
+const AngebotController = require('../../controllers/AngebotController');
 
 function createControllingBautagebuchRepo(deps) {
     const { db, dbQuery, dbRun, appendAuditLog, auditLogger, getEinstellung: injectedGetEinstellung, dbAPI } = deps;
@@ -398,19 +399,112 @@ function createControllingBautagebuchRepo(deps) {
 
     // --- Projekte ---
     async saveProjekt(projekt) {
-        if (projekt.id) {
-            await dbRun(
-                'UPDATE projekte SET name=?, kundeId=?, start=?, ende=?, budget=?, status=?, sicherheitseinbehalt_prozent=? WHERE id=?',
-                [projekt.name, projekt.kundeId, projekt.start, projekt.ende, projekt.budget, projekt.status, projekt.sicherheitseinbehalt_prozent || 0, projekt.id]
-            );
-            return projekt.id;
-        } else {
-            const res = await dbRun(
-                'INSERT INTO projekte (name, kundeId, start, ende, budget, status, sicherheitseinbehalt_prozent) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                [projekt.name, projekt.kundeId, projekt.start, projekt.ende, projekt.budget, projekt.status, projekt.sicherheitseinbehalt_prozent || 0]
-            );
-            return res.id;
-        }
+        const tx = db.transaction((p) => {
+            let projId = p.id;
+            if (projId) {
+                db.prepare(`
+                    UPDATE projekte SET
+                        name=?, kundeId=?, start=?, ende=?, budget=?, status=?,
+                        sicherheitseinbehalt_prozent=?, source_angebot_id=?, source_angebot_version=?,
+                        gaeb_phase=?, hoai_vob_flag=?
+                    WHERE id=?
+                `).run(
+                    p.name,
+                    p.kundeId || null,
+                    p.start || null,
+                    p.ende || null,
+                    p.budget || 0,
+                    p.status || null,
+                    p.sicherheitseinbehalt_prozent || 0,
+                    p.source_angebot_id || null,
+                    p.source_angebot_version || null,
+                    p.gaeb_phase || null,
+                    p.hoai_vob_flag || 'VOB',
+                    projId
+                );
+            } else {
+                const res = db.prepare(`
+                    INSERT INTO projekte (
+                        name, kundeId, start, ende, budget, status,
+                        sicherheitseinbehalt_prozent, source_angebot_id, source_angebot_version,
+                        gaeb_phase, hoai_vob_flag
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `).run(
+                    p.name,
+                    p.kundeId || null,
+                    p.start || null,
+                    p.ende || null,
+                    p.budget || 0,
+                    p.status || null,
+                    p.sicherheitseinbehalt_prozent || 0,
+                    p.source_angebot_id || null,
+                    p.source_angebot_version || null,
+                    p.gaeb_phase || null,
+                    p.hoai_vob_flag || 'VOB'
+                );
+                projId = Number(res.lastInsertRowid);
+            }
+
+            if (Array.isArray(p.positionen)) {
+                db.prepare('DELETE FROM projekt_positionen WHERE projekt_id = ?').run(projId);
+                const insertPosStmt = db.prepare(`
+                    INSERT INTO projekt_positionen (
+                        projekt_id, source_angebot_id, source_angebot_version, source_angebot_pos_id,
+                        oz_code, titel, name, menge, einheit, preis,
+                        cost_type, positionstyp, in_endsumme_enthalten,
+                        zeitansatz_h, lohn_ep, stoff_ep, geraet_ep, sonst_ep,
+                        ekt_stoff_je_me, ekt_geraet_je_me, ekt_sonst_je_me, ekt_nu_je_me
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `);
+
+                for (const pos of p.positionen) {
+                    const inEndsumme = AngebotController.normalizeInEndsumme(pos.in_endsumme_enthalten, pos.positionstyp);
+                    insertPosStmt.run(
+                        projId,
+                        pos.source_angebot_id || p.source_angebot_id || null,
+                        pos.source_angebot_version || p.source_angebot_version || null,
+                        pos.source_angebot_pos_id || pos.sourceOfferPositionId || null,
+                        pos.oz_code || null,
+                        pos.titel || null,
+                        pos.name || '',
+                        pos.menge !== undefined ? parseFloat(pos.menge) : 1,
+                        pos.einheit || 'Stk.',
+                        pos.preis !== undefined ? parseFloat(pos.preis) : 0,
+                        pos.cost_type || 'MATERIAL',
+                        (pos.positionstyp || 'NORMAL').toUpperCase().trim(),
+                        inEndsumme,
+                        parseFloat(pos.zeitansatz_h) || 0.0,
+                        parseFloat(pos.lohn_ep) || 0.0,
+                        parseFloat(pos.stoff_ep) || 0.0,
+                        parseFloat(pos.geraet_ep) || 0.0,
+                        parseFloat(pos.sonst_ep) || 0.0,
+                        parseFloat(pos.ekt_stoff_je_me) || 0.0,
+                        parseFloat(pos.ekt_geraet_je_me) || 0.0,
+                        parseFloat(pos.ekt_sonst_je_me) || 0.0,
+                        parseFloat(pos.ekt_nu_je_me) || 0.0
+                    );
+                }
+            }
+
+            return projId;
+        });
+
+        return tx(projekt);
+    },
+
+    getProjektMitPositionen(projektId) {
+        const projekt = db.prepare('SELECT * FROM projekte WHERE id = ?').get(projektId);
+        if (!projekt) return null;
+        const positions = db.prepare('SELECT * FROM projekt_positionen WHERE projekt_id = ? ORDER BY id ASC').all(projektId);
+        projekt.positionen = positions.map(p => ({
+            ...p,
+            sourceOfferPositionId: p.source_angebot_pos_id
+        }));
+        return projekt;
+    },
+
+    getProjekt(projektId) {
+        return this.getProjektMitPositionen(projektId);
     },
 
 getVobMeldungen(filter = {}) {

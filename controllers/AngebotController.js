@@ -12,6 +12,19 @@
 
 class AngebotController {
     /**
+     * Einheitliche Normalisierung des Flags in_endsumme_enthalten.
+     * Erkennt strikt 1, '1', true als 1 und 0, '0', false als 0.
+     * Bei undefined/null greift der Standard nach Positionstyp (NORMAL & PAUSCHALE = 1, sonst 0).
+     */
+    static normalizeInEndsumme(val, positionstyp = 'NORMAL') {
+        if (val !== undefined && val !== null) {
+            return (val === 1 || val === '1' || val === true) ? 1 : 0;
+        }
+        const pType = (positionstyp || 'NORMAL').toUpperCase().trim();
+        return (pType === 'NORMAL' || pType === 'PAUSCHALE') ? 1 : 0;
+    }
+
+    /**
      * Rundet monetäre Werte kaufmännisch auf 2 Dezimalstellen (Cent).
      */
     static round2(value) {
@@ -61,14 +74,8 @@ class AngebotController {
             totalsByType[pType].count += 1;
 
             // In Endsumme enthalten:
-            // Wenn explizit gesetzt, hat das Flag Vorrang.
             // Standard: NORMAL und PAUSCHALE = enthalten (1). ALTERNATIV und BEDARF = nicht enthalten (0).
-            let inEndsumme = false;
-            if (pos.in_endsumme_enthalten !== undefined && pos.in_endsumme_enthalten !== null) {
-                inEndsumme = Boolean(pos.in_endsumme_enthalten === 1 || pos.in_endsumme_enthalten === true || pos.in_endsumme_enthalten === '1');
-            } else {
-                inEndsumme = (pType === 'NORMAL' || pType === 'PAUSCHALE');
-            }
+            const inEndsumme = this.normalizeInEndsumme(pos.in_endsumme_enthalten, pType) === 1;
 
             if (inEndsumme) {
                 endsummeNetto = this.round2(endsummeNetto + posNetto);
@@ -150,9 +157,7 @@ class AngebotController {
                 mwst: p.mwst !== undefined && p.mwst !== null ? parseFloat(p.mwst) : 19,
                 rabatt: parseFloat(p.rabatt) || 0,
                 positionstyp: (p.positionstyp || 'NORMAL').toUpperCase().trim(),
-                in_endsumme_enthalten: (p.in_endsumme_enthalten !== undefined && p.in_endsumme_enthalten !== null)
-                    ? (p.in_endsumme_enthalten ? 1 : 0)
-                    : (['ALTERNATIV', 'BEDARF'].includes((p.positionstyp || 'NORMAL').toUpperCase().trim()) ? 0 : 1),
+                in_endsumme_enthalten: this.normalizeInEndsumme(p.in_endsumme_enthalten, p.positionstyp),
                 bieterangabe_wert: p.bieterangabe_wert || null,
                 oz_code: p.oz_code || null,
                 cost_type: p.cost_type || 'MATERIAL'
@@ -227,9 +232,7 @@ class AngebotController {
             mwst: p.mwst !== undefined && p.mwst !== null ? parseFloat(p.mwst) : 19,
             rabatt: parseFloat(p.rabatt) || 0,
             positionstyp: (p.positionstyp || 'NORMAL').toUpperCase().trim(),
-            in_endsumme_enthalten: p.in_endsumme_enthalten !== undefined && p.in_endsumme_enthalten !== null
-                ? (p.in_endsumme_enthalten ? 1 : 0)
-                : (['ALTERNATIV', 'BEDARF'].includes((p.positionstyp || 'NORMAL').toUpperCase().trim()) ? 0 : 1),
+            in_endsumme_enthalten: this.normalizeInEndsumme(p.in_endsumme_enthalten, p.positionstyp),
             bieterangabe_wert: p.bieterangabe_wert || null,
             oz_code: p.oz_code || null,
             cost_type: p.cost_type || 'MATERIAL'
@@ -310,37 +313,46 @@ class AngebotController {
         // Wenn options.includeAll gesetzt ist, werden alle Positionen übernommen.
         const filteredPositions = options.includeAll
             ? srcPositions
-            : srcPositions.filter(p => {
-                if (p.in_endsumme_enthalten !== undefined && p.in_endsumme_enthalten !== null) {
-                    return Boolean(p.in_endsumme_enthalten === 1 || p.in_endsumme_enthalten === true || p.in_endsumme_enthalten === '1');
-                }
-                const pType = (p.positionstyp || 'NORMAL').toUpperCase().trim();
-                return pType === 'NORMAL' || pType === 'PAUSCHALE';
-            });
+            : srcPositions.filter(p => this.normalizeInEndsumme(p.in_endsumme_enthalten, p.positionstyp) === 1);
+
+        const version = angebot.angenommene_version || angebot.version || 1;
 
         const idGenerator = options.idGenerator || ((p, idx) => `proj_pos_${Date.now()}_${idx + 1}_${Math.random().toString(36).substring(2, 7)}`);
 
-        const projectPositions = filteredPositions.map((pos, idx) => ({
-            id: idGenerator(pos, idx),
-            sourceOfferPositionId: pos.id !== undefined && pos.id !== null ? pos.id : (idx + 1),
-            artikelId: pos.artikelId || null,
-            titel: pos.titel || null,
-            name: pos.name || '',
-            menge: parseFloat(pos.menge) || 0,
-            einheit: pos.einheit || 'Stk.',
-            preis: parseFloat(pos.preis) || 0,
-            ek: parseFloat(pos.ek) || 0,
-            mwst: pos.mwst !== undefined && pos.mwst !== null ? parseFloat(pos.mwst) : 19,
-            rabatt: parseFloat(pos.rabatt) || 0,
-            positionstyp: (pos.positionstyp || 'NORMAL').toUpperCase().trim(),
-            in_endsumme_enthalten: pos.in_endsumme_enthalten !== undefined ? (pos.in_endsumme_enthalten ? 1 : 0) : 1,
-            oz_code: pos.oz_code || null,
-            cost_type: pos.cost_type || 'MATERIAL'
-        }));
+        const projectPositions = filteredPositions.map((pos, idx) => {
+            const posId = pos.id !== undefined && pos.id !== null ? pos.id : (idx + 1);
+            return {
+                id: idGenerator(pos, idx),
+                sourceOfferPositionId: posId,
+                source_angebot_pos_id: posId,
+                source_angebot_id: angebot.id || null,
+                source_angebot_version: version,
+                artikelId: pos.artikelId || null,
+                titel: pos.titel || null,
+                name: pos.name || '',
+                menge: parseFloat(pos.menge) || 0,
+                einheit: pos.einheit || 'Stk.',
+                preis: parseFloat(pos.preis) || 0,
+                ek: parseFloat(pos.ek) || 0,
+                mwst: pos.mwst !== undefined && pos.mwst !== null ? parseFloat(pos.mwst) : 19,
+                rabatt: parseFloat(pos.rabatt) || 0,
+                positionstyp: (pos.positionstyp || 'NORMAL').toUpperCase().trim(),
+                in_endsumme_enthalten: this.normalizeInEndsumme(pos.in_endsumme_enthalten, pos.positionstyp),
+                oz_code: pos.oz_code || null,
+                cost_type: pos.cost_type || 'MATERIAL',
+                zeitansatz_h: parseFloat(pos.zeitansatz_h) || 0.0,
+                lohn_ep: parseFloat(pos.lohn_ep) || 0.0,
+                stoff_ep: parseFloat(pos.stoff_ep) || 0.0,
+                geraet_ep: parseFloat(pos.geraet_ep) || 0.0,
+                sonst_ep: parseFloat(pos.sonst_ep) || 0.0,
+                ekt_stoff_je_me: parseFloat(pos.ekt_stoff_je_me) || 0.0,
+                ekt_geraet_je_me: parseFloat(pos.ekt_geraet_je_me) || 0.0,
+                ekt_sonst_je_me: parseFloat(pos.ekt_sonst_je_me) || 0.0,
+                ekt_nu_je_me: parseFloat(pos.ekt_nu_je_me) || 0.0
+            };
+        });
 
         const totals = this.calculateTotals(projectPositions, options);
-
-        const version = angebot.angenommene_version || angebot.version || 1;
 
         const projekt = {
             name: options.name || `Projekt: ${angebot.nr || 'Angebot'} (v${version})`,
