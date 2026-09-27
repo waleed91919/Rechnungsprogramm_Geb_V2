@@ -214,8 +214,8 @@ function createSchema(db) {
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_projekt_positionen_source_pos ON projekt_positionen(source_angebot_pos_id)`); } catch (e) { console.error('[DB Schema] Index idx_projekt_positionen_source_pos:', e.message); }
     try {
         db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_projekte_unique_source_angebot 
-        ON projekte(source_angebot_id, source_angebot_version) 
-        WHERE source_angebot_id IS NOT NULL AND source_angebot_version IS NOT NULL`);
+        ON projekte(source_angebot_id, COALESCE(source_angebot_version, 1)) 
+        WHERE source_angebot_id IS NOT NULL`);
     } catch (e) {
         console.error('[DB Schema] Index idx_projekte_unique_source_angebot:', e.message);
     }
@@ -1290,6 +1290,10 @@ function createSchema(db) {
 }
 
 function runMigrations(db) {
+    try {
+        db.exec(`CREATE TABLE IF NOT EXISTS einstellungen (key TEXT PRIMARY KEY, value TEXT)`);
+    } catch (_e) {}
+
     // Einmaliger Opt-in-Reset: Das alte "true" war auch ein automatisch
     // gesetzter Standard und ist deshalb keine bewusste Netzwerk-Freigabe.
     db.transaction(() => {
@@ -1492,11 +1496,39 @@ function runMigrations(db) {
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_dokumente_parent_angebot ON dokumente(parent_angebot_id)`); } catch (e) { if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] idx_dokumente_parent_angebot:', e.message); }
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_projekte_source_angebot ON projekte(source_angebot_id)`); } catch (e) { if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] idx_projekte_source_angebot:', e.message); }
     try {
-        db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_projekte_unique_source_angebot 
-        ON projekte(source_angebot_id, source_angebot_version) 
-        WHERE source_angebot_id IS NOT NULL AND source_angebot_version IS NOT NULL`);
+        const hasProjekte = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='projekte'").get();
+        if (hasProjekte) {
+            // Finde und bereinige Duplikate in bestehenden Altdatenbanken:
+            // Für Duplikate (ab dem 2. Eintrag) wird die Version auf einen negativen Wert (-id) gesetzt,
+            // damit historische Projekte nicht gelöscht werden, der Unique-Index aber erfolgreich angelegt werden kann.
+            db.exec(`
+                UPDATE projekte
+                SET source_angebot_version = -id
+                WHERE source_angebot_id IS NOT NULL
+                  AND id NOT IN (
+                      SELECT MIN(id)
+                      FROM projekte
+                      WHERE source_angebot_id IS NOT NULL
+                      GROUP BY source_angebot_id, COALESCE(source_angebot_version, 1)
+                  );
+            `);
+
+            // Alten Index verwerfen, falls er noch die alte Definition (ohne COALESCE) hatte
+            db.exec(`DROP INDEX IF EXISTS idx_projekte_unique_source_angebot`);
+
+            db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_projekte_unique_source_angebot 
+            ON projekte(source_angebot_id, COALESCE(source_angebot_version, 1)) 
+            WHERE source_angebot_id IS NOT NULL`);
+
+            const idxCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_projekte_unique_source_angebot'").get();
+            if (!idxCheck) {
+                console.error('[DB Migration Error] idx_projekte_unique_source_angebot fehlt nach Migration in sqlite_master!');
+                throw new Error('Migrationsfehler: idx_projekte_unique_source_angebot konnte nicht erstellt werden');
+            }
+        }
     } catch (e) {
-        if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] idx_projekte_unique_source_angebot:', e.message);
+        console.error('[DB Migration Error] idx_projekte_unique_source_angebot:', e.message);
+        throw e;
     }
 
     // Tabelle projekt_positionen:

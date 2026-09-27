@@ -1,5 +1,18 @@
 # Changelog / Fortschritt
 
+## 27.09.2026 (Härtung des Angebots- & Projekt-Kerns: NULL-Version Unique Guard, Altdaten-Deduplizierung & Aufmaß-Löschschutz)
+- **NULL-Version im Unique-Index und beim Speichern abgesichert (`schema.js` & `controlling_bautagebuch_repo.js`):**
+  - Partieller UNIQUE INDEX `idx_projekte_unique_source_angebot` auf `projekte(source_angebot_id, COALESCE(source_angebot_version, 1)) WHERE source_angebot_id IS NOT NULL` definiert (sowohl in `createSchema` als auch in `runMigrations`). Verhindert zuverlässig Duplikate selbst bei manuellen SQL-Inserts mit `source_angebot_version = NULL`.
+  - In `saveProjekt()` wird die Angebotsversion bei vorhandener `source_angebot_id` stets auf mindestens Version 1 normalisiert (`const sVer = p.source_angebot_id ? (parseInt(p.source_angebot_version, 10) || 1) : null;`) und konsistent für `INSERT`, `UPDATE` und die Idempotenz-Vorprüfung verwendet.
+- **Bereinigung von Altdaten-Duplikaten vor Index-Erstellung & Index-Verifikation (`schema.js` & `tests/angebot_lifecycle.test.js`):**
+  - In `runMigrations()` wird vor Erstellung des Unique-Index eine Deduplizierung durchgeführt: Für etwaige Duplikate ab dem 2. Eintrag wird die Version auf `-id` umgesetzt. Dadurch gehen historische Projektdaten nicht verloren, während der Unique-Index fehlerfrei und manipulationssicher angelegt werden kann.
+  - Verifikation nach Index-Erstellung via `sqlite_master`: Stellt sicher, dass `idx_projekte_unique_source_angebot` nach Migration aktiv ist, andernfalls wird ein harter Fehler geloggt und geworfen.
+  - Migrationstest erweitert um Altdatenbank mit bereits bestehenden Duplikaten (Version 1 und Version NULL), welche fehlerfrei migriert wird.
+- **Löschschutz für Projektpositionen mit verknüpftem Aufmaß (Aufmaß-Integritätsschutz):**
+  - In `saveProjekt()` wird beim Diff & Sync vor dem Löschen verwaister Positionen geprüft, ob Aufmaße auf eine der zu löschenden Positionen verweisen (`SELECT id, titel FROM aufmass WHERE CAST(position_id AS INTEGER) = ? OR position_id = ?`).
+  - Falls verknüpfte Aufmaße existieren, wird das Löschen verhindert und ein klarer Fehler geworfen (`Löschen der Projektposition verhindert: Auf Position #... verweisen bereits Aufmaße. Löschen Sie zuerst die zugehörigen Aufmaße.`), wodurch die gesamte Transaktion zurückrollt.
+  - Test 11 um Negativ-Szenario erweitert: Verifiziert das Werfen des Fehlers, den Rollback (Position bleibt in SQLite erhalten) und den fortbestehenden relationalen Bezug des Aufmaßes.
+
 ## 27.09.2026 (Neuer Angebots-Kern: Direktangebot, Versionierung, Freeze-Snapshot, Risiko-Check & Projektübergabe)
 - **Implementierung des neuen modularen Angebots-Kerns (gemäß `doc/angebot_checkliste_bau_2026-09-27.md` & `liesen.txt`):**
   - **Rechtliche & architektonische Differenzierung:**

@@ -401,6 +401,7 @@ function createControllingBautagebuchRepo(deps) {
     async saveProjekt(projekt) {
         const tx = db.transaction((p) => {
             let projId = p.id;
+            const sVer = p.source_angebot_id ? (parseInt(p.source_angebot_version, 10) || 1) : null;
             if (projId) {
                 db.prepare(`
                     UPDATE projekte SET
@@ -417,19 +418,19 @@ function createControllingBautagebuchRepo(deps) {
                     p.status || null,
                     p.sicherheitseinbehalt_prozent || 0,
                     p.source_angebot_id || null,
-                    p.source_angebot_version || null,
+                    sVer,
                     p.gaeb_phase || null,
                     p.hoai_vob_flag || 'VOB',
                     projId
                 );
             } else {
                 if (!projId && p.source_angebot_id) {
-                    const existing = db.prepare('SELECT id, name FROM projekte WHERE source_angebot_id = ? AND source_angebot_version = ?').get(
+                    const existing = db.prepare('SELECT id, name FROM projekte WHERE source_angebot_id = ? AND COALESCE(source_angebot_version, 1) = ?').get(
                         p.source_angebot_id,
-                        p.source_angebot_version || 1
+                        sVer
                     );
                     if (existing) {
-                        throw new Error(`Doppel-Projektanlage verhindert: Für Angebot #${p.source_angebot_id} (Version ${p.source_angebot_version || 1}) existiert bereits Projekt #${existing.id} ("${existing.name}").`);
+                        throw new Error(`Doppel-Projektanlage verhindert: Für Angebot #${p.source_angebot_id} (Version ${sVer}) existiert bereits Projekt #${existing.id} ("${existing.name}").`);
                     }
                 }
 
@@ -448,7 +449,7 @@ function createControllingBautagebuchRepo(deps) {
                     p.status || null,
                     p.sicherheitseinbehalt_prozent || 0,
                     p.source_angebot_id || null,
-                    p.source_angebot_version || null,
+                    sVer,
                     p.gaeb_phase || null,
                     p.hoai_vob_flag || 'VOB'
                 );
@@ -456,7 +457,7 @@ function createControllingBautagebuchRepo(deps) {
             }
 
             if (Array.isArray(p.positionen)) {
-                const existingRows = db.prepare('SELECT id FROM projekt_positionen WHERE projekt_id = ?').all(projId);
+                const existingRows = db.prepare('SELECT id, name FROM projekt_positionen WHERE projekt_id = ?').all(projId);
                 const existingIdSet = new Set(existingRows.map(r => Number(r.id)));
                 const keptIds = [];
 
@@ -499,7 +500,7 @@ function createControllingBautagebuchRepo(deps) {
                 for (const pos of p.positionen) {
                     const inEndsumme = AngebotController.normalizeInEndsumme(pos.in_endsumme_enthalten, pos.positionstyp);
                     const sAngId = pos.source_angebot_id || p.source_angebot_id || null;
-                    const sAngVer = pos.source_angebot_version || p.source_angebot_version || null;
+                    const sAngVer = pos.source_angebot_version || sVer || null;
                     const sAngPosId = pos.source_angebot_pos_id || pos.sourceOfferPositionId || null;
                     const ozCode = pos.oz_code || null;
                     const titel = pos.titel || null;
@@ -582,11 +583,25 @@ function createControllingBautagebuchRepo(deps) {
                     }
                 }
 
-                if (keptIds.length > 0) {
-                    const placeholders = keptIds.map(() => '?').join(',');
-                    db.prepare(`DELETE FROM projekt_positionen WHERE projekt_id = ? AND id NOT IN (${placeholders})`).run(projId, ...keptIds);
-                } else {
-                    db.prepare('DELETE FROM projekt_positionen WHERE projekt_id = ?').run(projId);
+                const keptIdSet = new Set(keptIds);
+                const toDelete = existingRows.filter(r => !keptIdSet.has(Number(r.id)));
+
+                if (toDelete.length > 0) {
+                    for (const posToDelete of toDelete) {
+                        const posId = Number(posToDelete.id);
+                        const posName = posToDelete.name || '';
+                        const linkedAufmass = db.prepare(`
+                            SELECT id, titel FROM aufmass WHERE CAST(position_id AS INTEGER) = ? OR position_id = ?
+                        `).get(posId, String(posId));
+
+                        if (linkedAufmass) {
+                            throw new Error('Löschen der Projektposition verhindert: Auf Position #' + posId + ' ("' + posName + '") verweisen bereits Aufmaße. Löschen Sie zuerst die zugehörigen Aufmaße.');
+                        }
+                    }
+
+                    const toDeleteIds = toDelete.map(r => Number(r.id));
+                    const placeholders = toDeleteIds.map(() => '?').join(',');
+                    db.prepare(`DELETE FROM projekt_positionen WHERE projekt_id = ? AND id IN (${placeholders})`).run(projId, ...toDeleteIds);
                 }
             }
 
@@ -599,6 +614,9 @@ function createControllingBautagebuchRepo(deps) {
             if (err && typeof err.message === 'string' && err.message.startsWith('Doppel-Projektanlage verhindert')) {
                 throw err;
             }
+            if (err && typeof err.message === 'string' && err.message.startsWith('Löschen der Projektposition verhindert')) {
+                throw err;
+            }
             if (
                 err &&
                 (err.code === 'SQLITE_CONSTRAINT_UNIQUE' ||
@@ -606,9 +624,9 @@ function createControllingBautagebuchRepo(deps) {
                  (typeof err.message === 'string' && (err.message.includes('UNIQUE constraint failed') || err.message.includes('SQLITE_CONSTRAINT_UNIQUE'))))
             ) {
                 const sId = projekt && projekt.source_angebot_id;
-                const sVer = (projekt && projekt.source_angebot_version) || 1;
+                const sVer = sId ? (parseInt(projekt.source_angebot_version, 10) || 1) : 1;
                 if (sId) {
-                    const existing = db.prepare('SELECT id, name FROM projekte WHERE source_angebot_id = ? AND source_angebot_version = ?').get(sId, sVer);
+                    const existing = db.prepare('SELECT id, name FROM projekte WHERE source_angebot_id = ? AND COALESCE(source_angebot_version, 1) = ?').get(sId, sVer);
                     const existingInfo = existing ? ` existiert bereits Projekt #${existing.id} ("${existing.name}").` : '.';
                     throw new Error(`Doppel-Projektanlage verhindert: Für Angebot #${sId} (Version ${sVer})${existingInfo}`);
                 }

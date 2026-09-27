@@ -10,9 +10,9 @@
  * 6. DB-Persistenz im SQLite Test-DB über document_repo
  * 7. String "0" vs "1" Test & einheitliche Normalisierung von in_endsumme_enthalten
  * 8. Stabile Identität bei Projekt-Updates (Kein ID-Wechsel)
- * 9. Verhindern von Doppel-Projektanlagen (Idempotenz / Double-Click Guard)
- * 10. Legacy-DB Migrationstest
- * 11. Stabile Aufmaß-Referenz über Projekt-Updates hinweg
+ * 9. Verhindern von Doppel-Projektanlagen (Idempotenz / Double-Click Guard & NULL-Version Unique-Check)
+ * 10. Legacy-DB Migrationstest & Altdaten-Duplikatbereinigung vor Index-Erstellung
+ * 11. Stabile Aufmaß-Referenz & Löschschutz für verknüpfte Aufmaße (Aufmaß-Integritätsschutz)
  */
 
 const test = require('node:test');
@@ -885,6 +885,45 @@ test('Test 9: Verhindern von Doppel-Projektanlagen (Idempotenz / Double-Click Gu
         proj1Data.name = 'Projekt Erstaufruf (Update)';
         const updatedId = await repo.saveProjekt(proj1Data);
         assert.equal(updatedId, proj1Id, 'Update des bestehenden Projekts mit gesetzter id muss erlaubt sein');
+
+        // 9.4: Versuch, zweites Projekt mit source_angebot_version: null anzulegen (wird auf 1 normalisiert und geblockt)
+        const projNullVerData = {
+            name: 'Projekt mit NULL Version',
+            source_angebot_id: angebotId,
+            source_angebot_version: null,
+            positionen: [{ name: 'Leistung', menge: 1, preis: 500.0 }]
+        };
+        await assert.rejects(
+            async () => {
+                await repo.saveProjekt(projNullVerData);
+            },
+            (err) => {
+                assert.ok(
+                    err.message.includes('Doppel-Projektanlage verhindert'),
+                    `Fehler muss Doppel-Projektanlage verhindern, war: ${err.message}`
+                );
+                return true;
+            },
+            'saveProjekt mit source_angebot_version=null muss als Duplikat erkannt und blockiert werden'
+        );
+
+        // 9.5: Manueller SQL-Insert mit source_angebot_version = NULL muss durch UNIQUE-Index abgewiesen werden
+        assert.throws(
+            () => {
+                db.prepare(`
+                    INSERT INTO projekte (name, source_angebot_id, source_angebot_version)
+                    VALUES ('Manueller Insert NULL', ?, NULL)
+                `).run(angebotId);
+            },
+            (err) => {
+                assert.ok(
+                    err.message.includes('UNIQUE constraint failed') || err.code === 'SQLITE_CONSTRAINT_UNIQUE',
+                    `Manueller SQL-Insert mit NULL muss UNIQUE constraint verletzen, war: ${err.message}`
+                );
+                return true;
+            },
+            'Manueller SQL-Insert mit NULL-Version muss durch COALESCE Unique-Index blockiert werden'
+        );
     } finally {
         try {
             db.close();
@@ -1216,6 +1255,89 @@ test('Test 10: Legacy-DB Migrationstest', async () => {
     }
 });
 
+test('Test 10 (Erweiterung): Migration einer Altdatenbank mit Duplikaten bei source_angebot_id (Bereinigung vor Unique-Index)', () => {
+    const tmpDbPath = path.join(os.tmpdir(), `angebot-lifecycle-dup-mig-${Date.now()}-${process.pid}.sqlite`);
+    const Database = require('better-sqlite3');
+    const { runMigrations } = require('../schema.js');
+
+    const db = new Database(tmpDbPath);
+    try {
+        // Altdatenbank-Zustand: Tabelle projekte enthält BEREITS ZWEI PROJEKTE mit demselben source_angebot_id
+        // (Projekt 1 mit Version 1, Projekt 2 mit NULL, Projekt 3 mit Version 1 als weiteres Duplikat)
+        db.exec(`
+            CREATE TABLE IF NOT EXISTS einstellungen (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            );
+
+            CREATE TABLE projekte (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                kundeId INTEGER,
+                budget REAL DEFAULT 0,
+                status TEXT,
+                source_angebot_id INTEGER,
+                source_angebot_version INTEGER
+            );
+
+            INSERT INTO projekte (id, name, source_angebot_id, source_angebot_version)
+            VALUES (10, 'Projekt Alt 10 (Version 1)', 55, 1);
+
+            INSERT INTO projekte (id, name, source_angebot_id, source_angebot_version)
+            VALUES (11, 'Projekt Alt 11 (Version NULL Duplikat)', 55, NULL);
+
+            INSERT INTO projekte (id, name, source_angebot_id, source_angebot_version)
+            VALUES (12, 'Projekt Alt 12 (Version 1 Duplikat)', 55, 1);
+
+            INSERT INTO projekte (id, name, source_angebot_id, source_angebot_version)
+            VALUES (20, 'Projekt Normal ohne Angebot', NULL, NULL);
+        `);
+
+        // Migration ausführen: Muss fehlerfrei durchlaufen (Duplikate werden auf -id gesetzt)
+        runMigrations(db);
+
+        // 1. Prüfen, dass der Unique-Index tatsächlich in sqlite_master existiert
+        const idxCheck = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_projekte_unique_source_angebot'").get();
+        assert.ok(idxCheck, 'idx_projekte_unique_source_angebot muss nach Migration in sqlite_master existieren');
+
+        // 2. Erstes Projekt hat Version 1 behalten
+        const p10 = db.prepare('SELECT * FROM projekte WHERE id = 10').get();
+        assert.equal(p10.source_angebot_version, 1, 'Erst-Projekt muss Version 1 behalten');
+
+        // 3. Duplikate wurden auf negative Version (-id) gesetzt, sodass historische Daten erhalten bleiben
+        const p11 = db.prepare('SELECT * FROM projekte WHERE id = 11').get();
+        assert.equal(p11.source_angebot_version, -11, 'Duplikat 11 muss auf -11 umgesetzt worden sein');
+
+        const p12 = db.prepare('SELECT * FROM projekte WHERE id = 12').get();
+        assert.equal(p12.source_angebot_version, -12, 'Duplikat 12 muss auf -12 umgesetzt worden sein');
+
+        // 4. Normales Projekt ohne source_angebot_id bleibt unverändert
+        const p20 = db.prepare('SELECT * FROM projekte WHERE id = 20').get();
+        assert.equal(p20.source_angebot_id, null);
+        assert.equal(p20.source_angebot_version, null);
+
+        // 5. Index ist aktiv: Neues Duplikat für Angebot 55 (Version 1 oder NULL) wird blockiert
+        assert.throws(
+            () => {
+                db.prepare("INSERT INTO projekte (name, source_angebot_id, source_angebot_version) VALUES ('Neues Duplikat v1', 55, 1)").run();
+            },
+            /UNIQUE constraint failed/
+        );
+
+        assert.throws(
+            () => {
+                db.prepare("INSERT INTO projekte (name, source_angebot_id, source_angebot_version) VALUES ('Neues Duplikat vNull', 55, NULL)").run();
+            },
+            /UNIQUE constraint failed/
+        );
+    } finally {
+        try {
+            db.close();
+            if (fs.existsSync(tmpDbPath)) fs.unlinkSync(tmpDbPath);
+        } catch (_err) {}
+    }
+});
+
 test('Test 11: Aufmaß-Referenz bleibt über Projekt-Updates hinweg stabil und intakt', async () => {
     const tmpDbPath = path.join(os.tmpdir(), `angebot-lifecycle-test11-${Date.now()}-${process.pid}.sqlite`);
     const Database = require('better-sqlite3');
@@ -1382,6 +1504,50 @@ test('Test 11: Aufmaß-Referenz bleibt über Projekt-Updates hinweg stabil und i
         const reloadedPos4 = reloadedProj.positionen.find(p => p.name === 'Sauberkeitsschicht C12/15');
         assert.ok(reloadedPos4 && reloadedPos4.id > 0, 'Neue Position 4 muss persistiert worden sein');
         assert.notEqual(reloadedPos4.id, posId);
+
+        // 11.6: Negativ-Szenario: Löschschutz für Projektposition mit verknüpftem Aufmaß (Aufmaß-Integritätsschutz)
+        // Versuche, das Projekt mit einem Positionen-Array zu speichern, aus dem die Position mit verknüpftem Aufmaß entfernt wurde
+        const positionsWithoutPos1 = reloadedProj.positionen.filter(p => p.id !== posId);
+        assert.equal(positionsWithoutPos1.length, 3, 'Array enthält alle Positionen außer der verknüpften Aufmaß-Position pos1');
+
+        await assert.rejects(
+            async () => {
+                await controllingRepo.saveProjekt({
+                    ...reloadedProj,
+                    positionen: positionsWithoutPos1
+                });
+            },
+            (err) => {
+                // 1. Der Fehler wird mit aussagekräftigem Text geworfen
+                assert.ok(
+                    err.message.includes('Löschen der Projektposition verhindert'),
+                    `Fehler muss Löschschutz signalisieren, war: ${err.message}`
+                );
+                assert.ok(
+                    err.message.includes(String(posId)),
+                    `Fehler muss die betroffene Positions-ID #${posId} enthalten, war: ${err.message}`
+                );
+                assert.ok(
+                    err.message.includes('Erdaushub Baugrube'),
+                    `Fehler muss den Positionsnamen ("Erdaushub Baugrube") enthalten, war: ${err.message}`
+                );
+                return true;
+            },
+            'Löschen einer Position mit verknüpftem Aufmaß muss durch saveProjekt strikt verhindert werden'
+        );
+
+        // 2. Die Position in der SQLite-Datenbank wurde NICHT gelöscht (Rollback)
+        const pos1StillInDb = db.prepare('SELECT * FROM projekt_positionen WHERE id = ?').get(posId);
+        assert.ok(pos1StillInDb, 'Projektposition mit verknüpftem Aufmaß darf nach abgelehntem Löschen NICHT gelöscht worden sein');
+        assert.equal(pos1StillInDb.id, posId);
+        assert.equal(pos1StillInDb.name, 'Erdaushub Baugrube');
+
+        // 3. Das Aufmaß ist weiterhin intakt verknüpft
+        const aufmassStillIntact = await aufmassRepo.getAufmassById(aufmassId);
+        assert.ok(aufmassStillIntact, 'Aufmaß muss weiterhin existieren');
+        assert.equal(aufmassStillIntact.position_id, String(posId), 'Aufmaß position_id muss weiterhin unverändert auf posId verweisen');
+        assert.equal(aufmassStillIntact.projekt_id, projId, 'Aufmaß projekt_id muss intakt bleiben');
+        assert.equal(aufmassStillIntact.positionen.length, 2, 'Aufmaß-Unterpositionen müssen intakt bleiben');
     } finally {
         try {
             db.close();
