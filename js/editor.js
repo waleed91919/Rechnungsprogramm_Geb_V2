@@ -798,6 +798,7 @@ function setupAngebotModalUI() {
         if (cb13b) {
             cb13b.disabled = false;
             cb13b.checked = false;
+            cb13b.onchange = handleAngebot13bChange;
         }
 
         handleAngebotMetaChange();
@@ -1057,6 +1058,7 @@ function applyAngebotEditMode(existing, form, submitBtn) {
         if (cb13b) {
             cb13b.checked = !!existing.unterliegt_13b;
             cb13b.disabled = isFrozen;
+            cb13b.onchange = handleAngebot13bChange;
         }
 
         handleAngebotMetaChange();
@@ -1163,14 +1165,30 @@ function collectAngebotFormData() {
     const auftraggeber_typ = auftraggeberTypEl ? auftraggeberTypEl.value : (existing?.auftraggeber_typ || 'PRIVAT');
     const vertragsgrundlage = vertragsgrundlageEl ? vertragsgrundlageEl.value : (existing?.vertragsgrundlage || 'BGB_WERKVERTRAG');
 
-    const baustellen_adresse = document.getElementById('angebot-baustellen-adresse')?.value || document.getElementById('rechnung-baustellen-adresse')?.value || existing?.baustellen_adresse || '';
-    const leistungszeitraum_von = document.getElementById('angebot-ausfuehrung-von')?.value || document.getElementById('rechnung-leistungszeitraum-von')?.value || existing?.leistungszeitraum_von || '';
-    const leistungszeitraum_bis = document.getElementById('angebot-ausfuehrung-bis')?.value || document.getElementById('rechnung-leistungszeitraum-bis')?.value || existing?.leistungszeitraum_bis || '';
+    const baustellenEl = document.getElementById('angebot-baustellen-adresse');
+    const baustellen_adresse = baustellenEl ? baustellenEl.value.trim() : (existing?.baustellen_adresse || '');
 
-    const rawSicherheit = document.getElementById('angebot-sicherheitseinbehalt')?.value || document.getElementById('rechnung-sicherheitseinbehalt-prozent')?.value || document.getElementById('rechnung-handwerk-sicherheitseinbehalt')?.value;
-    const sicherheitseinbehalt_prozent = (rawSicherheit !== undefined && rawSicherheit !== null && rawSicherheit !== '') ? parseFloat(rawSicherheit) : (existing?.sicherheitseinbehalt_prozent || 0);
+    const ausfVonEl = document.getElementById('angebot-ausfuehrung-von');
+    const ausfBisEl = document.getElementById('angebot-ausfuehrung-bis');
+    const leistungszeitraum_von = ausfVonEl ? ausfVonEl.value : (existing?.leistungszeitraum_von || '');
+    const leistungszeitraum_bis = ausfBisEl ? ausfBisEl.value : (existing?.leistungszeitraum_bis || '');
 
-    const unterliegt_13b = (document.getElementById('angebot-13b-ustg')?.checked || document.getElementById('rechnung-13b-ustg')?.checked) ? 1 : (existing?.unterliegt_13b ? 1 : 0);
+    const sichEl = document.getElementById('angebot-sicherheitseinbehalt');
+    let sicherheitseinbehalt_prozent = 0;
+    if (sichEl) {
+        const sVal = sichEl.value.trim();
+        sicherheitseinbehalt_prozent = (sVal !== '' && !isNaN(parseFloat(sVal))) ? parseFloat(sVal) : 0;
+    } else if (existing?.sicherheitseinbehalt_prozent !== undefined) {
+        sicherheitseinbehalt_prozent = parseFloat(existing.sicherheitseinbehalt_prozent) || 0;
+    }
+
+    const cb13b = document.getElementById('angebot-13b-ustg');
+    let unterliegt_13b = 0;
+    if (cb13b) {
+        unterliegt_13b = (auftraggeber_typ !== 'PRIVAT' && cb13b.checked) ? 1 : 0;
+    } else if (existing && existing.unterliegt_13b !== undefined) {
+        unterliegt_13b = existing.unterliegt_13b ? 1 : 0;
+    }
     const ist_privatkunde = (auftraggeber_typ === 'PRIVAT') ? 1 : 0;
     const vob_vereinbart = (vertragsgrundlage === 'VOB_B') ? 1 : 0;
 
@@ -1199,8 +1217,12 @@ function collectAngebotFormData() {
     });
 
     const totals = window.AngebotController
-        ? window.AngebotController.calculateTotals(positions)
+        ? window.AngebotController.calculateTotals(positions, { unterliegt_13b: Boolean(unterliegt_13b) })
         : { netto: 0, steuer: 0, brutto: 0 };
+
+    const sicherheitseinbehalt = (totals.netto && sicherheitseinbehalt_prozent > 0)
+        ? Math.round(totals.netto * sicherheitseinbehalt_prozent) / 100
+        : 0;
 
     const doc = {
         id: existingId,
@@ -1232,7 +1254,7 @@ function collectAngebotFormData() {
         leistungszeitraum_von,
         leistungszeitraum_bis,
         sicherheitseinbehalt_prozent,
-        sicherheitseinbehalt: (totals.netto && sicherheitseinbehalt_prozent) ? Math.round(totals.netto * sicherheitseinbehalt_prozent) / 100 : (existing?.sicherheitseinbehalt || 0),
+        sicherheitseinbehalt,
         unterliegt_13b,
         ist_privatkunde,
         vob_vereinbart,
@@ -2407,19 +2429,47 @@ window.syncSicherheitseinbehalt = syncSicherheitseinbehalt;
 function calculateRechnungTotals() {
     if (state.isAngebotMode && window.AngebotController) {
         const posList = state.currentRechnungPositionen || [];
-        const totals = window.AngebotController.calculateTotals(posList);
+        const curIdVal = document.getElementById('rechnung-id')?.value;
+        const curId = curIdVal ? parseInt(curIdVal, 10) : null;
+        const existing = curId ? (state.angebote || []).find(a => a.id === curId) : null;
+
+        const auftraggeberTypEl = document.getElementById('angebot-auftraggeber-typ');
+        const auftraggeber_typ = auftraggeberTypEl ? auftraggeberTypEl.value : (existing?.auftraggeber_typ || 'PRIVAT');
+
+        const cb13b = document.getElementById('angebot-13b-ustg');
+        let unterliegt_13b = 0;
+        if (cb13b) {
+            unterliegt_13b = (auftraggeber_typ !== 'PRIVAT' && cb13b.checked) ? 1 : 0;
+        } else if (existing && existing.unterliegt_13b !== undefined) {
+            unterliegt_13b = existing.unterliegt_13b ? 1 : 0;
+        }
+
+        const totals = window.AngebotController.calculateTotals(posList, { unterliegt_13b: Boolean(unterliegt_13b) });
+
+        const sichEl = document.getElementById('angebot-sicherheitseinbehalt');
+        let sicherheitseinbehalt_prozent = 0;
+        if (sichEl) {
+            const sVal = sichEl.value.trim();
+            sicherheitseinbehalt_prozent = (sVal !== '' && !isNaN(parseFloat(sVal))) ? parseFloat(sVal) : 0;
+        } else if (existing?.sicherheitseinbehalt_prozent !== undefined) {
+            sicherheitseinbehalt_prozent = parseFloat(existing.sicherheitseinbehalt_prozent) || 0;
+        }
+        const sicherheitseinbehalt = (totals.netto && sicherheitseinbehalt_prozent > 0)
+            ? Math.round(totals.netto * sicherheitseinbehalt_prozent) / 100
+            : 0;
+
         state.currentRechnungTotals = {
             netto: totals.netto,
             steuer: totals.steuer,
             brutto: totals.brutto,
             rabattAbzug: 0,
             anzahlung: 0,
-            sicherheitseinbehalt: 0,
-            sicherheitseinbehalt_prozent: 0,
+            sicherheitseinbehalt,
+            sicherheitseinbehalt_prozent,
             kumulierte_leistung_netto: totals.netto,
             zahlbetrag: totals.brutto,
-            netto13b: 0,
-            nettoNormal: totals.netto
+            netto13b: totals.totals13bNetto || (unterliegt_13b ? totals.netto : 0),
+            nettoNormal: totals.totalsNormalNetto || (unterliegt_13b ? 0 : totals.netto)
         };
 
         const nettoEl = document.getElementById('rechnung-netto');
@@ -2433,13 +2483,28 @@ function calculateRechnungTotals() {
         const rabattEl = document.getElementById('rechnung-rabatt-wert');
         if (rabattEl) rabattEl.textContent = formatCurrency(0);
 
+        const sichRow = document.getElementById('rechnung-sicherheitseinbehalt-row');
+        const sichWert = document.getElementById('rechnung-sicherheitseinbehalt-wert');
+        if (sichRow && sichWert) {
+            if (sicherheitseinbehalt_prozent > 0 && sicherheitseinbehalt > 0) {
+                sichRow.classList.remove('hidden');
+                sichWert.textContent = `- ${formatCurrency(sicherheitseinbehalt)}`;
+            } else {
+                sichRow.classList.add('hidden');
+            }
+        }
+
         const steuerContainer = document.getElementById('rechnung-steuern-container');
         if (steuerContainer) {
             steuerContainer.innerHTML = '';
             for (const [rate, data] of Object.entries(totals.taxBreakdown || {})) {
                 const div = document.createElement('div');
                 div.className = 'flex justify-between items-center text-xs text-slate-500';
-                div.innerHTML = `<span>MwSt. ${rate}% (auf ${formatCurrency(data.base)})</span><span class="font-mono text-slate-700">${formatCurrency(data.tax)}</span>`;
+                if (data.is13b || rate === '0' || unterliegt_13b) {
+                    div.innerHTML = `<span>MwSt. 0% (§ 13b Steuerschuldnerschaft d. Leistungsempfängers auf ${formatCurrency(data.base)})</span><span class="font-mono text-slate-700">${formatCurrency(data.tax)}</span>`;
+                } else {
+                    div.innerHTML = `<span>MwSt. ${rate}% (auf ${formatCurrency(data.base)})</span><span class="font-mono text-slate-700">${formatCurrency(data.tax)}</span>`;
+                }
                 steuerContainer.appendChild(div);
             }
         }

@@ -1,5 +1,28 @@
 # Changelog / Fortschritt
 
+## 27.09.2026 (liesen.txt: Deterministische Erfassung von § 13b UStG und Beseitigung fehlerhafter Fallbacks beim Leeren von Angebotsfeldern)
+- **§ 13b UStG (Reverse Charge) sauber und deterministisch erfassen (`js/editor.js` & `views/modals/rechnung-modal.html`):**
+  - **Entfernung der fehlerhaften Koppelung:** Die unzuverlässige Bedingung `(angebot-13b-ustg?.checked || rechnung-13b-ustg?.checked) ? 1 : (existing?.unterliegt_13b ? 1 : 0)` wurde beseitigt.
+  - **Deterministische UI-Auswertung:** Wenn das Kontrollkästchen `#angebot-13b-ustg` im DOM existiert und abgewählt wird (`checked === false`), wird strikt `unterliegt_13b = 0` gespeichert. Es erfolgt kein Fallback auf Altdaten oder versteckte Rechnungs-Elemente mehr.
+  - **Reaktive Steuerberechnung im UI:** Anbindung eines `onchange`-Listeners an `#angebot-13b-ustg` (`handleAngebot13bChange(); calculateRechnungTotals()`), sodass die Steuerzeile und Bruttosumme im Modal bei Abwahl sofort aktualisiert werden.
+- **Respektierung geleerter/gelöschter Formularfelder (`collectAngebotFormData()` in `js/editor.js`):**
+  - **Baustellen-Adresse (`angebot-baustellen-adresse`):** Speichert bei gelöschtem Inhalt exakt einen leeren String `''` statt eines `||`-Rückgriffs auf Altdaten oder Rechnungsfelder.
+  - **Voraussichtlicher Ausführungszeitraum (`angebot-ausfuehrung-von`, `angebot-ausfuehrung-bis`):** Speichert bei geleerten Datumsfeldern deterministisch `''`.
+  - **Sicherheitseinbehalt (`angebot-sicherheitseinbehalt`):** Wenn das Feld geleert wird, werden sowohl `sicherheitseinbehalt_prozent` als auch `sicherheitseinbehalt` auf `0` gesetzt.
+- **Steuerlogik nach § 13b UStG (`controllers/AngebotController.js` & `calculateRechnungTotals()` in `js/editor.js`):**
+  - In `AngebotController.calculateTotals()`: Bei gesetztem `options.unterliegt_13b` oder `options.is13b` werden 0 % MwSt für die Positionen angewendet, Netto = Brutto berechnet und `taxBreakdown` weist die Steuerschuldnerschaft des Leistungsempfängers aus.
+  - `calculateRechnungTotals()` in `js/editor.js` übergibt `{ unterliegt_13b: Boolean(unterliegt_13b) }` an `AngebotController.calculateTotals()`.
+- **Echte DOM- & SQLite-Tests (`tests/test_electron_runner.js`, `tests/angebot_true_ui_and_pdf.test.js`, `tests/angebot_lifecycle.test.js`):**
+  - **Testfall 4b in `tests/test_electron_runner.js`:** Erstellt ein Angebot mit `unterliegt_13b = 1`, `baustellen_adresse = 'Musterstraße 12'`, Ausführungszeitraum und 5 % Sicherheitseinbehalt. Öffnet das Angebot erneut im Modal, wählt § 13b ab, leert alle genannten Felder und speichert. Prüft per `assert` in der SQLite-Datenbank:
+    * `unterliegt_13b === 0`
+    * `baustellen_adresse === ''`
+    * `leistungszeitraum_von === ''`
+    * `leistungszeitraum_bis === ''`
+    * `sicherheitseinbehalt_prozent === 0`
+    * `sicherheitseinbehalt === 0`
+  - **Unit-Test 1b in `tests/angebot_lifecycle.test.js`:** Prüft `calculateTotals` mit `unterliegt_13b: true` (0 % Steuer, Netto = Brutto, Steuerschuldnerschaft im Breakdown).
+  - Alle Testsuiten zu 100 % grün.
+
 ## 27.09.2026 (liesen.txt: Saubere Trennung und Neugestaltung des Handwerks- und Baubereichs für Angebote)
 - **Dedizierte Sektion "Bauvorhaben & Vertragsbedingungen" für Angebote (`views/modals/rechnung-modal.html` & `js/modal-loader.js`):**
   - **Beseitigung von `Handwerk & Erweiterte Angaben (VOB/GoBD)` im Angebot:** Der für Rechnungen gedachte Abschnitt mit Rechnungsart, Bauabzugsteuer (§ 48 EStG) und GoBD-Hinweisen wurde für Angebote vollständig eliminiert.

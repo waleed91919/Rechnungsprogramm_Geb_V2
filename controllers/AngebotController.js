@@ -41,6 +41,7 @@ class AngebotController {
      */
     static calculateTotals(positionen = [], options = {}) {
         const defaultMwst = options.defaultMwst !== undefined ? parseFloat(options.defaultMwst) : 19.0;
+        const isGlobal13b = Boolean(options.unterliegt_13b || options.is13b);
 
         const totalsByType = {
             NORMAL: { netto: 0, steuer: 0, brutto: 0, count: 0 },
@@ -57,10 +58,19 @@ class AngebotController {
             const menge = parseFloat(pos.menge) || 0;
             const preis = parseFloat(pos.preis) || 0;
             const rabatt = parseFloat(pos.rabatt) || 0;
-            const mwstRate = pos.mwst !== undefined && pos.mwst !== null ? parseFloat(pos.mwst) : defaultMwst;
+            const explicit13b = (pos.is13b !== undefined && pos.is13b !== null)
+                ? pos.is13b
+                : ((pos.unterliegt_13b !== undefined && pos.unterliegt_13b !== null)
+                    ? pos.unterliegt_13b
+                    : (pos.ist13b !== undefined && pos.ist13b !== null ? pos.ist13b : undefined));
+            const pos13b = (explicit13b !== undefined && explicit13b !== null)
+                ? Boolean(explicit13b)
+                : isGlobal13b;
+
+            const mwstRate = pos13b ? 0 : (pos.mwst !== undefined && pos.mwst !== null ? parseFloat(pos.mwst) : defaultMwst);
 
             const posNetto = this.round2(menge * preis * (1 - rabatt / 100));
-            const posMwst = this.round2(posNetto * (mwstRate / 100));
+            const posMwst = pos13b ? 0 : this.round2(posNetto * (mwstRate / 100));
             const posBrutto = this.round2(posNetto + posMwst);
 
             let pType = (pos.positionstyp || 'NORMAL').toUpperCase().trim();
@@ -91,14 +101,51 @@ class AngebotController {
         for (const [rateStr, base] of Object.entries(taxBases)) {
             const rate = parseFloat(rateStr);
             const roundedBase = this.round2(base);
-            const taxAmount = this.round2(roundedBase * (rate / 100));
+            const is13bRate = Boolean(isGlobal13b || (rate === 0 && positionen.some(p => p.is13b || p.unterliegt_13b)));
+            const taxAmount = (rate === 0 || is13bRate) ? 0 : this.round2(roundedBase * (rate / 100));
             taxBreakdown[rateStr] = {
                 rate,
                 base: roundedBase,
                 tax: taxAmount,
-                brutto: this.round2(roundedBase + taxAmount)
+                brutto: this.round2(roundedBase + taxAmount),
+                is13b: is13bRate,
+                steuerschuldner: is13bRate ? 'Leistungsempfänger' : undefined,
+                notice: is13bRate ? 'Steuerschuldnerschaft des Leistungsempfängers (Reverse Charge) gemäß § 13b UStG' : undefined
             };
             endsummeSteuer = this.round2(endsummeSteuer + taxAmount);
+        }
+
+        if (isGlobal13b && Object.keys(taxBases).length === 0) {
+            taxBreakdown['0'] = {
+                rate: 0,
+                base: 0,
+                tax: 0,
+                brutto: 0,
+                is13b: true,
+                steuerschuldner: 'Leistungsempfänger',
+                notice: 'Steuerschuldnerschaft des Leistungsempfängers (Reverse Charge) gemäß § 13b UStG'
+            };
+        }
+
+        if (isGlobal13b) {
+            Object.defineProperty(taxBreakdown, 'notice', {
+                value: 'Steuerschuldnerschaft des Leistungsempfängers (Reverse Charge) gemäß § 13b UStG',
+                enumerable: false,
+                writable: true,
+                configurable: true
+            });
+            Object.defineProperty(taxBreakdown, 'steuerschuldnerschaft', {
+                value: 'Steuerschuldnerschaft des Leistungsempfängers (Reverse Charge) gemäß § 13b UStG',
+                enumerable: false,
+                writable: true,
+                configurable: true
+            });
+            Object.defineProperty(taxBreakdown, 'is13b', {
+                value: true,
+                enumerable: false,
+                writable: true,
+                configurable: true
+            });
         }
 
         const endsummeBrutto = this.round2(endsummeNetto + endsummeSteuer);
@@ -110,7 +157,12 @@ class AngebotController {
             totalsByType,
             taxBreakdown,
             positionenCount: positionen.length,
-            inEndsummeCount: endsummePositionen.length
+            inEndsummeCount: endsummePositionen.length,
+            unterliegt_13b: isGlobal13b ? 1 : 0,
+            is13b: isGlobal13b,
+            totals13bNetto: isGlobal13b ? endsummeNetto : 0,
+            totalsNormalNetto: isGlobal13b ? 0 : endsummeNetto,
+            steuerschuldnerschaft: isGlobal13b ? 'Steuerschuldnerschaft des Leistungsempfängers (Reverse Charge) gemäß § 13b UStG' : null
         };
     }
 
@@ -126,7 +178,11 @@ class AngebotController {
         if (!angebot) throw new Error('freezeAngebot: Kein Angebot übergeben.');
 
         const posList = positionen || angebot.positionen || [];
-        const totals = this.calculateTotals(posList, options);
+        const opts = {
+            ...options,
+            unterliegt_13b: options.unterliegt_13b !== undefined ? options.unterliegt_13b : Boolean(angebot.unterliegt_13b)
+        };
+        const totals = this.calculateTotals(posList, opts);
 
         const snapshot = {
             frozen_at: new Date().toISOString(),
@@ -238,7 +294,11 @@ class AngebotController {
             cost_type: p.cost_type || 'MATERIAL'
         }));
 
-        const totals = this.calculateTotals(clonedPositionen, options);
+        const opts = {
+            ...options,
+            unterliegt_13b: options.unterliegt_13b !== undefined ? options.unterliegt_13b : Boolean(originalAngebot.unterliegt_13b)
+        };
+        const totals = this.calculateTotals(clonedPositionen, opts);
 
         const newAngebot = {
             ...originalAngebot,
@@ -352,7 +412,11 @@ class AngebotController {
             };
         });
 
-        const totals = this.calculateTotals(projectPositions, options);
+        const opts = {
+            ...options,
+            unterliegt_13b: options.unterliegt_13b !== undefined ? options.unterliegt_13b : Boolean(angebot.unterliegt_13b)
+        };
+        const totals = this.calculateTotals(projectPositions, opts);
 
         const projekt = {
             name: options.name || `Projekt: ${angebot.nr || 'Angebot'} (v${version})`,

@@ -40,6 +40,10 @@ test('Echter Electron UI- und PDF-Workflow-Test (Chromium DOM, Button-Clicks, ec
         'Testfall 4 (Post-Versand UI-Aktionen) must pass'
     );
     assert.ok(
+        result.stdout.includes('Testfall 4b (§ 13b Abwahl & Feldleerung) erfolgreich bestanden'),
+        'Testfall 4b (§ 13b Abwahl & Feldleerung) must pass'
+    );
+    assert.ok(
         result.stdout.includes('Testfall 5 erfolgreich bestanden'),
         'Testfall 5 (DB-Reload & Integrität) must pass'
     );

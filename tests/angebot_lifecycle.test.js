@@ -149,6 +149,29 @@ test('Test 1: Summenberechnung mit Normal-, Alternativ- und Bedarfspositionen', 
     assert.equal(totalsWithAlt.netto, 1100.00, 'Gewählte Alternativposition muss in Netto enthalten sein (500 + 200 + 400 = 1100)');
 });
 
+test('Test 1b: § 13b UStG Steuerschuldnerschaft & 0% MwSt-Effekt in calculateTotals', () => {
+    const positionen = [
+        { menge: 5, preis: 100, mwst: 19, positionstyp: 'NORMAL' },
+        { menge: 1, preis: 200, mwst: 7, positionstyp: 'PAUSCHALE' }
+    ];
+    // Ohne 13b: Netto 700, Steuer 19%*500 + 7%*200 = 95 + 14 = 109, Brutto 809
+    const totalsNormal = AngebotController.calculateTotals(positionen);
+    assert.equal(totalsNormal.netto, 700.00);
+    assert.equal(totalsNormal.steuer, 109.00);
+    assert.equal(totalsNormal.brutto, 809.00);
+
+    // Mit unterliegt_13b: Netto 700, Steuer 0, Brutto 700
+    const totals13b = AngebotController.calculateTotals(positionen, { unterliegt_13b: true });
+    assert.equal(totals13b.netto, 700.00);
+    assert.equal(totals13b.steuer, 0.00);
+    assert.equal(totals13b.brutto, 700.00);
+    assert.equal(totals13b.taxBreakdown['0'].base, 700.00);
+    assert.equal(totals13b.taxBreakdown['0'].tax, 0.00);
+    assert.ok(totals13b.taxBreakdown['0'].is13b);
+    assert.ok(totals13b.taxBreakdown['0'].notice.includes('13b'));
+    assert.ok(totals13b.steuerschuldnerschaft.includes('13b'));
+});
+
 test('Test 2: Freeze-Mechanismus (Snapshot unveränderlich bei Versand)', () => {
     const angebot = {
         id: 42,

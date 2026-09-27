@@ -523,6 +523,116 @@ app.whenReady().then(async () => {
             console.log('✓ Testfall 4 erfolgreich bestanden!');
 
             // =================================================================
+            // TESTFALL 4b: § 13b UStG Abwahl & Feldleerung (liesen.txt Behebung)
+            // =================================================================
+            console.log('Testfall 4b: § 13b Abwahl & Feldleerung...');
+            const step4bResult = await win.webContents.executeJavaScript(`
+                (async () => {
+                    // 1. Neues Angebot öffnen
+                    window.openAngebotModal();
+
+                    // Stammdaten & Auftraggeber-Typ
+                    document.getElementById('rechnung-nr').value = 'ANG-2026-13B-001';
+                    const kundeSelect = document.getElementById('rechnung-kunde');
+                    kundeSelect.value = '${testKundeId}';
+                    handleKundeSelect({ target: kundeSelect });
+
+                    // Auftraggeber-Typ auf GEWERBLICH setzen, damit 13b erlaubt ist
+                    const auftraggeberTypEl = document.getElementById('angebot-auftraggeber-typ');
+                    if (auftraggeberTypEl) {
+                        auftraggeberTypEl.value = 'GEWERBLICH';
+                        handleAngebotMetaChange();
+                    }
+
+                    document.getElementById('rechnung-datum').value = '2026-11-01';
+                    document.getElementById('rechnung-faellig').value = '2026-11-30';
+
+                    // Position anlegen
+                    window.addRechnungPosition();
+                    const posId = window.state.currentRechnungPositionen[0].id;
+                    window.handlePositionChange(posId, 'name', 'Bauleistung Dachsanierung');
+                    window.handlePositionChange(posId, 'menge', 1);
+                    window.handlePositionChange(posId, 'preis', 1000.00);
+                    window.renderRechnungPositionen();
+
+                    // Initialwerte: 13b = 1, baustellen_adresse, leistungszeitraum, sicherheitseinbehalt = 5.0
+                    const cb13b = document.getElementById('angebot-13b-ustg');
+                    if (cb13b) {
+                        cb13b.checked = true;
+                        cb13b.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+
+                    const baustellenEl = document.getElementById('angebot-baustellen-adresse');
+                    if (baustellenEl) baustellenEl.value = 'Musterstraße 12';
+
+                    const vonEl = document.getElementById('angebot-ausfuehrung-von');
+                    if (vonEl) vonEl.value = '2026-11-01';
+
+                    const bisEl = document.getElementById('angebot-ausfuehrung-bis');
+                    if (bisEl) bisEl.value = '2026-11-30';
+
+                    const sichEl = document.getElementById('angebot-sicherheitseinbehalt');
+                    if (sichEl) {
+                        sichEl.value = '5.0';
+                        sichEl.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+
+                    // Erstes Speichern
+                    await window.saveAngebotEntwurf();
+
+                    // Id aus dem state holen
+                    const savedObj = window.state.angebote.find(a => a.nr === 'ANG-2026-13B-001');
+                    if (!savedObj) throw new Error('Saved offer not found in state.angebote');
+                    const savedId = savedObj.id;
+
+                    // 2. Erneut im Modal öffnen
+                    window.openAngebotModal(savedId);
+
+                    // 3. Werte ändern / leeren:
+                    // - Wähle #angebot-13b-ustg AB (checked = false)
+                    const cb13bReopen = document.getElementById('angebot-13b-ustg');
+                    if (cb13bReopen) {
+                        cb13bReopen.checked = false;
+                        cb13bReopen.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+
+                    // - Leere #angebot-baustellen-adresse (value = '')
+                    const baustellenReopen = document.getElementById('angebot-baustellen-adresse');
+                    if (baustellenReopen) baustellenReopen.value = '';
+
+                    // - Leere #angebot-ausfuehrung-von und #angebot-ausfuehrung-bis (value = '')
+                    const vonReopen = document.getElementById('angebot-ausfuehrung-von');
+                    if (vonReopen) vonReopen.value = '';
+                    const bisReopen = document.getElementById('angebot-ausfuehrung-bis');
+                    if (bisReopen) bisReopen.value = '';
+
+                    // - Leere #angebot-sicherheitseinbehalt (value = '')
+                    const sichReopen = document.getElementById('angebot-sicherheitseinbehalt');
+                    if (sichReopen) {
+                        sichReopen.value = '';
+                        sichReopen.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+
+                    // 4. Zweites Speichern
+                    await window.saveAngebotEntwurf();
+                    window.closeRechnungModal();
+
+                    return { savedId };
+                })()
+            `);
+
+            // 5. Lade das Dokument aus der SQLite-Datenbank und prüfe per assert
+            const savedDocInDb = db.prepare('SELECT * FROM dokumente WHERE id = ?').get(step4bResult.savedId);
+            assert.ok(savedDocInDb, 'Document must exist in SQLite DB');
+            assert.strictEqual(savedDocInDb.unterliegt_13b, 0, 'unterliegt_13b must be 0 after unchecking');
+            assert.strictEqual(savedDocInDb.baustellen_adresse, '', 'baustellen_adresse must be empty string after clearing');
+            assert.strictEqual(savedDocInDb.leistungszeitraum_von, '', 'leistungszeitraum_von must be empty string after clearing');
+            assert.strictEqual(savedDocInDb.leistungszeitraum_bis, '', 'leistungszeitraum_bis must be empty string after clearing');
+            assert.strictEqual(savedDocInDb.sicherheitseinbehalt_prozent, 0, 'sicherheitseinbehalt_prozent must be 0 after clearing');
+            assert.strictEqual(savedDocInDb.sicherheitseinbehalt, 0, 'sicherheitseinbehalt must be 0 after clearing');
+            console.log('✓ Testfall 4b (§ 13b Abwahl & Feldleerung) erfolgreich bestanden!');
+
+            // =================================================================
             // TESTFALL 5: DB-Reload & Integrität
             // =================================================================
             console.log('Testfall 5: DB-Reload & Integrität...');
