@@ -190,7 +190,13 @@ app.whenReady().then(async () => {
                         containerHasNr: containerHtml.includes('ANG-2026-TRUE-001'),
                         containerHasCustomer: containerHtml.includes('Bauherr Max Mustermann'),
                         containerHasPosition: containerHtml.includes('Mauerarbeiten Spezial'),
-                        htmlLength: containerHtml.length
+                        htmlLength: containerHtml.length,
+                        hasAngebotsdatum: containerHtml.includes('Angebotsdatum'),
+                        hasRechnungsdatum: containerHtml.includes('Rechnungsdatum'),
+                        hasLeistungsdatum: containerHtml.includes('Leistungsdatum'),
+                        hasZahlungsaufforderung: containerHtml.includes('Bitte überweisen Sie den Betrag'),
+                        hasAngebotssumme: containerHtml.includes('Angebotssumme'),
+                        hasZahlbetrag: containerHtml.includes('Zahlbetrag')
                     };
                 })()
             `);
@@ -200,6 +206,34 @@ app.whenReady().then(async () => {
             assert.ok(step2Result.containerHasCustomer, '#pdf-preview-container must contain customer name');
             assert.ok(step2Result.containerHasPosition, '#pdf-preview-container must contain position name');
             assert.ok(step2Result.htmlLength > 500, 'Rendered PDF preview HTML must be substantive');
+
+            // Trennung Angebots-PDF vom Rechnungs-Template
+            assert.ok(step2Result.hasAngebotsdatum, 'PDF-Vorschau des Angebots muss "Angebotsdatum" enthalten');
+            assert.strictEqual(step2Result.hasRechnungsdatum, false, 'PDF-Vorschau des Angebots darf NICHT "Rechnungsdatum" enthalten');
+            assert.strictEqual(step2Result.hasLeistungsdatum, false, 'PDF-Vorschau des Angebots darf ohne Ausführungszeitraum kein falsches "Leistungsdatum" enthalten');
+            assert.strictEqual(step2Result.hasZahlungsaufforderung, false, 'PDF-Vorschau des Angebots darf keine Zahlungsaufforderung ("Bitte überweisen Sie den Betrag") enthalten');
+            assert.ok(step2Result.hasAngebotssumme, 'PDF-Vorschau des Angebots muss "Angebotssumme" statt "Zahlbetrag" verwenden');
+            assert.strictEqual(step2Result.hasZahlbetrag, false, 'PDF-Vorschau des Angebots darf NICHT "Zahlbetrag" verwenden');
+
+            // Zusätzliche Verifikation: Angebot MIT Ausführungszeitraum rendert "Voraussichtl. Ausführung"
+            const mitAusfuehrungHtml = await win.webContents.executeJavaScript(`
+                (async () => {
+                    const testOfferWithPeriod = {
+                        nr: 'ANG-2026-TEST-AUSF',
+                        type: 'angebot',
+                        datum: '2026-10-01',
+                        faellig: '2026-10-31',
+                        leistungszeitraum_von: '2026-11-01',
+                        leistungszeitraum_bis: '2026-11-15',
+                        positionen: []
+                    };
+                    return await window.buildInvoiceDocumentHtml(testOfferWithPeriod, {}, true);
+                })()
+            `);
+            assert.ok(
+                mitAusfuehrungHtml.includes('Voraussichtl. Ausführung:') || mitAusfuehrungHtml.includes('Voraussichtlicher Ausführungszeitraum'),
+                'Angebot mit Ausführungszeitraum muss "Voraussichtl. Ausführung" enthalten'
+            );
 
             // Verify in SQLite: Status is still ENTWURF and freeze_snapshot_json is NULL
             const draftInDb = db.prepare('SELECT * FROM dokumente WHERE nr = ?').get('ANG-2026-TRUE-001');

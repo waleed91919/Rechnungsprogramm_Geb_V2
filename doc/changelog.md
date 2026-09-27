@@ -1,5 +1,29 @@
 # Changelog / Fortschritt
 
+## 27.09.2026 (liesen.txt: Vollständige Trennung des Angebots-PDF-Templates vom Rechnungs-Template)
+- **Vollständige Trennung Angebot vs. Rechnung in den PDF-Vorlagen (`js/einstellungen.js`):**
+  - **Erkennung `isAngebot`:** `buildInvoiceDocumentHtml(rech, kunde, isAngebot = false)` erkennt Angebote nun auch automatisch anhand von Dokumenteigenschaften (`rech.type === 'angebot' || rech.doc_type === 'angebot'`), selbst wenn das Flag nicht explizit übergeben wird.
+  - **Datumsbezeichnung DIN 5008:** In allen drei Vorlagen (*modern*, *klassisch*, *minimalistisch*) wird für Angebote statt `Rechnungsdatum:` das korrekte Label `Angebotsdatum:` gerendert.
+  - **Kein falsches Leistungsdatum auf Tagesdatum:** Ein Angebot hat zum Erstellungszeitpunkt kein fälliges Leistungsdatum. Das automatische Setzen des Angebotsdatums als Leistungsdatum wurde für Angebote vollständig eliminiert.
+  - **Voraussichtlicher Ausführungszeitraum:** Liegt ein vereinbarter oder geplanter Zeitraum vor (`rech.leistungszeitraum_von` und `rech.leistungszeitraum_bis` oder `rech.ausfuehrungszeitraum`), wird dieser im Infoblock als `Voraussichtl. Ausführung:` und in den Textabsätzen als `Voraussichtlicher Ausführungszeitraum:` ausgewiesen. Ohne hinterlegten Zeitraum wird die Zeile im Angebots-Infoblock sauber ausgeblendet.
+  - **Bereinigung von `legalTextsHtml`:** Der rechnungsspezifische Steuerhinweis *"Das Liefer- und Leistungsdatum entspricht, sofern nicht anders angegeben, dem Rechnungsdatum."* sowie die 21-tägige VOB/B-Zahlungsfrist und der § 14b Abs. 1 UStG Aufbewahrungshinweis für Privatkunden werden für Angebote nicht mehr ausgegeben.
+  - **Löschung der Zahlungsaufforderung im Abschlussbereich:** Die Aufforderung *"Bitte überweisen Sie den Betrag bis zum ... unter Angabe der Rechnungsnummer"* wurde für Angebote in allen drei Templates entfernt. Das Gültigkeitsdatum (`faelligStr`) kennzeichnet das Ende der Bindefrist, kein Zahlungsziel.
+  - **Neuer sachlicher Konditionenblock:** Für Angebote wird der Block *"Konditionen & Gültigkeit:"* mit dem sachlichen Hinweis *"Dieses Angebot ist freibleibend gültig bis zum [faelligStr]. Zahlungsbedingungen: [individuell oder: Nach Vereinbarung und Leistungsfortschritt (gemäß VOB/B bzw. BGB-Werkvertrag)]."* formuliert.
+  - **Summenblock:** Die Hervorhebung im Summenblock lautet für Angebote nun zutreffend `Angebotssumme (Brutto)` statt `Zahlbetrag`.
+  - **GiroCode / EPC-QR:** Geprüft und sichergestellt, dass kein EPC-QR-Code auf Angeboten generiert wird (`!isAngebot`).
+- **Formulardaten-Erfassung (`js/editor.js`):**
+  - `collectAngebotFormData` erfasst nun auch `leistungszeitraum_von`, `leistungszeitraum_bis`, `ausfuehrungszeitraum`, `zahlungsbedingungen` und `konditionen`.
+- **Echte Electron- und DOM-Tests (`tests/test_electron_runner.js`):**
+  - Testfall 2 prüft jetzt strikt im echten DOM:
+    * `hasAngebotsdatum` ist wahr.
+    * `hasRechnungsdatum` ist falsch.
+    * `hasLeistungsdatum` ist falsch (kein Tagesdatums-Fallback).
+    * `hasZahlungsaufforderung` ist falsch (kein "Bitte überweisen Sie den Betrag").
+    * `hasAngebotssumme` ist wahr.
+    * `hasZahlbetrag` ist falsch.
+    * Angebot mit Ausführungszeitraum rendert `Voraussichtl. Ausführung:`.
+- **Regressionstests:** Alle automatisierten Node- und Electron-Tests sind grün.
+
 ## 27.09.2026 (liesen.txt: Leerpreis vs. 0,00 € Trennung, präzise Versandregistrierung & echter Electron UI- + PDF-Test)
 - **Korrektur der Leerpreis-Behandlung & saubere Risiko-Validierung (`js/editor.js`):**
   - **Erhaltung von Leerpreisen als `null`:** In `collectAngebotFormData()` wird ein leerer String oder ungültiger Wert nicht mehr fälschlich zu `0.00` gewandelt, sondern sauber als `null` übergeben (`(rawPreis === '' || isNaN(parseFloat(p.preis))) ? null : parseFloat(p.preis)`).

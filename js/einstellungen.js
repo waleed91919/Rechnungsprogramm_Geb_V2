@@ -458,16 +458,24 @@ function formatIban(iban) {
 // Dokumentobjekt. Bewusst von window.generatePdf entkoppelt, damit der ZUGFeRD-Export
 // Sichtseite und CII-XML aus DEMSELBEN doc-Objekt erzeugen kann.
 async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
+    // Sicherstellen, dass isAngebot auch anhand von Dokumenteigenschaften sauber erkannt wird
+    isAngebot = Boolean(isAngebot || (rech && (rech.type === 'angebot' || rech.doc_type === 'angebot')));
+
     const logoHtml = state.einstellungen.logo ? `<img src="${state.einstellungen.logo}" class="max-h-14 max-w-[220px] object-contain" alt="Firmenlogo">` : '';
     const datumStr = formatGermanDate(rech.datum);
     const faelligStr = formatGermanDate(rech.faellig);
 
-    let leistungsdatumStr = datumStr;
+    let ausfuehrungStr = '';
     if (rech.leistungszeitraum_von && rech.leistungszeitraum_bis) {
-        leistungsdatumStr = `${formatGermanDate(rech.leistungszeitraum_von)} – ${formatGermanDate(rech.leistungszeitraum_bis)}`;
+        ausfuehrungStr = `${formatGermanDate(rech.leistungszeitraum_von)} – ${formatGermanDate(rech.leistungszeitraum_bis)}`;
+    } else if (rech.ausfuehrungszeitraum) {
+        ausfuehrungStr = sanitize(rech.ausfuehrungszeitraum);
     } else if (rech.leistungsdatum) {
-        leistungsdatumStr = formatGermanDate(rech.leistungsdatum);
+        ausfuehrungStr = formatGermanDate(rech.leistungsdatum);
     }
+
+    // Bei Rechnungen Standard-Fallback auf Rechnungsdatum
+    const leistungsdatumStr = ausfuehrungStr || datumStr;
 
     const kundenNr = (kunde && kunde.kundennummer) || (kunde && kunde.id ? `KD-${String(kunde.id).padStart(5, '0')}` : '-');
 
@@ -720,10 +728,18 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
     
     let legalTextsHtml = '<div class="space-y-1 text-[10px] text-slate-500 leading-relaxed">';
     
-    if (rech.leistungszeitraum_von && rech.leistungszeitraum_bis) {
-        legalTextsHtml += `<p><strong>Leistungszeitraum:</strong> ${formatGermanDate(rech.leistungszeitraum_von)} bis ${formatGermanDate(rech.leistungszeitraum_bis)}.</p>`;
+    if (isAngebot) {
+        if (ausfuehrungStr) {
+            legalTextsHtml += `<p><strong>Voraussichtlicher Ausführungszeitraum:</strong> ${ausfuehrungStr}.</p>`;
+        }
     } else {
-        legalTextsHtml += `<p class="italic">Das Liefer- und Leistungsdatum entspricht, sofern nicht anders angegeben, dem Rechnungsdatum.</p>`;
+        if (rech.leistungszeitraum_von && rech.leistungszeitraum_bis) {
+            legalTextsHtml += `<p><strong>Leistungszeitraum:</strong> ${formatGermanDate(rech.leistungszeitraum_von)} bis ${formatGermanDate(rech.leistungszeitraum_bis)}.</p>`;
+        } else if (rech.leistungsdatum) {
+            legalTextsHtml += `<p><strong>Leistungsdatum:</strong> ${formatGermanDate(rech.leistungsdatum)}.</p>`;
+        } else {
+            legalTextsHtml += `<p class="italic">Das Liefer- und Leistungsdatum entspricht, sofern nicht anders angegeben, dem Rechnungsdatum.</p>`;
+        }
     }
     
     const isReverseCharge = Boolean(rech.unterliegt_13b || rech.isGlobal13b) || (Object.keys(taxes).length === 0 && positionenNetto > 0 && kunde && kunde.ist_bauleistender_13b);
@@ -739,11 +755,11 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
         }
     }
     
-    if (rech.vob_vereinbart) {
+    if (!isAngebot && rech.vob_vereinbart) {
         legalTextsHtml += `<p>Gemäß § 16 Abs. 1 VOB/B ist diese Zahlung innerhalb von 21 Tagen nach Zugang dieser prüfbaren Aufstellung fällig.</p>`;
     }
     
-    if (rech.ist_privatkunde || rech.customer_type === 'B2C' || (kunde && kunde.customer_type === 'B2C')) {
+    if (!isAngebot && (rech.ist_privatkunde || rech.customer_type === 'B2C' || (kunde && kunde.customer_type === 'B2C'))) {
         legalTextsHtml += `<p><strong>Hinweis gem. § 14b Abs. 1 Satz 5 UStG:</strong> Als Privatperson sind Sie gesetzlich verpflichtet, diese Rechnung sowie den zugehörigen Zahlungsbeleg bei steuerpflichtigen Werkleistungen oder sonstigen Leistungen im Zusammenhang mit einem Grundstück mindestens zwei Jahre lang aufzubewahren (Fristbeginn: Schluss des Kalenderjahres der Ausstellung).</p>`;
     }
     
@@ -836,6 +852,9 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
 
     const formattedIban = formatIban(state.einstellungen.iban);
     const vorlage = state.einstellungen.rechnungsvorlage || 'klassisch';
+    const customKonditionen = (rech.zahlungsbedingungen || rech.konditionen) ? sanitize(rech.zahlungsbedingungen || rech.konditionen).trim() : '';
+    const datumLabel = isAngebot ? 'Angebotsdatum:' : 'Rechnungsdatum:';
+    const totalBoxLabel = isAngebot ? 'Angebotssumme (Brutto)' : 'Zahlbetrag';
     
     let templateHtml = '';
 
@@ -876,13 +895,18 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                                 <span class="font-bold text-blue-600 font-mono">${sanitize(rech.nr)}</span>
                             </div>
                             <div class="flex justify-between border-b border-slate-200/60 pb-1">
-                                <span class="text-slate-500">Rechnungsdatum:</span>
+                                <span class="text-slate-500">${datumLabel}</span>
                                 <span class="font-medium text-slate-800">${datumStr}</span>
                             </div>
+                            ${!isAngebot ? `
                             <div class="flex justify-between border-b border-slate-200/60 pb-1">
                                 <span class="text-slate-500">Leistungsdatum:</span>
                                 <span class="font-medium text-slate-800">${leistungsdatumStr}</span>
-                            </div>
+                            </div>` : (ausfuehrungStr ? `
+                            <div class="flex justify-between border-b border-slate-200/60 pb-1">
+                                <span class="text-slate-500">Voraussichtl. Ausführung:</span>
+                                <span class="font-medium text-slate-800">${ausfuehrungStr}</span>
+                            </div>` : '')}
                             <div class="flex justify-between border-b border-slate-200/60 pb-1">
                                 <span class="text-slate-500">Kundennummer:</span>
                                 <span class="font-medium text-slate-800 font-mono">${kundenNr}</span>
@@ -946,10 +970,17 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                     <div class="mt-auto">
                         <div class="flex justify-between items-start gap-6 mb-4 avoid-break pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">
                             <div class="flex-1 space-y-2.5">
+                                ${isAngebot ? `
+                                <div class="text-xs text-slate-600 bg-blue-50/50 p-2.5 rounded-xl border border-blue-100 leading-relaxed">
+                                    <p class="font-semibold text-blue-900 mb-0.5">Konditionen &amp; Gültigkeit:</p>
+                                    <p>Dieses Angebot ist freibleibend gültig bis zum <strong class="text-slate-900">${faelligStr}</strong>. Zahlungsbedingungen: ${customKonditionen || 'Nach Vereinbarung und Leistungsfortschritt (gemäß VOB/B bzw. BGB-Werkvertrag).'}</p>
+                                </div>
+                                ` : `
                                 <div class="text-xs text-slate-600 bg-blue-50/50 p-2.5 rounded-xl border border-blue-100 leading-relaxed">
                                     <p class="font-semibold text-blue-900 mb-0.5">Zahlungsbedingungen:</p>
                                     <p>Bitte überweisen Sie den Betrag bis zum <strong class="text-slate-900">${faelligStr}</strong> auf das unten angegebene Bankkonto unter Angabe der Rechnungsnummer <strong class="text-slate-900 font-mono">${sanitize(rech.nr)}</strong>.</p>
                                 </div>
+                                `}
 
                                 ${legalTextsHtml}
 
@@ -960,7 +991,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                             <div class="w-72 flex-shrink-0 bg-slate-50 rounded-xl p-3.5 border border-slate-200/80 shadow-sm text-xs">
                                 ${totalsHtml}
                                 <div class="mt-2.5 p-2.5 bg-blue-600 text-white rounded-lg flex justify-between items-baseline shadow-sm">
-                                    <span class="font-bold text-xs uppercase tracking-wider text-blue-100">Zahlbetrag</span>
+                                    <span class="font-bold text-xs uppercase tracking-wider text-blue-100">${totalBoxLabel}</span>
                                     <span class="font-black text-lg font-mono">${formatCurrency(zahlbetragNumerical)}</span>
                                 </div>
                             </div>
@@ -1018,8 +1049,10 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                         </div>
 
                         <div class="w-60 border-l border-gray-300 pl-4 text-xs text-gray-700 space-y-1">
-                            <div class="flex justify-between"><span class="text-gray-500">Datum:</span> <span class="font-medium">${datumStr}</span></div>
-                            <div class="flex justify-between"><span class="text-gray-500">Leistungsdatum:</span> <span class="font-medium">${leistungsdatumStr}</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">${datumLabel}</span> <span class="font-medium">${datumStr}</span></div>
+                            ${!isAngebot ? `
+                            <div class="flex justify-between"><span class="text-gray-500">Leistungsdatum:</span> <span class="font-medium">${leistungsdatumStr}</span></div>` : (ausfuehrungStr ? `
+                            <div class="flex justify-between"><span class="text-gray-500">Voraussichtl. Ausführung:</span> <span class="font-medium">${ausfuehrungStr}</span></div>` : '')}
                             <div class="flex justify-between"><span class="text-gray-500">Kundennummer:</span> <span class="font-medium font-mono">${kundenNr}</span></div>
                             <div class="flex justify-between"><span class="text-gray-500">${isAngebot ? 'Gültig bis:' : 'Fällig am:'}</span> <span class="font-bold">${faelligStr}</span></div>
                             ${kunde.ustId ? `<div class="flex justify-between"><span class="text-gray-500">USt-IdNr.:</span> <span class="font-mono">${sanitize(kunde.ustId)}</span></div>` : ''}
@@ -1064,10 +1097,17 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                     <div class="mt-auto">
                         <div class="flex justify-between items-start gap-6 mb-4 avoid-break pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">
                             <div class="flex-1 space-y-2.5">
+                                ${isAngebot ? `
+                                <div class="text-xs text-gray-700 border-l-2 border-black pl-3 leading-relaxed">
+                                    <p class="font-bold text-black mb-0.5">Konditionen &amp; Gültigkeit:</p>
+                                    <p>Dieses Angebot ist freibleibend gültig bis zum <strong>${faelligStr}</strong>. Zahlungsbedingungen: ${customKonditionen || 'Nach Vereinbarung und Leistungsfortschritt (gemäß VOB/B bzw. BGB-Werkvertrag).'}</p>
+                                </div>
+                                ` : `
                                 <div class="text-xs text-gray-700 border-l-2 border-black pl-3 leading-relaxed">
                                     <p class="font-bold text-black mb-0.5">Zahlungsbedingungen:</p>
                                     <p>Zahlbar bis zum <strong>${faelligStr}</strong> ohne Abzug auf unten genanntes Konto unter Angabe der Rechnungs-Nr. <strong>${sanitize(rech.nr)}</strong>.</p>
                                 </div>
+                                `}
 
                                 ${legalTextsHtml}
 
@@ -1078,7 +1118,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                             <div class="w-72 flex-shrink-0 text-xs">
                                 ${totalsHtml}
                                 <div class="mt-2.5 pt-2 border-t-2 border-black flex justify-between items-baseline font-bold text-base">
-                                    <span>Zahlbetrag</span>
+                                    <span>${totalBoxLabel}</span>
                                     <span class="font-mono text-lg">${formatCurrency(zahlbetragNumerical)}</span>
                                 </div>
                             </div>
@@ -1144,13 +1184,18 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                                 <span class="font-bold text-slate-900 font-mono">${sanitize(rech.nr)}</span>
                             </div>
                             <div class="flex justify-between border-b border-slate-200/50 pb-1">
-                                <span class="text-slate-500">Rechnungsdatum:</span>
+                                <span class="text-slate-500">${datumLabel}</span>
                                 <span class="font-medium text-slate-800">${datumStr}</span>
                             </div>
+                            ${!isAngebot ? `
                             <div class="flex justify-between border-b border-slate-200/50 pb-1">
                                 <span class="text-slate-500">Leistungsdatum:</span>
                                 <span class="font-medium text-slate-800">${leistungsdatumStr}</span>
-                            </div>
+                            </div>` : (ausfuehrungStr ? `
+                            <div class="flex justify-between border-b border-slate-200/50 pb-1">
+                                <span class="text-slate-500">Voraussichtl. Ausführung:</span>
+                                <span class="font-medium text-slate-800">${ausfuehrungStr}</span>
+                            </div>` : '')}
                             <div class="flex justify-between border-b border-slate-200/50 pb-1">
                                 <span class="text-slate-500">Kundennummer:</span>
                                 <span class="font-medium text-slate-800 font-mono">${kundenNr}</span>
@@ -1210,10 +1255,17 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                         <div class="flex justify-between items-start gap-6 mb-4 avoid-break pdf-no-break" style="break-inside: avoid; page-break-inside: avoid;">
                             <!-- Links: Zahlungsbedingungen, Gesetzliche Hinweise & GiroCode -->
                             <div class="flex-1 space-y-2.5">
+                                ${isAngebot ? `
+                                <div class="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-200/70 leading-relaxed">
+                                    <p class="font-semibold text-slate-800 mb-0.5">Konditionen &amp; Gültigkeit:</p>
+                                    <p>Dieses Angebot ist freibleibend gültig bis zum <strong class="text-slate-900">${faelligStr}</strong>. Zahlungsbedingungen: ${customKonditionen || 'Nach Vereinbarung und Leistungsfortschritt (gemäß VOB/B bzw. BGB-Werkvertrag).'}</p>
+                                </div>
+                                ` : `
                                 <div class="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-200/70 leading-relaxed">
                                     <p class="font-semibold text-slate-800 mb-0.5">Zahlungsbedingungen:</p>
                                     <p>Bitte überweisen Sie den Betrag bis zum <strong class="text-slate-900">${faelligStr}</strong> auf das unten angegebene Bankkonto unter Angabe der Rechnungsnummer <strong class="text-slate-900 font-mono">${sanitize(rech.nr)}</strong>.</p>
                                 </div>
+                                `}
 
                                 ${legalTextsHtml}
 
@@ -1224,7 +1276,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                             <div class="w-72 flex-shrink-0 bg-slate-50/90 rounded-xl p-3 border border-slate-200/70 shadow-sm text-xs">
                                 ${totalsHtml}
                                 <div class="mt-2.5 pt-2 border-t-2 border-slate-800 flex justify-between items-baseline">
-                                    <span class="font-bold text-xs text-slate-900 uppercase tracking-wider">Zahlbetrag</span>
+                                    <span class="font-bold text-xs text-slate-900 uppercase tracking-wider">${totalBoxLabel}</span>
                                     <span class="font-black text-lg text-slate-900 font-mono">${formatCurrency(zahlbetragNumerical)}</span>
                                 </div>
                             </div>
@@ -1259,6 +1311,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
 
     return templateHtml;
 }
+window.buildInvoiceDocumentHtml = buildInvoiceDocumentHtml;
 
 window.generatePdf = async function(id, isAngebot = false) {
     const idNum = parseInt(id);

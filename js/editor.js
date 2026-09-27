@@ -1098,6 +1098,11 @@ function collectAngebotFormData() {
         fusstext: document.getElementById('rechnung-fusstext')?.value || '',
         skonto_tage: document.getElementById('rechnung-skonto-tage')?.value ? parseInt(document.getElementById('rechnung-skonto-tage').value, 10) : null,
         skonto_prozent: document.getElementById('rechnung-skonto-prozent')?.value ? parseFloat(document.getElementById('rechnung-skonto-prozent').value) : null,
+        leistungszeitraum_von: document.getElementById('rechnung-leistungszeitraum-von')?.value || existing?.leistungszeitraum_von || '',
+        leistungszeitraum_bis: document.getElementById('rechnung-leistungszeitraum-bis')?.value || existing?.leistungszeitraum_bis || '',
+        ausfuehrungszeitraum: existing?.ausfuehrungszeitraum || '',
+        zahlungsbedingungen: existing?.zahlungsbedingungen || '',
+        konditionen: existing?.konditionen || '',
         isLocked: existing?.isLocked || false
     };
 
