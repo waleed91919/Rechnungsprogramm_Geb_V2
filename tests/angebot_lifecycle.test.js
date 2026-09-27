@@ -8,6 +8,10 @@
  * 4. Annahme von v1 und Projektanlage mit sourceOfferPositionId
  * 5. Risikoprüfung (Fehlender Preis vs. 0,00 € Bestätigung vs. § 650m BGB Hinweis)
  * 6. DB-Persistenz im SQLite Test-DB über document_repo
+ * 7. String "0" vs "1" Test & einheitliche Normalisierung von in_endsumme_enthalten
+ * 8. Stabile Identität bei Projekt-Updates (Kein ID-Wechsel)
+ * 9. Verhindern von Doppel-Projektanlagen (Idempotenz / Double-Click Guard)
+ * 10. Legacy-DB Migrationstest
  */
 
 const test = require('node:test');
@@ -686,6 +690,468 @@ test('Test 7: String "0" vs "1" Test & einheitliche Normalisierung von in_endsum
     assert.equal(projAll.positionen[1].in_endsumme_enthalten, 1, "Projektposition B muss in_endsumme_enthalten=1 haben");
 });
 
+test('Test 8: Stabile Identität bei Projekt-Updates (Kein ID-Wechsel)', async () => {
+    const tmpDbPath = path.join(os.tmpdir(), `angebot-lifecycle-test8-${Date.now()}-${process.pid}.sqlite`);
+    const Database = require('better-sqlite3');
+    const { createSchema, runMigrations } = require('../schema.js');
+    const createControllingBautagebuchRepo = require('../db/repositories/controlling_bautagebuch_repo');
+
+    const db = new Database(tmpDbPath);
+    db.pragma('foreign_keys = ON');
+    createSchema(db);
+    runMigrations(db);
+
+    const repo = createControllingBautagebuchRepo({
+        db,
+        dbQuery: async (s, p) => db.prepare(s).all(p),
+        dbRun: async (s, p) => db.prepare(s).run(p),
+        appendAuditLog: () => {},
+        auditLogger: null,
+        getEinstellung: () => null
+    });
+
+    try {
+        // 8.1: Projekt mit 3 Positionen anlegen
+        const initialProject = {
+            name: 'Projekt Rohbau Gewerbe',
+            budget: 25000.0,
+            status: 'BEAUFTRAGT',
+            positionen: [
+                { name: 'Erdaushub', menge: 100, einheit: 'm³', preis: 35.0, positionstyp: 'NORMAL', in_endsumme_enthalten: 1 },
+                { name: 'Bewehrung B500B', menge: 5000, einheit: 'kg', preis: 1.45, positionstyp: 'NORMAL', in_endsumme_enthalten: 1 },
+                { name: 'Beton C25/30', menge: 80, einheit: 'm³', preis: 125.0, positionstyp: 'NORMAL', in_endsumme_enthalten: 1 }
+            ]
+        };
+
+        const projId = await repo.saveProjekt(initialProject);
+        assert.ok(projId > 0, 'Projekt muss erfolgreich mit ID angelegt worden sein');
+
+        // 8.2: Neu laden und generierte Primärschlüssel-IDs der Positionen merken
+        const loadedV1 = repo.getProjektMitPositionen(projId);
+        assert.equal(loadedV1.name, 'Projekt Rohbau Gewerbe');
+        assert.equal(loadedV1.positionen.length, 3);
+
+        const pos1Id = loadedV1.positionen[0].id;
+        const pos2Id = loadedV1.positionen[1].id;
+        const pos3Id = loadedV1.positionen[2].id;
+
+        assert.ok(Number.isInteger(pos1Id) && pos1Id > 0, 'Position 1 muss numerische Primärschlüssel-ID besitzen');
+        assert.ok(Number.isInteger(pos2Id) && pos2Id > 0, 'Position 2 muss numerische Primärschlüssel-ID besitzen');
+        assert.ok(Number.isInteger(pos3Id) && pos3Id > 0, 'Position 3 muss numerische Primärschlüssel-ID besitzen');
+        assert.notEqual(pos1Id, pos2Id);
+        assert.notEqual(pos2Id, pos3Id);
+
+        // 8.3: Projekt aktualisieren:
+        // - Projektnamen ändern
+        // - Preis von Position 2 ändern
+        // - Position 4 hinzufügen
+        loadedV1.name = 'Projekt Rohbau Gewerbe Phase 1';
+        loadedV1.positionen[1].preis = 1.60;
+        loadedV1.positionen.push({
+            name: 'Sauberkeitsschicht',
+            menge: 60,
+            einheit: 'm²',
+            preis: 22.0,
+            positionstyp: 'NORMAL',
+            in_endsumme_enthalten: 1
+        });
+
+        const updatedProjId = await repo.saveProjekt(loadedV1);
+        assert.equal(updatedProjId, projId, 'Projekt-ID darf sich bei Update nicht ändern');
+
+        // 8.4: Projekt neu laden und Stabilität der Primärschlüssel-IDs validieren
+        const loadedV2 = repo.getProjektMitPositionen(projId);
+        assert.equal(loadedV2.name, 'Projekt Rohbau Gewerbe Phase 1');
+        assert.equal(loadedV2.positionen.length, 4, 'Projekt muss nun 4 Positionen haben');
+
+        const reloadedPos1 = loadedV2.positionen.find(p => p.name === 'Erdaushub');
+        const reloadedPos2 = loadedV2.positionen.find(p => p.name === 'Bewehrung B500B');
+        const reloadedPos3 = loadedV2.positionen.find(p => p.name === 'Beton C25/30');
+        const reloadedPos4 = loadedV2.positionen.find(p => p.name === 'Sauberkeitsschicht');
+
+        assert.ok(reloadedPos1, 'Erdaushub muss existieren');
+        assert.ok(reloadedPos2, 'Bewehrung B500B muss existieren');
+        assert.ok(reloadedPos3, 'Beton C25/30 muss existieren');
+        assert.ok(reloadedPos4, 'Sauberkeitsschicht muss existieren');
+
+        // STABILE IDENTITÄT: Bestehende Positionen behalten EXAKT ihre vorherige Primärschlüssel-ID!
+        assert.equal(reloadedPos1.id, pos1Id, 'Erdaushub muss exakt dieselbe Primärschlüssel-ID behalten!');
+        assert.equal(reloadedPos2.id, pos2Id, 'Bewehrung B500B muss exakt dieselbe Primärschlüssel-ID behalten!');
+        assert.equal(reloadedPos2.preis, 1.60, 'Preis von Position 2 muss aktualisiert worden sein');
+        assert.equal(reloadedPos3.id, pos3Id, 'Beton C25/30 muss exakt dieselbe Primärschlüssel-ID behalten!');
+
+        // Neue Position hat eine neue ID erhalten
+        assert.ok(reloadedPos4.id > 0, 'Neue Position muss eine gültige ID erhalten');
+        assert.ok(reloadedPos4.id !== pos1Id && reloadedPos4.id !== pos2Id && reloadedPos4.id !== pos3Id);
+
+        // 8.5: Gezieltes Löschen einer Position (Diff & Sync):
+        // Entferne Position 3 (Beton C25/30) aus dem Array
+        loadedV2.positionen = loadedV2.positionen.filter(p => p.id !== pos3Id);
+        await repo.saveProjekt(loadedV2);
+
+        const loadedV3 = repo.getProjektMitPositionen(projId);
+        assert.equal(loadedV3.positionen.length, 3, 'Nach Löschen einer Position müssen 3 Positionen verbleiben');
+        assert.ok(!loadedV3.positionen.some(p => p.id === pos3Id), 'Position 3 darf nicht mehr existieren');
+        assert.equal(loadedV3.positionen.find(p => p.name === 'Erdaushub').id, pos1Id, 'Position 1 behält stabil pos1Id');
+        assert.equal(loadedV3.positionen.find(p => p.name === 'Bewehrung B500B').id, pos2Id, 'Position 2 behält stabil pos2Id');
+    } finally {
+        try {
+            db.close();
+            if (fs.existsSync(tmpDbPath)) fs.unlinkSync(tmpDbPath);
+        } catch (_err) {}
+    }
+});
+
+test('Test 9: Verhindern von Doppel-Projektanlagen (Idempotenz / Double-Click Guard)', async () => {
+    const tmpDbPath = path.join(os.tmpdir(), `angebot-lifecycle-test9-${Date.now()}-${process.pid}.sqlite`);
+    const Database = require('better-sqlite3');
+    const { createSchema, runMigrations } = require('../schema.js');
+    const createControllingBautagebuchRepo = require('../db/repositories/controlling_bautagebuch_repo');
+
+    const db = new Database(tmpDbPath);
+    db.pragma('foreign_keys = ON');
+    createSchema(db);
+    runMigrations(db);
+
+    const repo = createControllingBautagebuchRepo({
+        db,
+        dbQuery: async (s, p) => db.prepare(s).all(p),
+        dbRun: async (s, p) => db.prepare(s).run(p),
+        appendAuditLog: () => {},
+        auditLogger: null,
+        getEinstellung: () => null
+    });
+
+    try {
+        // Angenommenes Angebot anlegen
+        const res = db.prepare(`
+            INSERT INTO dokumente (type, nr, status, angebot_status, version)
+            VALUES ('angebot', 'ANG-2026-GUARD-01', 'ANGENOMMEN', 'ANGENOMMEN', 1)
+        `).run();
+        const angebotId = Number(res.lastInsertRowid);
+
+        // 9.1: Erste Projektanlage aus dem Angebot (Erfolgreich)
+        const proj1Data = {
+            name: 'Projekt Erstaufruf',
+            source_angebot_id: angebotId,
+            source_angebot_version: 1,
+            positionen: [
+                { name: 'Grundleistung', menge: 1, preis: 1000.0 }
+            ]
+        };
+
+        const proj1Id = await repo.saveProjekt(proj1Data);
+        assert.ok(proj1Id > 0, 'Erste Projektanlage muss erfolgreich sein');
+
+        // 9.2: Zweite Projektanlage für dasselbe Angebot & Version (Simulierter Doppel-Klick / Doppel-Anlage)
+        const proj2Data = {
+            name: 'Projekt Zweitaufruf Doppel-Klick',
+            source_angebot_id: angebotId,
+            source_angebot_version: 1,
+            positionen: [
+                { name: 'Grundleistung', menge: 1, preis: 1000.0 }
+            ]
+        };
+
+        await assert.rejects(
+            async () => {
+                await repo.saveProjekt(proj2Data);
+            },
+            (err) => {
+                assert.ok(
+                    err.message.includes('Doppel-Projektanlage verhindert'),
+                    `Fehlermeldung muss "Doppel-Projektanlage verhindert" enthalten, war: ${err.message}`
+                );
+                assert.ok(
+                    err.message.includes(`Angebot #${angebotId}`),
+                    `Fehlermeldung muss Angebots-ID #${angebotId} nennen, war: ${err.message}`
+                );
+                assert.ok(
+                    err.message.includes(`Projekt #${proj1Id}`),
+                    `Fehlermeldung muss die bestehende Projekt-ID #${proj1Id} nennen, war: ${err.message}`
+                );
+                return true;
+            },
+            'Zweiter Versuch der Projektanlage für dasselbe angenommene Angebot muss abgewiesen werden'
+        );
+
+        // Sicherstellen, dass nur 1 Projekt in der DB existiert
+        const count = db.prepare('SELECT COUNT(*) as cnt FROM projekte WHERE source_angebot_id = ?').get(angebotId);
+        assert.equal(count.cnt, 1, 'Es darf in der Datenbank exakt nur 1 Projekt für dieses Angebot geben');
+
+        // 9.3: Reguläres Update des bestehenden Projekts (mit id) darf NICHT blockiert werden
+        proj1Data.id = proj1Id;
+        proj1Data.name = 'Projekt Erstaufruf (Update)';
+        const updatedId = await repo.saveProjekt(proj1Data);
+        assert.equal(updatedId, proj1Id, 'Update des bestehenden Projekts mit gesetzter id muss erlaubt sein');
+    } finally {
+        try {
+            db.close();
+            if (fs.existsSync(tmpDbPath)) fs.unlinkSync(tmpDbPath);
+        } catch (_err) {}
+    }
+});
+
+test('Test 10: Legacy-DB Migrationstest', async () => {
+    const tmpDbPath = path.join(os.tmpdir(), `angebot-lifecycle-test10-${Date.now()}-${process.pid}.sqlite`);
+    const Database = require('better-sqlite3');
+    const { runMigrations } = require('../schema.js');
+    const createControllingBautagebuchRepo = require('../db/repositories/controlling_bautagebuch_repo');
+
+    const db = new Database(tmpDbPath);
+    db.pragma('foreign_keys = ON');
+
+    try {
+        // 10.1: Altzustand der DB herstellen (OHNE die neuen Angebotsspalten und OHNE projekt_positionen)
+        db.exec(`
+            CREATE TABLE einstellungen (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            );
+
+            CREATE TABLE kunden (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                kundennummer TEXT,
+                name TEXT NOT NULL,
+                adresse TEXT,
+                plz TEXT,
+                ort TEXT,
+                telefon TEXT,
+                email TEXT,
+                ustId TEXT,
+                createdAt TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE artikel (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                ean TEXT,
+                beschreibung TEXT,
+                ek REAL DEFAULT 0,
+                vk REAL DEFAULT 0,
+                mwst INTEGER DEFAULT 19,
+                bestand INTEGER DEFAULT 0,
+                lieferant TEXT,
+                katalog TEXT,
+                einheit TEXT DEFAULT 'Stk.'
+            );
+
+            -- Legacy dokumente-Tabelle OHNE neue Angebots-Spalten:
+            CREATE TABLE dokumente (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type TEXT NOT NULL,
+                nr TEXT NOT NULL,
+                datum TEXT,
+                faellig TEXT,
+                kundeId INTEGER,
+                projektId INTEGER,
+                status TEXT,
+                isLocked INTEGER DEFAULT 0,
+                netto REAL DEFAULT 0,
+                steuer REAL DEFAULT 0,
+                brutto REAL DEFAULT 0,
+                globalRabattAbzug REAL DEFAULT 0,
+                globalRabattType TEXT DEFAULT '%',
+                globalRabattValue REAL DEFAULT 0,
+                anzahlung REAL DEFAULT 0,
+                eingabemodus TEXT DEFAULT 'netto',
+                zahlbetrag REAL DEFAULT 0
+            );
+
+            -- Legacy positionen-Tabelle OHNE neue Spalten (titel, positionstyp, in_endsumme_enthalten, bieterangabe_wert):
+            CREATE TABLE positionen (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                dokumentId INTEGER,
+                artikelId INTEGER,
+                name TEXT,
+                menge REAL DEFAULT 1,
+                einheit TEXT DEFAULT 'Stk.',
+                preis REAL DEFAULT 0,
+                ek REAL DEFAULT 0,
+                mwst INTEGER DEFAULT 19,
+                rabatt REAL DEFAULT 0
+            );
+
+            -- Legacy projekte-Tabelle OHNE source_angebot_id und source_angebot_version:
+            CREATE TABLE projekte (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                kundeId INTEGER,
+                start TEXT,
+                ende TEXT,
+                budget REAL DEFAULT 0,
+                status TEXT
+            );
+
+            CREATE TABLE aufmass (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                titel TEXT NOT NULL,
+                datum TEXT DEFAULT CURRENT_TIMESTAMP,
+                rechnung_id INTEGER,
+                projekt_id INTEGER,
+                bemerkung TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE rechnung_verrechnungen (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                aktuelle_rechnung_id INTEGER,
+                vorherige_rechnung_id INTEGER,
+                abzugsbetrag_netto REAL DEFAULT 0,
+                abzugsbetrag_brutto REAL DEFAULT 0
+            );
+        `);
+
+        // 10.2: Alt-Datensätze einfügen
+        // Alt-Kunde:
+        db.prepare(`INSERT INTO kunden (id, name, ort) VALUES (1, 'Bauherrschaft Schmidt', 'Köln')`).run();
+
+        // Alt-Rechnung:
+        db.prepare(`
+            INSERT INTO dokumente (id, type, nr, datum, faellig, kundeId, status, netto, steuer, brutto)
+            VALUES (1, 'rechnung', 'RE-2024-0099', '2024-10-01', '2024-10-31', 1, 'Bezahlt', 3000.0, 570.0, 3570.0)
+        `).run();
+        db.prepare(`
+            INSERT INTO positionen (id, dokumentId, name, menge, einheit, preis, mwst)
+            VALUES (1, 1, 'Abbruch Estrich Altbau', 60, 'm²', 50.0, 19)
+        `).run();
+
+        // Altes Angebot (vor V2):
+        db.prepare(`
+            INSERT INTO dokumente (id, type, nr, datum, faellig, kundeId, status, netto, steuer, brutto)
+            VALUES (2, 'angebot', 'ANG-2024-0012', '2024-10-05', '2024-11-05', 1, 'Versendet', 4500.0, 855.0, 5355.0)
+        `).run();
+        db.prepare(`
+            INSERT INTO positionen (id, dokumentId, name, menge, einheit, preis, mwst)
+            VALUES (2, 2, 'Neuer Estrich Einbau', 60, 'm²', 75.0, 19)
+        `).run();
+
+        // Altes Projekt:
+        db.prepare(`
+            INSERT INTO projekte (id, name, kundeId, budget, status)
+            VALUES (1, 'Altprojekt Sanierung Köln', 1, 60000.0, 'In Ausführung')
+        `).run();
+
+        // Prüfen, dass neue Spalten und projekt_positionen vor der Migration definitiv NICHT existieren
+        const dokColsPre = db.prepare("PRAGMA table_info(dokumente)").all().map(c => c.name);
+        assert.ok(!dokColsPre.includes('version'), 'version darf vor Migration nicht existieren');
+        assert.ok(!dokColsPre.includes('angebot_status'), 'angebot_status darf vor Migration nicht existieren');
+        assert.ok(!dokColsPre.includes('auftraggeber_typ'), 'auftraggeber_typ darf vor Migration nicht existieren');
+
+        const posColsPre = db.prepare("PRAGMA table_info(positionen)").all().map(c => c.name);
+        assert.ok(!posColsPre.includes('positionstyp'), 'positionstyp darf vor Migration nicht existieren');
+        assert.ok(!posColsPre.includes('in_endsumme_enthalten'), 'in_endsumme_enthalten darf vor Migration nicht existieren');
+
+        const projColsPre = db.prepare("PRAGMA table_info(projekte)").all().map(c => c.name);
+        assert.ok(!projColsPre.includes('source_angebot_id'), 'source_angebot_id darf vor Migration nicht existieren');
+
+        const ppTablePre = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='projekt_positionen'").get();
+        assert.equal(ppTablePre, undefined, 'projekt_positionen darf vor Migration nicht existieren');
+
+        // 10.3: Migration ausführen
+        runMigrations(db);
+
+        // 10.4: Validierung 1: Alle Altdaten unverändert und lesbar
+        const rechnungPost = db.prepare('SELECT * FROM dokumente WHERE id = 1').get();
+        assert.equal(rechnungPost.type, 'rechnung');
+        assert.equal(rechnungPost.nr, 'RE-2024-0099');
+        assert.equal(rechnungPost.netto, 3000.0);
+        assert.equal(rechnungPost.steuer, 570.0);
+        assert.equal(rechnungPost.brutto, 3570.0);
+        assert.equal(rechnungPost.status, 'Bezahlt');
+
+        const rPosPost = db.prepare('SELECT * FROM positionen WHERE id = 1').get();
+        assert.equal(rPosPost.name, 'Abbruch Estrich Altbau');
+        assert.equal(rPosPost.menge, 60);
+        assert.equal(rPosPost.preis, 50.0);
+
+        const angebotPost = db.prepare('SELECT * FROM dokumente WHERE id = 2').get();
+        assert.equal(angebotPost.type, 'angebot');
+        assert.equal(angebotPost.nr, 'ANG-2024-0012');
+        assert.equal(angebotPost.netto, 4500.0);
+        assert.equal(angebotPost.brutto, 5355.0);
+
+        const aPosPost = db.prepare('SELECT * FROM positionen WHERE id = 2').get();
+        assert.equal(aPosPost.name, 'Neuer Estrich Einbau');
+        assert.equal(aPosPost.menge, 60);
+        assert.equal(aPosPost.preis, 75.0);
+
+        const projPost = db.prepare('SELECT * FROM projekte WHERE id = 1').get();
+        assert.equal(projPost.name, 'Altprojekt Sanierung Köln');
+        assert.equal(projPost.budget, 60000.0);
+        assert.equal(projPost.status, 'In Ausführung');
+
+        // 10.5: Validierung 2: Neue Spalten mit Defaultwerten vorhanden
+        assert.equal(angebotPost.version, 1, 'Default version muss 1 sein');
+        assert.equal(angebotPost.angebot_status, 'ENTWURF', 'Default angebot_status muss ENTWURF sein');
+        assert.equal(angebotPost.auftraggeber_typ, 'PRIVAT', 'Default auftraggeber_typ muss PRIVAT sein');
+        assert.equal(angebotPost.vergabe_verfahren, 'DIREKT', 'Default vergabe_verfahren muss DIREKT sein');
+        assert.equal(angebotPost.vertragsgrundlage, 'BGB_WERKVERTRAG', 'Default vertragsgrundlage muss BGB_WERKVERTRAG sein');
+        assert.equal(angebotPost.freeze_snapshot_json, null);
+        assert.equal(angebotPost.parent_angebot_id, null);
+        assert.equal(angebotPost.angenommen_am, null);
+        assert.equal(angebotPost.angenommene_version, null);
+
+        assert.equal(aPosPost.positionstyp, 'NORMAL', 'Default positionstyp muss NORMAL sein');
+        assert.equal(aPosPost.in_endsumme_enthalten, 1, 'Default in_endsumme_enthalten muss 1 sein');
+        assert.equal(aPosPost.titel, null);
+        assert.equal(aPosPost.bieterangabe_wert, null);
+
+        assert.equal(projPost.source_angebot_id, null);
+        assert.equal(projPost.source_angebot_version, null);
+
+        // 10.6: Validierung 3: Neue Tabelle projekt_positionen existiert und ist sofort für neue Projekte nutzbar
+        const ppTablePost = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='projekt_positionen'").get();
+        assert.ok(ppTablePost, 'Tabelle projekt_positionen muss nach Migration existieren');
+
+        const repo = createControllingBautagebuchRepo({
+            db,
+            dbQuery: async (s, p) => db.prepare(s).all(p),
+            dbRun: async (s, p) => db.prepare(s).run(p),
+            appendAuditLog: () => {},
+            auditLogger: null,
+            getEinstellung: () => null
+        });
+
+        const newProjId = await repo.saveProjekt({
+            name: 'Modernisierung nach Migration 2026',
+            source_angebot_id: 2,
+            source_angebot_version: 1,
+            budget: 15000.0,
+            status: 'BEAUFTRAGT',
+            positionen: [
+                {
+                    name: 'Estrich Zusatzversiegelung',
+                    menge: 60,
+                    einheit: 'm²',
+                    preis: 25.0,
+                    cost_type: 'MATERIAL',
+                    positionstyp: 'NORMAL',
+                    in_endsumme_enthalten: 1
+                }
+            ]
+        });
+
+        assert.ok(newProjId > 0, 'Neues Projekt muss in migrierter DB angelegt werden können');
+
+        const reloadedNewProj = repo.getProjektMitPositionen(newProjId);
+        assert.ok(reloadedNewProj, 'Neues Projekt muss geladen werden können');
+        assert.equal(reloadedNewProj.name, 'Modernisierung nach Migration 2026');
+        assert.equal(reloadedNewProj.source_angebot_id, 2);
+        assert.equal(reloadedNewProj.source_angebot_version, 1);
+        assert.equal(reloadedNewProj.positionen.length, 1);
+        assert.equal(reloadedNewProj.positionen[0].name, 'Estrich Zusatzversiegelung');
+        assert.equal(reloadedNewProj.positionen[0].preis, 25.0);
+        assert.ok(reloadedNewProj.positionen[0].id > 0, 'projekt_positionen Primärschlüssel muss erzeugt worden sein');
+    } finally {
+        try {
+            db.close();
+            if (fs.existsSync(tmpDbPath)) fs.unlinkSync(tmpDbPath);
+        } catch (_err) {}
+    }
+});
+
 if (IS_ELECTRON_AS_NODE) {
     console.log('ANGEBOT_LIFECYCLE_TESTS_PASSED');
 }
+

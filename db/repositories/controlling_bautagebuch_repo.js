@@ -423,6 +423,16 @@ function createControllingBautagebuchRepo(deps) {
                     projId
                 );
             } else {
+                if (!projId && p.source_angebot_id) {
+                    const existing = db.prepare('SELECT id, name FROM projekte WHERE source_angebot_id = ? AND source_angebot_version = ?').get(
+                        p.source_angebot_id,
+                        p.source_angebot_version || 1
+                    );
+                    if (existing) {
+                        throw new Error(`Doppel-Projektanlage verhindert: Für Angebot #${p.source_angebot_id} (Version ${p.source_angebot_version || 1}) existiert bereits Projekt #${existing.id} ("${existing.name}").`);
+                    }
+                }
+
                 const res = db.prepare(`
                     INSERT INTO projekte (
                         name, kundeId, start, ende, budget, status,
@@ -446,7 +456,10 @@ function createControllingBautagebuchRepo(deps) {
             }
 
             if (Array.isArray(p.positionen)) {
-                db.prepare('DELETE FROM projekt_positionen WHERE projekt_id = ?').run(projId);
+                const existingRows = db.prepare('SELECT id FROM projekt_positionen WHERE projekt_id = ?').all(projId);
+                const existingIdSet = new Set(existingRows.map(r => Number(r.id)));
+                const keptIds = [];
+
                 const insertPosStmt = db.prepare(`
                     INSERT INTO projekt_positionen (
                         projekt_id, source_angebot_id, source_angebot_version, source_angebot_pos_id,
@@ -457,32 +470,123 @@ function createControllingBautagebuchRepo(deps) {
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `);
 
+                const updatePosStmt = db.prepare(`
+                    UPDATE projekt_positionen SET
+                        source_angebot_id = ?,
+                        source_angebot_version = ?,
+                        source_angebot_pos_id = ?,
+                        oz_code = ?,
+                        titel = ?,
+                        name = ?,
+                        menge = ?,
+                        einheit = ?,
+                        preis = ?,
+                        cost_type = ?,
+                        positionstyp = ?,
+                        in_endsumme_enthalten = ?,
+                        zeitansatz_h = ?,
+                        lohn_ep = ?,
+                        stoff_ep = ?,
+                        geraet_ep = ?,
+                        sonst_ep = ?,
+                        ekt_stoff_je_me = ?,
+                        ekt_geraet_je_me = ?,
+                        ekt_sonst_je_me = ?,
+                        ekt_nu_je_me = ?
+                    WHERE id = ? AND projekt_id = ?
+                `);
+
                 for (const pos of p.positionen) {
                     const inEndsumme = AngebotController.normalizeInEndsumme(pos.in_endsumme_enthalten, pos.positionstyp);
-                    insertPosStmt.run(
-                        projId,
-                        pos.source_angebot_id || p.source_angebot_id || null,
-                        pos.source_angebot_version || p.source_angebot_version || null,
-                        pos.source_angebot_pos_id || pos.sourceOfferPositionId || null,
-                        pos.oz_code || null,
-                        pos.titel || null,
-                        pos.name || '',
-                        pos.menge !== undefined ? parseFloat(pos.menge) : 1,
-                        pos.einheit || 'Stk.',
-                        pos.preis !== undefined ? parseFloat(pos.preis) : 0,
-                        pos.cost_type || 'MATERIAL',
-                        (pos.positionstyp || 'NORMAL').toUpperCase().trim(),
-                        inEndsumme,
-                        parseFloat(pos.zeitansatz_h) || 0.0,
-                        parseFloat(pos.lohn_ep) || 0.0,
-                        parseFloat(pos.stoff_ep) || 0.0,
-                        parseFloat(pos.geraet_ep) || 0.0,
-                        parseFloat(pos.sonst_ep) || 0.0,
-                        parseFloat(pos.ekt_stoff_je_me) || 0.0,
-                        parseFloat(pos.ekt_geraet_je_me) || 0.0,
-                        parseFloat(pos.ekt_sonst_je_me) || 0.0,
-                        parseFloat(pos.ekt_nu_je_me) || 0.0
-                    );
+                    const sAngId = pos.source_angebot_id || p.source_angebot_id || null;
+                    const sAngVer = pos.source_angebot_version || p.source_angebot_version || null;
+                    const sAngPosId = pos.source_angebot_pos_id || pos.sourceOfferPositionId || null;
+                    const ozCode = pos.oz_code || null;
+                    const titel = pos.titel || null;
+                    const name = pos.name || '';
+                    const menge = pos.menge !== undefined ? parseFloat(pos.menge) : 1;
+                    const einheit = pos.einheit || 'Stk.';
+                    const preis = pos.preis !== undefined ? parseFloat(pos.preis) : 0;
+                    const costType = pos.cost_type || 'MATERIAL';
+                    const positionstyp = (pos.positionstyp || 'NORMAL').toUpperCase().trim();
+                    const zeitansatzH = parseFloat(pos.zeitansatz_h) || 0.0;
+                    const lohnEp = parseFloat(pos.lohn_ep) || 0.0;
+                    const stoffEp = parseFloat(pos.stoff_ep) || 0.0;
+                    const geraetEp = parseFloat(pos.geraet_ep) || 0.0;
+                    const sonstEp = parseFloat(pos.sonst_ep) || 0.0;
+                    const ektStoff = parseFloat(pos.ekt_stoff_je_me) || 0.0;
+                    const ektGeraet = parseFloat(pos.ekt_geraet_je_me) || 0.0;
+                    const ektSonst = parseFloat(pos.ekt_sonst_je_me) || 0.0;
+                    const ektNu = parseFloat(pos.ekt_nu_je_me) || 0.0;
+
+                    const rawId = pos.id;
+                    const isNumericId = typeof rawId === 'number' || (typeof rawId === 'string' && /^\d+$/.test(rawId.trim()));
+                    const numericId = isNumericId ? Number(rawId) : null;
+
+                    if (numericId !== null && existingIdSet.has(numericId)) {
+                        updatePosStmt.run(
+                            sAngId,
+                            sAngVer,
+                            sAngPosId,
+                            ozCode,
+                            titel,
+                            name,
+                            menge,
+                            einheit,
+                            preis,
+                            costType,
+                            positionstyp,
+                            inEndsumme,
+                            zeitansatzH,
+                            lohnEp,
+                            stoffEp,
+                            geraetEp,
+                            sonstEp,
+                            ektStoff,
+                            ektGeraet,
+                            ektSonst,
+                            ektNu,
+                            numericId,
+                            projId
+                        );
+                        keptIds.push(numericId);
+                        pos.id = numericId;
+                    } else {
+                        const insInfo = insertPosStmt.run(
+                            projId,
+                            sAngId,
+                            sAngVer,
+                            sAngPosId,
+                            ozCode,
+                            titel,
+                            name,
+                            menge,
+                            einheit,
+                            preis,
+                            costType,
+                            positionstyp,
+                            inEndsumme,
+                            zeitansatzH,
+                            lohnEp,
+                            stoffEp,
+                            geraetEp,
+                            sonstEp,
+                            ektStoff,
+                            ektGeraet,
+                            ektSonst,
+                            ektNu
+                        );
+                        const newId = Number(insInfo.lastInsertRowid);
+                        keptIds.push(newId);
+                        pos.id = newId;
+                    }
+                }
+
+                if (keptIds.length > 0) {
+                    const placeholders = keptIds.map(() => '?').join(',');
+                    db.prepare(`DELETE FROM projekt_positionen WHERE projekt_id = ? AND id NOT IN (${placeholders})`).run(projId, ...keptIds);
+                } else {
+                    db.prepare('DELETE FROM projekt_positionen WHERE projekt_id = ?').run(projId);
                 }
             }
 

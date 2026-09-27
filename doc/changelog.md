@@ -12,6 +12,8 @@
     * Erweiterung Tabelle `projekte`: `source_angebot_id`, `source_angebot_version`.
     * Neue Tabelle `projekt_positionen`: Zur dauerhaften Persistenz der aus Angeboten abgeleiteten Projektpositionen mit `source_angebot_pos_id`, OZ, Kostenarten, Einheitspreisen und EKT-Feldern (`ON DELETE CASCADE`).
     * State-Transition-Guard in `document_repo.js`: Fixierte Angebote mit Freeze-Snapshot können unter keinen Umständen auf `ENTWURF` zurückgesetzt werden; `freeze_snapshot_json` kann nicht geleert werden. Nur gültige Vorwärtsübergänge (`VERSENDET` -> `ANGENOMMEN` / `ABGELEHNT`) sind erlaubt.
+    * Stabile Identität in `controlling_bautagebuch_repo.js`: In `saveProjekt()` wurde das destruktive `DELETE + INSERT` auf `projekt_positionen` durch ein idempotentes Differenz-Upsert (Diff & Sync) ersetzt. Bestehende Positionen behalten ihre Primärschlüssel-ID dauerhaft bei, was für spätere Aufmaße und Abrechnungen essenziell ist.
+    * Doppel-Projektanlagen-Schutz: In `saveProjekt()` wird geprüft, ob für dieselbe Kombination aus `source_angebot_id` und `source_angebot_version` bereits ein Projekt existiert. Doppelklicks und versehentliche Mehrfachanlagen werden zuverlässig abgewiesen.
   - **Neuer Controller (`controllers/AngebotController.js`):**
     * `normalizeInEndsumme`: Einheitliche Normalisierung von `in_endsumme_enthalten` (String `'0'` und `0` werden verlässlich als `0` gewertet, `'1'` und `1` als `1`).
     * `calculateTotals`: Getrennte Summenberechnung für Normal-, Alternativ- und Bedarfspositionen sowie MwSt-Aufschlüsselung (19%, 7%).
@@ -21,7 +23,7 @@
     * `createProjektFromAngebot`: 1-Klick-Projektanlage mit eigenständigen Projektpositions-IDs und stabiler `sourceOfferPositionId`- / `source_angebot_pos_id`-Referenz.
     * `validateAngebot`: Kontextbezogene Vollständigkeits- und Risikoprüfung.
   - **Automatisierte Testsuite (`tests/angebot_lifecycle.test.js`):**
-    * 7 umfassende Testsuiten (Summenberechnung, Freeze-Snapshot, Versionierung, Projektübernahme, Risikoprüfung, SQLite-Persistenz & Reload von `projekt_positionen`, Foreign Key & Cascade, Offensive Attacken-Tests gegen den Freeze-Lock und String-`'0'`-Normalisierung). 100% Tests bestanden.
+    * 10 umfassende Tests (Summenberechnung, Freeze-Snapshot, Versionierung, Projektübernahme, Risikoprüfung, SQLite-Persistenz & Reload von `projekt_positionen`, Foreign Key & Cascade, Offensive Attacken-Tests gegen den Freeze-Lock, String-`'0'`-Normalisierung, ID-Erhaltung bei Projekt-Updates, Blockade von Doppel-Projektanlagen und realer Legacy-DB-Migrationstest). 100% Tests bestanden.
 
 ## 27.09.2026 (Bugfix PDF-Druck & ZUGFeRD-Sichtseite sowie DOM-Print-Reparatur)
 - **Behebung PDF-Druck blockiert (Klick auf PDF-Symbol im Dashboard ohne Reaktion):**
