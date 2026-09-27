@@ -290,3 +290,7 @@ window.InvoiceView = class InvoiceView {
         return result;
     }
 };
+
+if (typeof window !== 'undefined' && !window.invoiceView) {
+    window.invoiceView = new window.InvoiceView(window.formatCurrency);
+}

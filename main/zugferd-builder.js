@@ -14,21 +14,42 @@ const fontkit = require('fontkit');
 const AF_RELATIONSHIP_ALTERNATIVE = 'Alternative';
 
 const FONT_CANDIDATES_WIN = ['segoeui.ttf', 'arial.ttf', 'calibri.ttf'];
+const FONT_CANDIDATES_LINUX = ['DejaVuSans.ttf', 'LiberationSans-Regular.ttf', 'FreeSans.ttf', 'DejaVuSansCondensed.ttf'];
+const FONT_CANDIDATES_MAC = ['Helvetica.ttf', 'Arial.ttf', 'Geneva.ttf'];
+const FONT_DIRS_LINUX = [
+    '/usr/share/fonts/truetype/dejavu',
+    '/usr/share/fonts/truetype/liberation',
+    '/usr/share/fonts/truetype/freefont',
+    '/usr/share/fonts/truetype',
+    '/usr/share/fonts'
+];
+const FONT_DIRS_MAC = ['/System/Library/Fonts', '/Library/Fonts', '/System/Library/Fonts/Supplemental'];
 
-function loadEmbeddedFontCandidates() {
-    if (process.platform !== 'win32') return [];
-    const windir = process.env.WINDIR || 'C:\\Windows';
-    const fontDir = path.join(windir, 'Fonts');
+function collectFontFiles(dirs, names) {
     const found = [];
-    for (const name of FONT_CANDIDATES_WIN) {
-        const full = path.join(fontDir, name);
-        try {
-            if (fs.existsSync(full)) found.push(fs.readFileSync(full));
-        } catch (_e) {
-            continue;
+    for (const dir of dirs) {
+        for (const name of names) {
+            const full = path.join(dir, name);
+            try {
+                if (fs.existsSync(full)) found.push(fs.readFileSync(full));
+            } catch (_e) {
+                continue;
+            }
         }
+        if (found.length > 0) break;
     }
     return found;
+}
+
+function loadEmbeddedFontCandidates() {
+    if (process.platform === 'win32') {
+        const windir = process.env.WINDIR || 'C:\\Windows';
+        return collectFontFiles([path.join(windir, 'Fonts')], FONT_CANDIDATES_WIN);
+    }
+    if (process.platform === 'darwin') {
+        return collectFontFiles(FONT_DIRS_MAC, FONT_CANDIDATES_MAC);
+    }
+    return collectFontFiles(FONT_DIRS_LINUX, FONT_CANDIDATES_LINUX);
 }
 
 class ZugferdBuilder {
@@ -114,6 +135,10 @@ class ZugferdBuilder {
      * das Hybrid-PDF bleibt trotzdem gültig, nur ohne Text auf der Sichtseite.
      */
     static async _createFallbackDocument(meta) {
+        const candidates = loadEmbeddedFontCandidates();
+        if (!candidates.length) {
+            throw new Error('ZUGFeRD-Fallback abgebrochen: Kein einbettbarer TTF-Font gefunden (Windows: %WINDIR%\\Fonts, Linux: /usr/share/fonts, macOS: /System/Library/Fonts). Bitte System-Font installieren und Export wiederholen.');
+        }
         const pdfDoc = await PDFDocument.create();
         const page = pdfDoc.addPage([595.28, 841.89]);
         const nr = String(meta.nr || '').replace(/[^\x20-\x7EÄÖÜäöüß]/g, '');
@@ -122,7 +147,8 @@ class ZugferdBuilder {
         const empfaengerName = String(meta.empfaengerName || '').replace(/[^\x20-\x7EÄÖÜäöüß]/g, '');
         const betrag = String(meta.duePayableAmount || '').replace(/[^\x20-\x7E.,]/g, '');
 
-        for (const fontBytes of loadEmbeddedFontCandidates()) {
+        let eingebettet = false;
+        for (const fontBytes of candidates) {
             try {
                 pdfDoc.registerFontkit(fontkit);
                 const font = await pdfDoc.embedFont(fontBytes, { subset: true });
@@ -137,10 +163,17 @@ class ZugferdBuilder {
                 page.drawText('Elektronische Rechnung (ZUGFeRD 2.x): Die maschinenlesbaren Rechnungsdaten sind als Dateianhang eingebettet.', {
                     x: 50, y: 706, size: 9, font, color: rgb(0.25, 0.25, 0.25)
                 });
+                page.drawText('Hinweis: Platzhalter-Sichtseite - das Original-Rechnungsbild konnte nicht übernommen werden.', {
+                    x: 50, y: 690, size: 9, font, color: rgb(0.25, 0.25, 0.25)
+                });
+                eingebettet = true;
                 break;
             } catch (_e) {
                 continue;
             }
+        }
+        if (!eingebettet) {
+            throw new Error('ZUGFeRD-Fallback abgebrochen: Kein eingebetteter Font schreibbar (PDF/A verlangt eingebettete Fonts). Bitte System-Font prüfen und Export wiederholen.');
         }
         return pdfDoc;
     }

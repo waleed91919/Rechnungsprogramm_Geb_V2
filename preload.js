@@ -224,6 +224,10 @@ contextBridge.exposeInMainWorld('api', {
 
     focusWindow: () => ipcRenderer.invoke('app:focusWindow'),
     confirm: (options) => ipcRenderer.invoke('dialog:confirm', options),
-    alert: (options) => ipcRenderer.invoke('dialog:alert', options)
+    alert: (options) => ipcRenderer.invoke('dialog:alert', options),
+
+    // --- Modale Komponenten-Lader (views/modals/) ---
+    loadModalPartial: (modalName) => ipcRenderer.invoke('modals:loadPartial', modalName),
+    loadAllModalPartials: () => ipcRenderer.invoke('modals:loadAll')
 });
 

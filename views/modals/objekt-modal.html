@@ -1,0 +1,171 @@
+        <div id="objekt-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+            <div
+                class="bg-white rounded-lg shadow-xl w-full max-w-lg border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 id="objekt-modal-title" class="text-lg font-semibold text-slate-800">Objekt anlegen</h3>
+                    <button onclick="closeObjektModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto">
+                    <form id="objekt-form" class="flex flex-col gap-4">
+                        <input type="hidden" id="objekt-modal-id">
+                        <input type="hidden" id="objekt-modal-ebene">
+
+                        <div id="objekt-modal-eltern-wrap">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Übergeordnetes Objekt <span class="text-red-500">*</span></label>
+                            <select id="objekt-modal-eltern" required
+                                class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm"></select>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div data-ebene="LIEGENSCHAFT RAUM">
+                                <label class="block text-sm font-medium text-slate-700 mb-1"><span id="objekt-modal-nr-label">Liegenschafts-Nr.</span> <span class="text-slate-400 font-normal">(Optional)</span></label>
+                                <input type="text" id="objekt-modal-nr"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm font-mono"
+                                    placeholder="z.B. L-001">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Name <span class="text-red-500">*</span></label>
+                                <input type="text" id="objekt-modal-name" required autofocus
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+
+                        <div id="objekt-modal-adresse" class="grid grid-cols-3 gap-4">
+                            <div class="col-span-3">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Straße</label>
+                                <input type="text" id="objekt-modal-strasse"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div class="col-span-1">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">PLZ</label>
+                                <input type="text" id="objekt-modal-plz"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Ort</label>
+                                <input type="text" id="objekt-modal-ort"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+
+                        <div id="objekt-modal-gebaeude-felder" class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Baujahr</label>
+                                <input type="number" id="objekt-modal-baujahr" min="1600" max="2200"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Geschosse</label>
+                                <input type="number" id="objekt-modal-geschosse" min="0"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+
+                        <div data-ebene="ETAGE">
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Ebenen-Nr. <span class="text-slate-400 font-normal">(EG = 0)</span></label>
+                            <input type="number" id="objekt-modal-ebene-nummer" step="1"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                        </div>
+
+                        <div id="objekt-modal-raum-felder" class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Fläche</label>
+                                <input type="number" id="objekt-modal-flaeche" min="0" step="0.01" value="0"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Einheit</label>
+                                <select id="objekt-modal-einheit"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                    <option value="m²">m²</option>
+                                    <option value="Stk.">Stk.</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Raumtyp <span class="text-slate-400 font-normal">(frei)</span></label>
+                                <input type="text" id="objekt-modal-raumtyp" list="raumtyp-suggestions"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm"
+                                    placeholder="BUERO, TREPPE, ...">
+                                <datalist id="raumtyp-suggestions">
+                                    <option value="BUERO">Büroraum</option>
+                                    <option value="BESPRECHUNG">Besprechungsraum</option>
+                                    <option value="SANITAER">Sanitär / WC</option>
+                                    <option value="TREPPENHAUS">Treppenhaus</option>
+                                    <option value="FLUR">Flur / Verkehrsfläche</option>
+                                    <option value="KUECHE">Küche / Teeküche</option>
+                                    <option value="LAGER">Lager / Archiv</option>
+                                    <option value="TECHNIK">Technik / Heizraum</option>
+                                    <option value="VERKAUF">Verkaufsfläche</option>
+                                    <option value="AUSSENBEREICH">Außenbereich</option>
+                                    <option value="WERKSTATT">Werkstatt</option>
+                                    <option value="TIEFGARAGE">Tiefgarage / Stellplatz</option>
+                                </datalist>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Bodenbelag <span class="text-slate-400 font-normal">(FM)</span></label>
+                                <input type="text" id="objekt-modal-bodenbelag" list="bodenbelag-suggestions"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm"
+                                    placeholder="Fliesen, PVC, ...">
+                                <datalist id="bodenbelag-suggestions">
+                                    <option value="Fliesen">Fliesen / Keramik</option>
+                                    <option value="Teppich">Teppich / Nadelvlies</option>
+                                    <option value="PVC / Vinyl">PVC / Vinyl</option>
+                                    <option value="Linoleum">Linoleum</option>
+                                    <option value="Parkett">Parkett</option>
+                                    <option value="Laminat">Laminat</option>
+                                    <option value="Beton / Estrich">Beton / Estrich</option>
+                                    <option value="Naturstein">Naturstein / Marmor</option>
+                                    <option value="Glas">Glas / Fenster</option>
+                                </datalist>
+                            </div>
+                        </div>
+
+                        <!-- Abweichender Rechnungsempfänger -->
+                        <fieldset class="border border-slate-200 rounded-md p-3">
+                            <legend class="px-1 text-xs font-bold text-slate-500 uppercase tracking-wider">Abweichender Rechnungsempfänger</legend>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="col-span-2">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Kunde</label>
+                                    <select id="objekt-modal-empfaenger-kunde" onchange="toggleEmpfaengerArt()"
+                                        class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                        <option value="">— wie übergeordnetes Objekt —</option>
+                                    </select>
+                                </div>
+                                <div class="col-span-2">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Art</label>
+                                    <select id="objekt-modal-empfaenger-art" disabled
+                                        class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm disabled:bg-slate-100 disabled:text-slate-400">
+                                        <option value="">— nicht spezifiziert —</option>
+                                        <option value="EIGENTUEMER">Eigentümer</option>
+                                        <option value="MIETER">Mieter</option>
+                                        <option value="HAUSVERWALTUNG">Hausverwaltung</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </fieldset>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Notizen</label>
+                            <textarea id="objekt-modal-notizen" rows="2"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-none"></textarea>
+                        </div>
+
+                        <div id="objekt-modal-aktiv-wrap" class="hidden">
+                            <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                <input type="checkbox" id="objekt-modal-aktiv" checked class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                <span>Aktiv</span>
+                            </label>
+                        </div>
+                    </form>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="closeObjektModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                    <button onclick="saveObjektFromModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark shadow-sm">Speichern</button>
+                </div>
+            </div>
+        </div>

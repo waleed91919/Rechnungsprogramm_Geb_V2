@@ -171,7 +171,7 @@ test('Z5: Profilvarianten XRECHNUNG und EN16931 erzeugen korrekte URNs und Datei
     assert.equal(xInfo.fileName, 'xrechnung.xml');
     assert.equal(xInfo.guidelineId, 'urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0');
 
-    const xmlX = EInvoiceEngine.generateZUGFeRDXML(invoice, customer, seller, { profile: 'XRECHNUNG' });
+    const xmlX = EInvoiceEngine.generateZUGFeRDXML({ ...invoice, buyer_reference: 'AB-45001' }, { ...customer, buyer_reference: 'AB-45001' }, seller, { profile: 'XRECHNUNG' });
     assert.ok(
         xmlX.includes('urn:xeinkauf.de:kosit:xrechnung_3.0'),
         'XRECHNUNG-XML enthält nicht den XRechnung-3.0-Guideline-URN'
@@ -240,12 +240,12 @@ test('Z6: CII enthält BG-23-Steueraufschlüsselung, BG-5/BG-8-Adressen, Einheit
 });
 
 test('Z7: BT-10 BuyerReference - Leitweg-ID hat Vorrang vor buyer_reference', () => {
-    const inv = { ...invoice, leitweg_id: '991-12345678-12', buyer_reference: 'AB-45001' };
-    const cust = { ...customer, leitweg_id: '991-12345678-12', buyer_reference: 'AB-45001' };
+    const inv = { ...invoice, leitweg_id: '991-12345678-30', buyer_reference: 'AB-45001' };
+    const cust = { ...customer, leitweg_id: '991-12345678-30', buyer_reference: 'AB-45001' };
     const xmlLeitweg = EInvoiceEngine.generateXRechnungXML(inv, cust, seller);
     const match = xmlLeitweg.match(/<ram:BuyerReference>([^<]*)<\/ram:BuyerReference>/);
     assert.ok(match, 'BuyerReference fehlt');
-    assert.equal(match[1], '991-12345678-12', 'Leitweg-ID muss in BT-10 Vorrang haben');
+    assert.equal(match[1], '991-12345678-30', 'Leitweg-ID muss in BT-10 Vorrang haben');
 
     // Ohne Leitweg-ID greift buyer_reference als Fallback
     const invOhne = { ...invoice, buyer_reference: 'AB-45002' };
@@ -584,3 +584,48 @@ test('Z18: Leitweg-ID ISO 7064 MOD 97-10 Validierung in E-Rechnung', () => {
     assert.strictEqual(b2gInvalid.isValid, false);
     assert.ok(b2gInvalid.errors.some(e => e.includes('Ungültige Prüfziffer')));
 });
+
+test('Z19: Rechnungen im Brutto-Eingabemodus werden für EN 16931 / ZUGFeRD / XRechnung korrekt berechnet', () => {
+    const bruttoInvoice = {
+        id: 10,
+        nr: 'INV-2026-008',
+        datum: '2026-09-26',
+        faellig: '2026-10-10',
+        status: 'Ausstehend',
+        isLocked: 0,
+        eingabemodus: 'brutto',
+        netto: 8.40,
+        steuer: 1.60,
+        brutto: 10.00,
+        positionen: [
+            { id: 1, name: 'Testleistung', menge: 1, preis: 10.00, mwst: 19, rabatt: 0 }
+        ]
+    };
+    const b2cCustomer = {
+        id: 1,
+        name: 'Jassam abbas',
+        customer_type: 'B2C',
+        ort: 'Duisburg',
+        plz: '47051',
+        buyer_reference: 'AB-45003'
+    };
+    const seller = {
+        firmenname: 'Musterfirma GmbH',
+        adresse: 'Musterstraße 1\n12345 Musterstadt',
+        ort: 'Musterstadt',
+        plz: '12345',
+        iban: 'DE89370400440532013000',
+        steuer: 'DE999888777'
+    };
+
+    const val = EInvoiceEngine.validateForEN16931(bruttoInvoice, b2cCustomer, seller);
+    assert.strictEqual(val.isValid, true, `Errors: ${val.errors.join('; ')}`);
+
+    const xml = EInvoiceEngine.generateXRechnungXML(bruttoInvoice, b2cCustomer, seller);
+    assert.ok(xml.includes('<ram:ChargeAmount>8.40</ram:ChargeAmount>'));
+    assert.ok(xml.includes('<ram:LineTotalAmount>8.40</ram:LineTotalAmount>'));
+    assert.ok(xml.includes('<ram:TaxBasisTotalAmount>8.40</ram:TaxBasisTotalAmount>'));
+    assert.ok(xml.includes('<ram:TaxTotalAmount currencyID="EUR">1.60</ram:TaxTotalAmount>'));
+    assert.ok(xml.includes('<ram:GrandTotalAmount>10.00</ram:GrandTotalAmount>'));
+});
+

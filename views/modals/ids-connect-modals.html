@@ -1,0 +1,66 @@
+<!-- IDS Connect 2.5 & Großhandels-Center Dialoge -->
+<div id="quick-launch-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl shadow-xl max-w-md w-full overflow-hidden border border-slate-100 p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">storefront</span>
+                Großhändler Online-Shop öffnen
+            </h3>
+            <button type="button" onclick="document.getElementById('quick-launch-modal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 p-1">
+                <span class="material-symbols-outlined text-sm">close</span>
+            </button>
+        </div>
+        <p class="text-xs text-slate-500 mb-4">Wählen Sie den gewünschten Lieferanten für den IDS Connect 2.5 Sprung:</p>
+        <div id="quick-launch-list" class="space-y-2"></div>
+    </div>
+</div>
+
+<div id="konto-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl shadow-xl max-w-lg w-full overflow-hidden border border-slate-100">
+        <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+            <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">store</span>
+                Großhändler-Anbindung (IDS Connect 2.5)
+            </h3>
+            <button type="button" onclick="document.getElementById('konto-modal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 p-1">
+                <span class="material-symbols-outlined text-sm">close</span>
+            </button>
+        </div>
+        <div class="p-6 space-y-4 text-xs">
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Lieferant / Großhändler *</label>
+                    <input type="text" id="k-name" placeholder="z. B. GC Gruppe / Gienger" class="w-full rounded-xl border border-slate-200 py-2 px-3 text-xs">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Kürzel / Code *</label>
+                    <input type="text" id="k-code" placeholder="z. B. GC" class="w-full rounded-xl border border-slate-200 py-2 px-3 text-xs font-mono uppercase">
+                </div>
+            </div>
+            <div>
+                <label class="block font-semibold text-slate-700 mb-1">Kundennummer beim Großhändler</label>
+                <input type="text" id="k-kdnr" placeholder="z. B. KD-884920" class="w-full rounded-xl border border-slate-200 py-2 px-3 text-xs">
+            </div>
+            <div>
+                <label class="block font-semibold text-slate-700 mb-1">IDS Shop URL (Start-URL) *</label>
+                <input type="url" id="k-url" placeholder="https://shop.grosshandel.de/ids" class="w-full rounded-xl border border-slate-200 py-2 px-3 text-xs font-mono">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Standard-Kalkulationsaufschlag (%)</label>
+                    <input type="number" id="k-aufschlag" step="0.5" value="25.0" class="w-full rounded-xl border border-slate-200 py-2 px-3 text-xs font-mono">
+                </div>
+                <div class="flex items-center pt-5">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="k-default" class="rounded text-primary focus:ring-primary/20">
+                        <span class="font-semibold text-slate-700">Als Standardlieferant festlegen</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+            <button type="button" onclick="document.getElementById('konto-modal').classList.add('hidden')" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-xl text-xs font-bold">Abbrechen</button>
+            <button type="button" onclick="window.grosshandelViewInstance && window.grosshandelViewInstance.saveKonto()" class="px-5 py-2 bg-primary text-white rounded-xl text-xs font-bold hover:bg-primary-dark">Lieferant speichern</button>
+        </div>
+    </div>
+</div>

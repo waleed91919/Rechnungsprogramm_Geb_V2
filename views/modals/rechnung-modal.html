@@ -1,0 +1,560 @@
+        <div id="rechnung-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden overflow-y-auto">
+            <div class="min-h-screen px-4 text-center flex items-center justify-center">
+                <div
+                    class="inline-block w-full max-w-5xl my-8 text-left align-middle transition-all transform bg-white rounded-xl shadow-2xl border border-slate-200">
+
+                    <!-- Modal Header -->
+                    <div
+                        class="flex justify-between items-center px-8 py-5 border-b border-slate-200 bg-slate-50/80 rounded-t-xl sticky top-0 z-10">
+                        <div>
+                            <h3 id="rechnung-modal-title" class="text-2xl font-bold text-slate-800 tracking-tight">
+                                Neue
+                                Rechnung erstellen</h3>
+                            <p class="text-sm text-slate-500 mt-1">Geben Sie die Basisdaten und Positionen ein.</p>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span id="rechnung-modal-status"
+                                class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">Entwurf</span>
+                            <button onclick="closeRechnungModal()"
+                                class="text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 p-2 rounded-full transition-colors">
+                                <span class="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="p-8">
+                        <form id="rechnung-form" class="space-y-8">
+                            <input type="hidden" id="rechnung-id">
+
+                            <!-- Subunternehmer § 48b Status-Banner -->
+                            <div id="subcontractor-sec48b-warning" class="hidden bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg shadow-sm">
+                                <div class="flex items-start gap-3">
+                                    <span class="material-symbols-outlined text-amber-600 text-[22px]">warning</span>
+                                    <div>
+                                        <h5 class="font-bold text-amber-900 text-sm">Achtung: § 48b EStG Freistellungsbescheinigung ungültig oder nicht hinterlegt!</h5>
+                                        <p class="text-xs text-amber-800 mt-1" id="subcontractor-sec48b-warning-text">
+                                            Für diesen Subunternehmer liegt keine gültige Freistellungsbescheinigung vor. Es müssen automatisch 15% Bauabzugsteuer einbehalten und an das Finanzamt abgeführt werden.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Header Data Grid -->
+                            <div
+                                class="grid grid-cols-1 md:grid-cols-2 gap-8 bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
+                                <div class="space-y-5">
+                                    <h4
+                                        class="text-sm font-semibold text-slate-800 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                        <span class="material-symbols-outlined text-[18px] text-primary">person</span>
+                                        Kundendaten
+                                    </h4>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Kunde
+                                            auswählen
+                                            <span class="text-red-500">*</span></label>
+                                        <select id="rechnung-kunde" required onchange="handleKundeSelect(event)"
+                                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                            <option value="">Bitte wählen...</option>
+                                            <!-- JS populated -->
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Projekt
+                                            zuordnen
+                                            (Optional)</label>
+                                        <select id="rechnung-projekt"
+                                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                            <option value="">Kein Projekt</option>
+                                            <!-- JS populated -->
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Objekt
+                                            zuordnen
+                                            (Optional)</label>
+                                        <select id="rechnung-objekt"
+                                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                            <option value="">Kein Objekt</option>
+                                            <!-- JS populated -->
+                                        </select>
+                                    </div>
+                                    <div
+                                        class="bg-slate-50 rounded-lg p-4 border border-slate-200 min-h-[100px] flex items-center justify-center relative overflow-hidden group">
+                                        <!-- Animated background pattern -->
+                                        <div
+                                            class="absolute inset-0 opacity-[0.03] bg-[radial-gradient(#000_1px,transparent_1px)] [background-size:16px_16px] pointer-events-none">
+                                        </div>
+
+                                        <div id="rechnung-kunde-details"
+                                            class="w-full text-sm text-slate-600 leading-relaxed font-mono relative z-10">
+                                            <p class="text-slate-400 italic text-center text-sm">Kein Kunde
+                                                ausgewählt
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="space-y-5">
+                                    <h4
+                                        class="text-sm font-semibold text-slate-800 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                        <span class="material-symbols-outlined text-[18px] text-primary">event</span>
+                                        <span id="rechnungsdetails-title">Rechnungsdetails</span>
+                                    </h4>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label id="rechnung-nr-label"
+                                                class="block text-sm font-medium text-slate-700 mb-1.5">Rechnungsnummer</label>
+                                            <input type="text" id="rechnung-nr" readonly
+                                                class="w-full px-4 py-2.5 bg-slate-100 border border-slate-300 rounded-lg text-sm text-slate-500 font-mono focus:outline-none cursor-not-allowed">
+                                        </div>
+                                        <div>
+                                            <div class="flex items-center justify-between mb-1.5">
+                                                <label id="rechnung-datum-label"
+                                                    class="block text-sm font-medium text-slate-700">Rechnungsdatum</label>
+                                                <span class="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded">DD.MM.YYYY</span>
+                                            </div>
+                                            <input type="date" id="rechnung-datum" required
+                                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                            <div id="rechnung-datum-preview" class="text-xs text-slate-500 mt-1 font-medium flex items-center gap-1">
+                                                <span class="material-symbols-outlined text-[14px] text-slate-400">calendar_month</span>
+                                                <span id="rechnung-datum-preview-text">--.--.----</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center justify-between mb-1.5">
+                                            <label id="rechnung-faellig-label" class="block text-sm font-medium text-slate-700">Fälligkeitsdatum</label>
+                                            <span class="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">Arbeitstage-System</span>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            <input type="date" id="rechnung-faellig" required
+                                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+
+                                            <!-- Delivery / Payment Calculator -->
+                                            <div class="flex items-center gap-1 bg-slate-100 border border-slate-300 rounded-lg px-2 shadow-inner"
+                                                title="Zahlungsziel in Arbeitstagen (Wochenenden & Feiertage ausschließen)">
+                                                <input type="number" id="rechnung-werktage" placeholder="Arbeitstage"
+                                                    min="0"
+                                                    class="w-20 bg-transparent border-none text-sm focus:ring-0 p-1 text-center font-semibold text-slate-700">
+                                                <span class="text-xs text-slate-400 font-medium mr-1">AT</span>
+                                                <button type="button" onclick="calculateDeliveryDate()"
+                                                    title="Fälligkeitsdatum anhand Arbeitstagen neu berechnen"
+                                                    class="text-primary hover:text-primary-dark p-1 rounded transition-colors flex items-center justify-center bg-white border border-slate-200 shadow-sm">
+                                                    <span class="material-symbols-outlined text-[18px]">calculate</span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center justify-between mt-1">
+                                            <div id="rechnung-faellig-preview" class="text-xs text-emerald-700 font-medium flex items-center gap-1">
+                                                <span class="material-symbols-outlined text-[14px]">event_available</span>
+                                                <span id="rechnung-faellig-preview-text">--.--.----</span>
+                                            </div>
+                                            <p class="text-[10px] text-slate-400 italic">
+                                                § 193 BGB Werktage (Mo–Fr, ohne Feiertage).
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center justify-between mb-1.5">
+                                            <label class="block text-sm font-medium text-slate-700">Rechnungs-Standard / Empfängertyp</label>
+                                            <span id="rechnung-type-badge" class="text-[11px] font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-700">B2B (Gewerbe)</span>
+                                        </div>
+                                        <div class="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-lg border border-slate-200" id="rechnung-type-toggle-group">
+                                            <button type="button" id="btn-type-b2c" onclick="setRechnungCustomerType('B2C')"
+                                                class="py-1.5 px-2 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1 text-slate-600 hover:text-slate-800">
+                                                <span class="material-symbols-outlined text-[15px]">person</span>
+                                                <span>B2C (Privat)</span>
+                                            </button>
+                                            <button type="button" id="btn-type-b2b" onclick="setRechnungCustomerType('B2B')"
+                                                class="py-1.5 px-2 text-xs font-bold rounded-md transition-all flex items-center justify-center gap-1 shadow-sm bg-primary text-white">
+                                                <span class="material-symbols-outlined text-[15px]">domain</span>
+                                                <span>B2B (Gewerbe)</span>
+                                            </button>
+                                            <button type="button" id="btn-type-b2g" onclick="setRechnungCustomerType('B2G')"
+                                                class="py-1.5 px-2 text-xs font-medium rounded-md transition-all flex items-center justify-center gap-1 text-slate-600 hover:text-slate-800">
+                                                <span class="material-symbols-outlined text-[15px]">account_balance</span>
+                                                <span>B2G (Behörde)</span>
+                                            </button>
+                                        </div>
+                                        <input type="hidden" id="rechnung-customer-type" value="B2B">
+                                    </div>
+                                    <div>
+                                        <div class="flex items-center justify-between mb-1.5">
+                                            <label class="block text-sm font-medium text-slate-700">Eingabemodus (Preise)</label>
+                                            <span id="rechnung-b2g-netto-hint" class="text-[11px] text-blue-700 font-semibold italic hidden">
+                                                * B2G erfordert Netto (EN 16931)
+                                            </span>
+                                        </div>
+                                        <div class="flex gap-2 p-1 bg-slate-100 rounded-lg border border-slate-200">
+                                            <button type="button" id="btn-mode-netto" onclick="setEingabeModus('netto')"
+                                                class="flex-1 py-1.5 text-xs font-bold rounded-md transition-all shadow-sm bg-primary text-white">Netto (zzgl. MwSt.)</button>
+                                            <button type="button" id="btn-mode-brutto" onclick="setEingabeModus('brutto')"
+                                                class="flex-1 py-1.5 text-xs font-bold rounded-md transition-all text-slate-600 hover:text-slate-800">Brutto (inkl. MwSt.)</button>
+                                            <input type="hidden" id="rechnung-eingabemodus" value="netto">
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label id="rechnungsstatus-label"
+                                            class="block text-sm font-medium text-slate-700 mb-1.5">Rechnungsstatus</label>
+                                        <select id="rechnung-status" required
+                                            class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                            <option value="Ausstehend" selected>Ausstehend</option>
+                                            <option value="Bezahlt">Bezahlt</option>
+                                            <option value="Überfällig">Überfällig</option>
+                                            <option value="Entwurf">Entwurf</option>
+                                        </select>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Skonto-Frist (Tage)</label>
+                                            <input type="number" id="rechnung-skonto-tage" min="0" max="90" placeholder="z. B. 14"
+                                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Skonto-Satz (%)</label>
+                                            <input type="number" id="rechnung-skonto-prozent" min="0" max="100" step="0.1" placeholder="z. B. 2.0"
+                                                class="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- B2G E-Rechnungs-Sektion (Öffentliche Auftraggeber) -->
+                            <div id="rechnung-b2g-section" class="hidden bg-blue-50/70 border border-blue-200 rounded-lg p-6 shadow-sm">
+                                <h4 class="text-sm font-semibold text-blue-900 uppercase tracking-wider mb-4 flex items-center justify-between">
+                                    <span class="flex items-center gap-2">
+                                        <span class="material-symbols-outlined text-[20px] text-blue-600">account_balance</span>
+                                        <span id="b2g-section-title">B2G E-Rechnung (Öffentlicher Auftraggeber / EN 16931)</span>
+                                    </span>
+                                    <span id="b2g-section-badge" class="text-xs bg-blue-200 text-blue-800 font-bold px-2 py-0.5 rounded">XRechnung / ZUGFeRD</span>
+                                </h4>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div>
+                                        <label class="block text-sm font-medium text-blue-900 mb-1.5">Leitweg-ID <span id="rechnung-leitweg-required" class="text-red-500">*</span></label>
+                                        <input type="text" id="rechnung-leitweg-id" placeholder="z.B. 991-12345678-12"
+                                            class="w-full px-4 py-2 bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-400 text-sm font-mono transition-all">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-blue-900 mb-1.5">Buyer Reference / Aktenzeichen</label>
+                                        <input type="text" id="rechnung-buyer-reference" placeholder="z.B. AB-45001"
+                                            class="w-full px-4 py-2 bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-400 text-sm font-mono transition-all">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-blue-900 mb-1.5">E-Rechnungs-Standard</label>
+                                        <select id="rechnung-erechnung-format" class="w-full px-4 py-2 bg-white border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-400 text-sm font-semibold transition-all">
+                                            <option value="XRECHNUNG" selected>XRechnung (CII XML nach EN 16931-1)</option>
+                                            <option value="ZUGFERD">ZUGFeRD 2.0.1+ (PDF/A-3 + XML)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Erweiterte Angaben (Handwerksmodul) -->
+                            <div id="rechnung-handwerk-section" class="bg-white border border-slate-200 rounded-lg p-6 shadow-sm">
+                                <h4 class="text-sm font-semibold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">engineering</span>
+                                    Handwerk & Erweiterte Angaben (VOB/GoBD)
+                                </h4>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div class="space-y-4">
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Rechnungsart</label>
+                                            <select id="rechnung-art"
+                                                class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                                <option value="REGULAER" selected>Reguläre Rechnung</option>
+                                                <option value="TEILRECHNUNG">Teilrechnung</option>
+                                                <option value="ABSCHLAG_KUMULIERT">Abschlagsrechnung (kumuliert)</option>
+                                                <option value="SCHLUSSRECHNUNG">Schlussrechnung</option>
+                                            </select>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Leistungszeitraum Von</label>
+                                                <input type="date" id="rechnung-leistungszeitraum-von"
+                                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Leistungszeitraum Bis</label>
+                                                <input type="date" id="rechnung-leistungszeitraum-bis"
+                                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Baustellen-Adresse</label>
+                                            <input type="text" id="rechnung-baustellen-adresse" placeholder="Straße, PLZ Ort..."
+                                                class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Sicherheitseinbehalt (%)</label>
+                                            <div class="relative">
+                                                <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                                    <span class="text-slate-400 font-medium text-sm">%</span>
+                                                </div>
+                                                <input type="number" id="rechnung-handwerk-sicherheitseinbehalt" min="0" max="100" step="0.1"
+                                                    placeholder="z. B. 5.0" oninput="syncSicherheitseinbehalt('rechnung-handwerk-sicherheitseinbehalt')"
+                                                    class="w-full pl-4 pr-8 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="space-y-4">
+                                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer pt-2">
+                                            <input type="checkbox" id="rechnung-vob-vereinbart" onchange="handleRechtlicheCheckboxes()" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                            <span>VOB/B vereinbart</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer pt-2">
+                                            <input type="checkbox" id="rechnung-ist-privatkunde" onchange="handleRechtlicheCheckboxes()" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                            <span>Privatkunde</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer pt-2">
+                                            <input type="checkbox" id="rechnung-unterliegt-bauabzugsteuer" onchange="handleRechtlicheCheckboxes()" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                            <span>Unterliegt der Bauabzugsteuer (§48 EStG)</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer pt-2">
+                                            <input type="checkbox" id="rechnung-13b-ustg" onchange="handleRechtlicheCheckboxes()" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                            <span>§ 13b UStG (Reverse Charge)</span>
+                                        </label>
+                                        <p class="text-xs text-slate-500 leading-relaxed">Bei Bauleistungen trifft den Leistungsempfänger (Unternehmer/Juristische Person des öffentlichen Rechts) eine Aufbewahrungspflicht nach § 14b Abs. 1 Satz 5 UStG.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Bisherige Abschlagsrechnungen (Kumulation) -->
+                            <div id="rechnung-kumulation-section" class="bg-indigo-50/50 border border-indigo-100 rounded-lg p-6 shadow-sm hidden mb-6">
+                                <h4 class="text-sm font-semibold text-indigo-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-[18px] text-indigo-600">account_tree</span>
+                                    Bisherige Abschlagsrechnungen abziehen (Kumulativ)
+                                </h4>
+                                <div class="space-y-4">
+                                    <div class="flex gap-4">
+                                        <select id="rechnung-verrechnung-select" class="flex-1 px-4 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 text-sm transition-all">
+                                            <option value="">Vorherige Rechnung wählen...</option>
+                                            <!-- Populated dynamically -->
+                                        </select>
+                                        <button type="button" onclick="addVerrechnung()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm">
+                                            Hinzufügen
+                                        </button>
+                                    </div>
+                                    <div class="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                                        <table class="w-full text-sm text-left">
+                                            <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
+                                                <tr>
+                                                    <th class="px-4 py-2 font-medium">Rechnung Nr.</th>
+                                                    <th class="px-4 py-2 font-medium">Datum</th>
+                                                    <th class="px-4 py-2 font-medium text-right">Abzugsbetrag (Netto)</th>
+                                                    <th class="px-4 py-2 w-16"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="rechnung-verrechnungen-list" class="divide-y divide-slate-100">
+                                                <!-- Dynamic rows -->
+                                            </tbody>
+                                        </table>
+                                        <div id="verrechnungen-empty-state" class="py-4 text-center text-slate-400 text-sm italic">
+                                            Keine bisherigen Abschlagsrechnungen ausgewählt.
+                                        </div>
+                                    </div>
+                                    <div class="flex justify-end pt-2">
+                                        <div class="text-sm font-semibold text-indigo-900 bg-indigo-100/50 px-4 py-2 rounded-lg border border-indigo-100 flex items-center gap-2">
+                                            <span>Summe Abzüge (Netto):</span>
+                                            <span id="verrechnungen-summe-netto" class="font-mono text-indigo-700 text-lg">€0,00</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Vortext</label>
+                                <textarea id="rechnung-vortext" rows="2"
+                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all"></textarea>
+                            </div>
+
+                            <!-- Line Items -->
+                            <div
+                                class="bg-white border text-left border-slate-200 rounded-lg shadow-sm overflow-hidden">
+                                <div
+                                    class="px-6 py-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                                    <h4
+                                        class="text-sm font-semibold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                                        <span class="material-symbols-outlined text-[18px] text-primary">list_alt</span>
+                                        Positionen
+                                    </h4>
+                                    <button type="button" onclick="addRechnungPosition()"
+                                        class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary bg-primary/10 rounded-md hover:bg-primary/20 transition-colors">
+                                        <span class="material-symbols-outlined text-[16px]">add</span>
+                                        Zeile hinzufügen
+                                    </button>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm">
+                                        <thead class="bg-slate-50 border-b border-slate-200">
+                                            <tr>
+                                                <th class="px-2 py-2.5 font-semibold text-slate-600 w-10 text-center">
+                                                    #
+                                                </th>
+                                                <th class="px-3 py-2.5 font-semibold text-slate-600">
+                                                    Artikelbeschreibung
+                                                </th>
+                                                <th class="px-2 py-2.5 font-semibold text-slate-600 w-36 text-right">
+                                                    Menge
+                                                </th>
+                                                <th id="header-einzelpreis" class="px-2 py-2.5 font-semibold text-slate-600 w-32 text-right">
+                                                    Einzelpreis (€)</th>
+                                                <th class="px-2 py-2.5 font-semibold text-slate-600 w-24 min-w-[80px] text-right">
+                                                    MwSt
+                                                </th>
+                                                <th class="px-2 py-2.5 font-semibold text-slate-600 w-24 text-right">
+                                                    Rabatt
+                                                </th>
+                                                <th id="header-gesamtpreis" class="px-3 py-2.5 font-semibold text-slate-600 w-32 text-right">
+                                                    Gesamt (€)</th>
+                                                <th class="px-2 py-2.5 font-semibold text-slate-600 w-12 text-center">
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="rechnung-positionen" class="divide-y divide-slate-100">
+                                            <!-- JS populated rows -->
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- No Items Empty State -->
+                                <div id="rechnung-empty-state" class="hidden py-8 text-center bg-slate-50">
+                                    <span class="material-symbols-outlined text-4xl text-slate-300 mb-2">inbox</span>
+                                    <p class="text-sm text-slate-500">Keine Positionen hinzugefügt.</p>
+                                    <button type="button" onclick="addRechnungPosition()"
+                                        class="mt-3 text-sm font-medium text-primary hover:text-primary-dark">Position
+                                        hinzufügen</button>
+                                </div>
+                            </div>
+
+                            <!-- Totals Box and Advanced Financials -->
+                            <div class="flex justify-between items-start gap-8">
+
+                                <!-- Modifiers -->
+                                <div class="w-full max-w-sm space-y-4">
+                                    <div class="bg-slate-50 border border-slate-200 p-4 rounded-lg shadow-sm">
+                                        <label
+                                            class="block text-sm font-semibold text-slate-800 mb-2">Gesamtrabatt</label>
+                                        <div class="flex items-center gap-3">
+                                            <input type="number" id="rechnung-global-rabatt" min="0" step="1"
+                                                placeholder="0" oninput="calculateRechnungTotals()"
+                                                class="w-24 px-3 py-1.5 border border-slate-300 rounded text-sm text-right focus:ring-1 focus:ring-primary focus:border-primary">
+                                            
+                                            <div class="flex p-1 bg-slate-100 rounded-lg border border-slate-200 w-fit">
+                                                <button type="button" id="btn-rabatt-pct" onclick="setRabattType('%')" 
+                                                    class="px-3 py-1 text-xs font-bold rounded-md transition-all shadow-sm bg-primary text-white">%</button>
+                                                <button type="button" id="btn-rabatt-eur" onclick="setRabattType('€')" 
+                                                    class="px-3 py-1 text-xs font-bold rounded-md transition-all text-slate-600 hover:text-slate-800">€</button>
+                                                <input type="hidden" id="rechnung-global-rabatt-type" value="%">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="bg-slate-50 border border-slate-200 p-4 rounded-lg shadow-sm">
+                                        <label class="block text-sm font-semibold text-slate-800 mb-2">Bereits
+                                            gezahlt /
+                                            Anzahlung</label>
+                                        <div class="relative">
+                                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                                <span class="text-slate-400 font-medium text-sm">€</span>
+                                            </div>
+                                            <input type="number" id="rechnung-anzahlung" min="0" step="0.01"
+                                                placeholder="0.00" oninput="calculateRechnungTotals()"
+                                                class="w-full pl-8 pr-4 py-1.5 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-primary focus:border-primary">
+                                        </div>
+                                    </div>
+
+                                    <div class="bg-slate-50 border border-slate-200 p-4 rounded-lg shadow-sm">
+                                        <label class="block text-sm font-semibold text-slate-800 mb-2">Sicherheitseinbehalt (%)</label>
+                                        <div class="relative">
+                                            <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                                <span class="text-slate-400 font-medium text-sm">%</span>
+                                            </div>
+                                            <input type="number" id="rechnung-sicherheitseinbehalt-prozent" min="0" max="100" step="0.1"
+                                                placeholder="z. B. 5.0" oninput="syncSicherheitseinbehalt('rechnung-sicherheitseinbehalt-prozent')"
+                                                class="w-full pl-3 pr-8 py-1.5 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-primary focus:border-primary">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Totals -->
+                                <div
+                                    class="w-full max-w-sm bg-white rounded-xl border border-slate-200 p-6 shadow-sm shadow-slate-200/50">
+                                    <div class="space-y-3 text-sm">
+
+                                        <div class="flex justify-between items-center text-slate-500">
+                                            <span>Zwischensumme Positionen</span>
+                                            <span id="rechnung-zwischensumme"
+                                                class="font-mono text-slate-700">€0,00</span>
+                                        </div>
+                                        <div class="flex justify-between items-center text-emerald-600">
+                                            <span>Abzug Rabatt</span>
+                                            <span id="rechnung-rabatt-wert" class="font-mono">-€0,00</span>
+                                        </div>
+
+                                        <div
+                                            class="border-t border-slate-100 pt-3 flex justify-between items-center text-slate-600 font-medium">
+                                            <span>Nettobetrag (Leistungsstand)</span>
+                                            <span id="rechnung-netto" class="font-mono">€0,00</span>
+                                        </div>
+
+                                        <div id="rechnung-verrechnungen-row" class="hidden flex justify-between items-center text-indigo-600 pt-1 pb-1">
+                                            <span>Abzug bisherige Anforderungen (Netto)</span>
+                                            <span id="rechnung-verrechnungen-wert" class="font-mono">-</span>
+                                        </div>
+
+                                        <div id="rechnung-steuern-container" class="space-y-1 py-2 text-slate-500">
+                                            <!-- JS populated tax breakdown -->
+                                        </div>
+
+                                        <div
+                                            class="flex justify-between items-center text-lg font-bold text-slate-900 pt-3 border-t border-slate-200">
+                                            <span>Bruttobetrag</span>
+                                            <span id="rechnung-brutto" class="font-mono">€0,00</span>
+                                        </div>
+
+                                        <div class="flex justify-between items-center text-slate-500 pt-2 pb-1">
+                                            <span>Abzug Anzahlung</span>
+                                            <span id="rechnung-anzahlung-wert" class="font-mono text-slate-700">-</span>
+                                        </div>
+
+                                        <div id="rechnung-sicherheitseinbehalt-row" class="hidden flex justify-between items-center text-amber-600 pt-1 pb-1">
+                                            <span id="rechnung-sicherheitseinbehalt-label">Sicherheitseinbehalt</span>
+                                            <span id="rechnung-sicherheitseinbehalt-wert" class="font-mono">-</span>
+                                        </div>
+
+                                        <div
+                                            class="flex justify-between items-center text-xl font-bold text-primary pt-3 border-t-2 border-primary/20">
+                                            <span>Zahlbetrag</span>
+                                            <span id="rechnung-zahlbetrag" class="font-mono text-primary">€0,00</span>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Fusstext</label>
+                                <textarea id="rechnung-fusstext" rows="2"
+                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all"></textarea>
+                            </div>
+
+                            <datalist id="artikel-datalist"></datalist>
+                        </form>
+                    </div>
+
+                    <!-- Modal Actions -->
+                    <div
+                        class="px-8 py-5 border-t border-slate-200 bg-slate-50/80 rounded-b-xl flex justify-end items-center sticky bottom-0 z-10 backdrop-blur-sm">
+                        <div class="flex gap-3">
+                            <button onclick="closeRechnungModal()" type="button"
+                                class="px-5 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-all focus:ring-2 focus:ring-slate-200">Abbrechen</button>
+                            <button onclick="saveRechnung()" type="button" id="rechnung-modal-submit"
+                                class="px-6 py-2.5 text-sm font-semibold text-white bg-primary rounded-lg hover:bg-primary-dark shadow-md hover:shadow-lg transition-all active:scale-[0.98] focus:ring-2 focus:ring-primary/50 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px]">save</span>
+                                <span id="rechnung-modal-submit-text">Rechnung Speichern</span>
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>

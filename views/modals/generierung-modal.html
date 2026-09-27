@@ -1,0 +1,39 @@
+        <div id="generierung-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+            <div
+                class="bg-white rounded-lg shadow-xl w-full max-w-3xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 class="text-lg font-semibold text-slate-800">Fällige Dauerrechnungen</h3>
+                    <button onclick="closeGenerierungModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto flex-1">
+                    <div id="generierung-liste" class="flex flex-col gap-2"></div>
+                    <div id="generierung-leer" class="hidden p-8 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
+                        <span class="material-symbols-outlined text-4xl text-slate-200">task_alt</span>
+                        Keine fälligen Läufe.
+                    </div>
+                    <div class="mt-4 flex items-center gap-4">
+                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                            <input type="radio" name="generierung-art" value="einzeln" checked class="text-primary focus:ring-primary">
+                            Einzeln je Objekt
+                        </label>
+                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                            <input type="radio" name="generierung-art" value="sammel" class="text-primary focus:ring-primary">
+                            Sammelrechnung je Eigentümer (nur Gruppen mit ≥ 2 Läufen)
+                        </label>
+                    </div>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3 shrink-0">
+                    <div class="text-sm font-semibold text-slate-600">Σ ausgewählt: <span id="generierung-summe" class="font-bold text-slate-800">€0,00</span></div>
+                    <div class="flex gap-3">
+                        <button onclick="closeGenerierungModal()" type="button"
+                            class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                        <button onclick="fuehreGenerierungAus()" type="button"
+                            class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark shadow-sm">Rechnungen jetzt erstellen</button>
+                    </div>
+                </div>
+                <div id="generierung-ergebnis" class="hidden px-6 py-4 border-t border-slate-200 bg-green-50 text-sm max-h-40 overflow-y-auto"></div>
+            </div>
+        </div>

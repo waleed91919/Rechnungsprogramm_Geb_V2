@@ -1,0 +1,93 @@
+        <div id="projekt-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] hidden overflow-y-auto">
+            <div class="min-h-screen px-4 text-center flex items-center justify-center">
+                <div
+                    class="inline-block w-full max-w-2xl my-8 text-left align-middle transition-all transform bg-white rounded-xl shadow-2xl border border-slate-200">
+                    <div
+                        class="flex justify-between items-center px-8 py-5 border-b border-slate-200 bg-slate-50/80 rounded-t-xl sticky top-0 z-10">
+                        <div>
+                            <h3 id="projekt-modal-title" class="text-2xl font-bold text-slate-800 tracking-tight">Neues
+                                Projekt</h3>
+                            <p class="text-sm text-slate-500 mt-1">Erfassen Sie Grunddaten und Budget für das Projekt.
+                            </p>
+                        </div>
+                        <button onclick="closeProjektModal()"
+                            class="text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 p-2 rounded-full transition-colors">
+                            <span class="material-symbols-outlined">close</span>
+                        </button>
+                    </div>
+                    <div class="p-8">
+                        <form id="projekt-form" class="space-y-6">
+                            <input type="hidden" id="projekt-id">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Projektname <span
+                                        class="text-red-500">*</span></label>
+                                <input type="text" id="projekt-name" required
+                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all"
+                                    placeholder="z.B. Website Relaunch 2024">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Kunde <span
+                                        class="text-red-500">*</span></label>
+                                <select id="projekt-kunde" required
+                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                    <option value="">Bitte wählen...</option>
+                                    <!-- JS populated -->
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Startdatum</label>
+                                    <input type="date" id="projekt-start"
+                                        class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Geplantes
+                                        Ende</label>
+                                    <input type="date" id="projekt-ende"
+                                        class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Budget (Kostenlimit)
+                                        €</label>
+                                    <input type="number" id="projekt-budget" step="100" min="0" placeholder="0.00"
+                                        class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1.5">Projektstatus</label>
+                                    <select id="projekt-status" required
+                                        class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                                        <option value="Geplant" selected>Geplant</option>
+                                        <option value="In Bearbeitung">In Bearbeitung</option>
+                                        <option value="Abgeschlossen">Abgeschlossen</option>
+                                        <option value="Abgebrochen">Abgebrochen</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Sicherheitseinbehalt (%)</label>
+                                <input type="number" id="projekt-sicherheitseinbehalt" step="0.1" min="0" max="100" placeholder="0.0"
+                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Beschreibung oder Notizen
+                                    <span class="text-slate-400 font-normal">(Optional)</span></label>
+                                <textarea id="projekt-notizen" rows="3"
+                                    class="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm transition-all"
+                                    placeholder="Vertragsdetails, Anmerkungen oder Notizen..."></textarea>
+                            </div>
+                        </form>
+                    </div>
+                    <div
+                        class="px-8 py-5 border-t border-slate-200 bg-slate-50/80 rounded-b-xl flex justify-end gap-3 sticky bottom-0 z-10">
+                        <button onclick="closeProjektModal()" type="button"
+                            class="px-5 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-all focus:ring-2 focus:ring-slate-200">Abbrechen</button>
+                        <button onclick="saveProjekt()" type="button"
+                            class="px-6 py-2 text-sm font-semibold text-white bg-primary rounded-lg hover:bg-primary-dark shadow-md hover:shadow-lg transition-all focus:ring-2 focus:ring-primary/50 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[18px]">save</span> Speichern
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>

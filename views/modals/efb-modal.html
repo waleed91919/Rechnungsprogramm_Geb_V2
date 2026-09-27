@@ -1,0 +1,32 @@
+<!-- EFB-Preisblätter 221 & 223 (VHB Bund) Dialog Template -->
+<div id="efb-export-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full overflow-hidden border border-slate-100">
+        <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+            <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">description</span>
+                EFB-Preisblätter Export (Formblatt 221 / 223)
+            </h3>
+            <button type="button" onclick="document.getElementById('efb-export-modal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 p-1">
+                <span class="material-symbols-outlined text-sm">close</span>
+            </button>
+        </div>
+        <div class="p-6 space-y-4 text-xs">
+            <p class="text-slate-600">Exportieren Sie VHB-konforme EFB-Preisblätter nach Vorgaben des Bundesministeriums für Wohnen, Stadtentwicklung und Bauwesen:</p>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="p-4 border border-slate-200 rounded-xl bg-slate-50/50 hover:border-primary cursor-pointer transition-colors">
+                    <h4 class="font-bold text-slate-800 mb-1">EFB-Preisblatt 221</h4>
+                    <p class="text-slate-500 text-[11px] mb-3">Angaben zur Preisermittlung bei Zuschlagskalkulation (Löhne, Stoffe, Geräte, Sonstiges)</p>
+                    <button type="button" id="btn-export-efb-221" class="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold">PDF erzeugen</button>
+                </div>
+                <div class="p-4 border border-slate-200 rounded-xl bg-slate-50/50 hover:border-primary cursor-pointer transition-colors">
+                    <h4 class="font-bold text-slate-800 mb-1">EFB-Preisblatt 223</h4>
+                    <p class="text-slate-500 text-[11px] mb-3">Aufgliederung der Einheitspreise für Teilleistungen und LV-Positionen</p>
+                    <button type="button" id="btn-export-efb-223" class="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold">PDF erzeugen</button>
+                </div>
+            </div>
+        </div>
+        <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end">
+            <button type="button" onclick="document.getElementById('efb-export-modal').classList.add('hidden')" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-xl text-xs font-bold">Schließen</button>
+        </div>
+    </div>
+</div>

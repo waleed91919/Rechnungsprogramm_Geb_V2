@@ -1,0 +1,33 @@
+    <div id="extend-deadline-modal"
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[110] hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">calendar_month</span>
+                    Zahlungsziel verlängern
+                </h3>
+                <button onclick="closeExtendModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="p-6">
+                <input type="hidden" id="extend-rechnung-id">
+                <label class="block text-sm font-medium text-slate-700 mb-2">Neues Fälligkeitsdatum</label>
+                <input type="date" id="extend-date-input" 
+                    class="w-full px-4 py-2.5 border border-slate-300 rounded-xl focus:ring-4 focus:ring-primary/10 focus:border-primary text-sm shadow-sm transition-all">
+                <p class="text-xs text-slate-500 mt-3 leading-relaxed">
+                    Der Status wird automatisch auf "Ausstehend" gesetzt, wenn das Datum in der Zukunft liegt.
+                </p>
+            </div>
+            <div class="p-6 bg-slate-50 flex justify-end gap-3">
+                <button onclick="closeExtendModal()" 
+                    class="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors">
+                    Abbrechen
+                </button>
+                <button onclick="confirmExtendDeadline()" 
+                    class="px-6 py-2 bg-primary hover:bg-primary-dark text-white text-sm font-bold rounded-xl shadow-md shadow-primary/20 transition-all">
+                    Datum speichern
+                </button>
+            </div>
+        </div>
+    </div>

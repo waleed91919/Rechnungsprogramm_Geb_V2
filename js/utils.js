@@ -269,9 +269,12 @@ function showToast(message, type = 'info') {
     }, 4000);
 }
 
-// Safe async confirm() replacement using a custom HTML modal.
+// Safe async confirm() replacement using Electron's native dialog or custom modal.
 // This provides a modern UI and avoids focus issues with native OS dialogs.
 async function safeConfirm(message, title = 'Bestätigung') {
+    if (typeof window !== 'undefined' && window.api && typeof window.api.confirm === 'function') {
+        return await window.api.confirm({ message, title });
+    }
     return new Promise((resolve) => {
         const modal = document.getElementById('custom-confirm-modal');
         const titleEl = document.getElementById('custom-confirm-title');

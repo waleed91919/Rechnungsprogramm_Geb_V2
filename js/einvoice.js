@@ -222,15 +222,26 @@ class EInvoiceEngine {
      * Brutto und Zahlbetrag analog InvoiceController.calculateTotals (Modus netto).
      */
     static computeTotals(invoice = {}) {
+        const isBrutto = (invoice.eingabemodus === 'brutto');
         const positionen = Array.isArray(invoice.positionen) ? invoice.positionen : [];
         const lines = positionen.map((pos, idx) => {
             const menge = parseFloat(pos.menge) || 0;
-            const preis = parseFloat(pos.preis) || 0;
+            const rawPreis = parseFloat(pos.preis) || 0;
             const rabatt = Math.min(100, Math.max(0, parseFloat(pos.rabatt) || 0));
             const mwst = parseFloat(pos.mwst) || 0;
-            const netto = this.round2(menge * preis * (1 - rabatt / 100));
             const category = this.resolvePositionCategory(invoice, pos);
             const rate = category === 'AE' ? 0 : mwst;
+
+            let netto = 0;
+            let preis = rawPreis;
+            if (isBrutto) {
+                const rowBrutto = this.round2((menge * rawPreis) * (1 - rabatt / 100));
+                netto = (category === 'AE' || rate <= 0) ? rowBrutto : this.round2(rowBrutto / (1 + rate / 100));
+                preis = (category === 'AE' || rate <= 0) ? rawPreis : this.round2(rawPreis / (1 + rate / 100));
+            } else {
+                netto = this.round2(menge * rawPreis * (1 - rabatt / 100));
+            }
+
             return { idx, menge, preis, rabatt, mwst, netto, category, rate };
         });
 
@@ -512,7 +523,10 @@ class EInvoiceEngine {
             }
         }
         // BT-10 BuyerReference: Leitweg-ID hat Vorrang vor buyer_reference
-        const buyerRef = leitwegId || (invoice.buyer_reference || c.buyer_reference || '').trim();
+        const buyerRef = leitwegId || String(invoice.buyer_reference ?? c.buyer_reference ?? '').trim();
+        if (!buyerRef && guidelineId === this.GUIDELINE_XRECHNUNG_30) {
+            throw new Error('[E-Rechnung] Käuferreferenz fehlt: Für das XRechnung-Profil ist BT-10 Pflicht (BR-DE-15). Bitte Leitweg-ID oder Käuferreferenz erfassen.');
+        }
 
         const today = new Date().toISOString().split('T')[0];
         const issueDateIso = invoice.datum || today;
@@ -719,8 +733,8 @@ class EInvoiceEngine {
     </ram:IncludedNote>` : ''}
   </rsm:ExchangedDocument>
   <rsm:SupplyChainTradeTransaction>${lineItemsXML}
-    <ram:ApplicableHeaderTradeAgreement>
-      <ram:BuyerReference>${this.escapeXML(buyerRef)}</ram:BuyerReference>
+    <ram:ApplicableHeaderTradeAgreement>${buyerRef ? `
+      <ram:BuyerReference>${this.escapeXML(buyerRef)}</ram:BuyerReference>` : ''}
       <ram:SellerTradeParty>
         <ram:Name>${sellerName}</ram:Name>${definedContactXML}${this.buildPostalAddressXML(sellerAddr)}${this.buildElectronicAddressXML(sellerEmail)}${sellerRegsXML}
       </ram:SellerTradeParty>

@@ -1,0 +1,42 @@
+    <div id="help-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[250] hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden border border-slate-200">
+            <div class="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary">help</span>
+                    Hilfe & Systeminformationen
+                </h3>
+                <button onclick="closeHelpModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="p-6 space-y-6">
+                <!-- System Info -->
+                <div class="space-y-2">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest text-[10px]">Programm-Info</h4>
+                    <div class="bg-slate-50 p-4 rounded-lg border border-slate-100 space-y-1">
+                        <p class="text-sm font-bold text-slate-800">W-LINK ERP</p>
+                        <p class="text-xs text-slate-500">Version 1.0.5</p>
+                        <p class="text-xs text-slate-600 mt-2">Entwickelt von: <span class="font-semibold text-primary">Waleed Hussein</span></p>
+                        <p class="text-xs text-slate-600">Support: <a href="mailto:4kwaleed@gmail.com" class="text-primary hover:underline">4kwaleed@gmail.com</a></p>
+                    </div>
+                </div>
+                <!-- Shortcuts -->
+                <div class="space-y-2">
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-widest text-[10px]">Tastenkombinationen</h4>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="flex items-center justify-between p-2.5 bg-slate-50 rounded border border-slate-100">
+                            <span class="text-xs text-slate-600">Neue Rechnung</span>
+                            <kbd class="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-[10px] font-bold shadow-sm">STRG + N</kbd>
+                        </div>
+                        <div class="flex items-center justify-between p-2.5 bg-slate-50 rounded border border-slate-100">
+                            <span class="text-xs text-slate-600">Drucken</span>
+                            <kbd class="px-1.5 py-0.5 bg-white border border-slate-300 rounded text-[10px] font-bold shadow-sm">STRG + P</kbd>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+                <button onclick="closeHelpModal()" class="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-semibold hover:bg-slate-50 transition-colors">Schließen</button>
+            </div>
+        </div>
+    </div>

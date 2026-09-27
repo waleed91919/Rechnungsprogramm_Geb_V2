@@ -1,0 +1,26 @@
+        <div id="storno-lauf-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[60] hidden flex items-center justify-center">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-md border border-slate-200 overflow-hidden flex flex-col">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 class="text-lg font-semibold text-slate-800">Lauf stornieren</h3>
+                    <button onclick="closeStornoLaufModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 space-y-4">
+                    <p class="text-sm text-slate-600">Der Lauf wird GoBD-konform als STORNIERT protokolliert. Eine Begründung ist Pflicht.</p>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Begründung <span class="text-red-500">*</span></label>
+                        <textarea id="storno-lauf-grund" rows="3"
+                            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-none"
+                            placeholder="Grund für das Storno ..."></textarea>
+                    </div>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="closeStornoLaufModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                    <button onclick="bestaetigeStornoLauf()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md shadow-sm">Stornieren</button>
+                </div>
+            </div>
+        </div>

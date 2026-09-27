@@ -1,0 +1,89 @@
+        <div id="nachtrag-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+                <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                    <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                        <span class="material-symbols-outlined text-indigo-600">post_add</span>
+                        VOB/B Nachtragsangebot erstellen / bearbeiten
+                    </h3>
+                    <button type="button" onclick="closeNachtragModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto flex-1 space-y-4">
+                    <input type="hidden" id="nt-id">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Nachtrags-Nr.</label>
+                            <input type="text" id="nt-nr" placeholder="N-01" class="w-full px-3 py-2 border border-slate-300 rounded text-sm font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Rechtsgrundlage</label>
+                            <select id="nt-rechtsgrundlage" class="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white">
+                                <option value="VOB_2_6">VOB/B § 2 Abs. 6 (Zusätzliche Leistung)</option>
+                                <option value="VOB_2_5">VOB/B § 2 Abs. 5 (Geänderte Leistung)</option>
+                                <option value="VOB_2_3">VOB/B § 2 Abs. 3 (Mengenänderung > 110%)</option>
+                                <option value="BGB_650b">BGB § 650b (Bauvertragliche Anordnung)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Status</label>
+                            <select id="nt-status" class="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white font-semibold">
+                                <option value="EINGEREICHT">Eingereicht</option>
+                                <option value="IN_VERHANDLUNG">In Verhandlung</option>
+                                <option value="GENEHMIGT">Genehmigt (Auftrag erteilt)</option>
+                                <option value="ABGELEHNT">Abgelehnt</option>
+                                <option value="ENTWURF">Entwurf</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Titel des Nachtrags</label>
+                        <input type="text" id="nt-titel" placeholder="z.B. Zusätzliche Wärmedämmung Dachgeschoss" class="w-full px-3 py-2 border border-slate-300 rounded text-sm">
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="block text-xs font-semibold text-slate-700">Nachtragspositionen</label>
+                            <button type="button" onclick="addNachtragPositionRow()" class="text-xs text-indigo-600 font-bold hover:underline flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[14px]">add</span> Position hinzufügen
+                            </button>
+                        </div>
+                        <div class="border border-slate-200 rounded-lg overflow-x-auto">
+                            <table class="w-full text-left text-xs whitespace-nowrap">
+                                <thead class="bg-slate-100 text-slate-700 font-semibold">
+                                    <tr>
+                                        <th class="px-3 py-2 w-24">OZ Code</th>
+                                        <th class="px-3 py-2">Kurzbezeichnung</th>
+                                        <th class="px-3 py-2 w-20 text-center">Kostenart</th>
+                                        <th class="px-3 py-2 w-20 text-center">Menge</th>
+                                        <th class="px-3 py-2 w-16 text-center">Einheit</th>
+                                        <th class="px-3 py-2 w-24 text-right">EP (€)</th>
+                                        <th class="px-3 py-2 w-24 text-right">GP Netto</th>
+                                        <th class="px-2 py-2 w-8"></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="nt-positionen-body" class="divide-y divide-slate-100 bg-white">
+                                    <!-- JS populated -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Begründung & Erläuterung nach VOB/B</label>
+                        <textarea id="nt-begruendung" rows="2" placeholder="Begründung der Mehrkosten und bauzeitlichen Auswirkungen..." class="w-full px-3 py-2 border border-slate-300 rounded text-sm"></textarea>
+                    </div>
+                </div>
+                <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+                    <div class="text-sm font-bold text-slate-700">
+                        Gesamt Netto: <span id="nt-total-netto" class="text-indigo-600 font-mono text-base">0.00 €</span>
+                        <span class="text-xs text-slate-400 font-normal ml-2">(Brutto: <span id="nt-total-brutto">0.00 €</span>)</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="button" onclick="closeNachtragModal()" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-50">Abbrechen</button>
+                        <button type="button" onclick="saveNachtragData()" class="px-5 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg shadow hover:bg-indigo-700">Nachtrag speichern</button>
+                    </div>
+                </div>
+            </div>
+        </div>

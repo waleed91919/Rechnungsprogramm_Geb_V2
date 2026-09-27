@@ -3,7 +3,7 @@ const path = require('path');
 
 const codeHtml = fs.readFileSync(path.join(__dirname, '../code.html'), 'utf8');
 
-// Sammle alle IDs aus code.html
+// Sammle alle IDs aus code.html und ausgelagerten views/modals/
 const idRegex = /id=["']([^"']+)["']/g;
 const htmlIds = new Set();
 let m;
@@ -11,7 +11,19 @@ while ((m = idRegex.exec(codeHtml)) !== null) {
     htmlIds.add(m[1]);
 }
 
-console.log(`Gefundene IDs in code.html: ${htmlIds.size}`);
+const modalsDir = path.join(__dirname, '../views/modals');
+if (fs.existsSync(modalsDir)) {
+    const modalFiles = fs.readdirSync(modalsDir).filter(f => f.endsWith('.html'));
+    modalFiles.forEach(f => {
+        const content = fs.readFileSync(path.join(modalsDir, f), 'utf8');
+        let m2;
+        while ((m2 = idRegex.exec(content)) !== null) {
+            htmlIds.add(m2[1]);
+        }
+    });
+}
+
+console.log(`Gefundene IDs in code.html + views/modals/: ${htmlIds.size}`);
 
 // Durchsuche alle js-Dateien und views-Dateien nach getElementById
 const dirs = [

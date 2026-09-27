@@ -1,0 +1,80 @@
+        <div id="eingangsrechnung-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden">
+                <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                    <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">receipt</span>
+                        Eingangsrechnung erfassen
+                    </h3>
+                    <button type="button" onclick="closeEingangsrechnungModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto flex-1 space-y-4">
+                    <input type="hidden" id="er-id">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Lieferant / Subunternehmer</label>
+                        <select id="er-lieferant" class="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white" onchange="checkSubcontractorWarningInModal()">
+                            <option value="">-- Lieferant / Subunternehmer wählen --</option>
+                        </select>
+                    </div>
+
+                    <!-- § 48b Warnhinweis im Modal -->
+                    <div id="er-sec48b-warnbox" class="hidden p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900">
+                        <div class="flex items-start gap-2">
+                            <span class="material-symbols-outlined text-amber-600 text-[18px]">warning</span>
+                            <div>
+                                <span class="font-bold">Keine gültige § 48b Freistellungsbescheinigung!</span>
+                                <p class="mt-0.5">Vom Bruttobetrag werden automatisch 15 % Bauabzugsteuer zur Einbehaltung abgespalten.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Rechnungs-Nr.</label>
+                            <input type="text" id="er-nr" placeholder="z.B. ER-2026-889" class="w-full px-3 py-2 border border-slate-300 rounded text-sm font-mono">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Kostenart</label>
+                            <select id="er-kostenart" class="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white" onchange="checkSubcontractorWarningInModal()">
+                                <option value="MATERIAL">Material / Baustoffe</option>
+                                <option value="SUBCONTRACTOR">Subunternehmer / Nachunternehmer</option>
+                                <option value="EQUIPMENT">Geräte & Maschinen</option>
+                                <option value="LOHN">Lohn / Fremdpersonal</option>
+                                <option value="OTHER">Sonstige Betriebskosten</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Rechnungsdatum</label>
+                            <input type="date" id="er-datum" class="w-full px-3 py-2 border border-slate-300 rounded text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Fälligkeitsdatum</label>
+                            <input type="date" id="er-faellig" class="w-full px-3 py-2 border border-slate-300 rounded text-sm">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Nettobetrag (€)</label>
+                            <input type="number" step="0.01" id="er-netto" placeholder="0.00" class="w-full px-3 py-2 border border-slate-300 rounded text-sm font-mono" oninput="calculateERBrutto()">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">USt-Satz (%)</label>
+                            <input type="number" step="1" id="er-ust-satz" value="19" class="w-full px-3 py-2 border border-slate-300 rounded text-sm font-mono" oninput="calculateERBrutto()">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Bruttobetrag (€)</label>
+                            <input type="number" step="0.01" id="er-brutto" placeholder="0.00" class="w-full px-3 py-2 border border-slate-300 rounded text-sm font-mono bg-slate-50" readonly>
+                        </div>
+                    </div>
+                </div>
+                <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+                    <button type="button" onclick="closeEingangsrechnungModal()" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-50">Abbrechen</button>
+                    <button type="button" onclick="saveEingangsrechnungData()" class="px-5 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow hover:bg-primary-dark">Eingangsrechnung speichern</button>
+                </div>
+            </div>
+        </div>

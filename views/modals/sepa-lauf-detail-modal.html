@@ -1,0 +1,26 @@
+        <div id="sepa-lauf-detail-modal" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-xl w-full max-w-3xl overflow-hidden border border-slate-100 max-h-[90vh] overflow-y-auto">
+                <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                    <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">receipt_long</span>
+                        Lauf-Positionen
+                    </h3>
+                    <button onclick="schliesseSepaLaufDetail()" class="text-slate-400 hover:text-slate-600">✕</button>
+                </div>
+                <div class="p-6 overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs font-semibold">
+                                <th class="px-3 py-2">Beleg</th>
+                                <th class="px-3 py-2">Kunde</th>
+                                <th class="px-3 py-2">Mandatsreferenz</th>
+                                <th class="px-3 py-2 text-right">Betrag</th>
+                                <th class="px-3 py-2 text-center">Status</th>
+                                <th class="px-3 py-2 text-center">Aktion</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sepa-lauf-detail-tbody" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>

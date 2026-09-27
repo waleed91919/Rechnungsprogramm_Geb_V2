@@ -1,5 +1,40 @@
 # Changelog / Fortschritt
 
+## 27.09.2026 (Neuer Angebots-Kern: Direktangebot, Versionierung, Freeze-Snapshot, Risiko-Check & Projektübergabe)
+- **Implementierung des neuen modularen Angebots-Kerns (gemäß `doc/angebot_checkliste_bau_2026-09-27.md` & `liesen.txt`):**
+  - **Rechtliche & architektonische Differenzierung:**
+    * Saubere Entkopplung der Dimensionen: Auftraggeber-Typ (`PRIVAT`, `GEWERBLICH`, `OEFFENTLICH`), Vergabeverfahren (`DIREKT`, `FORMELLE_AUSSCHREIBUNG`) und Vertragsgrundlage (`BGB_WERKVERTRAG`, `BGB_VERBRAUCHERBAU`, `VOB_B`).
+    * Berücksichtigung BGH VII ZR 94/22: Einzelgewerke begründen keinen Verbraucherbauvertrag nach § 650i BGB; bei echtem Verbraucherbauvertrag Prüfung nach § 650m BGB (90% Abschlagsdeckel, 5% Sicherheitsleistung).
+    * Kontextsensitive Risikoprüfung: Präzise Unterscheidung zwischen fehlenden Preisen (Ausschlussgefahr nach VOB/A) und 0,00 € Preisen (Bestätigungspflicht).
+  - **Datenbank & Schema (`schema.js` & `db/repositories/document_repo.js`):**
+    * Erweiterung Tabelle `dokumente`: `version`, `parent_angebot_id`, `angebot_status` (`ENTWURF`, `VERSENDET`, `ANGENOMMEN`, `ABGELEHNT`), `freeze_snapshot_json`, `auftraggeber_typ`, `vergabe_verfahren`, `vertragsgrundlage`, `angenommen_am`, `angenommene_version`.
+    * Erweiterung Tabelle `positionen`: `titel`, `positionstyp` (`NORMAL`, `ALTERNATIV`, `BEDARF`, `PAUSCHALE`), `in_endsumme_enthalten`, `bieterangabe_wert`.
+    * Erweiterung Tabelle `projekte`: `source_angebot_id`, `source_angebot_version`.
+    * Freeze-Mutationssperre & Löschsperre in `document_repo.js`: Versendete und angenommene Angebote sind durch ihren Freeze-Snapshot unveränderlich fixiert; Änderungen erfordern eine neue Version.
+  - **Neuer Controller (`controllers/AngebotController.js`):**
+    * `calculateTotals`: Getrennte Summenberechnung für Normal-, Alternativ- und Bedarfspositionen sowie MwSt-Aufschlüsselung (19%, 7%).
+    * `freezeAngebot`: Erstellung des unveränderlichen Snapshots bei Status `VERSENDET`.
+    * `createVersion`: Nachverhandlungen erzeugen `v2` (mit Belegnummern-Suffix wie `-V2`), während `v1` im Snapshot intakt bleibt.
+    * `acceptAngebot`: Protokollierung von Annahmezeitpunkt und angenommener Version.
+    * `createProjektFromAngebot`: 1-Klick-Projektanlage mit eigenständigen Projektpositions-IDs und stabiler `sourceOfferPositionId`-Referenz (keine ID-Konflikte).
+    * `validateAngebot`: Kontextbezogene Vollständigkeits- und Risikoprüfung.
+  - **Automatisierte Testsuite (`tests/angebot_lifecycle.test.js`):**
+    * 6 vollständige Testfälle (Summenberechnung, Freeze-Snapshot, Versionierung, Projektübernahme mit Positionsreferenz, Risikoprüfung, SQLite-Persistenz via `document_repo`). Alle 6 Tests erfolgreich bestanden.
+
+## 27.09.2026 (Bugfix PDF-Druck & ZUGFeRD-Sichtseite sowie DOM-Print-Reparatur)
+- **Behebung PDF-Druck blockiert (Klick auf PDF-Symbol im Dashboard ohne Reaktion):**
+  - **Ursache:** In [`js/dauerrechnungen.js`](../js/dauerrechnungen.js) und [`js/einstellungen.js`](../js/einstellungen.js) wurde die Konstante `const AUFBEWAHRUNGSFRISTEN_BEG_IV` jeweils im globalen Browser-Scope deklariert. Dies führte zu einem unhandled `SyntaxError: Identifier 'AUFBEWAHRUNGSFRISTEN_BEG_IV' has already been declared`, der die Ausführung des gesamten Skripts `js/einstellungen.js` abbrach. Infolgedessen wurden globale Handler wie `window.generatePdf`, `openPdfPreview` und `executePrint` nicht registriert.
+  - **Lösung:** Beide Deklarationen auf kollisionssicheres `var AUFBEWAHRUNGSFRISTEN_BEG_IV = (typeof window !== 'undefined' && window.AUFBEWAHRUNGSFRISTEN_BEG_IV) || { ... }` umgestellt.
+  - **Ergänzung:** In [`views/InvoiceView.js`](../views/InvoiceView.js) wird `window.invoiceView` nun direkt bei Skriptausführung instanziiert (`window.invoiceView = new window.InvoiceView(...)`), sodass Modal-Events (`pdf-preview-print-btn`, `pdf-preview-save-btn`, Tastenkürzel) auch vor dem ersten Öffnen des Rechnungseditors registriert sind.
+- **Behebung ZUGFeRD-Export erzeugte leere/weiße PDFs:**
+  - **Ursache:** In [`code.html`](../code.html) fehlte nach der Modal-Modularisierung der schließende `</main>`-Tag nach `#view-sokabau`. Dadurch umschloss `<main class="... print:hidden">` versehentlich auch `#print-template` und `#modals-container`. Im `@media print`-Modus wurde `<main>` und somit das gesamte `#print-template` durch Tailwind `.print:hidden` und `body > *:not(#print-template) { display: none !important; }` ausgeblendet. Chromiums `printToPDF` lieferte eine leere 1-KB-Seite als Basis für das ZUGFeRD-Dokument.
+  - **Lösung:** Der schließende `</main>`-Tag wurde unmittelbar vor `#print-template` eingefügt. `#print-template` ist nun wieder ein direktes Kindelement von `<body>` und wird beim Electron-Druck vollständig gerendert (108–120 KB Sichtseite).
+- **Stammdaten-Repository Bereinigung:**
+  - In [`db/repositories/kunden_artikel_repo.js`](../db/repositories/kunden_artikel_repo.js) wurde `dbQuery` in den Parametern von `createKundenArtikelRepo` ergänzt, um einen `ReferenceError` bei der automatischen Kundennummern-Generierung (`SELECT MAX(id)`) zu verhindern.
+- **Verifikation & Testabdeckung:**
+  - E2E-Electron-Test verifiziert: ZUGFeRD-Export erzeugt ein valides PDF/A-3b Dokument mit echter Sichtseite (`sichtseiteQuelle: 'echt'`, ~120 KB) und eingebetteter `factur-x.xml`.
+  - Alle 25 E-Rechnungs- und ZUGFeRD-Tests (`tests/zugferd.test.js` & `tests/erechnung_belegfixierung.test.js`) erfolgreich bestanden.
+
 ## 11.09.2026 (Vollständige Implementierung & Verifikation aller 5 Architektur-Sanierungspläne)
 - **100% Implementierung & Verifikation abgeschlossen:** Sämtliche im Gesamtsystem-Audit identifizierten P0-, P1- und P2-Schwachstellen wurden über 5 disziplinierte Sanierungspläne modular behoben und durch 140+ automatisierte Tests verifiziert:
   - **Plan 01: E-Rechnung (XRechnung 3.0 / ZUGFeRD 2.3) & VOB/B Kern:**

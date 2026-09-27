@@ -10,7 +10,7 @@
  * Fristbeginn: Mit dem Schluss des Kalenderjahres, in dem die Rechnung ausgestellt wurde (§ 147 Abs. 4 AO).
  * Ablaufhemmung: Bei offener Festsetzungsfrist oder laufender Betriebsprüfung (§ 147 Abs. 3 Satz 5 AO n.F.).
  */
-const AUFBEWAHRUNGSFRISTEN_BEG_IV = {
+var AUFBEWAHRUNGSFRISTEN_BEG_IV = (typeof window !== 'undefined' && window.AUFBEWAHRUNGSFRISTEN_BEG_IV) || {
     RECHNUNGSBELEGE_JAHRE: 8,
     BUCHUNGSBELEGE_JAHRE: 8,
     BUECHER_ABSCHLUESSE_JAHRE: 10,

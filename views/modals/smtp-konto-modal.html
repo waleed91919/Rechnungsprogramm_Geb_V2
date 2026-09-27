@@ -1,0 +1,98 @@
+        <div id="smtp-konto-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-lg border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 id="smtp-konto-modal-title" class="text-lg font-semibold text-slate-800">SMTP-Konto anlegen</h3>
+                    <button onclick="closeSmtpKontoModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto">
+                    <form id="smtp-konto-form" class="flex flex-col gap-4">
+                        <input type="hidden" id="smtp-modal-id">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Kontoname <span class="text-red-500">*</span></label>
+                                <input type="text" id="smtp-modal-name" required placeholder="z.B. Büro-Postfach" autofocus
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Server (Host) <span class="text-red-500">*</span></label>
+                                <input type="text" id="smtp-modal-host" required placeholder="smtp.example.de"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm font-mono">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 items-end">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Port</label>
+                                <select id="smtp-modal-port" onchange="onSmtpPortChange()"
+                                    class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm cursor-pointer">
+                                    <option value="587">587 (STARTTLS)</option>
+                                    <option value="465">465 (SSL/TLS)</option>
+                                    <option value="25">25 (nur intern)</option>
+                                </select>
+                            </div>
+                            <fieldset class="border border-slate-200 rounded-md p-2.5">
+                                <legend class="px-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Verbindungssicherheit</legend>
+                                <div class="flex flex-col gap-1 text-xs">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="smtp-modal-secure" id="smtp-modal-secure-off" checked class="text-primary focus:ring-primary h-3.5 w-3.5">
+                                        <span>STARTTLS (Aufrüstung)</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="smtp-modal-secure" id="smtp-modal-secure-on" class="text-primary focus:ring-primary h-3.5 w-3.5">
+                                        <span>SSL/TLS (implizit)</span>
+                                    </label>
+                                </div>
+                            </fieldset>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Benutzername <span class="text-red-500">*</span></label>
+                                <input type="text" id="smtp-modal-user" placeholder="login@mailbox.de"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Passwort</label>
+                                <input type="password" id="smtp-modal-passwort" placeholder="(unverändert – gespeichert)"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Absender-Name <span class="text-red-500">*</span></label>
+                                <input type="text" id="smtp-modal-absender-name" placeholder="Musterfirma Buchhaltung"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Absender-E-Mail <span class="text-red-500">*</span></label>
+                                <input type="email" id="smtp-modal-absender-email" placeholder="rechnungen@firma.de"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer w-fit">
+                            <input type="checkbox" id="smtp-modal-standard" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                            <span>Als Standardkonto verwenden</span>
+                        </label>
+                        <label id="smtp-modal-klartext-wrap" class="hidden items-center gap-2 text-xs text-amber-700 cursor-pointer w-fit">
+                            <input type="checkbox" id="smtp-modal-klartext" class="rounded border-amber-400 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5">
+                            <span>Unverschlüsselt speichern – NICHT empfohlen</span>
+                        </label>
+                        <div id="smtp-modal-test-ergebnis" class="hidden rounded-md px-4 py-3 text-sm"></div>
+                    </form>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-between gap-3 shrink-0">
+                    <button onclick="testSmtpConnectionFromModal()" type="button" id="smtp-modal-test-btn"
+                        class="px-4 py-2 text-sm font-semibold text-emerald-700 bg-white border border-emerald-300 rounded-md hover:bg-emerald-50 transition-colors flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[18px]">power</span>
+                        Verbindung testen
+                    </button>
+                    <div class="flex justify-end gap-3">
+                        <button onclick="closeSmtpKontoModal()" type="button"
+                            class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                        <button onclick="saveSmtpKontoFromModal()" type="button"
+                            class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark shadow-sm">Speichern</button>
+                    </div>
+                </div>
+            </div>
+        </div>

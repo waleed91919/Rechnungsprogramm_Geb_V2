@@ -10,4 +10,5 @@ winrar/
 *.sqlite-wal
 *.sqlite3
 *.db
+*.bak
 

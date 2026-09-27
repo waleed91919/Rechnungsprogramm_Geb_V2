@@ -1,0 +1,61 @@
+        <div id="formelassistent-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden">
+                <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                    <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                        <span class="material-symbols-outlined text-indigo-600">functions</span>
+                        Formelauswahl- & Werteingabe-Assistent
+                    </h3>
+                    <button type="button" onclick="closeFormelassistentModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+
+                <div class="p-6 overflow-y-auto flex-1 space-y-4">
+                    <!-- Formel-Katalog Auswahl -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">Formel-Vorlage wählen</label>
+                        <select id="fa-vorlage-select" onchange="onFormelVorlageChange()" class="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-white font-medium">
+                            <option value="2*([laenge]+[breite])*[hoehe]">Raum - Wandflächen: 2 * ([laenge] + [breite]) * [hoehe]</option>
+                            <option value="[wand_b]*[wand_h]-([tuer_b]*[tuer_h])">Wand mit Türabzug: [wand_b] * [wand_h] - ([tuer_b] * [tuer_h])</option>
+                            <option value="2*[leibung_t]*[fenster_h]+[fenster_b]*[leibung_t]">Fensternische: 2 * [leibung_t] * [fenster_h] + [fenster_b] * [leibung_t]</option>
+                            <option value="[laenge]*[breite]-[abzug]">Bodenfläche mit Abzug: [laenge] * [breite] - [abzug]</option>
+                            <option value="[laenge]*[breite]">Rechteckfläche: [laenge] * [breite]</option>
+                            <option value="[laenge]*[breite]*[hoehe]">Quader / Volumen: [laenge] * [breite] * [hoehe]</option>
+                            <option value="(3.14159/4)*[durchmesser]^2*[hoehe]">Zylinder / Säule: (π/4) * [durchmesser]² * [hoehe]</option>
+                            <option value="custom">-- Eigene benutzerdefinierte Formel --</option>
+                        </select>
+                    </div>
+
+                    <!-- Ausgewählte Formelform -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Aktiver mathematischer Ansatz</label>
+                        <input type="text" id="fa-formel-text" oninput="onCustomFormulaInput()" class="w-full px-3 py-1.5 border border-slate-300 rounded font-mono text-xs bg-slate-50 text-indigo-900 font-bold" placeholder="z.B. [l]*[b]">
+                    </div>
+
+                    <!-- Dynamische Parameter-Eingaben -->
+                    <div class="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                        <span class="text-xs font-bold text-slate-700 uppercase tracking-wider block">Werte der Parameter eingeben</span>
+                        <div id="fa-dynamische-parameter-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                            <!-- Dynamisch generierte Eingabefelder -->
+                        </div>
+                    </div>
+
+                    <!-- Live Vorschau -->
+                    <div class="p-4 bg-indigo-50/60 border border-indigo-200 rounded-xl flex justify-between items-center">
+                        <div>
+                            <span class="text-[11px] font-bold text-indigo-900 uppercase tracking-wider block">Aufgelöster Rechenansatz:</span>
+                            <span id="fa-live-ansatz-preview" class="font-mono text-xs text-indigo-800 font-semibold">2 * (0.00 + 0.00) * 0.00</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-[11px] font-bold text-indigo-900 uppercase tracking-wider block">Ergebnis:</span>
+                            <span id="fa-live-ergebnis-preview" class="font-mono text-xl font-bold text-indigo-700">0.00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">
+                    <button type="button" onclick="closeFormelassistentModal()" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-50">Abbrechen</button>
+                    <button type="button" onclick="applyFormelassistentResult()" class="px-5 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg shadow hover:bg-indigo-700">In Aufmaßzeile übernehmen</button>
+                </div>
+            </div>
+        </div>

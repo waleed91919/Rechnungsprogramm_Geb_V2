@@ -42,7 +42,7 @@ test('P0.4 generiertes XRechnung-XML trägt 3.0-URN (xeinkauf.de/kosit)', () => 
         positionen: [{ menge: 1, preis: 100, mwst: 19, name: 'Leistung' }],
         netto: 100, steuer: 19, brutto: 119
     };
-    const customer = { name: 'Kunde', ort: 'Berlin', leitweg_id: '991-12345678-12', customer_type: 'B2B', vat_id: 'DE123' };
+    const customer = { name: 'Kunde', ort: 'Berlin', leitweg_id: '991-12345678-30', customer_type: 'B2B', vat_id: 'DE123' };
     const seller = { firmenname: 'Firma', ort: 'Berlin', ustId: 'DE999', iban: 'DE00' };
     const xml = EInvoiceEngine.generateXRechnungXML(invoice, customer, seller);
     assert.ok(xml.includes('urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0'));
@@ -55,7 +55,7 @@ test('P0.4 generateXRechnungXML blockiert ungespeicherte Entwürfe ohne allowDra
         nr: 'RE-ENTWURF', datum: '2026-09-10',
         positionen: [{ menge: 1, preis: 100, mwst: 19, name: 'Leistung' }]
     };
-    const customer = { name: 'Kunde', ort: 'Berlin', customer_type: 'B2B' };
+    const customer = { name: 'Kunde', ort: 'Berlin', customer_type: 'B2B', buyer_reference: 'VORSCHAU-REF' };
     const seller = { firmenname: 'Firma', ort: 'Berlin', ustId: 'DE999', iban: 'DE00' };
     assert.throws(() => EInvoiceEngine.generateXRechnungXML(draft, customer, seller), /Beleg-ID/);
 

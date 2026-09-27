@@ -1,0 +1,112 @@
+        <div id="aufmass-wizard-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+                <div class="px-6 py-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
+                    <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                        <span class="material-symbols-outlined text-primary">auto_awesome</span>
+                        Aufmaß-Erstellungs-Assistent
+                    </h3>
+                    <button type="button" onclick="closeAufmassWizardModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+
+                <!-- Wizard Progress Indicator -->
+                <div class="px-6 py-3 bg-primary/5 border-b border-primary/10 flex items-center justify-between text-xs">
+                    <div class="flex items-center gap-2">
+                        <span id="wizard-step-badge-1" class="w-6 h-6 rounded-full bg-primary text-white font-bold flex items-center justify-center text-[11px]">1</span>
+                        <span id="wizard-step-label-1" class="font-bold text-primary">Aufmaßtyp & Variante</span>
+                    </div>
+                    <span class="material-symbols-outlined text-slate-400 text-sm">arrow_forward</span>
+                    <div class="flex items-center gap-2">
+                        <span id="wizard-step-badge-2" class="w-6 h-6 rounded-full bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-[11px]">2</span>
+                        <span id="wizard-step-label-2" class="font-medium text-slate-500">Stammdaten & Erfassung</span>
+                    </div>
+                </div>
+
+                <div class="p-6 overflow-y-auto flex-1">
+                    <!-- SCHRITT 1 -->
+                    <div id="wizard-step-1-content" class="space-y-5">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">1. Aufmaßtyp wählen</label>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3" id="wiz-typ-container">
+                                <div data-aufmass-typ="FREI" onclick="selectAufmassWizardTyp('FREI')" class="wiz-card-typ border-2 border-primary bg-primary/5 rounded-xl p-4 cursor-pointer hover:border-primary hover:shadow-md transition-all flex flex-col items-center text-center">
+                                    <input type="radio" name="wiz-aufmass-typ" value="FREI" checked class="hidden">
+                                    <span class="material-symbols-outlined text-primary text-2xl mb-1 wiz-card-icon">calculate</span>
+                                    <span class="font-bold text-slate-800 text-xs">Freies Aufmaß</span>
+                                    <span class="text-[10px] text-slate-500 mt-1">Mathematische Formelansätze ohne feste Spalten</span>
+                                </div>
+                                <div data-aufmass-typ="SPALTEN" onclick="selectAufmassWizardTyp('SPALTEN')" class="wiz-card-typ border-2 border-slate-200 bg-white rounded-xl p-4 cursor-pointer hover:border-primary hover:shadow-md transition-all flex flex-col items-center text-center">
+                                    <input type="radio" name="wiz-aufmass-typ" value="SPALTEN" class="hidden">
+                                    <span class="material-symbols-outlined text-slate-500 text-2xl mb-1 wiz-card-icon">view_column</span>
+                                    <span class="font-bold text-slate-800 text-xs">Spaltenaufmaß</span>
+                                    <span class="text-[10px] text-slate-500 mt-1">L x B x H mit Faktoren & Zu-/Abschlägen</span>
+                                </div>
+                                <div data-aufmass-typ="RAUM" onclick="selectAufmassWizardTyp('RAUM')" class="wiz-card-typ border-2 border-slate-200 bg-white rounded-xl p-4 cursor-pointer hover:border-primary hover:shadow-md transition-all flex flex-col items-center text-center">
+                                    <input type="radio" name="wiz-aufmass-typ" value="RAUM" class="hidden">
+                                    <span class="material-symbols-outlined text-slate-500 text-2xl mb-1 wiz-card-icon">meeting_room</span>
+                                    <span class="font-bold text-slate-800 text-xs">Raumaufmaß</span>
+                                    <span class="text-[10px] text-slate-500 mt-1">Strukturiert nach Geschoss & Räumen</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">2. Aufmaßvariante wählen</label>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3" id="wiz-var-container">
+                                <div data-aufmass-variante="TEIL" onclick="selectAufmassWizardVariante('TEIL')" class="wiz-card-var border-2 border-primary bg-primary/5 rounded-xl p-3 cursor-pointer hover:border-primary hover:shadow-md transition-all flex flex-col">
+                                    <input type="radio" name="wiz-aufmass-var" value="TEIL" checked class="hidden">
+                                    <span class="font-bold text-slate-800 text-xs">Teilaufmaß</span>
+                                    <span class="text-[10px] text-slate-500 mt-0.5">Für laufende Abschlagsrechnungen</span>
+                                </div>
+                                <div data-aufmass-variante="EINZEL" onclick="selectAufmassWizardVariante('EINZEL')" class="wiz-card-var border-2 border-slate-200 bg-white rounded-xl p-3 cursor-pointer hover:border-primary hover:shadow-md transition-all flex flex-col">
+                                    <input type="radio" name="wiz-aufmass-var" value="EINZEL" class="hidden">
+                                    <span class="font-bold text-slate-800 text-xs">Einzelaufmaß</span>
+                                    <span class="text-[10px] text-slate-500 mt-0.5">Für spezifische Einzelpositionen</span>
+                                </div>
+                                <div data-aufmass-variante="SCHLUSS" onclick="selectAufmassWizardVariante('SCHLUSS')" class="wiz-card-var border-2 border-slate-200 bg-white rounded-xl p-3 cursor-pointer hover:border-primary hover:shadow-md transition-all flex flex-col">
+                                    <input type="radio" name="wiz-aufmass-var" value="SCHLUSS" class="hidden">
+                                    <span class="font-bold text-slate-800 text-xs">Schlussaufmaß</span>
+                                    <span class="text-[10px] text-slate-500 mt-0.5">Gesamtabnahme & Schlussrechnung</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SCHRITT 2 -->
+                    <div id="wizard-step-2-content" class="hidden space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Aufmaßnummer</label>
+                                <input type="text" id="wiz-nummer" placeholder="AUF-001" class="w-full px-3 py-2 border border-slate-300 rounded text-sm font-mono">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Aufmaßdatum</label>
+                                <input type="date" id="wiz-datum" class="w-full px-3 py-2 border border-slate-300 rounded text-sm">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Titel / Leistungsbereich</label>
+                            <input type="text" id="wiz-titel" placeholder="z.B. Estricharbeiten 1. OG & Treppenhaus" class="w-full px-3 py-2 border border-slate-300 rounded text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Bemerkung / Ort / Bauabschnitt</label>
+                            <textarea id="wiz-bemerkung" rows="3" placeholder="Zusätzliche Notizen zum Aufmaß..." class="w-full px-3 py-2 border border-slate-300 rounded text-sm"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
+                    <button type="button" id="wiz-btn-back" onclick="wizardPrevStep()" class="hidden px-4 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-50">Zurück</button>
+                    <div class="flex-1"></div>
+                    <div class="flex gap-2">
+                        <button type="button" onclick="closeAufmassWizardModal()" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-50">Abbrechen</button>
+                        <button type="button" id="wiz-btn-next" onclick="wizardNextStep()" class="px-5 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow hover:bg-primary-dark">Weiter zu Schritt 2</button>
+                        <button type="button" id="wiz-btn-finish-print" onclick="finishAufmassWizard(true)" class="hidden px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg shadow hover:bg-indigo-700 transition-all flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[16px]">print</span>
+                            Erstellen & Drucken
+                        </button>
+                        <button type="button" id="wiz-btn-finish" onclick="finishAufmassWizard(false)" class="hidden px-5 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg shadow hover:bg-emerald-700">Aufmaß erstellen & öffnen</button>
+                    </div>
+                </div>
+            </div>
+        </div>

@@ -1,0 +1,171 @@
+        <div id="plan-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+            <div
+                class="bg-white rounded-lg shadow-xl w-full max-w-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 id="plan-modal-title" class="text-lg font-semibold text-slate-800">Abrechnungsplan anlegen</h3>
+                    <button onclick="closePlanModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto">
+                    <form id="plan-form" class="flex flex-col gap-4">
+                        <input type="hidden" id="plan-modal-id">
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Planname <span class="text-red-500">*</span></label>
+                            <input type="text" id="plan-modal-name" required autofocus
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm"
+                                placeholder="z.B. Unterhaltsreinigung Bürohaus">
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Objekt <span class="text-red-500">*</span></label>
+                            <select id="plan-modal-objekt" onchange="updatePlanEmpfaengerPreview()"
+                                class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                <option value="">Bitte wählen...</option>
+                            </select>
+                            <p id="plan-modal-empfaenger-preview" class="text-xs mt-1.5 text-slate-500"></p>
+                        </div>
+
+                        <fieldset class="border border-slate-200 rounded-md p-3">
+                            <legend class="px-1 text-xs font-bold text-slate-500 uppercase tracking-wider">Rhythmus</legend>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Intervall</label>
+                                    <select id="plan-modal-rhythmus" onchange="togglePlanRhythmusFelder()"
+                                        class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                        <option value="MONATLICH">Monatlich</option>
+                                        <option value="QUARTALSWEISE">Quartalsweise</option>
+                                        <option value="JAEHRLICH">Jährlich</option>
+                                        <option value="WOCHEN_INTERVALL">Wochenintervall</option>
+                                    </select>
+                                </div>
+                                <div id="plan-modal-tag-wrap">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Abrechnungstag (1–31)</label>
+                                    <input type="number" id="plan-modal-abrechnungstag" min="1" max="31" value="1"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                    <p class="text-[11px] text-slate-400 mt-1">31. wird auf Monatsende gekürzt.</p>
+                                </div>
+                                <div id="plan-modal-monat-wrap" class="hidden">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Abrechnungsmonat</label>
+                                    <select id="plan-modal-abrechnungsmonat"
+                                        class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm"></select>
+                                </div>
+                                <div id="plan-modal-wochen-wrap" class="hidden">
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Intervall (Wochen)</label>
+                                    <input type="number" id="plan-modal-intervall-wochen" min="1" value="2"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                            </div>
+                            <div class="mt-3 flex items-center gap-4">
+                                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="radio" name="plan-modus" value="NACHTRAEGLICH" checked class="text-primary focus:ring-primary">
+                                    nachträglich
+                                </label>
+                                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="radio" name="plan-modus" value="VORAUS" class="text-primary focus:ring-primary">
+                                    im Voraus
+                                </label>
+                            </div>
+                        </fieldset>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Startdatum <span class="text-red-500">*</span></label>
+                                <input type="date" id="plan-modal-start" required
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Enddatum <span class="text-slate-400 font-normal">(leer = unbefristet)</span></label>
+                                <input type="date" id="plan-modal-ende"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+
+                        <fieldset class="border border-slate-200 rounded-md p-3">
+                            <legend class="px-1 text-xs font-bold text-slate-500 uppercase tracking-wider">Preis</legend>
+                            <div class="flex items-center gap-4 mb-3">
+                                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="radio" name="plan-preis-modus" value="PAUSCHALE" checked onchange="togglePlanPreisModus()" class="text-primary focus:ring-primary">
+                                    Pauschale
+                                </label>
+                                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="radio" name="plan-preis-modus" value="POSITIONEN" onchange="togglePlanPreisModus()" class="text-primary focus:ring-primary">
+                                    Positionen
+                                </label>
+                            </div>
+                            <div id="plan-modal-pauschale-wrap" class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Pauschale netto (€)</label>
+                                    <input type="number" id="plan-modal-pauschale-netto" min="0" step="0.01"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">MwSt.-Satz</label>
+                                    <select id="plan-modal-mwst"
+                                        class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                        <option value="19">19 %</option>
+                                        <option value="7">7 %</option>
+                                        <option value="0">0 %</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div id="plan-modal-positionen-wrap" class="hidden">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-50 text-slate-500">
+                                        <tr>
+                                            <th class="px-2 py-1.5 font-semibold">Artikel / Bezeichnung</th>
+                                            <th class="px-2 py-1.5 font-semibold w-16">Menge</th>
+                                            <th class="px-2 py-1.5 font-semibold w-20">Einheit</th>
+                                            <th class="px-2 py-1.5 font-semibold w-20">Preis</th>
+                                            <th class="px-2 py-1.5 font-semibold w-16">MwSt</th>
+                                            <th class="w-8"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="plan-modal-positionen-body"></tbody>
+                                </table>
+                                <button type="button" onclick="addPlanPosition()"
+                                    class="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors">
+                                    <span class="material-symbols-outlined text-[16px]">add</span>
+                                    Position
+                                </button>
+                            </div>
+                            <div id="plan-modal-preise-live-wrap" class="hidden mt-3">
+                                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="checkbox" id="plan-modal-preise-live" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                    Preise live vom Artikelkatalog übernehmen
+                                </label>
+                                <p class="text-xs text-slate-500 mt-1 ml-6">An: Positionen mit Artikellink nutzen den <strong>aktuellen</strong> Verkaufspreis bei jeder Rechnungsgenerierung. Aus (Standard): Preise werden beim Speichern eingefroren; Preisänderung über Plan bearbeiten.</p>
+                            </div>
+                        </fieldset>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Zahlungsziel (Tage)</label>
+                                <input type="number" id="plan-modal-zahlungsziel" min="0" value="14"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div class="flex items-end pb-2">
+                                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="checkbox" id="plan-modal-als-entwurf" checked class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                    Als Entwurf erstellen (vor Buchung prüfen)
+                                </label>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Bemerkung</label>
+                            <textarea id="plan-modal-bemerkung" rows="2"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-none"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="closePlanModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                    <button onclick="savePlanFromModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark shadow-sm">Speichern</button>
+                </div>
+            </div>
+        </div>

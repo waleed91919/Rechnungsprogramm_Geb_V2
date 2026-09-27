@@ -1,0 +1,178 @@
+        <div id="artikel-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+            <div
+                class="bg-white rounded-lg shadow-xl w-full max-w-xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 id="modal-title" class="text-lg font-semibold text-slate-800">Neuer Artikel</h3>
+                    <button onclick="closeArtikelModal()" aria-label="Schließen" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto">
+                    <form id="artikel-form" class="flex flex-col gap-4">
+                        <div class="flex items-stretch gap-4 mb-2">
+                            <!-- Image Preview Area -->
+                            <div class="shrink-0 w-32 flex flex-col gap-2">
+                                <div id="artikel-bilder-container" class="grid grid-cols-2 gap-2 empty:hidden">
+                                    <!-- Dynamic thumbnails will be injected here -->
+                                </div>
+                                <div id="artikel-bilder-upload-btn"
+                                    class="w-full h-full min-h-[96px] bg-slate-100 border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-slate-200 transition-colors"
+                                    onclick="document.getElementById('artikel-bild').click()">
+                                    <span
+                                        class="material-symbols-outlined text-2xl text-slate-400">add_photo_alternate</span>
+                                    <span class="text-[10px] font-semibold text-slate-500 mt-1">Bilder (Max 4)</span>
+                                </div>
+                                <input type="file" id="artikel-bild" accept="image/*" multiple class="hidden"
+                                    onchange="handleArtikelBildUpload(event)">
+                            </div>
+
+                            <!-- Primary Info -->
+                            <div class="flex-1 space-y-4">
+                                <input type="hidden" id="artikel-id">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Artikelname</label>
+                                    <input type="text" id="artikel-name" required
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Artikelnummer/Barcode
+                                        (EAN) <span class="text-slate-400 font-normal">(Optional)</span></label>
+                                    <input type="text" id="artikel-ean"
+                                        placeholder="z.B. 4001234567890 (Klick hier für Scanner)"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Artikelkatalog /
+                                        Kategorie <span class="text-slate-400 font-normal">(Optional)</span></label>
+                                    <input type="text" id="artikel-katalog" placeholder="z.B. IT Zubehör"
+                                        class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Detaillierte Beschreibung
+                                (Beschreibung)</label>
+                            <textarea id="artikel-beschreibung" rows="3"
+                                placeholder="Detaillierte Artikelinformationen, Varianten (Farbe, Größe, etc.)..."
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-y"></textarea>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Lieferant</label>
+                                <input type="text" id="artikel-lieferant" placeholder="z.B. Großhandel GmbH"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Einheit</label>
+                                <select id="artikel-einheit"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                    <option value="Stk.">Stk. (Stück)</option>
+                                    <option value="Std.">Std. (Stunden)</option>
+                                    <option value="m">m (Meter)</option>
+                                    <option value="m²">m² (Quadratmeter)</option>
+                                    <option value="m³">m³ (Kubikmeter)</option>
+                                    <option value="psch.">psch. (Pauschal)</option>
+                                    <option value="kg">kg (Kilogramm)</option>
+                                    <option value="l">l (Liter)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Aktueller Bestand</label>
+                                <input type="number" id="artikel-bestand" min="0" value="0"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4 border-t border-slate-100 pt-4 mt-2">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">EK-Preis (€)</label>
+                                <input type="number" step="0.01" id="artikel-ek" required
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">VK-Preis (€)</label>
+                                <input type="number" step="0.01" id="artikel-vk" required
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">MwSt</label>
+                                <select id="artikel-mwst"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                    <option value="19">19%</option>
+                                    <option value="7">7%</option>
+                                    <option value="0">0%</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4 pt-2">
+                            <div class="flex items-center pt-6">
+                                <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer">
+                                    <input type="checkbox" id="artikel-ist-bauleistung" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                                    <span>Bauleistung (13b UStG)</span>
+                                </label>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Kostenart</label>
+                                <select id="artikel-kostenart" class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                                    <option value="MATERIAL">Material (Standard)</option>
+                                    <option value="LOHN">Lohnleistung (Handwerkerleistung nach § 35a EStG)</option>
+                                    <option value="MASCHINE">Maschine / Gerät</option>
+                                    <option value="FAHRT">Fahrtkosten</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Lohnanteil (%)</label>
+                                <input type="number" step="1" min="0" max="100" value="0" id="artikel-lohnanteil" class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm" placeholder="0">
+                            </div>
+                        </div>
+
+                        <!-- GPSR Produktsicherheitsangaben (EU 2023/988 / Art. 12 GPSR) -->
+                        <div class="border-t border-slate-200 pt-3 mt-1 bg-slate-50 p-3 rounded-md border border-slate-200">
+                            <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                                <span class="material-symbols-outlined text-[16px] text-slate-500">verified_user</span>
+                                Produktsicherheit &amp; GPSR (EU 2023/988)
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Hersteller Name</label>
+                                    <input type="text" id="artikel-hersteller-name" placeholder="z.B. Mustermann GmbH"
+                                        class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Hersteller Kontakt / Adresse</label>
+                                    <input type="text" id="artikel-hersteller-kontakt" placeholder="z.B. post@mustermann.de, Musterstr. 1"
+                                        class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-xs">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3 mt-2">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">Charge / Seriennummer / Typ</label>
+                                    <input type="text" id="artikel-charge-seriennummer" placeholder="z.B. Lot 2026-X, Art.-Nr. Type"
+                                        class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 mb-1">EU-Verantwortlicher (Drittland)</label>
+                                    <input type="text" id="artikel-eu-verantwortlicher" placeholder="z.B. EU Importer GmbH, Berlin"
+                                        class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-xs">
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <label class="block text-xs font-medium text-slate-700 mb-1">Sicherheits- &amp; Warnhinweise</label>
+                                <textarea id="artikel-warnhinweis" rows="2" placeholder="z.B. Augenschutz tragen, nicht über 50°C lagern..."
+                                    class="w-full px-2.5 py-1.5 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-xs resize-y"></textarea>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="closeArtikelModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                    <button onclick="saveArtikel()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark shadow-sm">Speichern</button>
+                </div>
+            </div>
+        </div>

@@ -933,10 +933,15 @@ window.downloadZugferdPdf = async function(invoiceId) {
                 doc: rech,
                 customer: kunde,
                 profile: 'EN16931',
-                fileNameHint: `ZUGFeRD_${rech.nr}.pdf`
+                fileNameHint: `ZUGFeRD_${rech.nr}.pdf`,
+                allowFallback: true
             });
             if (res && res.success) {
-                showToast(`ZUGFeRD PDF/A-3 gespeichert: ${res.path}`, 'success');
+                if (res.sichtseiteQuelle === 'fallback') {
+                    showToast(`ZUGFeRD PDF/A-3 mit Platzhalter-Seite gespeichert: ${res.path}`, 'info');
+                } else {
+                    showToast(`ZUGFeRD PDF/A-3 gespeichert: ${res.path}`, 'success');
+                }
             } else if (res && res.cancelled) {
                 showToast('ZUGFeRD-Export abgebrochen.', 'info');
             } else {

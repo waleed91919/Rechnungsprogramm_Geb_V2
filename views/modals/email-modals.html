@@ -1,0 +1,201 @@
+<!-- ========================================= -->
+<!-- PARTIAL: smtp-konto-modal.html -->
+<!-- ========================================= -->
+        <div id="smtp-konto-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-lg border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 id="smtp-konto-modal-title" class="text-lg font-semibold text-slate-800">SMTP-Konto anlegen</h3>
+                    <button onclick="closeSmtpKontoModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto">
+                    <form id="smtp-konto-form" class="flex flex-col gap-4">
+                        <input type="hidden" id="smtp-modal-id">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Kontoname <span class="text-red-500">*</span></label>
+                                <input type="text" id="smtp-modal-name" required placeholder="z.B. Büro-Postfach" autofocus
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Server (Host) <span class="text-red-500">*</span></label>
+                                <input type="text" id="smtp-modal-host" required placeholder="smtp.example.de"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm font-mono">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 items-end">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Port</label>
+                                <select id="smtp-modal-port" onchange="onSmtpPortChange()"
+                                    class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm cursor-pointer">
+                                    <option value="587">587 (STARTTLS)</option>
+                                    <option value="465">465 (SSL/TLS)</option>
+                                    <option value="25">25 (nur intern)</option>
+                                </select>
+                            </div>
+                            <fieldset class="border border-slate-200 rounded-md p-2.5">
+                                <legend class="px-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Verbindungssicherheit</legend>
+                                <div class="flex flex-col gap-1 text-xs">
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="smtp-modal-secure" id="smtp-modal-secure-off" checked class="text-primary focus:ring-primary h-3.5 w-3.5">
+                                        <span>STARTTLS (Aufrüstung)</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="smtp-modal-secure" id="smtp-modal-secure-on" class="text-primary focus:ring-primary h-3.5 w-3.5">
+                                        <span>SSL/TLS (implizit)</span>
+                                    </label>
+                                </div>
+                            </fieldset>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Benutzername <span class="text-red-500">*</span></label>
+                                <input type="text" id="smtp-modal-user" placeholder="login@mailbox.de"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Passwort</label>
+                                <input type="password" id="smtp-modal-passwort" placeholder="(unverändert – gespeichert)"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Absender-Name <span class="text-red-500">*</span></label>
+                                <input type="text" id="smtp-modal-absender-name" placeholder="Musterfirma Buchhaltung"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Absender-E-Mail <span class="text-red-500">*</span></label>
+                                <input type="email" id="smtp-modal-absender-email" placeholder="rechnungen@firma.de"
+                                    class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                            </div>
+                        </div>
+                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer w-fit">
+                            <input type="checkbox" id="smtp-modal-standard" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                            <span>Als Standardkonto verwenden</span>
+                        </label>
+                        <label id="smtp-modal-klartext-wrap" class="hidden items-center gap-2 text-xs text-amber-700 cursor-pointer w-fit">
+                            <input type="checkbox" id="smtp-modal-klartext" class="rounded border-amber-400 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5">
+                            <span>Unverschlüsselt speichern – NICHT empfohlen</span>
+                        </label>
+                        <div id="smtp-modal-test-ergebnis" class="hidden rounded-md px-4 py-3 text-sm"></div>
+                    </form>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-between gap-3 shrink-0">
+                    <button onclick="testSmtpConnectionFromModal()" type="button" id="smtp-modal-test-btn"
+                        class="px-4 py-2 text-sm font-semibold text-emerald-700 bg-white border border-emerald-300 rounded-md hover:bg-emerald-50 transition-colors flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[18px]">power</span>
+                        Verbindung testen
+                    </button>
+                    <div class="flex justify-end gap-3">
+                        <button onclick="closeSmtpKontoModal()" type="button"
+                            class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                        <button onclick="saveSmtpKontoFromModal()" type="button"
+                            class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-md hover:bg-primary-dark shadow-sm">Speichern</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+<!-- ========================================= -->
+<!-- PARTIAL: email-modal.html -->
+<!-- ========================================= -->
+        <div id="email-modal"
+            class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[210] hidden flex items-center justify-center">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+                <div class="flex justify-between items-center px-6 py-4 border-b border-slate-200 bg-slate-50">
+                    <h3 class="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                        <span id="email-modal-chip" class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold uppercase bg-primary/10 text-primary border border-primary/30">Rechnung</span>
+                        <span id="email-modal-nr" class="font-mono"></span>
+                    </h3>
+                    <button onclick="closeEmailModal()" class="text-slate-400 hover:text-slate-600">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="p-6 overflow-y-auto flex flex-col gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Empfänger <span class="text-red-500">*</span></label>
+                        <input type="email" id="email-modal-empfaenger" placeholder="name@kunde.de"
+                            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                        <div id="email-modal-empfaenger-warnung" class="hidden mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-100 text-amber-800 border border-amber-300">Kunde hat keine E-Mail-Adresse</div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">CC</label>
+                            <input type="text" id="email-modal-cc" placeholder="cc@firma.de, cc2@firma.de"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">BCC</label>
+                            <input type="text" id="email-modal-bcc" placeholder=""
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">SMTP-Konto</label>
+                        <div class="flex items-center gap-2">
+                            <select id="email-modal-konto"
+                                class="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm"></select>
+                            <button type="button" onclick="openSmtpSetupHinweis()" id="email-modal-konto-hinweis" class="hidden shrink-0 inline-flex items-center gap-1 px-2 py-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-300 rounded hover:bg-amber-100 transition-colors">
+                                <span class="material-symbols-outlined text-[16px]">settings</span> SMTP einrichten
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Betreff <span class="text-red-500">*</span></label>
+                        <input type="text" id="email-modal-betreff"
+                            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Nachricht</label>
+                        <textarea id="email-modal-text" rows="6"
+                            class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-y"></textarea>
+                    </div>
+                    <div class="flex items-center justify-between gap-3 flex-wrap">
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded bg-slate-100 border border-slate-200 text-xs text-slate-600 font-medium">
+                            <span class="material-symbols-outlined text-[16px] text-red-500">picture_as_pdf</span>
+                            <span id="email-modal-anhang">Anhang.pdf</span>
+                        </span>
+                        <label class="flex items-center gap-2 text-xs font-medium text-slate-600 cursor-pointer">
+                            <input type="checkbox" id="email-modal-pdf-kopie" onchange="toggleEmailPdfKopie(this.checked)" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                            <span>PDF-Kopie lokal speichern</span>
+                        </label>
+                    </div>
+                    <div id="email-modal-fehler" class="hidden rounded-md bg-red-50 border border-red-300 px-4 py-3 text-sm text-red-800"></div>
+
+                    <div class="border-t border-slate-200 pt-3">
+                        <button type="button" onclick="toggleEmailHistorie()" class="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors">
+                            <span class="material-symbols-outlined text-[16px]">history</span>
+                            Versandhistorie (<span id="email-historie-anzahl">0</span>)
+                            <span id="email-historie-chevron" class="material-symbols-outlined text-[16px] transition-transform">expand_more</span>
+                        </button>
+                        <div id="email-historie-panel" class="hidden mt-2">
+                            <table class="w-full text-left text-xs dense-table border border-slate-200 rounded overflow-hidden">
+                                <thead class="bg-slate-100 text-slate-600 border-b border-slate-200">
+                                    <tr>
+                                        <th class="px-2 py-1.5 font-semibold">Datum</th>
+                                        <th class="px-2 py-1.5 font-semibold">Status</th>
+                                        <th class="px-2 py-1.5 font-semibold">Empfänger</th>
+                                        <th class="px-2 py-1.5 font-semibold">Versuche</th>
+                                        <th class="px-2 py-1.5 font-semibold">Aktion</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="email-historie-body" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 shrink-0">
+                    <button onclick="closeEmailModal()" type="button"
+                        class="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50">Abbrechen</button>
+                    <button onclick="sendeBelegEmailFromModal()" type="button" id="email-modal-send-btn"
+                        class="px-5 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md shadow-sm transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed">
+                        <span class="material-symbols-outlined text-[18px]">send</span>
+                        Senden
+                    </button>
+                </div>
+            </div>
+        </div>

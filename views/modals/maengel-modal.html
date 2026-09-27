@@ -1,0 +1,74 @@
+<!-- Mängelkataster Neuer Mangel Modal -->
+<div id="mangel-create-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden text-xs">
+        <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+            <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary">add_circle</span>
+                Neuen Mangel erfassen
+            </h3>
+            <button type="button" onclick="document.getElementById('mangel-create-modal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        <div class="p-6 overflow-y-auto space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Projekt *</label>
+                    <select id="mc-projekt" class="w-full rounded-lg border-slate-300 py-1.5 px-3">
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Subunternehmer / Verursacher</label>
+                    <select id="mc-sub" class="w-full rounded-lg border-slate-300 py-1.5 px-3">
+                        <option value="">-- Eigenleistung / Unbekannt --</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label class="block font-semibold text-slate-700 mb-1">Mangel-Bezeichnung / Titel *</label>
+                <input type="text" id="mc-titel" placeholder="z. B. Undichtigkeit an Eckventil im EG Bad" class="w-full rounded-lg border-slate-300 py-1.5 px-3">
+            </div>
+
+            <div class="grid grid-cols-3 gap-3">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Gewerk</label>
+                    <input type="text" id="mc-gewerk" placeholder="z. B. Sanitär" class="w-full rounded-lg border-slate-300 py-1.5 px-3">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Bauteil</label>
+                    <input type="text" id="mc-bauteil" placeholder="z. B. Waschtisch" class="w-full rounded-lg border-slate-300 py-1.5 px-3">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Schweregrad</label>
+                    <select id="mc-schweregrad" class="w-full rounded-lg border-slate-300 py-1.5 px-3">
+                        <option value="LEICHT">Leicht (Optisch)</option>
+                        <option value="MITTEL" selected>Mittel (Funktionell)</option>
+                        <option value="SCHWER">Schwer</option>
+                        <option value="ABNAHMEHINDERND">Abnahmehindernd</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Nacherfüllungsfrist</label>
+                    <input type="date" id="mc-frist" class="w-full rounded-lg border-slate-300 py-1.5 px-3">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Geschätzte Kosten (€)</label>
+                    <input type="number" id="mc-kosten" step="50" value="0" class="w-full rounded-lg border-slate-300 py-1.5 px-3">
+                </div>
+            </div>
+
+            <div>
+                <label class="block font-semibold text-slate-700 mb-1">Detaillierte Sachverhaltsbeschreibung</label>
+                <textarea id="mc-beschreibung" rows="3" placeholder="Genaue Beschreibung des Mangels..." class="w-full rounded-lg border-slate-300 py-1.5 px-3"></textarea>
+            </div>
+        </div>
+        <div class="p-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
+            <button type="button" onclick="document.getElementById('mangel-create-modal').classList.add('hidden')" class="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-100">Abbrechen</button>
+            <button type="button" onclick="window.maengelViewInstance && window.maengelViewInstance.submitCreateMangel()" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 font-semibold">Mangel speichern</button>
+        </div>
+    </div>
+</div>

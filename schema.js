@@ -58,8 +58,18 @@ function createSchema(db) {
         mahnungGebuehr REAL DEFAULT 0,
         eingabemodus TEXT DEFAULT 'netto',
         zahlbetrag REAL DEFAULT 0,
+        version INTEGER DEFAULT 1,
+        parent_angebot_id INTEGER,
+        angebot_status TEXT DEFAULT 'ENTWURF',
+        freeze_snapshot_json TEXT,
+        auftraggeber_typ TEXT DEFAULT 'PRIVAT',
+        vergabe_verfahren TEXT DEFAULT 'DIREKT',
+        vertragsgrundlage TEXT DEFAULT 'BGB_WERKVERTRAG',
+        angenommen_am TEXT,
+        angenommene_version INTEGER,
         FOREIGN KEY(kundeId) REFERENCES kunden(id),
-        FOREIGN KEY(projektId) REFERENCES projekte(id)
+        FOREIGN KEY(projektId) REFERENCES projekte(id),
+        FOREIGN KEY(parent_angebot_id) REFERENCES dokumente(id)
     )`);
 
     db.exec(`CREATE TABLE IF NOT EXISTS positionen (
@@ -73,6 +83,10 @@ function createSchema(db) {
         ek REAL DEFAULT 0, -- Purchase price snapshot
         mwst INTEGER DEFAULT 19,
         rabatt REAL DEFAULT 0,
+        titel TEXT,
+        positionstyp TEXT DEFAULT 'NORMAL',
+        in_endsumme_enthalten INTEGER DEFAULT 1,
+        bieterangabe_wert TEXT,
         FOREIGN KEY(dokumentId) REFERENCES dokumente(id),
         FOREIGN KEY(artikelId) REFERENCES artikel(id)
     )`);
@@ -163,7 +177,10 @@ function createSchema(db) {
         start TEXT,
         ende TEXT,
         budget REAL DEFAULT 0,
-        status TEXT
+        status TEXT,
+        source_angebot_id INTEGER,
+        source_angebot_version INTEGER,
+        FOREIGN KEY(source_angebot_id) REFERENCES dokumente(id)
     )`);
 
     // 1. Aufmaßblätter & Zeilen (REB 23.003 & DA11)
@@ -1395,6 +1412,31 @@ function runMigrations(db) {
     try { db.exec(`ALTER TABLE projekte ADD COLUMN sicherheitseinbehalt_prozent REAL DEFAULT 0`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
     try { db.exec(`ALTER TABLE projekte ADD COLUMN gaeb_phase TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
     try { db.exec(`ALTER TABLE projekte ADD COLUMN hoai_vob_flag TEXT DEFAULT 'VOB'`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+
+    // --- Angebot-Erweiterungen (V2 / Direktangebot mit Versionierung, Freeze-Snapshot & Risiko-Check) ---
+    // Tabelle dokumente:
+    try { db.exec(`ALTER TABLE dokumente ADD COLUMN version INTEGER DEFAULT 1`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE dokumente ADD COLUMN parent_angebot_id INTEGER REFERENCES dokumente(id)`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE dokumente ADD COLUMN angebot_status TEXT DEFAULT 'ENTWURF'`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE dokumente ADD COLUMN freeze_snapshot_json TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE dokumente ADD COLUMN auftraggeber_typ TEXT DEFAULT 'PRIVAT'`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE dokumente ADD COLUMN vergabe_verfahren TEXT DEFAULT 'DIREKT'`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE dokumente ADD COLUMN vertragsgrundlage TEXT DEFAULT 'BGB_WERKVERTRAG'`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE dokumente ADD COLUMN angenommen_am TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE dokumente ADD COLUMN angenommene_version INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+
+    // Tabelle positionen:
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN titel TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN positionstyp TEXT DEFAULT 'NORMAL'`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN in_endsumme_enthalten INTEGER DEFAULT 1`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN bieterangabe_wert TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+
+    // Tabelle projekte:
+    try { db.exec(`ALTER TABLE projekte ADD COLUMN source_angebot_id INTEGER REFERENCES dokumente(id)`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE projekte ADD COLUMN source_angebot_version INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_dokumente_parent_angebot ON dokumente(parent_angebot_id)`); } catch (e) { if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] idx_dokumente_parent_angebot:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_projekte_source_angebot ON projekte(source_angebot_id)`); } catch (e) { if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] idx_projekte_source_angebot:', e.message); }
 
     // --- Datenintegrität: §48b / Subunternehmer-Felder auf kunden ---
     // Bug A: kunden.sec48b_valid_until wird von getEingangsrechnungen()/saveEingangsrechnung()
