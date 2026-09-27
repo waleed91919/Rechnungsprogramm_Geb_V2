@@ -32,3 +32,7 @@ const state = {
     currentRechnungPositionen: [],
     isAngebotMode: false
 };
+
+if (typeof window !== 'undefined') {
+    window.state = state;
+}

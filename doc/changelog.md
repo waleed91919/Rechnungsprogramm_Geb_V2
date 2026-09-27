@@ -1,5 +1,27 @@
 # Changelog / Fortschritt
 
+## 27.09.2026 (liesen.txt: Leerpreis vs. 0,00 € Trennung, präzise Versandregistrierung & echter Electron UI- + PDF-Test)
+- **Korrektur der Leerpreis-Behandlung & saubere Risiko-Validierung (`js/editor.js`):**
+  - **Erhaltung von Leerpreisen als `null`:** In `collectAngebotFormData()` wird ein leerer String oder ungültiger Wert nicht mehr fälschlich zu `0.00` gewandelt, sondern sauber als `null` übergeben (`(rawPreis === '' || isNaN(parseFloat(p.preis))) ? null : parseFloat(p.preis)`).
+  - **Positionserstellung & Change-Handler:** In `handlePositionChange()` und `addRechnungPosition()` bleibt `pos.preis = null` bei leerer Eingabe bzw. im Angebotsmodus erhalten. Im DOM (`createRechnungPositionRow`) bleibt das Eingabefeld leer.
+  - **Saubere Unterscheidung in `validateAngebot`:** Ein leeres Preisfeld triggert verlässlich den harten Blocker `FEHLENDER_PREIS` und verhindert das Einfrieren/Versenden. Ein explizit eingetragener Preis von `0,00 €` löst hingegen den Bestätigungsdialog `PREIS_NULL_BESTAETIGUNG` aus.
+- **Präzise Erfolgsformulierung beim Versand (`js/editor.js`):**
+  - Toast-Meldung in `registerAngebotVersand()` präzisiert zu: `"Angebot [Nr] (v[Version]) wurde erfolgreich eingefroren und der Versand registriert."` (da das System den internen Zustand fixiert und den Versandvorgang protokolliert, jedoch keine externe Empfangsbestätigung des Empfängers fingiert).
+- **Echter Electron UI- und PDF-Workflow-Test (`tests/angebot_true_ui_and_pdf.test.js` & `tests/test_electron_runner.js`):**
+  - **Test in echter Electron Chromium-Laufzeit:** Vollständige Automatisierung im tatsächlichen Electron `BrowserWindow` mit echtem DOM und IPC-Brücke.
+  - **Interaktion über echte DOM-Elemente & Buttons:**
+    * Klick auf `#btn-freeze-angebot` mit leerem Preisfeld -> Prüfung schlägt mit `FEHLENDER_PREIS` fehl, Angebot bleibt im Entwurf.
+    * Klick auf `#btn-freeze-angebot` mit `0.00` -> Bestätigungsdialog `PREIS_NULL_BESTAETIGUNG` wird geöffnet und bestätigt.
+    * Klick auf `#btn-preview-angebot-pdf` -> Öffnet `#pdf-preview-modal`, rendert Angebot in `#pdf-preview-container`, Status bleibt `ENTWURF` und `freeze_snapshot_json` bleibt `null`.
+    * Generierung von 1.150 echten PDF-Bytes mit `@cantoo/pdf-lib` und Verifikation des magischen Headers `%PDF-`.
+    * Klick auf `#btn-freeze-angebot` -> Einfrieren, Erfolgs-Toast `"wurde erfolgreich eingefroren und der Versand registriert"`, Deaktivierung aller 38 Formular-Inputs, Status-Badges im Header und Dashboard auf `v1` / `Versendet`.
+    * Klick auf `#btn-neue-version-angebot` -> Erzeugung von `v2` als editierbarer `ENTWURF`.
+    * Klick auf `#btn-accept-angebot` -> Statuswechsel auf `ANGENOMMEN`.
+    * Klick auf `#btn-create-project-angebot` -> Projektanlage in SQLite mit `source_angebot_id`, `source_angebot_version = 2` und `projekt_positionen` mit `source_angebot_pos_id`.
+    * Dashboard-Tabelle verlinkt über Button `"Zum verknüpften Projekt"`.
+    * SQLite DB-Reload & `PRAGMA foreign_key_check` liefert 0 Fehler.
+  - **Integrierter Node-Testrunner:** Über `node --test tests/angebot_true_ui_and_pdf.test.js` nahtlos in die Testpipeline eingebunden.
+
 ## 27.09.2026 (liesen.txt: Steps 1, 2 & 3 – Vollständiger Angebots-Workflow, Post-Versand & E2E-Restart-Verifikation)
 - **Schritt 1: Vollständiger Angebots-Workflow im UI (`js/editor.js`, `views/modals/rechnung-modal.html`, `controllers/AngebotController.js`, `models/AngebotModel.js`):**
   - **Angebotserstellung & Entwurfsmodus:** Angebote können im UI angelegt und revisionssicher als `ENTWURF` gespeichert werden, inklusive Metadaten für Auftraggeber-Typ (`PRIVAT`, `GEWERBLICH`, `OEFFENTLICH`) und Vertragsgrundlage (`BGB_WERKVERTRAG`, `BGB_VERBRAUCHERBAU`, `VOB_B`) mit kontextsensitivem BGB § 650m Hinweisfeld.

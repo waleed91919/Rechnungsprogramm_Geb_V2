@@ -770,7 +770,7 @@ function updateAngebotModalFooter(angStatus, existing) {
     if (statusNorm === 'ENTWURF' || statusNorm === 'OFFEN') {
         // Bei ENTWURF:
         leftActions.innerHTML = `
-            <button type="button" onclick="previewAngebotPdf()"
+            <button type="button" id="btn-preview-angebot-pdf" onclick="previewAngebotPdf()"
                 class="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 flex items-center gap-1.5 shadow-sm transition-all">
                 <span class="material-symbols-outlined text-[18px] text-slate-500">visibility</span>
                 PDF Vorschau
@@ -778,14 +778,14 @@ function updateAngebotModalFooter(angStatus, existing) {
         `;
 
         rightActions.innerHTML = `
-            <button onclick="closeRechnungModal()" type="button"
+            <button onclick="closeRechnungModal()" type="button" id="rechnung-modal-cancel"
                 class="px-5 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-all focus:ring-2 focus:ring-slate-200">Abbrechen</button>
             <button onclick="saveAngebotEntwurf()" type="button" id="btn-angebot-save-draft"
                 class="px-5 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 shadow-sm transition-all flex items-center gap-2">
                 <span class="material-symbols-outlined text-[18px]">save</span>
                 Entwurf speichern
             </button>
-            <button onclick="registerAngebotVersand()" type="button" id="btn-angebot-freeze-send"
+            <button onclick="registerAngebotVersand()" type="button" id="btn-freeze-angebot" data-legacy-id="btn-angebot-freeze-send"
                 class="px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2">
                 <span class="material-symbols-outlined text-[18px]">lock</span>
                 Versand registrieren (Einfrieren)
@@ -794,12 +794,12 @@ function updateAngebotModalFooter(angStatus, existing) {
     } else if (statusNorm === 'VERSENDET') {
         // Bei VERSENDET (Gefroren):
         leftActions.innerHTML = `
-            <button type="button" onclick="previewAngebotPdf()"
+            <button type="button" id="btn-preview-angebot-pdf" onclick="previewAngebotPdf()"
                 class="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 flex items-center gap-1.5 shadow-sm transition-all">
                 <span class="material-symbols-outlined text-[18px] text-primary">picture_as_pdf</span>
                 PDF anzeigen
             </button>
-            <button type="button" onclick="createNextAngebotVersion()" id="btn-angebot-new-version"
+            <button type="button" onclick="createNextAngebotVersion()" id="btn-neue-version-angebot" data-legacy-id="btn-angebot-new-version"
                 class="px-4 py-2 text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 flex items-center gap-1.5 shadow-sm transition-all">
                 <span class="material-symbols-outlined text-[18px]">difference</span>
                 Neue Version erstellen (v${ver + 1})
@@ -807,14 +807,14 @@ function updateAngebotModalFooter(angStatus, existing) {
         `;
 
         rightActions.innerHTML = `
-            <button onclick="closeRechnungModal()" type="button"
+            <button onclick="closeRechnungModal()" type="button" id="rechnung-modal-close"
                 class="px-5 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-all focus:ring-2 focus:ring-slate-200">Schließen</button>
             <button onclick="rejectAngebotFromModal()" type="button" id="btn-angebot-reject"
                 class="px-4 py-2.5 text-sm font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 shadow-sm transition-all flex items-center gap-1.5">
                 <span class="material-symbols-outlined text-[18px]">cancel</span>
                 Angebot ablehnen
             </button>
-            <button onclick="acceptAngebotFromModal()" type="button" id="btn-angebot-accept"
+            <button onclick="acceptAngebotFromModal()" type="button" id="btn-accept-angebot" data-legacy-id="btn-angebot-accept"
                 class="px-6 py-2.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2">
                 <span class="material-symbols-outlined text-[18px]">check_circle</span>
                 Angebot annehmen
@@ -823,7 +823,7 @@ function updateAngebotModalFooter(angStatus, existing) {
     } else if (statusNorm === 'ANGENOMMEN') {
         // Bei ANGENOMMEN:
         leftActions.innerHTML = `
-            <button type="button" onclick="previewAngebotPdf()"
+            <button type="button" id="btn-preview-angebot-pdf" onclick="previewAngebotPdf()"
                 class="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 flex items-center gap-1.5 shadow-sm transition-all">
                 <span class="material-symbols-outlined text-[18px] text-primary">picture_as_pdf</span>
                 PDF anzeigen
@@ -836,7 +836,7 @@ function updateAngebotModalFooter(angStatus, existing) {
         let projBtnHtml = '';
         if (existingProjekt) {
             projBtnHtml = `
-                <button type="button" onclick="navigateToAngebotProjekt(${existingProjekt.id})"
+                <button type="button" onclick="navigateToAngebotProjekt(${existingProjekt.id})" id="btn-to-project-angebot"
                     class="px-6 py-2.5 text-sm font-semibold text-white bg-primary hover:bg-primary-dark rounded-lg shadow-md flex items-center gap-2 transition-all">
                     <span class="material-symbols-outlined text-[18px]">folder_open</span>
                     Zum Projekt (#${existingProjekt.id})
@@ -844,7 +844,7 @@ function updateAngebotModalFooter(angStatus, existing) {
             `;
         } else {
             projBtnHtml = `
-                <button type="button" onclick="createProjektFromAngebotModal()" id="btn-angebot-create-project"
+                <button type="button" onclick="createProjektFromAngebotModal()" id="btn-create-project-angebot" data-legacy-id="btn-angebot-create-project"
                     class="px-6 py-2.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2">
                     <span class="material-symbols-outlined text-[18px]">construction</span>
                     In Projekt umwandeln / Projekt anlegen
@@ -853,7 +853,7 @@ function updateAngebotModalFooter(angStatus, existing) {
         }
 
         rightActions.innerHTML = `
-            <button onclick="closeRechnungModal()" type="button"
+            <button onclick="closeRechnungModal()" type="button" id="rechnung-modal-close"
                 class="px-5 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-all focus:ring-2 focus:ring-slate-200">Schließen</button>
             ${projBtnHtml}
         `;
@@ -936,17 +936,6 @@ function applyAngebotEditMode(existing, form, submitBtn) {
         }
     }
 
-    // Enable/Disable form inputs
-    const inputs = form.querySelectorAll('input, select, textarea');
-    inputs.forEach(el => {
-        el.disabled = isFrozen;
-        if (isFrozen) {
-            el.classList.add('cursor-not-allowed');
-        } else {
-            el.classList.remove('cursor-not-allowed');
-        }
-    });
-
     const addRowBtn = form.querySelector('button[onclick="addRechnungPosition()"]');
     if (addRowBtn) {
         if (isFrozen) addRowBtn.classList.add('hidden');
@@ -985,6 +974,17 @@ function applyAngebotEditMode(existing, form, submitBtn) {
 
     handleKundeSelect({ target: { value: existing.kundeId } });
     renderRechnungPositionen();
+
+    // Enable/Disable ALL form inputs (including dynamically rendered positions and customer selects)
+    const inputs = form.querySelectorAll('input:not([type="hidden"]), select, textarea');
+    inputs.forEach(el => {
+        el.disabled = isFrozen;
+        if (isFrozen) {
+            el.classList.add('cursor-not-allowed');
+        } else {
+            el.classList.remove('cursor-not-allowed');
+        }
+    });
 
     updateAngebotModalFooter(angStatus, existing);
 }
@@ -1037,24 +1037,29 @@ function collectAngebotFormData() {
     const auftraggeber_typ = auftraggeberTypEl ? auftraggeberTypEl.value : (existing?.auftraggeber_typ || 'PRIVAT');
     const vertragsgrundlage = vertragsgrundlageEl ? vertragsgrundlageEl.value : (existing?.vertragsgrundlage || 'BGB_WERKVERTRAG');
 
-    const positions = (state.currentRechnungPositionen || []).map((p, idx) => ({
-        id: p.id !== undefined ? p.id : null,
-        positionIndex: idx,
-        artikelId: p.artikelId || null,
-        titel: p.titel || null,
-        name: p.name || '',
-        menge: parseFloat(p.menge) || 0,
-        einheit: p.einheit || 'Stk.',
-        preis: (p.preis !== undefined && p.preis !== null && p.preis !== '') ? parseFloat(p.preis) : 0,
-        ek: parseFloat(p.ek) || 0,
-        mwst: p.mwst !== undefined && p.mwst !== null ? parseFloat(p.mwst) : 19,
-        rabatt: parseFloat(p.rabatt) || 0,
-        positionstyp: (p.positionstyp || 'NORMAL').toUpperCase().trim(),
-        in_endsumme_enthalten: window.AngebotController ? window.AngebotController.normalizeInEndsumme(p.in_endsumme_enthalten, p.positionstyp) : 1,
-        bieterangabe_wert: p.bieterangabe_wert || null,
-        oz_code: p.oz_code || null,
-        cost_type: p.cost_type || 'MATERIAL'
-    }));
+    const positions = (state.currentRechnungPositionen || []).map((p, idx) => {
+        const rawPreis = (p.preis !== undefined && p.preis !== null) ? String(p.preis).trim() : '';
+        const parsedPreis = (rawPreis === '' || isNaN(parseFloat(p.preis))) ? null : parseFloat(p.preis);
+        return {
+            id: p.id !== undefined ? p.id : null,
+            positionIndex: idx,
+            artikelId: p.artikelId || null,
+            titel: p.titel || null,
+            name: p.name || '',
+            menge: parseFloat(p.menge) || 0,
+            einheit: p.einheit || 'Stk.',
+            preis: parsedPreis,
+            preis_null_bestaetigt: Boolean(p.preis_null_bestaetigt),
+            ek: parseFloat(p.ek) || 0,
+            mwst: p.mwst !== undefined && p.mwst !== null ? parseFloat(p.mwst) : 19,
+            rabatt: parseFloat(p.rabatt) || 0,
+            positionstyp: (p.positionstyp || 'NORMAL').toUpperCase().trim(),
+            in_endsumme_enthalten: window.AngebotController ? window.AngebotController.normalizeInEndsumme(p.in_endsumme_enthalten, p.positionstyp) : 1,
+            bieterangabe_wert: p.bieterangabe_wert || null,
+            oz_code: p.oz_code || null,
+            cost_type: p.cost_type || 'MATERIAL'
+        };
+    });
 
     const totals = window.AngebotController
         ? window.AngebotController.calculateTotals(positions)
@@ -1232,8 +1237,13 @@ async function registerAngebotVersand() {
             state.rechnungen = fullState.rechnungen || [];
             state.artikel = fullState.artikel || [];
         }
-        showToast(`Angebot ${doc.nr} (v${doc.version || 1}) wurde erfolgreich eingefroren und versendet.`, 'success');
-        closeRechnungModal();
+        showToast(`Angebot ${doc.nr} (v${doc.version || 1}) wurde erfolgreich eingefroren und der Versand registriert.`, 'success');
+        const updated = (state.angebote || []).find(a => a.id === doc.id) || doc;
+        const form = document.getElementById('rechnung-form');
+        const submitBtn = document.getElementById('rechnung-modal-submit');
+        if (form) {
+            applyAngebotEditMode(updated, form, submitBtn);
+        }
         if (typeof renderAngebote === 'function') renderAngebote();
     } catch (err) {
         console.error('Fehler beim Einfrieren/Versenden:', err);
@@ -1794,7 +1804,7 @@ function addRechnungPosition() {
         name: '', // Allow custom Name
         menge: 1,
         einheit: 'Stk.',
-        preis: 0,
+        preis: state.isAngebotMode ? null : 0,
         mwst: 19,
         rabatt: 0 // New field
     });
@@ -1855,7 +1865,9 @@ function handlePositionChange(id, field, value) {
     const pos = state.currentRechnungPositionen.find(p => p.id === id);
     if (!pos) return;
 
-    if (field === 'artikelId') {
+    if (field === 'name') {
+        pos.name = value || '';
+    } else if (field === 'artikelId') {
         const art = state.artikel.find(a => a.id === parseInt(value));
         pos.artikelId = parseInt(value);
         if (art) {
@@ -1867,7 +1879,7 @@ function handlePositionChange(id, field, value) {
             pos.kostenart = art.kostenart || 'MATERIAL';
             pos.lohnanteil_prozent = art.lohnanteil_prozent || 0;
         } else {
-            pos.preis = 0;
+            pos.preis = state.isAngebotMode ? null : 0;
             pos.rabatt = 0;
         }
     } else if (field === 'menge') {
@@ -1878,7 +1890,11 @@ function handlePositionChange(id, field, value) {
             pos.menge = 1;
         }
     } else if (field === 'preis') {
-        pos.preis = parseFloat(value) || 0;
+        if (value === '' || value === null || value === undefined) {
+            pos.preis = null;
+        } else {
+            pos.preis = isNaN(parseFloat(value)) ? null : parseFloat(value);
+        }
     } else if (field === 'mwst') {
         pos.mwst = parseInt(value) || 0;
         if (!pos.is13b) {
@@ -2041,7 +2057,7 @@ function createRechnungPositionRow(pos, index) {
     const inputPreis = document.createElement('input');
     inputPreis.type = 'number';
     inputPreis.step = '0.01';
-    inputPreis.value = pos.preis !== undefined && pos.preis !== null ? pos.preis.toFixed(2) : '0.00';
+    inputPreis.value = (pos.preis !== undefined && pos.preis !== null && pos.preis !== '') ? (typeof pos.preis === 'number' ? pos.preis.toFixed(2) : String(pos.preis)) : '';
     inputPreis.onblur = (e) => handlePositionChange(pos.id, 'preis', e.target.value);
     inputPreis.className = 'w-full px-3 py-1.5 border border-slate-300 rounded text-sm text-right focus:ring-1 focus:ring-primary focus:border-primary';
     if (isReadOnly) {
