@@ -480,4 +480,7 @@ if (typeof window !== 'undefined') {
     window.AngebotController = AngebotController;
 }
 
-module.exports = AngebotController;
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = AngebotController;
+}
+

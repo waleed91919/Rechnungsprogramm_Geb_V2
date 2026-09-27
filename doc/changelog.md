@@ -1,5 +1,44 @@
 # Changelog / Fortschritt
 
+## 27.09.2026 (liesen.txt: Steps 1, 2 & 3 – Vollständiger Angebots-Workflow, Post-Versand & E2E-Restart-Verifikation)
+- **Schritt 1: Vollständiger Angebots-Workflow im UI (`js/editor.js`, `views/modals/rechnung-modal.html`, `controllers/AngebotController.js`, `models/AngebotModel.js`):**
+  - **Angebotserstellung & Entwurfsmodus:** Angebote können im UI angelegt und revisionssicher als `ENTWURF` gespeichert werden, inklusive Metadaten für Auftraggeber-Typ (`PRIVAT`, `GEWERBLICH`, `OEFFENTLICH`) und Vertragsgrundlage (`BGB_WERKVERTRAG`, `BGB_VERBRAUCHERBAU`, `VOB_B`) mit kontextsensitivem BGB § 650m Hinweisfeld.
+  - **Positionstypen & Endsummensteuerung:** Normal-, Alternativ-, Bedarfs- und Pauschalpositionen werden im Editor mit Auszeichnung und Checkbox `in Endsumme` unterstützt.
+  - **PDF-Vorschau ohne Statuswechsel:** Aufruf der PDF-Vorschau rendert das Dokument, belässt den Status garantiert auf `ENTWURF` und erzeugt keinen verfrühten Freeze-Snapshot (`freeze_snapshot_json` bleibt `NULL`).
+  - **Explizite Aktion "Versand registrieren (Einfrieren)":**
+    * Führt vor dem Versand die baurechtliche Risikoprüfung via `AngebotController.validateAngebot` aus.
+    * Prüft Bestätigung für 0,00 € Positionen und weist auf BGB § 650m Grenzen hin (90% Abschlagsdeckel, 5% Sicherheitsleistung).
+    * Friert bei Bestätigung das Angebot mit einem unveränderlichen JSON-Snapshot (`freeze_snapshot_json`) ein und setzt den Status auf `VERSENDET`.
+- **Schritt 2: Post-Versand Workflow & Nachverhandlung (`js/dashboard.js`, `js/editor.js`, `code.html`):**
+  - **Versions- und Status-Badges:**
+    * In der Angebotsliste (`#view-angebote`) wird eine dedizierte Version-Spalte mit Badges (`v1`, `v2`, `v3` etc.) angezeigt.
+    * Status-Badges unterscheiden farblich zwischen `ENTWURF` (Bernstein), `VERSENDET` (Blau), `ANGENOMMEN` (Smaragdgrün) und `ABGELEHNT` (Rot).
+  - **Read-Only Sperre für gefrorene Angebote:**
+    * Nach dem Versand werden alle Eingabefelder im Editor gesperrt (read-only / disabled).
+    * Bearbeiten- und Lösch-Buttons für Positionen werden ausgeblendet.
+    * Das Modal zeigt den Status und die Versionsnummer im Header an.
+  - **Verhandlungsversionen ableiten:**
+    * Aus einem versendeten, gefrorenen Angebot kann per Knopfdruck ("Neue Version verhandeln") eine Folgeberechtigung (`v2`, `v3`) erzeugt werden.
+    * Die bisherige Version bleibt unverändert und gesperrt; die neue Version startet als editierbarer `ENTWURF` mit Verweis `parent_angebot_id`.
+  - **Annahme & Projektanlage mit Positions-Verknüpfung:**
+    * Spezifische Version kann als `ANGENOMMEN` markiert werden.
+    * Aus dem angenommenen Angebot kann direkt ein neues Projekt angelegt werden.
+    * Die Angebotspositionen werden in `projekt_positionen` übernommen, wobei `sourceOfferPositionId` und `source_angebot_pos_id` dauerhaft und sauber auf die ID der ursprünglichen Angebotsposition zeigen.
+    * Bereits angelegte Projekte werden erkannt und über Schnellzugriffs-Icon ("Zum verknüpften Projekt") direkt verlinkt.
+- **Schritt 3: Testing & Verifikation (`tests/angebot_ui_workflow.test.js`):**
+  - Neuer E2E-Lifecycle-Testlauf implementiert, der die gesamte Prozesskette durchläuft:
+    1. Angebot anlegen als `ENTWURF` mit Normal-, Alternativ- und 0,00 € Positionen.
+    2. PDF-Vorschau abrufen -> Prüfung, dass Status `ENTWURF` und `freeze_snapshot_json` `NULL` bleiben.
+    3. Risikoprüfung & 0,00 € Bestätigung -> Versand registrieren und Snapshot einfrieren (`VERSENDET`).
+    4. Mutationsangriff auf gefrorenes `v1` abwehren (Änderungssperre).
+    5. Verhandlungsversion `v2` ableiten -> `v1` bleibt gefroren, `v2` startet als `ENTWURF`.
+    6. `v2` nachverhandeln, versenden und als `ANGENOMMEN` markieren.
+    7. Projekt aus `v2` erstellen und saubere `source_angebot_pos_id`-Zuordnung in `projekt_positionen` verifizieren.
+    8. Verknüpftes Aufmaß anlegen und Trigger-Löschschutz verifizieren.
+    9. Simulation eines App-Neustarts: Schließen der SQLite-Datenbankverbindung und Neuverbindung zur selben Datei.
+    10. Datenbankintegrität nach Neustart prüfen: `PRAGMA foreign_key_check` liefert 0 Fehler; alle Angebote, Versionen, Projekte, Positionen und Aufmaße bleiben vollständig verknüpft persistiert.
+  - 100% Erfolgsquote bei `tests/angebot_ui_workflow.test.js` und `tests/angebot_lifecycle.test.js`.
+
 ## 27.09.2026 (liesen.txt: Duplikat-Quellenprotokollierung, explizite Aufmaß-Verknüpfung & Trigger-Schutz)
 - **Hinterlegung der Quelle duplizierter Projekte vor Entkopplung (`schema.js` & `tests/angebot_lifecycle.test.js`):**
   - Quelle duplizierter Projekte wurde vor der Entkopplung in projektbezogenen Feldern (`archived_source_angebot_id`, `archived_source_angebot_version`, `archived_source_note`, `archived_source_at`) und einer Migrationstabelle (`projekt_source_migrations` mit `projekt_id`, `original_angebot_id`, `original_angebot_version`, `reason`, `migrated_at`) hinterlegt.

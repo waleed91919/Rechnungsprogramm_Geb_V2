@@ -732,6 +732,123 @@ async function bulkAction(action) {
     }
 }
 
+function getAngebotStatusBadge(ang) {
+    const rawStatus = (ang.angebot_status || ang.status || 'ENTWURF').toUpperCase();
+    switch (rawStatus) {
+        case 'ENTWURF':
+        case 'OFFEN':
+            return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-300">Entwurf</span>';
+        case 'VERSENDET':
+            return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-300">Versendet</span>';
+        case 'ANGENOMMEN':
+            return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-300">Angenommen</span>';
+        case 'ABGELEHNT':
+            return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-rose-50 text-rose-800 border border-rose-300">Abgelehnt</span>';
+        default:
+            return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200">${typeof sanitize === 'function' ? sanitize(rawStatus) : rawStatus}</span>`;
+    }
+}
+window.getAngebotStatusBadge = getAngebotStatusBadge;
+
+window.neueVersionFromDashboard = async function(angId) {
+    const targetId = parseInt(angId, 10) || angId;
+    const existing = (state.angebote || []).find(a => a.id == targetId);
+    if (!existing) {
+        showToast('Angebot nicht gefunden.', 'error');
+        return;
+    }
+    const nextVer = (parseInt(existing.version, 10) || 1) + 1;
+    if (!(await safeConfirm(`Möchten Sie eine neue Verhandlungs-Version (v${nextVer}) auf Basis von ${existing.nr} anlegen?\n\nDie bisherige Version bleibt unverändert gefroren.`))) {
+        return;
+    }
+    try {
+        const newVersionObj = window.AngebotController.createVersion(existing, existing.positionen);
+        const newDocId = await window.api.saveDocument(newVersionObj);
+        const fullState = await window.api.getFullState();
+        if (fullState) {
+            state.angebote = fullState.angebote || [];
+            state.rechnungen = fullState.rechnungen || [];
+        }
+        showToast(`Neue Version ${newVersionObj.nr} (v${newVersionObj.version}) als Entwurf angelegt.`, 'success');
+        if (typeof renderAngebote === 'function') renderAngebote();
+        if (typeof openAngebotModal === 'function') openAngebotModal(newDocId);
+    } catch (err) {
+        console.error('Fehler beim Erstellen der neuen Version:', err);
+        showToast('Fehler beim Erstellen der Version: ' + (err.message || err), 'error');
+    }
+};
+
+window.angebotAnnehmenFromDashboard = async function(angId) {
+    const targetId = parseInt(angId, 10) || angId;
+    const existing = (state.angebote || []).find(a => a.id == targetId);
+    if (!existing) {
+        showToast('Angebot nicht gefunden.', 'error');
+        return;
+    }
+    if (!(await safeConfirm(`Angebot ${existing.nr} (v${existing.version || 1}) verbindlich als ANGENOMMEN markieren?`))) {
+        return;
+    }
+    try {
+        window.AngebotController.acceptAngebot(existing, existing.version);
+        await window.api.saveDocument(existing);
+        const fullState = await window.api.getFullState();
+        if (fullState) {
+            state.angebote = fullState.angebote || [];
+            state.rechnungen = fullState.rechnungen || [];
+        }
+        showToast(`Angebot ${existing.nr} wurde als ANGENOMMEN markiert.`, 'success');
+        if (typeof renderAngebote === 'function') renderAngebote();
+    } catch (err) {
+        console.error('Fehler beim Annehmen des Angebots:', err);
+        showToast('Fehler beim Annehmen: ' + (err.message || err), 'error');
+    }
+};
+
+window.projektAnlegenFromDashboard = async function(angId) {
+    const targetId = parseInt(angId, 10) || angId;
+    const existing = (state.angebote || []).find(a => a.id == targetId);
+    if (!existing) {
+        showToast('Angebot nicht gefunden.', 'error');
+        return;
+    }
+    const sVer = existing.angenommene_version || existing.version || 1;
+    const existingProjekt = (state.projekte || []).find(p => p.source_angebot_id === existing.id && (p.source_angebot_version || 1) === sVer);
+    if (existingProjekt) {
+        showToast(`Für dieses Angebot existiert bereits Projekt #${existingProjekt.id} (${existingProjekt.name}).`, 'info');
+        if (typeof openProjektDetails === 'function') {
+            openProjektDetails(existingProjekt.id);
+        } else if (typeof switchView === 'function') {
+            switchView('projekte');
+        }
+        return;
+    }
+    if (!(await safeConfirm(`Aus Angebot ${existing.nr} (v${sVer}) jetzt ein neues Projekt anlegen?`))) {
+        return;
+    }
+    try {
+        const projektData = window.AngebotController.createProjektFromAngebot(existing, existing.positionen, {
+            name: `Projekt: ${existing.nr} (v${sVer})`
+        });
+        const newProjId = await window.api.saveProjekt(projektData);
+        const fullState = await window.api.getFullState();
+        if (fullState) {
+            state.projekte = fullState.projekte || [];
+            state.angebote = fullState.angebote || [];
+        }
+        showToast(`Projekt #${newProjId} erfolgreich aus Angebot ${existing.nr} angelegt!`, 'success');
+        if (typeof renderAngebote === 'function') renderAngebote();
+        if (typeof renderProjekte === 'function') renderProjekte();
+        if (typeof openProjektDetails === 'function') {
+            openProjektDetails(newProjId);
+        } else if (typeof switchView === 'function') {
+            switchView('projekte');
+        }
+    } catch (err) {
+        console.error('Fehler bei der Projektanlage:', err);
+        showToast('Fehler bei Projektanlage: ' + (err.message || err), 'error');
+    }
+};
+
 function renderAngebote(searchQuery = '') {
     const tbody = document.getElementById('angebote-table-body');
     if (!tbody) return;
@@ -740,81 +857,166 @@ function renderAngebote(searchQuery = '') {
     let offeneAngebote = 0;
 
     const kundenMap = new Map();
-    state.kunden.forEach(k => kundenMap.set(k.id, k));
+    (state.kunden || []).forEach(k => kundenMap.set(k.id, k));
 
-    let sortedAngebote = [...state.angebote].reverse();
+    let sortedAngebote = [...(state.angebote || [])].reverse();
     if (searchQuery) {
         const q = searchQuery.toLowerCase();
         sortedAngebote = sortedAngebote.filter(ang => {
-            const kunde = kundenMap.get(parseInt(ang.kundeId)) || { name: 'Unbekannt' };
-            return ang.nr.toLowerCase().includes(q) || kunde.name.toLowerCase().includes(q) || ang.brutto.toString().includes(q);
+            const kunde = kundenMap.get(parseInt(ang.kundeId, 10)) || { name: 'Unbekannt' };
+            const nrStr = ang.nr ? String(ang.nr).toLowerCase() : '';
+            const kundeName = kunde.name ? String(kunde.name).toLowerCase() : '';
+            const bruttoStr = ang.brutto !== undefined && ang.brutto !== null ? String(ang.brutto) : '';
+            return nrStr.includes(q) || kundeName.includes(q) || bruttoStr.includes(q);
         });
     }
 
     sortedAngebote.forEach(ang => {
-        const kunde = kundenMap.get(parseInt(ang.kundeId)) || { name: 'Unbekannt' };
+        const kunde = kundenMap.get(parseInt(ang.kundeId, 10)) || { name: 'Unbekannt' };
+        const rawStatus = (ang.angebot_status || ang.status || 'ENTWURF').toUpperCase();
 
-        if (ang.status === 'Offen') {
+        if (rawStatus === 'ENTWURF' || rawStatus === 'OFFEN' || rawStatus === 'VERSENDET') {
             offeneAngebote++;
         }
 
-        const dateStr = new Date(ang.datum).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' });
+        const dateStr = ang.datum ? new Date(ang.datum).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+        const isFrozen = Boolean(ang.freeze_snapshot_json || ['VERSENDET', 'ANGENOMMEN', 'ABGELEHNT'].includes(rawStatus));
 
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-blue-50/50 transition-colors group';
 
+        // 1. Angebots-Nr.
         const tdNr = document.createElement('td');
         tdNr.className = 'px-4 py-3 font-medium text-primary';
         tdNr.textContent = ang.nr;
         tr.appendChild(tdNr);
 
+        // 2. Version
+        const tdVersion = document.createElement('td');
+        tdVersion.className = 'px-4 py-3 text-center';
+        const versionNum = ang.version || 1;
+        tdVersion.innerHTML = `<span class="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700 font-mono border border-slate-200">v${versionNum}</span>`;
+        tr.appendChild(tdVersion);
+
+        // 3. Datum
         const tdDate = document.createElement('td');
         tdDate.className = 'px-4 py-3 text-slate-500';
         tdDate.textContent = dateStr;
         tr.appendChild(tdDate);
 
+        // 4. Kunde
         const tdKunde = document.createElement('td');
         tdKunde.className = 'px-4 py-3 font-medium';
         tdKunde.textContent = kunde.name;
         tr.appendChild(tdKunde);
 
+        // 5. Betrag
         const tdBetrag = document.createElement('td');
-        tdBetrag.className = 'px-4 py-3 text-right font-medium';
+        tdBetrag.className = 'px-4 py-3 text-right font-medium text-slate-800 tabular-nums';
         tdBetrag.textContent = formatCurrency(ang.brutto);
         tr.appendChild(tdBetrag);
 
+        // 6. Status
         const tdStatus = document.createElement('td');
         tdStatus.className = 'px-4 py-3 text-center';
-        tdStatus.innerHTML = getStatusBadge(ang.status);
+        tdStatus.innerHTML = getAngebotStatusBadge(ang);
         tr.appendChild(tdStatus);
 
+        // 7. Aktionen
         const tdActions = document.createElement('td');
-        tdActions.className = 'px-4 py-3 text-right w-24';
+        tdActions.className = 'px-4 py-3 text-right w-44';
         const divActions = document.createElement('div');
         divActions.className = 'flex justify-end items-center gap-1';
 
+        // Action: Edit or View
         const btnEdit = document.createElement('button');
         btnEdit.onclick = () => openAngebotModal(ang.id);
         btnEdit.className = 'text-slate-400 hover:text-blue-500 p-1 transition-colors flex items-center justify-center';
-        btnEdit.title = 'Angebot bearbeiten';
-        btnEdit.setAttribute('aria-label', `Angebot ${ang.nr} bearbeiten`);
+        btnEdit.title = isFrozen ? 'Angebot ansehen' : 'Angebot bearbeiten';
+        btnEdit.setAttribute('aria-label', `${btnEdit.title} ${ang.nr}`);
         const spanEdit = document.createElement('span');
         spanEdit.className = 'material-symbols-outlined text-[20px]';
-        spanEdit.textContent = 'edit';
+        spanEdit.textContent = isFrozen ? 'visibility' : 'edit';
         btnEdit.appendChild(spanEdit);
         divActions.appendChild(btnEdit);
 
-        const btnConv = document.createElement('button');
-        btnConv.onclick = () => convertToRechnung(ang.id);
-        btnConv.className = 'text-slate-400 hover:text-emerald-500 p-1 transition-colors flex items-center justify-center';
-        btnConv.title = 'In Rechnung umwandeln';
-        btnConv.setAttribute('aria-label', `Angebot ${ang.nr} in Rechnung umwandeln`);
-        const spanConv = document.createElement('span');
-        spanConv.className = 'material-symbols-outlined text-[20px]';
-        spanConv.textContent = 'post_add';
-        btnConv.appendChild(spanConv);
-        divActions.appendChild(btnConv);
+        // Action for Draft: Versand registrieren (Einfrieren)
+        if (rawStatus === 'ENTWURF' || rawStatus === 'OFFEN') {
+            const btnSend = document.createElement('button');
+            btnSend.onclick = () => openAngebotModal(ang.id);
+            btnSend.className = 'text-slate-400 hover:text-blue-600 p-1 transition-colors flex items-center justify-center';
+            btnSend.title = 'Versand registrieren (Einfrieren)';
+            btnSend.setAttribute('aria-label', `Versand für Angebot ${ang.nr} registrieren`);
+            const spanSend = document.createElement('span');
+            spanSend.className = 'material-symbols-outlined text-[20px]';
+            spanSend.textContent = 'send';
+            btnSend.appendChild(spanSend);
+            divActions.appendChild(btnSend);
+        }
 
+        // Actions for Sent: Neue Version verhandeln & Annehmen
+        if (rawStatus === 'VERSENDET') {
+            const nextV = (parseInt(ang.version, 10) || 1) + 1;
+            const btnVer = document.createElement('button');
+            btnVer.onclick = () => neueVersionFromDashboard(ang.id);
+            btnVer.className = 'text-slate-400 hover:text-amber-600 p-1 transition-colors flex items-center justify-center';
+            btnVer.title = `Neue Version verhandeln (v${nextV})`;
+            btnVer.setAttribute('aria-label', `Neue Version verhandeln für ${ang.nr}`);
+            const spanVer = document.createElement('span');
+            spanVer.className = 'material-symbols-outlined text-[20px]';
+            spanVer.textContent = 'difference';
+            btnVer.appendChild(spanVer);
+            divActions.appendChild(btnVer);
+
+            const btnAccept = document.createElement('button');
+            btnAccept.onclick = () => angebotAnnehmenFromDashboard(ang.id);
+            btnAccept.className = 'text-slate-400 hover:text-emerald-600 p-1 transition-colors flex items-center justify-center';
+            btnAccept.title = 'Angebot annehmen';
+            btnAccept.setAttribute('aria-label', `Angebot ${ang.nr} annehmen`);
+            const spanAccept = document.createElement('span');
+            spanAccept.className = 'material-symbols-outlined text-[20px]';
+            spanAccept.textContent = 'check_circle';
+            btnAccept.appendChild(spanAccept);
+            divActions.appendChild(btnAccept);
+        }
+
+        // Actions for Accepted: Projekt anlegen / Zum Projekt
+        if (rawStatus === 'ANGENOMMEN') {
+            const sVer = ang.angenommene_version || ang.version || 1;
+            const linkedProj = (state.projekte || []).find(p => p.source_angebot_id === ang.id && (p.source_angebot_version || 1) === sVer) ||
+                               (state.projekte || []).find(p => p.source_angebot_id === ang.id || p.angebot_id === ang.id);
+            if (linkedProj) {
+                const btnProj = document.createElement('button');
+                btnProj.onclick = () => {
+                    if (typeof openProjektDetails === 'function') {
+                        openProjektDetails(linkedProj.id);
+                    } else if (typeof switchView === 'function') {
+                        switchView('projekte');
+                    }
+                };
+                btnProj.className = 'text-slate-400 hover:text-indigo-600 p-1 transition-colors flex items-center justify-center';
+                btnProj.title = `Zum verknüpften Projekt #${linkedProj.id}`;
+                btnProj.setAttribute('aria-label', `Zum Projekt von Angebot ${ang.nr}`);
+                const spanProj = document.createElement('span');
+                spanProj.className = 'material-symbols-outlined text-[20px]';
+                spanProj.textContent = 'folder_open';
+                btnProj.appendChild(spanProj);
+                divActions.appendChild(btnProj);
+            } else {
+                const btnNewProj = document.createElement('button');
+                btnNewProj.onclick = () => projektAnlegenFromDashboard(ang.id);
+                btnNewProj.className = 'text-slate-400 hover:text-emerald-600 p-1 transition-colors flex items-center justify-center';
+                btnNewProj.title = 'In Projekt umwandeln';
+                btnNewProj.setAttribute('aria-label', `Angebot ${ang.nr} in Projekt umwandeln`);
+                const spanNewProj = document.createElement('span');
+                spanNewProj.className = 'material-symbols-outlined text-[20px]';
+                spanNewProj.textContent = 'construction';
+                btnNewProj.appendChild(spanNewProj);
+                divActions.appendChild(btnNewProj);
+            }
+        }
+
+        // Action: PDF Generieren / Drucken
         const btnPdf = document.createElement('button');
         btnPdf.onclick = () => generatePdf(ang.id, true);
         btnPdf.className = 'text-slate-400 hover:text-primary p-1 transition-colors flex items-center justify-center';
@@ -831,8 +1033,10 @@ function renderAngebote(searchQuery = '') {
         tbody.appendChild(tr);
     });
 
-    document.getElementById('kpi-angebote-offen').innerText = offeneAngebote;
+    const kpiEl = document.getElementById('kpi-angebote-offen');
+    if (kpiEl) kpiEl.innerText = offeneAngebote;
 }
+window.renderAngebote = renderAngebote;
 
 window.downloadXRechnungXML = async function(invoiceId) {
     const idNum = parseInt(invoiceId);

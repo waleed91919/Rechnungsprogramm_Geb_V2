@@ -91,13 +91,38 @@ async function markAsPaid(id) {
 
 function setupRechnungModalUI() {
     state.isAngebotMode = false;
+    state.isEditorReadOnly = false;
     document.getElementById('rechnung-modal-title').innerText = 'Neue Rechnung erstellen';
     document.getElementById('rechnungsdetails-title').innerText = 'Rechnungsdetails';
     document.getElementById('rechnung-nr-label').innerText = 'Rechnungsnummer';
     document.getElementById('rechnung-datum-label').innerText = 'Rechnungsdatum';
     const faelligLabel = document.getElementById('rechnung-faellig-label');
     if (faelligLabel) faelligLabel.innerText = 'Fälligkeitsdatum';
-    document.getElementById('rechnung-modal-submit-text').innerText = 'Rechnung Speichern';
+
+    const verBadge = document.getElementById('rechnung-modal-version');
+    if (verBadge) verBadge.classList.add('hidden');
+    const modalStatus = document.getElementById('rechnung-modal-status');
+    if (modalStatus) {
+        modalStatus.className = 'inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200';
+        modalStatus.textContent = 'Entwurf';
+    }
+    const metaSection = document.getElementById('angebot-metadaten-section');
+    if (metaSection) metaSection.classList.add('hidden');
+
+    const leftActions = document.getElementById('angebot-modal-actions-left');
+    if (leftActions) leftActions.innerHTML = '';
+    const rightActions = document.getElementById('rechnung-modal-actions-right');
+    if (rightActions) {
+        rightActions.innerHTML = `
+            <button onclick="closeRechnungModal()" type="button" id="rechnung-modal-cancel"
+                class="px-5 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-all focus:ring-2 focus:ring-slate-200">Abbrechen</button>
+            <button onclick="saveRechnung()" type="button" id="rechnung-modal-submit"
+                class="px-6 py-2.5 text-sm font-semibold text-white bg-primary rounded-lg hover:bg-primary-dark shadow-md hover:shadow-lg transition-all active:scale-[0.98] focus:ring-2 focus:ring-primary/50 flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px]">save</span>
+                <span id="rechnung-modal-submit-text">Rechnung Speichern</span>
+            </button>
+        `;
+    }
 
     // Update Status Label and Options for Rechnung
     const statusLabel = document.getElementById('rechnungsstatus-label');
@@ -634,26 +659,72 @@ function openRechnungModal() {
     applyUnternehmensartVisibility();
 }
 
+function handleAngebotMetaChange() {
+    const vg = document.getElementById('angebot-vertragsgrundlage')?.value;
+    const alertBox = document.getElementById('bgb-650m-alert-box');
+    if (alertBox) {
+        if (vg === 'BGB_VERBRAUCHERBAU') {
+            alertBox.classList.remove('hidden');
+        } else {
+            alertBox.classList.add('hidden');
+        }
+    }
+}
+window.handleAngebotMetaChange = handleAngebotMetaChange;
+
 function setupAngebotModalUI() {
     state.isAngebotMode = true;
+    state.isEditorReadOnly = false;
     document.getElementById('rechnung-modal-title').innerText = 'Neues Angebot erstellen';
     document.getElementById('rechnungsdetails-title').innerText = 'Angebotsdetails';
     document.getElementById('rechnung-nr-label').innerText = 'Angebotsnummer';
     document.getElementById('rechnung-datum-label').innerText = 'Angebotsdatum';
     const faelligLabel = document.getElementById('rechnung-faellig-label');
     if (faelligLabel) faelligLabel.innerText = 'Gültig bis';
-    document.getElementById('rechnung-modal-submit-text').innerText = 'Angebot Speichern';
 
-    // Update Status Label and Options for Angebot
+    // Header Badges
+    const verBadge = document.getElementById('rechnung-modal-version');
+    if (verBadge) {
+        verBadge.classList.remove('hidden');
+        verBadge.textContent = 'v1';
+    }
+    const modalStatus = document.getElementById('rechnung-modal-status');
+    if (modalStatus) {
+        modalStatus.className = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200';
+        modalStatus.innerHTML = '<span class="material-symbols-outlined text-[14px]">edit_document</span>ENTWURF';
+    }
+
+    // Angebots-Metadaten Section
+    const metaSection = document.getElementById('angebot-metadaten-section');
+    if (metaSection) {
+        metaSection.classList.remove('hidden');
+        const selAuftraggeber = document.getElementById('angebot-auftraggeber-typ');
+        if (selAuftraggeber) {
+            selAuftraggeber.disabled = false;
+            selAuftraggeber.value = 'PRIVAT';
+        }
+        const selVertrag = document.getElementById('angebot-vertragsgrundlage');
+        if (selVertrag) {
+            selVertrag.disabled = false;
+            selVertrag.value = 'BGB_WERKVERTRAG';
+        }
+        const alertBox = document.getElementById('bgb-650m-alert-box');
+        if (alertBox) alertBox.classList.add('hidden');
+        const freezeBadge = document.getElementById('angebot-freeze-badge');
+        if (freezeBadge) freezeBadge.classList.add('hidden');
+    }
+
+    // Status select for offer
     const statusLabel = document.getElementById('rechnungsstatus-label');
     if (statusLabel) statusLabel.innerText = 'Angebotsstatus';
     const statusSelect = document.getElementById('rechnung-status');
     if (statusSelect) {
         statusSelect.innerHTML = '';
         const options = [
-            { value: 'Offen', label: 'Offen', selected: true },
-            { value: 'Angenommen', label: 'Angenommen' },
-            { value: 'Abgelehnt', label: 'Abgelehnt' }
+            { value: 'ENTWURF', label: 'ENTWURF', selected: true },
+            { value: 'VERSENDET', label: 'VERSENDET' },
+            { value: 'ANGENOMMEN', label: 'ANGENOMMEN' },
+            { value: 'ABGELEHNT', label: 'ABGELEHNT' }
         ];
         options.forEach(optData => {
             const opt = document.createElement('option');
@@ -682,19 +753,207 @@ function setupAngebotModalUI() {
     detailsBox.appendChild(pNoKunde);
 
     populateSelects();
+    updateAngebotModalFooter('ENTWURF', null);
+}
+
+function updateAngebotModalFooter(angStatus, existing) {
+    const leftActions = document.getElementById('angebot-modal-actions-left');
+    const rightActions = document.getElementById('rechnung-modal-actions-right');
+    if (!leftActions || !rightActions) return;
+
+    leftActions.innerHTML = '';
+    rightActions.innerHTML = '';
+
+    const statusNorm = (angStatus || existing?.angebot_status || 'ENTWURF').toUpperCase().trim();
+    const ver = existing?.version || 1;
+
+    if (statusNorm === 'ENTWURF' || statusNorm === 'OFFEN') {
+        // Bei ENTWURF:
+        leftActions.innerHTML = `
+            <button type="button" onclick="previewAngebotPdf()"
+                class="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 flex items-center gap-1.5 shadow-sm transition-all">
+                <span class="material-symbols-outlined text-[18px] text-slate-500">visibility</span>
+                PDF Vorschau
+            </button>
+        `;
+
+        rightActions.innerHTML = `
+            <button onclick="closeRechnungModal()" type="button"
+                class="px-5 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-all focus:ring-2 focus:ring-slate-200">Abbrechen</button>
+            <button onclick="saveAngebotEntwurf()" type="button" id="btn-angebot-save-draft"
+                class="px-5 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 shadow-sm transition-all flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px]">save</span>
+                Entwurf speichern
+            </button>
+            <button onclick="registerAngebotVersand()" type="button" id="btn-angebot-freeze-send"
+                class="px-6 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px]">lock</span>
+                Versand registrieren (Einfrieren)
+            </button>
+        `;
+    } else if (statusNorm === 'VERSENDET') {
+        // Bei VERSENDET (Gefroren):
+        leftActions.innerHTML = `
+            <button type="button" onclick="previewAngebotPdf()"
+                class="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 flex items-center gap-1.5 shadow-sm transition-all">
+                <span class="material-symbols-outlined text-[18px] text-primary">picture_as_pdf</span>
+                PDF anzeigen
+            </button>
+            <button type="button" onclick="createNextAngebotVersion()" id="btn-angebot-new-version"
+                class="px-4 py-2 text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 flex items-center gap-1.5 shadow-sm transition-all">
+                <span class="material-symbols-outlined text-[18px]">difference</span>
+                Neue Version erstellen (v${ver + 1})
+            </button>
+        `;
+
+        rightActions.innerHTML = `
+            <button onclick="closeRechnungModal()" type="button"
+                class="px-5 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-all focus:ring-2 focus:ring-slate-200">Schließen</button>
+            <button onclick="rejectAngebotFromModal()" type="button" id="btn-angebot-reject"
+                class="px-4 py-2.5 text-sm font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 shadow-sm transition-all flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[18px]">cancel</span>
+                Angebot ablehnen
+            </button>
+            <button onclick="acceptAngebotFromModal()" type="button" id="btn-angebot-accept"
+                class="px-6 py-2.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2">
+                <span class="material-symbols-outlined text-[18px]">check_circle</span>
+                Angebot annehmen
+            </button>
+        `;
+    } else if (statusNorm === 'ANGENOMMEN') {
+        // Bei ANGENOMMEN:
+        leftActions.innerHTML = `
+            <button type="button" onclick="previewAngebotPdf()"
+                class="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 flex items-center gap-1.5 shadow-sm transition-all">
+                <span class="material-symbols-outlined text-[18px] text-primary">picture_as_pdf</span>
+                PDF anzeigen
+            </button>
+        `;
+
+        const acceptedVer = existing?.angenommene_version || existing?.version || 1;
+        const existingProjekt = (state.projekte || []).find(p => p.source_angebot_id === existing?.id && (p.source_angebot_version || 1) === acceptedVer);
+
+        let projBtnHtml = '';
+        if (existingProjekt) {
+            projBtnHtml = `
+                <button type="button" onclick="navigateToAngebotProjekt(${existingProjekt.id})"
+                    class="px-6 py-2.5 text-sm font-semibold text-white bg-primary hover:bg-primary-dark rounded-lg shadow-md flex items-center gap-2 transition-all">
+                    <span class="material-symbols-outlined text-[18px]">folder_open</span>
+                    Zum Projekt (#${existingProjekt.id})
+                </button>
+            `;
+        } else {
+            projBtnHtml = `
+                <button type="button" onclick="createProjektFromAngebotModal()" id="btn-angebot-create-project"
+                    class="px-6 py-2.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2">
+                    <span class="material-symbols-outlined text-[18px]">construction</span>
+                    In Projekt umwandeln / Projekt anlegen
+                </button>
+            `;
+        }
+
+        rightActions.innerHTML = `
+            <button onclick="closeRechnungModal()" type="button"
+                class="px-5 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-all focus:ring-2 focus:ring-slate-200">Schließen</button>
+            ${projBtnHtml}
+        `;
+    } else if (statusNorm === 'ABGELEHNT') {
+        // Bei ABGELEHNT:
+        leftActions.innerHTML = `
+            <button type="button" onclick="previewAngebotPdf()"
+                class="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 flex items-center gap-1.5 shadow-sm transition-all">
+                <span class="material-symbols-outlined text-[18px] text-primary">picture_as_pdf</span>
+                PDF anzeigen
+            </button>
+            <button type="button" onclick="createNextAngebotVersion()"
+                class="px-4 py-2 text-sm font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 flex items-center gap-1.5 shadow-sm transition-all">
+                <span class="material-symbols-outlined text-[18px]">difference</span>
+                Neue Version verhandeln
+            </button>
+        `;
+        rightActions.innerHTML = `
+            <button onclick="closeRechnungModal()" type="button"
+                class="px-5 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-all focus:ring-2 focus:ring-slate-200">Schließen</button>
+        `;
+    }
 }
 
 function applyAngebotEditMode(existing, form, submitBtn) {
-    document.getElementById('rechnung-modal-title').innerText = 'Angebot Bearbeiten';
+    const rawStatus = (existing.angebot_status || (existing.status === 'Entwurf' ? 'ENTWURF' : existing.status) || 'ENTWURF').toUpperCase().trim();
+    const angStatus = rawStatus === 'OFFEN' ? 'ENTWURF' : rawStatus;
+    const isFrozen = (angStatus === 'VERSENDET' || angStatus === 'ANGENOMMEN' || angStatus === 'ABGELEHNT' || Boolean(existing.freeze_snapshot_json));
+    state.isEditorReadOnly = isFrozen;
 
-    // Un-disable inputs
+    // Header Title
+    document.getElementById('rechnung-modal-title').innerText = isFrozen ? `Angebot ansehen (${existing.nr || ''})` : 'Angebot Bearbeiten';
+
+    // Header Badges
+    const verBadge = document.getElementById('rechnung-modal-version');
+    if (verBadge) {
+        verBadge.classList.remove('hidden');
+        verBadge.textContent = 'v' + (existing.version || 1);
+    }
+    const modalStatus = document.getElementById('rechnung-modal-status');
+    if (modalStatus) {
+        if (angStatus === 'VERSENDET') {
+            modalStatus.className = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200';
+            modalStatus.innerHTML = '<span class="material-symbols-outlined text-[14px]">lock</span>VERSENDET (Gefroren)';
+        } else if (angStatus === 'ANGENOMMEN') {
+            modalStatus.className = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200';
+            modalStatus.innerHTML = '<span class="material-symbols-outlined text-[14px]">check_circle</span>ANGENOMMEN';
+        } else if (angStatus === 'ABGELEHNT') {
+            modalStatus.className = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 border border-red-200';
+            modalStatus.innerHTML = '<span class="material-symbols-outlined text-[14px]">cancel</span>ABGELEHNT';
+        } else {
+            modalStatus.className = 'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200';
+            modalStatus.innerHTML = '<span class="material-symbols-outlined text-[14px]">edit_document</span>ENTWURF';
+        }
+    }
+
+    // Angebots-Metadaten Section
+    const metaSection = document.getElementById('angebot-metadaten-section');
+    if (metaSection) {
+        metaSection.classList.remove('hidden');
+        const selAuftraggeber = document.getElementById('angebot-auftraggeber-typ');
+        if (selAuftraggeber) {
+            selAuftraggeber.disabled = isFrozen;
+            selAuftraggeber.value = existing.auftraggeber_typ || 'PRIVAT';
+        }
+        const selVertrag = document.getElementById('angebot-vertragsgrundlage');
+        if (selVertrag) {
+            selVertrag.disabled = isFrozen;
+            selVertrag.value = existing.vertragsgrundlage || 'BGB_WERKVERTRAG';
+        }
+        const alertBox = document.getElementById('bgb-650m-alert-box');
+        if (alertBox) {
+            if (existing.vertragsgrundlage === 'BGB_VERBRAUCHERBAU') alertBox.classList.remove('hidden');
+            else alertBox.classList.add('hidden');
+        }
+        const freezeBadge = document.getElementById('angebot-freeze-badge');
+        if (freezeBadge) {
+            if (isFrozen) freezeBadge.classList.remove('hidden');
+            else freezeBadge.classList.add('hidden');
+        }
+    }
+
+    // Enable/Disable form inputs
     const inputs = form.querySelectorAll('input, select, textarea');
-    inputs.forEach(el => el.disabled = false);
+    inputs.forEach(el => {
+        el.disabled = isFrozen;
+        if (isFrozen) {
+            el.classList.add('cursor-not-allowed');
+        } else {
+            el.classList.remove('cursor-not-allowed');
+        }
+    });
 
-    submitBtn.classList.remove('hidden');
     const addRowBtn = form.querySelector('button[onclick="addRechnungPosition()"]');
-    if (addRowBtn) addRowBtn.classList.remove('hidden');
+    if (addRowBtn) {
+        if (isFrozen) addRowBtn.classList.add('hidden');
+        else addRowBtn.classList.remove('hidden');
+    }
 
+    // Fill form values
     document.getElementById('rechnung-id').value = existing.id;
     document.getElementById('rechnung-kunde').value = existing.kundeId;
     document.getElementById('rechnung-projekt').value = existing.projektId || '';
@@ -704,14 +963,17 @@ function applyAngebotEditMode(existing, form, submitBtn) {
     document.getElementById('rechnung-faellig').value = typeof formatDateISO === 'function' ? formatDateISO(existing.faellig) : existing.faellig;
     const wTageAng = document.getElementById('rechnung-werktage');
     if (wTageAng) {
-        wTageAng.disabled = false;
+        wTageAng.disabled = isFrozen;
         if (existing.datum && existing.faellig && typeof countWorkingDaysBetween === 'function') {
             wTageAng.value = countWorkingDaysBetween(existing.datum, existing.faellig);
         }
     }
     if (typeof initRechnungDateHandlers === 'function') initRechnungDateHandlers();
     if (typeof updateRechnungDatePreviews === 'function') updateRechnungDatePreviews();
-    document.getElementById('rechnung-status').value = existing.status;
+
+    const statusSelect = document.getElementById('rechnung-status');
+    if (statusSelect) statusSelect.value = angStatus;
+
     if (existing.eingabemodus) {
         setEingabeModus(existing.eingabemodus);
     }
@@ -719,17 +981,16 @@ function applyAngebotEditMode(existing, form, submitBtn) {
     setRabattType(existing.globalRabattType || '%');
     document.getElementById('rechnung-anzahlung').value = existing.anzahlung || '';
 
-    state.currentRechnungPositionen = JSON.parse(JSON.stringify(existing.positionen));
+    state.currentRechnungPositionen = JSON.parse(JSON.stringify(existing.positionen || []));
 
     handleKundeSelect({ target: { value: existing.kundeId } });
     renderRechnungPositionen();
 
-    // Show delete buttons
-    const delBtns = document.getElementById('rechnung-positionen').querySelectorAll('button');
-    delBtns.forEach(b => b.classList.remove('hidden'));
+    updateAngebotModalFooter(angStatus, existing);
 }
 
 function applyAngebotNewMode() {
+    state.isEditorReadOnly = false;
     const today = new Date();
     const todayIso = typeof formatDateISO === 'function' ? formatDateISO(today) : today.toISOString().split('T')[0];
     document.getElementById('rechnung-datum').value = todayIso;
@@ -753,7 +1014,391 @@ function applyAngebotNewMode() {
     document.getElementById('rechnung-nr').value = nextNr;
 
     renderRechnungPositionen(); // Empty initially
+    updateAngebotModalFooter('ENTWURF', null);
 }
+
+function collectAngebotFormData() {
+    const existingIdVal = document.getElementById('rechnung-id')?.value;
+    const existingId = existingIdVal ? parseInt(existingIdVal, 10) : null;
+    const existing = existingId ? (state.angebote || []).find(a => a.id === existingId) : null;
+
+    const kundeId = document.getElementById('rechnung-kunde')?.value || '';
+    const projektId = document.getElementById('rechnung-projekt')?.value || '';
+    const objektWert = document.getElementById('rechnung-objekt')?.value || '';
+    const [objektTyp, objektIdStr] = objektWert ? objektWert.split(':') : [null, null];
+    const rawDatum = document.getElementById('rechnung-datum')?.value || '';
+    const rawFaellig = document.getElementById('rechnung-faellig')?.value || '';
+    const datum = typeof formatDateISO === 'function' ? (formatDateISO(rawDatum) || formatDateISO(new Date())) : rawDatum;
+    const faellig = typeof formatDateISO === 'function' ? (formatDateISO(rawFaellig) || datum) : rawFaellig;
+    const nr = document.getElementById('rechnung-nr')?.value || '';
+
+    const auftraggeberTypEl = document.getElementById('angebot-auftraggeber-typ');
+    const vertragsgrundlageEl = document.getElementById('angebot-vertragsgrundlage');
+    const auftraggeber_typ = auftraggeberTypEl ? auftraggeberTypEl.value : (existing?.auftraggeber_typ || 'PRIVAT');
+    const vertragsgrundlage = vertragsgrundlageEl ? vertragsgrundlageEl.value : (existing?.vertragsgrundlage || 'BGB_WERKVERTRAG');
+
+    const positions = (state.currentRechnungPositionen || []).map((p, idx) => ({
+        id: p.id !== undefined ? p.id : null,
+        positionIndex: idx,
+        artikelId: p.artikelId || null,
+        titel: p.titel || null,
+        name: p.name || '',
+        menge: parseFloat(p.menge) || 0,
+        einheit: p.einheit || 'Stk.',
+        preis: (p.preis !== undefined && p.preis !== null && p.preis !== '') ? parseFloat(p.preis) : 0,
+        ek: parseFloat(p.ek) || 0,
+        mwst: p.mwst !== undefined && p.mwst !== null ? parseFloat(p.mwst) : 19,
+        rabatt: parseFloat(p.rabatt) || 0,
+        positionstyp: (p.positionstyp || 'NORMAL').toUpperCase().trim(),
+        in_endsumme_enthalten: window.AngebotController ? window.AngebotController.normalizeInEndsumme(p.in_endsumme_enthalten, p.positionstyp) : 1,
+        bieterangabe_wert: p.bieterangabe_wert || null,
+        oz_code: p.oz_code || null,
+        cost_type: p.cost_type || 'MATERIAL'
+    }));
+
+    const totals = window.AngebotController
+        ? window.AngebotController.calculateTotals(positions)
+        : { netto: 0, steuer: 0, brutto: 0 };
+
+    const doc = {
+        id: existingId,
+        type: 'angebot',
+        nr,
+        datum,
+        faellig,
+        kundeId: kundeId ? parseInt(kundeId, 10) : null,
+        projektId: projektId ? parseInt(projektId, 10) : null,
+        objekt_typ: objektTyp || null,
+        objekt_id: objektIdStr ? parseInt(objektIdStr, 10) : null,
+        positionen: positions,
+        netto: totals.netto,
+        steuer: totals.steuer,
+        brutto: totals.brutto,
+        globalRabattAbzug: 0,
+        globalRabattType: document.getElementById('rechnung-global-rabatt-type')?.value || '%',
+        globalRabattValue: parseFloat(document.getElementById('rechnung-global-rabatt')?.value) || 0,
+        anzahlung: 0,
+        zahlbetrag: totals.brutto,
+        status: existing?.status || 'Entwurf',
+        angebot_status: existing?.angebot_status || 'ENTWURF',
+        version: existing?.version || 1,
+        parent_angebot_id: existing?.parent_angebot_id || null,
+        freeze_snapshot_json: existing?.freeze_snapshot_json || null,
+        auftraggeber_typ,
+        vertragsgrundlage,
+        vergabe_verfahren: existing?.vergabe_verfahren || 'DIREKT',
+        angenommen_am: existing?.angenommen_am || null,
+        angenommene_version: existing?.angenommene_version || null,
+        vortext: document.getElementById('rechnung-vortext')?.value || '',
+        fusstext: document.getElementById('rechnung-fusstext')?.value || '',
+        skonto_tage: document.getElementById('rechnung-skonto-tage')?.value ? parseInt(document.getElementById('rechnung-skonto-tage').value, 10) : null,
+        skonto_prozent: document.getElementById('rechnung-skonto-prozent')?.value ? parseFloat(document.getElementById('rechnung-skonto-prozent').value) : null,
+        isLocked: existing?.isLocked || false
+    };
+
+    return { doc, positions };
+}
+
+async function saveAngebotEntwurf() {
+    const { doc, positions } = collectAngebotFormData();
+    if (!doc.nr || !doc.nr.trim()) {
+        showToast('Bitte geben Sie eine Angebotsnummer an.', 'error');
+        return;
+    }
+    if (!doc.kundeId) {
+        showToast('Bitte wählen Sie einen Kunden aus.', 'error');
+        return;
+    }
+
+    doc.angebot_status = 'ENTWURF';
+    doc.status = 'Entwurf';
+    doc.freeze_snapshot_json = null;
+
+    try {
+        const model = (window.InvoiceModel && typeof window.InvoiceModel === 'function')
+            ? new window.InvoiceModel(window.api)
+            : window.api;
+        await model.saveDocument(doc);
+        const fullState = await window.api.getFullState();
+        if (fullState) {
+            state.angebote = fullState.angebote || [];
+            state.rechnungen = fullState.rechnungen || [];
+            state.artikel = fullState.artikel || [];
+        }
+        showToast('Angebot erfolgreich als Entwurf gespeichert.', 'success');
+        closeRechnungModal();
+        if (typeof renderAngebote === 'function') renderAngebote();
+    } catch (err) {
+        console.error('Fehler beim Speichern des Entwurfs:', err);
+        showToast('Fehler beim Speichern: ' + (err.message || err), 'error');
+    }
+}
+window.saveAngebotEntwurf = saveAngebotEntwurf;
+
+async function previewAngebotPdf() {
+    const existingIdVal = document.getElementById('rechnung-id')?.value;
+    const existingId = existingIdVal ? parseInt(existingIdVal, 10) : null;
+    let angebot = existingId ? (state.angebote || []).find(a => a.id === existingId) : null;
+
+    if (!angebot) {
+        const { doc } = collectAngebotFormData();
+        if (!doc.kundeId) {
+            showToast('Bitte wählen Sie vor der Vorschau einen Kunden aus.', 'error');
+            return;
+        }
+        doc.angebot_status = 'ENTWURF';
+        doc.status = 'Entwurf';
+        try {
+            const savedId = await window.api.saveDocument(doc);
+            const fullState = await window.api.getFullState();
+            if (fullState) state.angebote = fullState.angebote || [];
+            angebot = (state.angebote || []).find(a => a.id === savedId);
+            const idInput = document.getElementById('rechnung-id');
+            if (idInput) idInput.value = savedId;
+        } catch (err) {
+            showToast('Fehler bei Vorbereitung der PDF-Vorschau: ' + err.message, 'error');
+            return;
+        }
+    }
+
+    // Explizit: Status MUSS Entwurf bleiben und Freeze-Snapshot null
+    if (angebot && (angebot.angebot_status === 'ENTWURF' || !angebot.freeze_snapshot_json)) {
+        angebot.angebot_status = 'ENTWURF';
+        angebot.status = 'Entwurf';
+        angebot.freeze_snapshot_json = null;
+    }
+
+    if (typeof window.generatePdf === 'function') {
+        await window.generatePdf(angebot.id, true);
+    }
+}
+window.previewAngebotPdf = previewAngebotPdf;
+
+async function registerAngebotVersand() {
+    const { doc, positions } = collectAngebotFormData();
+    if (!doc.nr || !doc.nr.trim()) {
+        showToast('Bitte geben Sie eine Angebotsnummer an.', 'error');
+        return;
+    }
+    if (!doc.kundeId) {
+        showToast('Bitte wählen Sie einen Kunden aus.', 'error');
+        return;
+    }
+
+    // 1. Risikoprüfung via AngebotController
+    const validation = window.AngebotController.validateAngebot(doc, positions);
+    if (!validation.valid) {
+        const errorMessages = validation.errors.map(e => `• ${e.message}`).join('\n');
+        await safeAlert(`Prüfung fehlgeschlagen - Angebot kann nicht versendet werden:\n\n${errorMessages}`);
+        return;
+    }
+
+    // 2. Warnungen / Bestätigungen (z.B. 0,00 € Positionen oder BGB § 650m Hinweis)
+    let confirmPrompt = 'Möchten Sie dieses Angebot jetzt verbindlich einfrieren und den Versand registrieren?\n\nNach dem Versand ist das Angebot schreibgeschützt und Änderungen erfordern eine neue Version.';
+    const details = [];
+    if (validation.warnings && validation.warnings.length > 0) {
+        details.push('Warnungen:');
+        validation.warnings.forEach(w => details.push(`• ${w.message}`));
+    }
+    if (validation.hinweise && validation.hinweise.length > 0) {
+        details.push('\nHinweise:');
+        validation.hinweise.forEach(h => details.push(`• ${h.message}`));
+    }
+
+    if (details.length > 0) {
+        confirmPrompt = `Baurechtliche & kalkulatorische Prüfung:\n\n${details.join('\n')}\n\n${confirmPrompt}`;
+    }
+
+    const confirmed = await safeConfirm(confirmPrompt);
+    if (!confirmed) return;
+
+    // 3. Wenn noch keine ID (neues Angebot), zuerst Entwurf speichern
+    let targetDocId = doc.id;
+    if (!targetDocId) {
+        doc.angebot_status = 'ENTWURF';
+        doc.status = 'Entwurf';
+        targetDocId = await window.api.saveDocument(doc);
+        doc.id = targetDocId;
+    }
+
+    // 4. Freeze Snapshot erstellen & Status auf VERSENDET setzen
+    window.AngebotController.freezeAngebot(doc, positions);
+
+    try {
+        await window.api.saveDocument(doc);
+        const fullState = await window.api.getFullState();
+        if (fullState) {
+            state.angebote = fullState.angebote || [];
+            state.rechnungen = fullState.rechnungen || [];
+            state.artikel = fullState.artikel || [];
+        }
+        showToast(`Angebot ${doc.nr} (v${doc.version || 1}) wurde erfolgreich eingefroren und versendet.`, 'success');
+        closeRechnungModal();
+        if (typeof renderAngebote === 'function') renderAngebote();
+    } catch (err) {
+        console.error('Fehler beim Einfrieren/Versenden:', err);
+        showToast('Fehler beim Einfrieren: ' + (err.message || err), 'error');
+    }
+}
+window.registerAngebotVersand = registerAngebotVersand;
+
+async function createNextAngebotVersion() {
+    const existingIdVal = document.getElementById('rechnung-id')?.value;
+    const existingId = existingIdVal ? parseInt(existingIdVal, 10) : null;
+    const existing = existingId ? (state.angebote || []).find(a => a.id === existingId) : null;
+
+    if (!existing) {
+        showToast('Kein bestehendes Angebot zum Versionieren gefunden.', 'error');
+        return;
+    }
+
+    const nextVer = (parseInt(existing.version, 10) || 1) + 1;
+    if (!(await safeConfirm(`Möchten Sie eine neue Verhandlungs-Version (v${nextVer}) auf Basis von ${existing.nr} anlegen?\n\nDie bisherige Version bleibt unverändert gefroren.`))) {
+        return;
+    }
+
+    try {
+        const newVersionObj = window.AngebotController.createVersion(existing, existing.positionen);
+        const newDocId = await window.api.saveDocument(newVersionObj);
+        const fullState = await window.api.getFullState();
+        if (fullState) {
+            state.angebote = fullState.angebote || [];
+            state.rechnungen = fullState.rechnungen || [];
+        }
+        showToast(`Neue Version ${newVersionObj.nr} (v${newVersionObj.version}) als Entwurf angelegt.`, 'success');
+        closeRechnungModal();
+        if (typeof renderAngebote === 'function') renderAngebote();
+        openAngebotModal(newDocId);
+    } catch (err) {
+        console.error('Fehler beim Erstellen der neuen Version:', err);
+        showToast('Fehler beim Erstellen der Version: ' + (err.message || err), 'error');
+    }
+}
+window.createNextAngebotVersion = createNextAngebotVersion;
+
+async function acceptAngebotFromModal() {
+    const existingIdVal = document.getElementById('rechnung-id')?.value;
+    const existingId = existingIdVal ? parseInt(existingIdVal, 10) : null;
+    const existing = existingId ? (state.angebote || []).find(a => a.id === existingId) : null;
+
+    if (!existing) {
+        showToast('Kein Angebot gefunden.', 'error');
+        return;
+    }
+
+    if (!(await safeConfirm(`Angebot ${existing.nr} (v${existing.version || 1}) verbindlich als ANGENOMMEN markieren?`))) {
+        return;
+    }
+
+    try {
+        window.AngebotController.acceptAngebot(existing, existing.version);
+        await window.api.saveDocument(existing);
+        const fullState = await window.api.getFullState();
+        if (fullState) {
+            state.angebote = fullState.angebote || [];
+            state.rechnungen = fullState.rechnungen || [];
+        }
+        showToast(`Angebot ${existing.nr} wurde als ANGENOMMEN markiert.`, 'success');
+        const updated = (state.angebote || []).find(a => a.id === existing.id);
+        const form = document.getElementById('rechnung-form');
+        const submitBtn = document.getElementById('rechnung-modal-submit');
+        applyAngebotEditMode(updated, form, submitBtn);
+        if (typeof renderAngebote === 'function') renderAngebote();
+    } catch (err) {
+        console.error('Fehler beim Annehmen des Angebots:', err);
+        showToast('Fehler beim Annehmen: ' + (err.message || err), 'error');
+    }
+}
+window.acceptAngebotFromModal = acceptAngebotFromModal;
+
+async function rejectAngebotFromModal() {
+    const existingIdVal = document.getElementById('rechnung-id')?.value;
+    const existingId = existingIdVal ? parseInt(existingIdVal, 10) : null;
+    const existing = existingId ? (state.angebote || []).find(a => a.id === existingId) : null;
+
+    if (!existing) return;
+
+    if (!(await safeConfirm(`Angebot ${existing.nr} als ABGELEHNT markieren?`))) {
+        return;
+    }
+
+    try {
+        existing.angebot_status = 'ABGELEHNT';
+        existing.status = 'Abgelehnt';
+        await window.api.saveDocument(existing);
+        const fullState = await window.api.getFullState();
+        if (fullState) {
+            state.angebote = fullState.angebote || [];
+        }
+        showToast(`Angebot ${existing.nr} wurde als ABGELEHNT markiert.`, 'info');
+        const updated = (state.angebote || []).find(a => a.id === existing.id);
+        const form = document.getElementById('rechnung-form');
+        const submitBtn = document.getElementById('rechnung-modal-submit');
+        applyAngebotEditMode(updated, form, submitBtn);
+        if (typeof renderAngebote === 'function') renderAngebote();
+    } catch (err) {
+        console.error('Fehler beim Ablehnen des Angebots:', err);
+        showToast('Fehler beim Ablehnen: ' + (err.message || err), 'error');
+    }
+}
+window.rejectAngebotFromModal = rejectAngebotFromModal;
+
+async function createProjektFromAngebotModal() {
+    const existingIdVal = document.getElementById('rechnung-id')?.value;
+    const existingId = existingIdVal ? parseInt(existingIdVal, 10) : null;
+    const existing = existingId ? (state.angebote || []).find(a => a.id === existingId) : null;
+
+    if (!existing) {
+        showToast('Kein Angebot gefunden.', 'error');
+        return;
+    }
+
+    const sVer = existing.angenommene_version || existing.version || 1;
+    const existingProjekt = (state.projekte || []).find(p => p.source_angebot_id === existing.id && (p.source_angebot_version || 1) === sVer);
+    if (existingProjekt) {
+        showToast(`Für dieses Angebot existiert bereits Projekt #${existingProjekt.id} (${existingProjekt.name}).`, 'info');
+        return;
+    }
+
+    if (!(await safeConfirm(`Aus Angebot ${existing.nr} (v${sVer}) jetzt ein neues Projekt anlegen?`))) {
+        return;
+    }
+
+    try {
+        const projektData = window.AngebotController.createProjektFromAngebot(existing, existing.positionen, {
+            name: `Projekt: ${existing.nr} (v${sVer})`
+        });
+        const newProjId = await window.api.saveProjekt(projektData);
+        const fullState = await window.api.getFullState();
+        if (fullState) {
+            state.projekte = fullState.projekte || [];
+            state.angebote = fullState.angebote || [];
+        }
+        showToast(`Projekt #${newProjId} erfolgreich aus Angebot ${existing.nr} angelegt!`, 'success');
+        closeRechnungModal();
+        if (typeof renderAngebote === 'function') renderAngebote();
+        if (typeof renderProjekte === 'function') renderProjekte();
+        if (typeof openProjektDetails === 'function') {
+            openProjektDetails(newProjId);
+        } else if (typeof switchView === 'function') {
+            switchView('projekte');
+        }
+    } catch (err) {
+        console.error('Fehler bei der Projektanlage:', err);
+        showToast('Fehler bei Projektanlage: ' + (err.message || err), 'error');
+    }
+}
+window.createProjektFromAngebotModal = createProjektFromAngebotModal;
+
+function navigateToAngebotProjekt(projId) {
+    closeRechnungModal();
+    if (typeof openProjektDetails === 'function') {
+        openProjektDetails(projId);
+    } else if (typeof switchView === 'function') {
+        switchView('projekte');
+    }
+}
+window.navigateToAngebotProjekt = navigateToAngebotProjekt;
 
 function openAngebotModal() {
     setupAngebotModalUI();
@@ -763,8 +1408,9 @@ function openAngebotModal() {
 
     let existing = null;
     // Check if we passed an ID for editing
-    if (arguments.length > 0 && typeof arguments[0] === 'number') {
-        existing = state.angebote.find(a => a.id === arguments[0]);
+    if (arguments.length > 0 && arguments[0] !== undefined && arguments[0] !== null) {
+        const targetId = parseInt(arguments[0], 10) || arguments[0];
+        existing = (state.angebote || []).find(a => a.id == targetId);
         if (existing) {
             applyAngebotEditMode(existing, form, submitBtn);
         } else {
@@ -1250,12 +1896,18 @@ function handlePositionChange(id, field, value) {
         }
     } else if (field === 'rabatt') {
         pos.rabatt = Math.max(0, Math.min(100, parseFloat(value) || 0)); // Cap 0-100%
+    } else if (field === 'positionstyp') {
+        pos.positionstyp = (value || 'NORMAL').toUpperCase().trim();
+        pos.in_endsumme_enthalten = (pos.positionstyp === 'NORMAL' || pos.positionstyp === 'PAUSCHALE') ? 1 : 0;
+    } else if (field === 'in_endsumme_enthalten') {
+        pos.in_endsumme_enthalten = (value === 1 || value === '1' || value === true) ? 1 : 0;
     }
 
     renderRechnungPositionen();
 }
 
 function createRechnungPositionRow(pos, index) {
+    const isReadOnly = Boolean(state.isEditorReadOnly);
     const tr = document.createElement('tr');
 
     // Index cell
@@ -1279,9 +1931,51 @@ function createRechnungPositionRow(pos, index) {
     inputArt.onchange = (e) => handleArtikelAutocomplete(pos.id, e.target.value);
     inputArt.placeholder = 'Artikel suchen...';
     inputArt.className = 'w-full pl-8 pr-3 py-1.5 border border-slate-300 rounded text-sm focus:ring-1 focus:ring-primary focus:border-primary';
+    if (isReadOnly) {
+        inputArt.disabled = true;
+        inputArt.classList.add('bg-slate-100', 'cursor-not-allowed');
+    }
     divRel.appendChild(spanSearch);
     divRel.appendChild(inputArt);
     tdArt.appendChild(divRel);
+
+    // Positionstyp & In-Endsumme Steuerung (nur im Angebotsmodus)
+    if (state.isAngebotMode) {
+        const divTypeWrapper = document.createElement('div');
+        divTypeWrapper.className = 'mt-1.5 flex items-center gap-3 text-xs text-slate-500';
+
+        const pType = (pos.positionstyp || 'NORMAL').toUpperCase().trim();
+        const inEnd = (pos.in_endsumme_enthalten !== undefined && pos.in_endsumme_enthalten !== null)
+            ? (pos.in_endsumme_enthalten === 1 || pos.in_endsumme_enthalten === '1' || pos.in_endsumme_enthalten === true ? 1 : 0)
+            : ((pType === 'NORMAL' || pType === 'PAUSCHALE') ? 1 : 0);
+
+        const selType = document.createElement('select');
+        selType.className = 'bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 text-xs text-slate-700 font-medium focus:ring-0';
+        selType.disabled = isReadOnly;
+        ['NORMAL', 'PAUSCHALE', 'ALTERNATIV', 'BEDARF'].forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t;
+            opt.textContent = t.charAt(0) + t.slice(1).toLowerCase();
+            if (t === pType) opt.selected = true;
+            selType.appendChild(opt);
+        });
+        selType.onchange = (e) => handlePositionChange(pos.id, 'positionstyp', e.target.value);
+
+        const lblInEnd = document.createElement('label');
+        lblInEnd.className = 'flex items-center gap-1 cursor-pointer select-none';
+        const cbInEnd = document.createElement('input');
+        cbInEnd.type = 'checkbox';
+        cbInEnd.checked = (inEnd === 1);
+        cbInEnd.disabled = isReadOnly;
+        cbInEnd.className = 'rounded border-slate-300 text-primary focus:ring-primary h-3.5 w-3.5';
+        cbInEnd.onchange = (e) => handlePositionChange(pos.id, 'in_endsumme_enthalten', e.target.checked ? 1 : 0);
+        lblInEnd.appendChild(cbInEnd);
+        lblInEnd.appendChild(document.createTextNode(' in Endsumme'));
+
+        divTypeWrapper.appendChild(selType);
+        divTypeWrapper.appendChild(lblInEnd);
+        tdArt.appendChild(divTypeWrapper);
+    }
     tr.appendChild(tdArt);
 
     // Menge cell mit Einheit & Aufmaß-Button
@@ -1300,7 +1994,7 @@ function createRechnungPositionRow(pos, index) {
     inputMenge.min = '0';
     inputMenge.step = 'any';
     inputMenge.value = pos.menge;
-    if (currentEinheit === 'Pauschal') {
+    if (currentEinheit === 'Pauschal' || isReadOnly) {
         inputMenge.disabled = true;
     }
     inputMenge.onblur = (e) => handlePositionChange(pos.id, 'menge', e.target.value);
@@ -1308,6 +2002,7 @@ function createRechnungPositionRow(pos, index) {
 
     const selectEinheit = document.createElement('select');
     selectEinheit.className = 'bg-slate-100 border-l border-r border-slate-300 text-xs px-1.5 py-1.5 font-medium text-slate-700 focus:ring-0 shrink-0 outline-none cursor-pointer';
+    if (isReadOnly) selectEinheit.disabled = true;
     selectEinheit.onchange = (e) => handlePositionChange(pos.id, 'einheit', e.target.value);
 
     const einheitenOptions = ['Stk.', 'm²', 'm³', 'lfm', 'Std.', 'Pauschal'];
@@ -1327,6 +2022,10 @@ function createRechnungPositionRow(pos, index) {
     btnAufmass.type = 'button';
     btnAufmass.title = 'Aufmaß / Mengenberechnung öffnen';
     btnAufmass.className = 'p-1.5 hover:bg-primary hover:text-white text-slate-500 transition-colors flex items-center justify-center shrink-0';
+    if (isReadOnly) {
+        btnAufmass.disabled = true;
+        btnAufmass.classList.add('opacity-40', 'cursor-not-allowed');
+    }
     btnAufmass.innerHTML = '<span class="material-symbols-outlined text-[16px]">straighten</span>';
     btnAufmass.onclick = () => openAufmassModalForPosition(pos.id);
 
@@ -1342,9 +2041,13 @@ function createRechnungPositionRow(pos, index) {
     const inputPreis = document.createElement('input');
     inputPreis.type = 'number';
     inputPreis.step = '0.01';
-    inputPreis.value = pos.preis.toFixed(2);
+    inputPreis.value = pos.preis !== undefined && pos.preis !== null ? pos.preis.toFixed(2) : '0.00';
     inputPreis.onblur = (e) => handlePositionChange(pos.id, 'preis', e.target.value);
     inputPreis.className = 'w-full px-3 py-1.5 border border-slate-300 rounded text-sm text-right focus:ring-1 focus:ring-primary focus:border-primary';
+    if (isReadOnly) {
+        inputPreis.disabled = true;
+        inputPreis.classList.add('bg-slate-100', 'cursor-not-allowed');
+    }
     tdPreis.appendChild(inputPreis);
     tr.appendChild(tdPreis);
 
@@ -1372,7 +2075,7 @@ function createRechnungPositionRow(pos, index) {
         selectMwst.appendChild(opt);
     });
 
-    if (isPos13b) {
+    if (isPos13b || isReadOnly) {
         selectMwst.disabled = true;
         selectMwst.classList.add('opacity-50', 'bg-slate-100', 'cursor-not-allowed');
     }
@@ -1385,12 +2088,13 @@ function createRechnungPositionRow(pos, index) {
         const cb13b = document.createElement('input');
         cb13b.type = 'checkbox';
         cb13b.checked = !!pos.is13b;
+        if (isReadOnly) cb13b.disabled = true;
         cb13b.onchange = (e) => handlePositionChange(pos.id, 'is13b', e.target.checked);
         cb13b.className = 'rounded border-slate-300 text-primary focus:ring-primary h-3 w-3 cursor-pointer';
         const lbl13b = document.createElement('span');
         lbl13b.className = 'text-xs font-semibold text-slate-500 cursor-pointer uppercase tracking-wider';
         lbl13b.textContent = '13b (0%)';
-        lbl13b.onclick = () => cb13b.click();
+        if (!isReadOnly) lbl13b.onclick = () => cb13b.click();
         div13b.appendChild(cb13b);
         div13b.appendChild(lbl13b);
         tdMwst.appendChild(div13b);
@@ -1411,6 +2115,10 @@ function createRechnungPositionRow(pos, index) {
     inputRabatt.value = pos.rabatt;
     inputRabatt.onblur = (e) => handlePositionChange(pos.id, 'rabatt', e.target.value);
     inputRabatt.className = 'w-16 px-2 py-1.5 border border-slate-300 rounded text-sm text-right focus:ring-1 focus:ring-primary focus:border-primary placeholder-slate-300';
+    if (isReadOnly) {
+        inputRabatt.disabled = true;
+        inputRabatt.classList.add('bg-slate-100', 'cursor-not-allowed');
+    }
     inputRabatt.placeholder = '0';
     const spanPct = document.createElement('span');
     spanPct.className = 'text-slate-500 ml-1';
@@ -1433,6 +2141,9 @@ function createRechnungPositionRow(pos, index) {
     btnDel.type = 'button';
     btnDel.onclick = () => removeRechnungPosition(pos.id);
     btnDel.className = 'text-slate-400 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-red-50';
+    if (isReadOnly) {
+        btnDel.classList.add('hidden');
+    }
     const spanDel = document.createElement('span');
     spanDel.className = 'material-symbols-outlined text-[18px]';
     spanDel.textContent = 'close';
@@ -1502,6 +2213,47 @@ window.syncSicherheitseinbehalt = syncSicherheitseinbehalt;
 
 
 function calculateRechnungTotals() {
+    if (state.isAngebotMode && window.AngebotController) {
+        const posList = state.currentRechnungPositionen || [];
+        const totals = window.AngebotController.calculateTotals(posList);
+        state.currentRechnungTotals = {
+            netto: totals.netto,
+            steuer: totals.steuer,
+            brutto: totals.brutto,
+            rabattAbzug: 0,
+            anzahlung: 0,
+            sicherheitseinbehalt: 0,
+            sicherheitseinbehalt_prozent: 0,
+            kumulierte_leistung_netto: totals.netto,
+            zahlbetrag: totals.brutto,
+            netto13b: 0,
+            nettoNormal: totals.netto
+        };
+
+        const nettoEl = document.getElementById('rechnung-netto');
+        if (nettoEl) nettoEl.textContent = formatCurrency(totals.netto);
+        const bruttoEl = document.getElementById('rechnung-brutto');
+        if (bruttoEl) bruttoEl.textContent = formatCurrency(totals.brutto);
+        const zahlbetragEl = document.getElementById('rechnung-zahlbetrag');
+        if (zahlbetragEl) zahlbetragEl.textContent = formatCurrency(totals.brutto);
+        const zwSumEl = document.getElementById('rechnung-zwischensumme');
+        if (zwSumEl) zwSumEl.textContent = formatCurrency(totals.netto);
+        const rabattEl = document.getElementById('rechnung-rabatt-wert');
+        if (rabattEl) rabattEl.textContent = formatCurrency(0);
+
+        const steuerContainer = document.getElementById('rechnung-steuern-container');
+        if (steuerContainer) {
+            steuerContainer.innerHTML = '';
+            for (const [rate, data] of Object.entries(totals.taxBreakdown || {})) {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center text-xs text-slate-500';
+                div.innerHTML = `<span>MwSt. ${rate}% (auf ${formatCurrency(data.base)})</span><span class="font-mono text-slate-700">${formatCurrency(data.tax)}</span>`;
+                steuerContainer.appendChild(div);
+            }
+        }
+        return;
+    }
+
     if (!window.invoiceView && window.InvoiceView) {
         window.invoiceView = new window.InvoiceView(window.formatCurrency);
     }
