@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- GAEB DA XML 3.3 Testdatei 03: Bieterangaben, Vorbemerkungen (Titel- & Positionsebene), EP-Aufgliederung (EFB) -->
+<GAEB xmlns="http://www.gaeb.de/GAEB_DA_XML/DA_XML_3.3">
+  <GAEBInfo>
+    <Version>3.3</Version>
+    <Date>2026-09-28</Date>
+    <Time>09:30:00</Time>
+    <ProgMan>AVA Professional 2026</ProgMan>
+  </GAEBInfo>
+  <Award>
+    <DP>83</DP>
+    <AwardInfo>
+      <Cur>EUR</Cur>
+    </AwardInfo>
+    <BoQ ID="BOQ_03">
+      <BoQInfo>
+        <Name>Modernisierung Rathaus - Technische Gebäudeausrüstung</Name>
+        <LblBoQ>Sanitär- und Entwässerungsanlagen</LblBoQ>
+        <CPN>2026-TGA-03</CPN>
+      </BoQInfo>
+      <BoQBody>
+        <BoQCtgy ID="CTG_01" RNoPart="01">
+          <LblTx>
+            <p><span>01 Sanitärinstallation</span></p>
+          </LblTx>
+          <!-- Vorbemerkung auf Titelebene (Description des BoQCtgy-Knotens) -->
+          <Description>
+            <CompleteText>
+              <DetailTxt>
+                <Text>
+                  <p><span>Vorbemerkung zu Gewerk 01 Sanitär:</span></p>
+                  <p><span>Alle Installationen sind streng nach DIN 1988 und DIN EN 806 auszuführen. Vor Wandverschluss ist eine Druckprobe gemäß ZVSHK-Merkblatt durchzuführen und zu protokollieren.</span></p>
+                  <p><span>Bietertextergänzungen (Fabrikate und Typen) sind zwingend im Angebot auszufüllen. Bei fehlenden Angaben kann das Angebot von der Wertung ausgeschlossen werden.</span></p>
+                </Text>
+              </DetailTxt>
+            </CompleteText>
+          </Description>
+          <BoQBody>
+            <Itemlist>
+              <!-- 1. Hinweistext / Vorbemerkung auf Positionsebene (ohne Menge / Einheit / Preis) -->
+              <Item ID="POS_01_0001" RNoPart="0001" ItemType="Hinweistext">
+                <RNoPart>0001</RNoPart>
+                <OZ>01.0001</OZ>
+                <Description>
+                  <CompleteText>
+                    <DetailTxt>
+                      <Text>
+                        <p><span>Hinweis zur Schallschutzanforderung:</span></p>
+                        <p><span>Es gelten die erhöhten Anforderungen nach DIN 4109 Beiblatt 2 (Schallschutz im Hochbau). Sämtliche Sanitärobjekte und Rohrleitungen sind körperschallentkoppelt zu montieren.</span></p>
+                      </Text>
+                    </DetailTxt>
+                  </CompleteText>
+                  <OutlineText>
+                    <OutlTxt>
+                      <TextOutl><span>Hinweistext: Erhöhter Schallschutz nach DIN 4109</span></TextOutl>
+                    </OutlTxt>
+                  </OutlineText>
+                </Description>
+              </Item>
+
+              <!-- 2. Position mit Bietertextergänzung / Bieterangabe (Fabrikat / Typ) -->
+              <Item ID="POS_01_0010" RNoPart="0010">
+                <RNoPart>0010</RNoPart>
+                <OZ>01.0010</OZ>
+                <Qty>16.000</Qty>
+                <QU>Stk</QU>
+                <Description>
+                  <CompleteText>
+                    <DetailTxt>
+                      <Text>
+                        <p><span>Wandhängendes Tiefspül-WC aus Sanitärkeramik mit spülrandloser Spültechnik liefern und montieren.</span></p>
+                        <p><span>Inklusive abnehmbarem WC-Sitz mit Absenkautomatik (Soft-Close) und Edelstahl-Scharnieren.</span></p>
+                        <p><span>Angebotenes Fabrikat: </span><lblTx><span>....................</span></lblTx></p>
+                        <p><span>Angebotener Typ: </span><lblTx><span>....................</span></lblTx></p>
+                      </Text>
+                    </DetailTxt>
+                  </CompleteText>
+                  <OutlineText>
+                    <OutlTxt>
+                      <TextOutl><span>Wand-WC Tiefspüler barrierefrei</span></TextOutl>
+                    </OutlTxt>
+                  </OutlineText>
+                </Description>
+                <!-- Bieterangaben-Deklaration nach GAEB DA XML 3.3 -->
+                <BiReq>
+                  <BiEl ID="BI_01_0010_01">
+                    <Lbl>Fabrikat</Lbl>
+                  </BiEl>
+                  <BiEl ID="BI_01_0010_02">
+                    <Lbl>Typ</Lbl>
+                  </BiEl>
+                </BiReq>
+              </Item>
+
+              <!-- 3. Position mit geforderter EP-Aufgliederung (EFB 221 / 222 / 223 Anteile: Lohn, Stoff, Gerät, Sonstiges) -->
+              <Item ID="POS_01_0020" RNoPart="0020">
+                <RNoPart>0020</RNoPart>
+                <OZ>01.0020</OZ>
+                <Qty>145.000</Qty>
+                <QU>m</QU>
+                <Description>
+                  <CompleteText>
+                    <DetailTxt>
+                      <Text>
+                        <p><span>Edelstahl-Trinkwasserrohr 1.4401 nach DVGW W534 d=28x1,2 mm im Schutzrohr verlegen.</span></p>
+                        <p><span>Inklusive Formstücke und Pressverbindungen. EP-Aufgliederung nach Formblatt EFB 223 zwingend erforderlich.</span></p>
+                      </Text>
+                    </DetailTxt>
+                  </CompleteText>
+                  <OutlineText>
+                    <OutlTxt>
+                      <TextOutl><span>Edelstahl-Rohr d=28x1,2 mm verlegen</span></TextOutl>
+                    </OutlTxt>
+                  </OutlineText>
+                </Description>
+                <!-- GAEB DA XML 3.3 Struktur für UPComponents -->
+                <UPComponents>
+                  <UPComp Type="Labor">
+                    <UP>28.50</UP>
+                  </UPComp>
+                  <UPComp Type="Material">
+                    <UP>34.20</UP>
+                  </UPComp>
+                  <UPComp Type="Plant">
+                    <UP>4.10</UP>
+                  </UPComp>
+                  <UPComp Type="Misc">
+                    <UP>2.20</UP>
+                  </UPComp>
+                  <!-- Zusätzliche Direkt-Tags für maximale Interoperabilität -->
+                  <Labor>28.50</Labor>
+                  <Material>34.20</Material>
+                  <Plant>4.10</Plant>
+                  <Misc>2.20</Misc>
+                </UPComponents>
+              </Item>
+            </Itemlist>
+          </BoQBody>
+        </BoQCtgy>
+      </BoQBody>
+    </BoQ>
+  </Award>
+</GAEB>

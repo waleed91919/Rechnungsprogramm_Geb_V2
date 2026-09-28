@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- GAEB DA XML 3.3 Testdatei 02: Positionstypen (Normal, Grund/Wahl, Bedarf mit/ohne Gesamtbetrag, Pauschale) -->
+<GAEB xmlns="http://www.gaeb.de/GAEB_DA_XML/DA_XML_3.3">
+  <GAEBInfo>
+    <Version>3.3</Version>
+    <Date>2026-09-28</Date>
+    <Time>09:15:00</Time>
+    <ProgMan>AVA Professional 2026</ProgMan>
+  </GAEBInfo>
+  <Award>
+    <DP>83</DP>
+    <AwardInfo>
+      <Cur>EUR</Cur>
+    </AwardInfo>
+    <BoQ ID="BOQ_02">
+      <BoQInfo>
+        <Name>Umbau und Sanierung Sporthalle Süd</Name>
+        <LblBoQ>Estrich- und Bodenbelagsarbeiten</LblBoQ>
+        <CPN>2026-SP-02</CPN>
+      </BoQInfo>
+      <BoQBody>
+        <BoQCtgy ID="CTG_01" RNoPart="01">
+          <LblTx>
+            <p><span>01 Estricharbeiten</span></p>
+          </LblTx>
+          <BoQBody>
+            <Itemlist>
+              <!-- 1. Normalposition -->
+              <Item ID="POS_01_0010" RNoPart="0010">
+                <RNoPart>0010</RNoPart>
+                <OZ>01.0010</OZ>
+                <Qty>420.000</Qty>
+                <QU>m²</QU>
+                <Description>
+                  <CompleteText>
+                    <DetailTxt>
+                      <Text>
+                        <p><span>Trittschalldämmung EPS 035 DES sm d=30mm liefern und stoßversetzt verlegen.</span></p>
+                      </Text>
+                    </DetailTxt>
+                  </CompleteText>
+                  <OutlineText>
+                    <OutlTxt>
+                      <TextOutl><span>Trittschalldämmung EPS d=30mm</span></TextOutl>
+                    </OutlTxt>
+                  </OutlineText>
+                </Description>
+              </Item>
+
+              <!-- 2. Grundposition (zu Wahlposition 01.0030) -->
+              <Item ID="POS_01_0020" RNoPart="0020" ItemType="Base">
+                <RNoPart>0020</RNoPart>
+                <OZ>01.0020</OZ>
+                <ALNGroup>01</ALNGroup>
+                <ALNSerNo>00</ALNSerNo>
+                <Qty>420.000</Qty>
+                <QU>m²</QU>
+                <Description>
+                  <CompleteText>
+                    <DetailTxt>
+                      <Text>
+                        <p><span>Grundposition zu Pos. 01.0030:</span></p>
+                        <p><span>Zementestrich CT-C25-F4 d=65mm auf Dämmschicht nach DIN 18560 einbauen und glätten.</span></p>
+                      </Text>
+                    </DetailTxt>
+                  </CompleteText>
+                  <OutlineText>
+                    <OutlTxt>
+                      <TextOutl><span>Zementestrich CT-C25-F4 d=65mm (Grundposition)</span></TextOutl>
+                    </OutlTxt>
+                  </OutlineText>
+                </Description>
+              </Item>
+
+              <!-- 3. Wahl-/Alternativposition (gehört zu ALNGroup 01, ALNSerNo 01) -->
+              <Item ID="POS_01_0030" RNoPart="0030" ItemType="Alternative">
+                <RNoPart>0030</RNoPart>
+                <OZ>01.0030</OZ>
+                <ALNGroup>01</ALNGroup>
+                <ALNSerNo>01</ALNSerNo>
+                <Qty>420.000</Qty>
+                <QU>m²</QU>
+                <Description>
+                  <CompleteText>
+                    <DetailTxt>
+                      <Text>
+                        <p><span>Wahlposition zu Pos. 01.0020 (Ausführung nach Entscheidung AG):</span></p>
+                        <p><span>Calciumsulfat-Fließestrich CA-C30-F5 d=50mm mit hoher Frühfestigkeit einbringen.</span></p>
+                      </Text>
+                    </DetailTxt>
+                  </CompleteText>
+                  <OutlineText>
+                    <OutlTxt>
+                      <TextOutl><span>Calciumsulfat-Fließestrich CA-C30-F5 (Wahlposition)</span></TextOutl>
+                    </OutlTxt>
+                  </OutlineText>
+                </Description>
+              </Item>
+
+              <!-- 4. Bedarfsposition MIT Gesamtbetrag (Eventualposition mit Preisbindung und Mengenansatz) -->
+              <Item ID="POS_01_0040" RNoPart="0040" ItemType="EventualWithTotal">
+                <RNoPart>0040</RNoPart>
+                <OZ>01.0040</OZ>
+                <Provis WithTotal="true">true</Provis>
+                <Qty>35.000</Qty>
+                <QU>m²</QU>
+                <Description>
+                  <CompleteText>
+                    <DetailTxt>
+                      <Text>
+                        <p><span>Bedarfsposition mit Gesamtbetrag (Ausführung nur auf gesonderte Anordnung):</span></p>
+                        <p><span>Estrich-Schnelltrocknungszusatz für Belegreife nach 7 Tagen beimischen.</span></p>
+                      </Text>
+                    </DetailTxt>
+                  </CompleteText>
+                  <OutlineText>
+                    <OutlTxt>
+                      <TextOutl><span>Bedarfsposition mit GB: Schnelltrocknungszusatz</span></TextOutl>
+                    </OutlTxt>
+                  </OutlineText>
+                </Description>
+              </Item>
+
+              <!-- 5. Bedarfsposition OHNE Gesamtbetrag (reine Einheitspreis-Abfrage ohne Vorab-Addition) -->
+              <Item ID="POS_01_0050" RNoPart="0050" ItemType="EventualWithoutTotal">
+                <RNoPart>0050</RNoPart>
+                <OZ>01.0050</OZ>
+                <Provis WithTotal="false">true</Provis>
+                <Qty>15.000</Qty>
+                <QU>h</QU>
+                <Description>
+                  <CompleteText>
+                    <DetailTxt>
+                      <Text>
+                        <p><span>Bedarfsposition ohne Gesamtbetrag (wird nicht in Angebotssumme eingerechnet):</span></p>
+                        <p><span>Facharbeiterstunde für zusätzliche Untergrundvorbereitungsarbeiten auf Nachweis.</span></p>
+                      </Text>
+                    </DetailTxt>
+                  </CompleteText>
+                  <OutlineText>
+                    <OutlTxt>
+                      <TextOutl><span>Bedarfsposition ohne GB: Facharbeiterstunde</span></TextOutl>
+                    </OutlTxt>
+                  </OutlineText>
+                </Description>
+              </Item>
+
+              <!-- 6. Pauschalposition -->
+              <Item ID="POS_01_0060" RNoPart="0060">
+                <RNoPart>0060</RNoPart>
+                <OZ>01.0060</OZ>
+                <Qty>1.000</Qty>
+                <QU>Psch</QU>
+                <Description>
+                  <CompleteText>
+                    <DetailTxt>
+                      <Text>
+                        <p><span>Baustellenreinigung und fachgerechte Entsorgung aller Reste und Verpackungen.</span></p>
+                      </Text>
+                    </DetailTxt>
+                  </CompleteText>
+                  <OutlineText>
+                    <OutlTxt>
+                      <TextOutl><span>Baustellenreinigung pauschal</span></TextOutl>
+                    </OutlTxt>
+                  </OutlineText>
+                </Description>
+              </Item>
+            </Itemlist>
+          </BoQBody>
+        </BoQCtgy>
+      </BoQBody>
+    </BoQ>
+  </Award>
+</GAEB>

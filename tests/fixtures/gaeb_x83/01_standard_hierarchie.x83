@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- GAEB DA XML 3.3 Testdatei 01: Standard-Hierarchie mit 3 BoQCtgy-Ebenen und mehrzeiligen Langtexten -->
+<GAEB xmlns="http://www.gaeb.de/GAEB_DA_XML/DA_XML_3.3">
+  <GAEBInfo>
+    <Version>3.3</Version>
+    <Date>2026-09-28</Date>
+    <Time>09:00:00</Time>
+    <ProgMan>AVA Professional 2026</ProgMan>
+  </GAEBInfo>
+  <Award>
+    <DP>83</DP>
+    <AwardInfo>
+      <Cur>EUR</Cur>
+    </AwardInfo>
+    <BoQ ID="BOQ_01">
+      <BoQInfo>
+        <Name>Neubau Verwaltungsgebäude Campus Nord</Name>
+        <LblBoQ>Leistungsverzeichnis 01</LblBoQ>
+        <CPN>2026-LV-01</CPN>
+      </BoQInfo>
+      <BoQBody>
+        <!-- Ebene 1: Gewerk -->
+        <BoQCtgy ID="CTG_01" RNoPart="01">
+          <LblTx>
+            <p><span>01 Rohbauarbeiten</span></p>
+          </LblTx>
+          <BoQBody>
+            <!-- Ebene 2: Abschnitt -->
+            <BoQCtgy ID="CTG_01_01" RNoPart="01">
+              <LblTx>
+                <p><span>Abschnitt 01: Erdarbeiten</span></p>
+              </LblTx>
+              <BoQBody>
+                <!-- Ebene 3: Unterabschnitt -->
+                <BoQCtgy ID="CTG_01_01_01" RNoPart="01">
+                  <LblTx>
+                    <p><span>Unterabschnitt 01: Baugrube</span></p>
+                  </LblTx>
+                  <BoQBody>
+                    <Itemlist>
+                      <!-- Position 01.01.01.0010: m³ -->
+                      <Item ID="POS_01_01_01_0010" RNoPart="0010">
+                        <RNoPart>0010</RNoPart>
+                        <OZ>01.01.01.0010</OZ>
+                        <Qty>350.000</Qty>
+                        <QU>m³</QU>
+                        <Description>
+                          <CompleteText>
+                            <DetailTxt>
+                              <Text>
+                                <p><span>Mutterboden bis 20 cm Dicke im Bereich des Baufeldes abschieben.</span></p>
+                                <p><span>Boden seitlich auf dem Grundstück zur späteren Wiederverwendung in Mieten lagern.</span></p>
+                                <p><span>Bodenklasse 1 bis 3 nach DIN 18300. Abrechnung nach Aufmaß im Urgelände.</span></p>
+                              </Text>
+                            </DetailTxt>
+                          </CompleteText>
+                          <OutlineText>
+                            <OutlTxt>
+                              <TextOutl><span>Mutterboden abtragen d=20cm</span></TextOutl>
+                            </OutlTxt>
+                          </OutlineText>
+                        </Description>
+                      </Item>
+                      <!-- Position 01.01.01.0020: m³ -->
+                      <Item ID="POS_01_01_01_0020" RNoPart="0020">
+                        <RNoPart>0020</RNoPart>
+                        <OZ>01.01.01.0020</OZ>
+                        <Qty>1250.000</Qty>
+                        <QU>m³</QU>
+                        <Description>
+                          <CompleteText>
+                            <DetailTxt>
+                              <Text>
+                                <p><span>Baugrube für Untergeschoss bis zur Unterkante der Sauberkeitsschicht ausheben.</span></p>
+                                <p><span>Aushubmaterial Bodenklasse 3 bis 5 lösen, laden und auf Deponie abtransportieren inkl. Entsorgungsgebühren.</span></p>
+                              </Text>
+                            </DetailTxt>
+                          </CompleteText>
+                          <OutlineText>
+                            <OutlTxt>
+                              <TextOutl><span>Baugrube ausheben BK 3-5</span></TextOutl>
+                            </OutlTxt>
+                          </OutlineText>
+                        </Description>
+                      </Item>
+                    </Itemlist>
+                  </BoQBody>
+                </BoQCtgy>
+
+                <!-- Ebene 3: Unterabschnitt 02 -->
+                <BoQCtgy ID="CTG_01_01_02" RNoPart="02">
+                  <LblTx>
+                    <p><span>Unterabschnitt 02: Wasserhaltung und Entwässerung</span></p>
+                  </LblTx>
+                  <BoQBody>
+                    <Itemlist>
+                      <!-- Position 01.01.02.0010: m² -->
+                      <Item ID="POS_01_01_02_0010" RNoPart="0010">
+                        <RNoPart>0010</RNoPart>
+                        <OZ>01.01.02.0010</OZ>
+                        <Qty>180.000</Qty>
+                        <QU>m²</QU>
+                        <Description>
+                          <CompleteText>
+                            <DetailTxt>
+                              <Text>
+                                <p><span>Spundwand aus Stahlprofilen LARSSEN oder gleichwertig einbringen zur Baugrubensicherung.</span></p>
+                                <p><span>Einbringtiefe im Mittel 6,50 m unter GOK. Vorhalten für die Dauer der Rohbauzeit.</span></p>
+                              </Text>
+                            </DetailTxt>
+                          </CompleteText>
+                          <OutlineText>
+                            <OutlTxt>
+                              <TextOutl><span>Spundwand einbringen und vorhalten</span></TextOutl>
+                            </OutlTxt>
+                          </OutlineText>
+                        </Description>
+                      </Item>
+                      <!-- Position 01.01.02.0020: m -->
+                      <Item ID="POS_01_01_02_0020" RNoPart="0020">
+                        <RNoPart>0020</RNoPart>
+                        <OZ>01.01.02.0020</OZ>
+                        <Qty>85.000</Qty>
+                        <QU>m</QU>
+                        <Description>
+                          <CompleteText>
+                            <DetailTxt>
+                              <Text>
+                                <p><span>Drainagerohr DN 100 aus PP nach DIN 4095 als Ringdrainage liefern und im Filterkiesbett verlegen.</span></p>
+                              </Text>
+                            </DetailTxt>
+                          </CompleteText>
+                          <OutlineText>
+                            <OutlTxt>
+                              <TextOutl><span>Drainagerohr DN 100 verlegen</span></TextOutl>
+                            </OutlTxt>
+                          </OutlineText>
+                        </Description>
+                      </Item>
+                      <!-- Position 01.01.02.0030: Stk -->
+                      <Item ID="POS_01_01_02_0030" RNoPart="0030">
+                        <RNoPart>0030</RNoPart>
+                        <OZ>01.01.02.0030</OZ>
+                        <Qty>4.000</Qty>
+                        <QU>Stk</QU>
+                        <Description>
+                          <CompleteText>
+                            <DetailTxt>
+                              <Text>
+                                <p><span>Revisions- und Spülschacht für Ringdrainage DN 400 aus PVC mit sanddichter Abdeckung Klasse A15 liefern und setzen.</span></p>
+                              </Text>
+                            </DetailTxt>
+                          </CompleteText>
+                          <OutlineText>
+                            <OutlTxt>
+                              <TextOutl><span>Revisionsschacht DN 400 setzen</span></TextOutl>
+                            </OutlTxt>
+                          </OutlineText>
+                        </Description>
+                      </Item>
+                      <!-- Position 01.01.02.0040: Psch -->
+                      <Item ID="POS_01_01_02_0040" RNoPart="0040">
+                        <RNoPart>0040</RNoPart>
+                        <OZ>01.01.02.0040</OZ>
+                        <Qty>1.000</Qty>
+                        <QU>Psch</QU>
+                        <Description>
+                          <CompleteText>
+                            <DetailTxt>
+                              <Text>
+                                <p><span>Offene Wasserhaltung während der gesamten Erd- und Betonierungsarbeiten pauschal betreiben.</span></p>
+                                <p><span>Inklusive Vorhalten von Pumpen, Schläuchen und Absetzbecken.</span></p>
+                              </Text>
+                            </DetailTxt>
+                          </CompleteText>
+                          <OutlineText>
+                            <OutlTxt>
+                              <TextOutl><span>Offene Wasserhaltung pauschal</span></TextOutl>
+                            </OutlTxt>
+                          </OutlineText>
+                        </Description>
+                      </Item>
+                    </Itemlist>
+                  </BoQBody>
+                </BoQCtgy>
+              </BoQBody>
+            </BoQCtgy>
+          </BoQBody>
+        </BoQCtgy>
+      </BoQBody>
+    </BoQ>
+  </Award>
+</GAEB>

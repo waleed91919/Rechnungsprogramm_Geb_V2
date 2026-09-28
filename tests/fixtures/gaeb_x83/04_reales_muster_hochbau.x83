@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- GAEB DA XML 3.3 Testdatei 04: Reales Muster Hochbau (Erd- und Betonarbeiten mit 2 Gewerken und 3 Titeln) -->
+<GAEB xmlns="http://www.gaeb.de/GAEB_DA_XML/DA_XML_3.3">
+  <GAEBInfo>
+    <Version>3.3</Version>
+    <Date>2026-09-28</Date>
+    <Time>09:45:00</Time>
+    <ProgMan>RIB iTWO 2026 GAEB XML Engine</ProgMan>
+  </GAEBInfo>
+  <Award>
+    <DP>83</DP>
+    <AwardInfo>
+      <Cur>EUR</Cur>
+    </AwardInfo>
+    <BoQ ID="BOQ_04">
+      <BoQInfo>
+        <Name>Neubau Mehrfamilienhaus mit Tiefgarage Sonnenallee 42</Name>
+        <LblBoQ>Rohbau - Los 1 Erd- und Stahlbetonarbeiten</LblBoQ>
+        <CPN>2026-HB-TGA-04</CPN>
+      </BoQInfo>
+      <BoQBody>
+        <!-- GEWERK 01: Erdarbeiten -->
+        <BoQCtgy ID="CTG_01" RNoPart="01">
+          <LblTx>
+            <p><span>Gewerk 01: Erdarbeiten</span></p>
+          </LblTx>
+          <BoQBody>
+            <!-- TITEL 01.01: Baugrube und Erdbewegungen -->
+            <BoQCtgy ID="CTG_01_01" RNoPart="01">
+              <LblTx>
+                <p><span>Titel 01: Baugrube und Geländeausgleich</span></p>
+              </LblTx>
+              <BoQBody>
+                <Itemlist>
+                  <!-- Pos. 01.01.0010 -->
+                  <Item ID="POS_01_01_0010" RNoPart="0010">
+                    <RNoPart>0010</RNoPart>
+                    <OZ>01.01.0010</OZ>
+                    <Qty>450.000</Qty>
+                    <QU>m²</QU>
+                    <Description>
+                      <CompleteText>
+                        <DetailTxt>
+                          <Text>
+                            <p><span>Oberboden (Mutterboden) d=25 cm im Bereich der gesamten überbauten Fläche schonend abschieben.</span></p>
+                            <p><span>Boden seitlich auf dem Baugrundstück in Mieten mit profilierter Oberfläche bis zu 2,00 m Höhe aufsetzen.</span></p>
+                            <p><span>Bodenklasse 1 bis 3 nach DIN 18300.</span></p>
+                          </Text>
+                        </DetailTxt>
+                      </CompleteText>
+                      <OutlineText>
+                        <OutlTxt>
+                          <TextOutl><span>Oberboden abtragen d=25cm</span></TextOutl>
+                        </OutlTxt>
+                      </OutlineText>
+                    </Description>
+                  </Item>
+
+                  <!-- Pos. 01.01.0020 -->
+                  <Item ID="POS_01_01_0020" RNoPart="0020">
+                    <RNoPart>0020</RNoPart>
+                    <OZ>01.01.0020</OZ>
+                    <Qty>820.000</Qty>
+                    <QU>m³</QU>
+                    <Description>
+                      <CompleteText>
+                        <DetailTxt>
+                          <Text>
+                            <p><span>Baugrube für Tiefgarage und Untergeschoss im freien Böschungswinkel herstellen.</span></p>
+                            <p><span>Boden der Klassen 3 bis 4 nach DIN 18300 (leicht lösbarer bis mittelschwer lösbarer Boden) maschinell lösen, auf LKWs verladen und zu einer zugelassenen Erd- und Bauschuttdeponie abfahren.</span></p>
+                            <p><span>Inklusive aller anfallenden Wiege-, Ablagerungs- und Deponiekosten. Entsorgungsnachweis (Begleitscheine) ist dem AG vorzulegen.</span></p>
+                          </Text>
+                        </DetailTxt>
+                      </CompleteText>
+                      <OutlineText>
+                        <OutlTxt>
+                          <TextOutl><span>Baugrubenaushub BK 3-4 inkl. Abtransport</span></TextOutl>
+                        </OutlTxt>
+                      </OutlineText>
+                    </Description>
+                  </Item>
+
+                  <!-- Pos. 01.01.0030 -->
+                  <Item ID="POS_01_01_0030" RNoPart="0030">
+                    <RNoPart>0030</RNoPart>
+                    <OZ>01.01.0030</OZ>
+                    <Qty>380.000</Qty>
+                    <QU>m²</QU>
+                    <Description>
+                      <CompleteText>
+                        <DetailTxt>
+                          <Text>
+                            <p><span>Planum der Baugrubensohle höhengerecht nach Schal- und Bewehrungsplan herstellen.</span></p>
+                            <p><span>Feinplanum durch Walzen oder Rüttelplatte verdichten. Nachweis des Verformungsmoduls Ev2 >= 45 MN/m² durch statischen Plattendruckversuch nach DIN 18134.</span></p>
+                          </Text>
+                        </DetailTxt>
+                      </CompleteText>
+                      <OutlineText>
+                        <OutlTxt>
+                          <TextOutl><span>Planum Baugrubensohle herstellen und verdichten</span></TextOutl>
+                        </OutlTxt>
+                      </OutlineText>
+                    </Description>
+                  </Item>
+                </Itemlist>
+              </BoQBody>
+            </BoQCtgy>
+          </BoQBody>
+        </BoQCtgy>
+
+        <!-- GEWERK 02: Beton- und Stahlbetonarbeiten -->
+        <BoQCtgy ID="CTG_02" RNoPart="02">
+          <LblTx>
+            <p><span>Gewerk 02: Beton- und Stahlbetonarbeiten</span></p>
+          </LblTx>
+          <BoQBody>
+            <!-- TITEL 02.01: Gründung und Bodenplatte -->
+            <BoQCtgy ID="CTG_02_01" RNoPart="01">
+              <LblTx>
+                <p><span>Titel 01: Gründung und Bodenplatte</span></p>
+              </LblTx>
+              <BoQBody>
+                <Itemlist>
+                  <!-- Pos. 02.01.0010 -->
+                  <Item ID="POS_02_01_0010" RNoPart="0010">
+                    <RNoPart>0010</RNoPart>
+                    <OZ>02.01.0010</OZ>
+                    <Qty>380.000</Qty>
+                    <QU>m²</QU>
+                    <Description>
+                      <CompleteText>
+                        <DetailTxt>
+                          <Text>
+                            <p><span>Sauberkeitsschicht aus unbewehrtem Magerbeton C8/10 nach DIN EN 206 / DIN 1045-2 einbringen.</span></p>
+                            <p><span>Nenndicke d=5 cm, Oberfläche planeben abgezogen als Arbeitsunterlage für die Bauwerksabdichtung und Bewehrung.</span></p>
+                          </Text>
+                        </DetailTxt>
+                      </CompleteText>
+                      <OutlineText>
+                        <OutlTxt>
+                          <TextOutl><span>Sauberkeitsschicht Magerbeton C8/10 d=5cm</span></TextOutl>
+                        </OutlTxt>
+                      </OutlineText>
+                    </Description>
+                  </Item>
+
+                  <!-- Pos. 02.01.0020 -->
+                  <Item ID="POS_02_01_0020" RNoPart="0020">
+                    <RNoPart>0020</RNoPart>
+                    <OZ>02.01.0020</OZ>
+                    <Qty>380.000</Qty>
+                    <QU>m²</QU>
+                    <Description>
+                      <CompleteText>
+                        <DetailTxt>
+                          <Text>
+                            <p><span>Trenn- und Gleitlage unter Stahlbeton-Bodenplatte liefern und vollflächig verlegen.</span></p>
+                            <p><span>Zweilagige Polyethylen-Folie (PE-Folie) d=0,20 mm mit mind. 15 cm Überlappung der Stöße.</span></p>
+                          </Text>
+                        </DetailTxt>
+                      </CompleteText>
+                      <OutlineText>
+                        <OutlTxt>
+                          <TextOutl><span>PE-Folie d=0,20mm zweilagig als Gleitlage</span></TextOutl>
+                        </OutlTxt>
+                      </OutlineText>
+                    </Description>
+                  </Item>
+
+                  <!-- Pos. 02.01.0030 -->
+                  <Item ID="POS_02_01_0030" RNoPart="0030">
+                    <RNoPart>0030</RNoPart>
+                    <OZ>02.01.0030</OZ>
+                    <Qty>114.000</Qty>
+                    <QU>m³</QU>
+                    <Description>
+                      <CompleteText>
+                        <DetailTxt>
+                          <Text>
+                            <p><span>Stahlbeton-Bodenplatte für Tiefgarage d=30 cm herstellen.</span></p>
+                            <p><span>Beton nach DIN EN 206 / DIN 1045-2: C25/30, XC4, XD1, XA1, Konsistenz F3/F4, wasserundurchlässiger Beton (WU-Beton) nach WU-Richtlinie des DAfStb, Beanspruchungsklasse 1, Nutzungsklasse A.</span></p>
+                            <p><span>Oberfläche maschinell geglättet zur direkten Beschichtung geeignet.</span></p>
+                          </Text>
+                        </DetailTxt>
+                      </CompleteText>
+                      <OutlineText>
+                        <OutlTxt>
+                          <TextOutl><span>Stahlbeton-Bodenplatte C25/30 WU d=30cm</span></TextOutl>
+                        </OutlTxt>
+                      </OutlineText>
+                    </Description>
+                  </Item>
+
+                  <!-- Pos. 02.01.0040 -->
+                  <Item ID="POS_02_01_0040" RNoPart="0040">
+                    <RNoPart>0040</RNoPart>
+                    <OZ>02.01.0040</OZ>
+                    <Qty>12.500</Qty>
+                    <QU>t</QU>
+                    <Description>
+                      <CompleteText>
+                        <DetailTxt>
+                          <Text>
+                            <p><span>Betonstabstahl B500B nach DIN 488 liefern, schneiden, biegen und nach Bewehrungsplan verlegen.</span></p>
+                            <p><span>Inklusive aller erforderlichen Unterstützungen, Abstandhalter und Bindedraht für die Bodenplatte. Abrechnung nach Biegelisten des Tragwerksplaners.</span></p>
+                          </Text>
+                        </DetailTxt>
+                      </CompleteText>
+                      <OutlineText>
+                        <OutlTxt>
+                          <TextOutl><span>Betonstahl B500B liefern und verlegen</span></TextOutl>
+                        </OutlTxt>
+                      </OutlineText>
+                    </Description>
+                  </Item>
+                </Itemlist>
+              </BoQBody>
+            </BoQCtgy>
+
+            <!-- TITEL 02.02: Aufgehende Wände -->
+            <BoQCtgy ID="CTG_02_02" RNoPart="02">
+              <LblTx>
+                <p><span>Titel 02: Aufgehende Kellerwände</span></p>
+              </LblTx>
+              <BoQBody>
+                <Itemlist>
+                  <!-- Pos. 02.02.0010 -->
+                  <Item ID="POS_02_02_0010" RNoPart="0010">
+                    <RNoPart>0010</RNoPart>
+                    <OZ>02.02.0010</OZ>
+                    <Qty>160.000</Qty>
+                    <QU>m²</QU>
+                    <Description>
+                      <CompleteText>
+                        <DetailTxt>
+                          <Text>
+                            <p><span>Stahlbeton-Kelleraußenwand d=25 cm gegen Erdreich / Baugrubenverbau herstellen.</span></p>
+                            <p><span>Betongüte C25/30, XC4, XF1, WU-Beton nach DAfStb-Richtlinie. Schalung als Rahmenschalung SB 2 (Sichtbetonklasse 2).</span></p>
+                            <p><span>Verdichtung mittels Innenrüttler, Nachbehandlung nach DIN EN 13670.</span></p>
+                          </Text>
+                        </DetailTxt>
+                      </CompleteText>
+                      <OutlineText>
+                        <OutlTxt>
+                          <TextOutl><span>Stahlbeton-Kellerwand C25/30 d=25cm</span></TextOutl>
+                        </OutlTxt>
+                      </OutlineText>
+                    </Description>
+                  </Item>
+
+                  <!-- Pos. 02.02.0020 -->
+                  <Item ID="POS_02_02_0020" RNoPart="0020">
+                    <RNoPart>0020</RNoPart>
+                    <OZ>02.02.0020</OZ>
+                    <Qty>45.000</Qty>
+                    <QU>m</QU>
+                    <Description>
+                      <CompleteText>
+                        <DetailTxt>
+                          <Text>
+                            <p><span>Fugenabdichtung der Arbeitsfuge zwischen Bodenplatte und Kelleraußenwand herstellen.</span></p>
+                            <p><span>Innenliegendes Arbeitsfugenband aus PVC-P mit beidseitiger Beschichtung oder verzinktes Fugenblech mit abziehbarer Schutzfolie liefern und lagesicher auf der oberen Bewehrungslage montieren.</span></p>
+                          </Text>
+                        </DetailTxt>
+                      </CompleteText>
+                      <OutlineText>
+                        <OutlTxt>
+                          <TextOutl><span>Fugenband PVC-P / Fugenblech montieren</span></TextOutl>
+                        </OutlTxt>
+                      </OutlineText>
+                    </Description>
+                  </Item>
+                </Itemlist>
+              </BoQBody>
+            </BoQCtgy>
+          </BoQBody>
+        </BoQCtgy>
+      </BoQBody>
+    </BoQ>
+  </Award>
+</GAEB>
