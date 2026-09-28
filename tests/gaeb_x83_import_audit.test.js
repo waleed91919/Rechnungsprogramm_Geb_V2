@@ -280,6 +280,18 @@ describe('GAEB X83 Import: Vollständige Verifikation des Datenerhalts (Phasen 1
         assert.strictEqual(posPauschal.isPauschal, true);
         assert.strictEqual(posPauschal.einheit, 'Psch');
         assert.strictEqual(posPauschal.in_endsumme_enthalten, 1);
+
+        // 7. Unverfälschter Datenerhalt nach Vorgaben aus liesen.txt (aln_group_no, aln_ser_no, provis, is_wahl, is_bedarf)
+        assert.strictEqual(posBase.aln_group_no, '01');
+        assert.strictEqual(posBase.aln_ser_no, '00');
+        assert.strictEqual(posAlternative.aln_group_no, '01');
+        assert.strictEqual(posAlternative.aln_ser_no, '01');
+        assert.strictEqual(posAlternative.is_wahl, true);
+        assert.strictEqual(posBase.is_wahl, false);
+        assert.strictEqual(posBedarfMitGB.is_bedarf, true);
+        assert.strictEqual(posBedarfMitGB.provis, true);
+        assert.strictEqual(posBedarfOhneGB.is_bedarf, true);
+        assert.strictEqual(posBedarfOhneGB.provis, true);
     });
 
     // =========================================================================
@@ -633,67 +645,98 @@ describe('GAEB X83 Import: Vollständige Verifikation des Datenerhalts (Phasen 1
         assert.strictEqual(subCat2.name, 'Rohbau');
         assert.strictEqual(subCat2.items.length, 5, 'Unterkategorie 01.02 hat 5 Positionen');
 
-        // 3. Positionsprüfung (6 Positionen insgesamt)
+        // 3. Positionsprüfung (6 Positionen insgesamt in exakter XML-Reihenfolge)
         assert.strictEqual(parsed.items.length, 6, 'Muss exakt 6 Positionen einlesen');
 
-        // Position 01.01.001: Pauschale Baustelleneinrichtung
+        // Exakte Reihenfolge aller Ordnungszahlen und RNoPart
+        const expectedOZs = ['01.01.001', '01.02.001', '01.02.002', '01.02.003', '01.02.004', '01.02.005'];
+        assert.deepStrictEqual(parsed.items.map(it => it.oz_code), expectedOZs, 'Positionsreihenfolge muss exakt der XML-Reihenfolge entsprechen');
+        const expectedRNoParts = ['001', '001', '002', '003', '004', '005'];
+        assert.deepStrictEqual(parsed.items.map(it => it.rno_part), expectedRNoParts, 'RNoPart muss unverfälscht erhalten bleiben');
+
+        // Position 01.01.001: Pauschale Baustelleneinrichtung (Menge 1 Psch)
         const pos1 = parsed.items[0];
         assert.strictEqual(pos1.oz_code, '01.01.001');
+        assert.strictEqual(pos1.rno_part, '001');
         assert.strictEqual(pos1.kurztext, 'Baustelleneinrichtung');
-        assert.strictEqual(pos1.menge, 1);
-        assert.strictEqual(pos1.einheit, 'psch');
+        assert.strictEqual(pos1.menge, 1, 'Menge muss exakt 1 betragen');
+        assert.strictEqual(pos1.einheit, 'psch', 'Einheit muss psch sein');
         assert.strictEqual(pos1.positions_art, 'PAUSCHALE');
         assert.strictEqual(pos1.isPauschal, true);
         assert.strictEqual(pos1.preis, null, 'Unbepreiste Ausschreibung: preis muss null bleiben');
         assert.strictEqual(pos1.gesamtpreis, null);
         assert.strictEqual(pos1.isPriceMissing, true);
-        assert.ok(pos1.langtext.includes('Einrichten der Baustelle'), 'Langtext muss enthalten sein');
+        assert.ok(pos1.langtext.includes('Einrichten der Baustelle vor Beginn der Bauarbeiten.'),
+            'Langtext muss unverfälscht erhalten sein');
 
         // Position 01.02.001: Bodenaushub mit QtyTBD
         const pos2 = parsed.items[1];
         assert.strictEqual(pos2.oz_code, '01.02.001');
+        assert.strictEqual(pos2.rno_part, '001');
         assert.strictEqual(pos2.kurztext, 'Bodenaushub');
         assert.strictEqual(pos2.menge, null, 'QtyTBD: menge muss null sein');
         assert.strictEqual(pos2.isQtyTBD, true, 'isQtyTBD Flag muss gesetzt sein');
         assert.strictEqual(pos2.einheit, 'm³');
         assert.strictEqual(pos2.positions_art, 'NORMAL');
         assert.strictEqual(pos2.preis, null);
+        assert.strictEqual(pos2.gesamtpreis, null);
         assert.strictEqual(pos2.isPriceMissing, true);
-        assert.ok(pos2.langtext.includes('Bodenaushub für die Baugrube herstellen.'));
+        assert.ok(pos2.langtext.includes('Bodenaushub für die Baugrube herstellen.'),
+            'Langtext für Bodenaushub muss unverfälscht erhalten sein');
 
         // Position 01.02.002: Verfüllung mit regulärer Menge
         const pos3 = parsed.items[2];
         assert.strictEqual(pos3.oz_code, '01.02.002');
+        assert.strictEqual(pos3.rno_part, '002');
         assert.strictEqual(pos3.kurztext, 'Verfüllung');
         assert.strictEqual(pos3.menge, 600);
         assert.strictEqual(pos3.einheit, 'm³');
         assert.strictEqual(pos3.preis, null);
+        assert.strictEqual(pos3.gesamtpreis, null);
+        assert.strictEqual(pos3.isPriceMissing, true);
+        assert.ok(pos3.langtext.includes('Verfüllen der Baugrube mit geeignetem Material für die Gründung.'));
 
         // Position 01.02.003: Bodenabfuhr mit QtyTBD
         const pos4 = parsed.items[3];
         assert.strictEqual(pos4.oz_code, '01.02.003');
+        assert.strictEqual(pos4.rno_part, '003');
         assert.strictEqual(pos4.kurztext, 'Bodenabfuhr');
         assert.strictEqual(pos4.menge, null);
         assert.strictEqual(pos4.isQtyTBD, true);
         assert.strictEqual(pos4.einheit, 'm³');
+        assert.strictEqual(pos4.preis, null);
+        assert.strictEqual(pos4.gesamtpreis, null);
+        assert.strictEqual(pos4.isPriceMissing, true);
+        assert.ok(pos4.langtext.includes('Abfahren des nicht verwertbaren Aushubs von der Baustelle.'));
 
         // Position 01.02.004: Betonsohle
         const pos5 = parsed.items[4];
         assert.strictEqual(pos5.oz_code, '01.02.004');
+        assert.strictEqual(pos5.rno_part, '004');
         assert.strictEqual(pos5.kurztext, 'Betonsohle');
         assert.strictEqual(pos5.menge, 800);
         assert.strictEqual(pos5.einheit, 'm²');
+        assert.strictEqual(pos5.preis, null);
+        assert.strictEqual(pos5.gesamtpreis, null);
+        assert.strictEqual(pos5.isPriceMissing, true);
+        assert.ok(pos5.langtext.includes('Betonsohle für die Halle herstellen.'));
 
         // Position 01.02.005: Betonwände
         const pos6 = parsed.items[5];
         assert.strictEqual(pos6.oz_code, '01.02.005');
+        assert.strictEqual(pos6.rno_part, '005');
         assert.strictEqual(pos6.kurztext, 'Betonwände');
         assert.strictEqual(pos6.menge, 240);
         assert.strictEqual(pos6.einheit, 'm²');
+        assert.strictEqual(pos6.preis, null);
+        assert.strictEqual(pos6.gesamtpreis, null);
+        assert.strictEqual(pos6.isPriceMissing, true);
+        assert.ok(pos6.langtext.includes('Betonwände für die Halle herstellen.'));
 
         // Verifikation: Keine einzige Position hat erfundene 0.00-Preise
         parsed.items.forEach(pos => {
             assert.strictEqual(pos.preis, null, `Position ${pos.oz_code} darf keinen erfundenen Preis haben`);
+            assert.strictEqual(pos.gesamtpreis, null, `Position ${pos.oz_code} darf keinen erfundenen Gesamtpreis haben`);
             assert.strictEqual(pos.isPriceMissing, true, `Position ${pos.oz_code} muss isPriceMissing = true haben`);
         });
     });

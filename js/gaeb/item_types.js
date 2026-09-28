@@ -84,11 +84,15 @@ class GAEB_ItemTypes {
             isGrundposition,
             isAlternative,
             isBedarf,
+            is_wahl: isAlternative,
+            is_bedarf: isBedarf,
             provis: provis ? true : undefined,
             withTotal: isBedarf ? withTotal : undefined,
             isPauschal,
             alnGroup: alnGroup || undefined,
-            alnSerNo: alnSerNo || undefined
+            alnSerNo: alnSerNo || undefined,
+            aln_group_no: alnGroup || undefined,
+            aln_ser_no: alnSerNo || undefined
         };
     }
 

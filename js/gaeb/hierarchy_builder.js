@@ -74,27 +74,30 @@ class GAEB_HierarchyBuilder {
             const qtyElem = find(itemElem, 'Qty');
             const unitElem = find(itemElem, 'QU') || find(itemElem, 'Unit');
             const upElem = find(itemElem, 'UP') || find(itemElem, 'UnitPrice');
+            const qtyTBDElem = find(itemElem, 'QtyTBD');
 
             const hasQty = qtyElem !== null && qtyElem.textContent.trim() !== '';
             const hasUnit = unitElem !== null && unitElem.textContent.trim() !== '';
             const hasUP = upElem !== null && upElem.textContent.trim() !== '';
+            const isQtyTBD = (qtyTBDElem !== null && qtyTBDElem.textContent.trim().toLowerCase() === 'yes') ||
+                             (find(itemElem, 'QtyTBD')?.textContent.trim().toLowerCase() === 'yes');
 
             const isExplicitHinweis = itemTypeAttr.toLowerCase() === 'hinweistext' ||
                                       itemTypeAttr.toLowerCase() === 'hinweis' ||
                                       itemTypeAttr.toLowerCase() === 'text';
-            const isImplicitHinweis = !hasQty && !hasUnit && !hasUP;
+            const isImplicitHinweis = !hasQty && !hasUnit && !hasUP && !isQtyTBD;
             const isHinweistext = isExplicitHinweis || isImplicitHinweis;
 
             // Mengen & Preise (strikter Null-Erhalt bei fehlendem UP nach liesen.txt)
             const qp = itemReader
                 ? itemReader.extractQuantitiesAndPrices(itemElem, isHinweistext)
                 : {
-                    menge: hasQty ? parseFloat(qtyElem.textContent.replace(',', '.')) : null,
+                    menge: (hasQty && !isQtyTBD) ? parseFloat(qtyElem.textContent.replace(',', '.')) : null,
                     einheit: hasUnit ? unitElem.textContent.trim() : '',
                     preis: hasUP ? parseFloat(upElem.textContent.replace(',', '.')) : null,
                     gesamtpreis: null,
                     isPriceMissing: !hasUP,
-                    isQtyTBD: false
+                    isQtyTBD: isQtyTBD
                 };
 
             // Typen & Kennzeichen
@@ -107,6 +110,8 @@ class GAEB_HierarchyBuilder {
                     isGrundposition: false,
                     isAlternative: false,
                     isBedarf: false,
+                    is_wahl: false,
+                    is_bedarf: false,
                     isPauschal: false
                 };
 
@@ -147,12 +152,16 @@ class GAEB_HierarchyBuilder {
                 isGrundposition: typeInfo.isGrundposition,
                 isAlternative: typeInfo.isAlternative,
                 isBedarf: typeInfo.isBedarf,
+                is_wahl: typeInfo.is_wahl,
+                is_bedarf: typeInfo.is_bedarf,
                 provis: typeInfo.provis,
                 withTotal: typeInfo.withTotal,
                 isPauschal: typeInfo.isPauschal,
                 isHinweistext: isHinweistext ? true : undefined,
                 alnGroup: typeInfo.alnGroup,
                 alnSerNo: typeInfo.alnSerNo,
+                aln_group_no: typeInfo.aln_group_no,
+                aln_ser_no: typeInfo.aln_ser_no,
                 requiresBidderInfo: requiresBidderInfo ? true : undefined,
                 bieterangaben: requiresBidderInfo ? bieterangaben : undefined,
                 biReq: requiresBidderInfo ? bieterangaben : undefined,
@@ -177,114 +186,134 @@ class GAEB_HierarchyBuilder {
         function traverseBoQBody(boqBodyElem, currentPath, parentCategory) {
             if (!boqBodyElem) return;
 
-            // 0. Remarks auf BoQBody-Ebene erfassen
-            const childRemarks = getChildren(boqBodyElem, 'Remark');
-            for (let r = 0; r < childRemarks.length; r++) {
-                const remarkElem = childRemarks[r];
-                const text = extractLines(remarkElem);
-                if (text) {
-                    if (parentCategory) {
+            // Durchlaufe alle Kindknoten von boqBodyElem in exakter Dokumenten-Reihenfolge
+            for (let c = 0; c < boqBodyElem.childNodes.length; c++) {
+                const node = boqBodyElem.childNodes[c];
+                if (node.nodeType !== 1) continue; // Nur Element-Knoten
+
+                const tag = (node.localName || node.nodeName || '').replace(/^.*:/, '');
+
+                if (tag === 'Remark') {
+                    const text = extractLines(node);
+                    if (text && parentCategory) {
                         if (!parentCategory.remarks) parentCategory.remarks = [];
                         parentCategory.remarks.push(text);
                     }
-                }
-            }
+                } else if (tag === 'BoQCtgy') {
+                    const ctgElem = node;
+                    const ctgId = ctgElem.getAttribute('ID') || `ctg_${parentCategory ? (parentCategory.categories.length + 1) : (topLevelCategories.length + 1)}`;
+                    const rnoPartElem = getChildren(ctgElem, 'RNoPart')[0];
+                    const rnoPart = ctgElem.getAttribute('RNoPart') ||
+                                    (rnoPartElem ? rnoPartElem.textContent.trim() : '');
+                    const lblCtgy = ctgElem.getAttribute('lblCtgy') || ctgElem.getAttribute('LblCtgy') || rnoPart;
 
-            // 1. Kind-Elemente <BoQCtgy> durchlaufen
-            const childCtgys = getChildren(boqBodyElem, 'BoQCtgy');
-            for (let i = 0; i < childCtgys.length; i++) {
-                const ctgElem = childCtgys[i];
-                const ctgId = ctgElem.getAttribute('ID') || `ctg_${i + 1}`;
-                const rnoPartElem = getChildren(ctgElem, 'RNoPart')[0];
-                const rnoPart = ctgElem.getAttribute('RNoPart') ||
-                                (rnoPartElem ? rnoPartElem.textContent.trim() : '');
-                const lblCtgy = ctgElem.getAttribute('lblCtgy') || ctgElem.getAttribute('LblCtgy') || rnoPart;
-
-                // Name aus direktem LblTx, OutlineText oder Description (niemals aus Kind-BoQBody / Items!)
-                let ctgName = '';
-                const lblTxElem = getChildren(ctgElem, 'LblTx')[0];
-                if (lblTxElem) {
-                    ctgName = clean(lblTxElem.textContent);
-                }
-                if (!ctgName) {
-                    const outlElem = getChildren(ctgElem, 'OutlineText')[0];
-                    if (outlElem) {
-                        const textOutl = find(outlElem, 'TextOutlTxt') || find(outlElem, 'TextOutl') || find(outlElem, 'OutlTxt') || outlElem;
-                        ctgName = clean(textOutl.textContent);
+                    // Name aus direktem LblTx, OutlineText oder Description (niemals aus Kind-BoQBody / Items!)
+                    let ctgName = '';
+                    const lblTxElem = getChildren(ctgElem, 'LblTx')[0];
+                    if (lblTxElem) {
+                        ctgName = clean(lblTxElem.textContent);
                     }
-                }
-                if (!ctgName) {
-                    const descElem = getChildren(ctgElem, 'Description')[0];
-                    if (descElem) {
-                        const outlElem = find(descElem, 'OutlineText');
+                    if (!ctgName) {
+                        const outlElem = getChildren(ctgElem, 'OutlineText')[0];
                         if (outlElem) {
                             const textOutl = find(outlElem, 'TextOutlTxt') || find(outlElem, 'TextOutl') || find(outlElem, 'OutlTxt') || outlElem;
                             ctgName = clean(textOutl.textContent);
                         }
                     }
-                }
-                if (!ctgName) {
-                    ctgName = `Kategorie ${rnoPart || i + 1}`;
-                }
-
-                // Vorbemerkung / Description auf BoQCtgy-Ebene (NUR direkte Description!)
-                let vorbemerkung = null;
-                const descElem = getChildren(ctgElem, 'Description')[0];
-                if (descElem) {
-                    const text = extractLines(descElem);
-                    if (text) vorbemerkung = text;
-                }
-
-                const pathEntry = { id: ctgId, rnoPart, name: ctgName };
-                const newPath = [...currentPath, pathEntry];
-                const ozPrefix = newPath.map(p => p.rnoPart).filter(Boolean).join('.');
-
-                const categoryObj = {
-                    id: ctgId,
-                    rno_part: rnoPart,
-                    lblCtgy: lblCtgy,
-                    name: ctgName,
-                    vorbemerkung: vorbemerkung,
-                    description: vorbemerkung,
-                    level: newPath.length,
-                    parentId: parentCategory ? parentCategory.id : null,
-                    categoryPath: newPath.map(p => p.name),
-                    oz_prefix: ozPrefix,
-                    categories: [],
-                    items: []
-                };
-
-                if (parentCategory) {
-                    parentCategory.categories.push(categoryObj);
-                } else {
-                    topLevelCategories.push(categoryObj);
-                }
-
-                // Inneres BoQBody der Kategorie rekursiv durchlaufen
-                const innerBoQBody = getChildren(ctgElem, 'BoQBody')[0];
-                if (innerBoQBody) {
-                    traverseBoQBody(innerBoQBody, newPath, categoryObj);
-                }
-
-                // Direkte Itemlist in ctgElem prüfen
-                const directItemlist = getChildren(ctgElem, 'Itemlist')[0];
-                if (directItemlist) {
-                    const items = getChildren(directItemlist, 'Item');
-                    for (let j = 0; j < items.length; j++) {
-                        const parsedItem = parseItem(items[j], categoryObj, newPath);
-                        categoryObj.items.push(parsedItem);
-                        allItems.push(parsedItem);
+                    if (!ctgName) {
+                        const descElem = getChildren(ctgElem, 'Description')[0];
+                        if (descElem) {
+                            const outlElem = find(descElem, 'OutlineText');
+                            if (outlElem) {
+                                const textOutl = find(outlElem, 'TextOutlTxt') || find(outlElem, 'TextOutl') || find(outlElem, 'OutlTxt') || outlElem;
+                                ctgName = clean(textOutl.textContent);
+                            }
+                        }
                     }
-                }
-            }
+                    if (!ctgName) {
+                        ctgName = `Kategorie ${rnoPart || (parentCategory ? (parentCategory.categories.length + 1) : (topLevelCategories.length + 1))}`;
+                    }
 
-            // 2. Direkte Itemlist in diesem BoQBody durchlaufen
-            const childItemlists = getChildren(boqBodyElem, 'Itemlist');
-            for (let l = 0; l < childItemlists.length; l++) {
-                const itemlistElem = childItemlists[l];
-                const items = getChildren(itemlistElem, 'Item');
-                for (let j = 0; j < items.length; j++) {
-                    const parsedItem = parseItem(items[j], parentCategory, currentPath);
+                    // Vorbemerkung / Description auf BoQCtgy-Ebene (NUR direkte Description!)
+                    let vorbemerkung = null;
+                    const descElem = getChildren(ctgElem, 'Description')[0];
+                    if (descElem) {
+                        const text = extractLines(descElem);
+                        if (text) vorbemerkung = text;
+                    }
+
+                    const pathEntry = { id: ctgId, rnoPart, name: ctgName };
+                    const newPath = [...currentPath, pathEntry];
+                    const ozPrefix = newPath.map(p => p.rnoPart).filter(Boolean).join('.');
+
+                    const categoryObj = {
+                        id: ctgId,
+                        rno_part: rnoPart,
+                        lblCtgy: lblCtgy,
+                        name: ctgName,
+                        vorbemerkung: vorbemerkung,
+                        description: vorbemerkung,
+                        level: newPath.length,
+                        parentId: parentCategory ? parentCategory.id : null,
+                        categoryPath: newPath.map(p => p.name),
+                        oz_prefix: ozPrefix,
+                        categories: [],
+                        items: []
+                    };
+
+                    if (parentCategory) {
+                        parentCategory.categories.push(categoryObj);
+                    } else {
+                        topLevelCategories.push(categoryObj);
+                    }
+
+                    // Inneres BoQBody der Kategorie rekursiv durchlaufen
+                    const innerBoQBody = getChildren(ctgElem, 'BoQBody')[0];
+                    if (innerBoQBody) {
+                        traverseBoQBody(innerBoQBody, newPath, categoryObj);
+                    }
+
+                    // Direkte Itemlist in ctgElem prüfen (falls außerhalb von BoQBody)
+                    const directItemlist = getChildren(ctgElem, 'Itemlist')[0];
+                    if (directItemlist) {
+                        for (let j = 0; j < directItemlist.childNodes.length; j++) {
+                            const itNode = directItemlist.childNodes[j];
+                            if (itNode.nodeType !== 1) continue;
+                            const itTag = (itNode.localName || itNode.nodeName || '').replace(/^.*:/, '');
+                            if (itTag === 'Item') {
+                                const parsedItem = parseItem(itNode, categoryObj, newPath);
+                                categoryObj.items.push(parsedItem);
+                                allItems.push(parsedItem);
+                            } else if (itTag === 'Remark') {
+                                const remText = extractLines(itNode);
+                                if (remText) {
+                                    if (!categoryObj.remarks) categoryObj.remarks = [];
+                                    categoryObj.remarks.push(remText);
+                                }
+                            }
+                        }
+                    }
+                } else if (tag === 'Itemlist') {
+                    for (let j = 0; j < node.childNodes.length; j++) {
+                        const itNode = node.childNodes[j];
+                        if (itNode.nodeType !== 1) continue;
+                        const itTag = (itNode.localName || itNode.nodeName || '').replace(/^.*:/, '');
+                        if (itTag === 'Item') {
+                            const parsedItem = parseItem(itNode, parentCategory, currentPath);
+                            if (parentCategory) {
+                                parentCategory.items.push(parsedItem);
+                            }
+                            allItems.push(parsedItem);
+                        } else if (itTag === 'Remark') {
+                            const remText = extractLines(itNode);
+                            if (remText && parentCategory) {
+                                if (!parentCategory.remarks) parentCategory.remarks = [];
+                                parentCategory.remarks.push(remText);
+                            }
+                        }
+                    }
+                } else if (tag === 'Item') {
+                    const parsedItem = parseItem(node, parentCategory, currentPath);
                     if (parentCategory) {
                         parentCategory.items.push(parsedItem);
                     }

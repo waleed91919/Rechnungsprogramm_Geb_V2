@@ -137,13 +137,20 @@ class GAEBEngine {
         const hb = getHierarchyBuilder();
         const buildResult = hb ? hb.build(doc) : { allItems: [], topLevelCategories: [], warnings: [] };
 
+        const warnings = [...(buildResult.warnings || [])];
+        if (!dpElem) {
+            warnings.push('GAEB-Phase (DP) nicht explizit im Dokument deklariert; Standardphase X83 angenommen.');
+        } else if (projectInfo.gaebPhase !== 'X83' && projectInfo.gaebPhase !== '83') {
+            warnings.push(`Hinweis: Dokument deklariert GAEB-Phase '${projectInfo.gaebPhase}' (erwartet: X83 Angebotsaufforderung).`);
+        }
+
         return {
             projectInfo,
             items: buildResult.allItems,
             categories: buildResult.topLevelCategories.length > 0 ? buildResult.topLevelCategories : undefined,
             hierarchy: buildResult.topLevelCategories.length > 0 ? buildResult.topLevelCategories : undefined,
             sections: buildResult.topLevelCategories.length > 0 ? buildResult.topLevelCategories : undefined,
-            warnings: buildResult.warnings
+            warnings: warnings
         };
     }
 

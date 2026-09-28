@@ -1,47 +1,145 @@
 """
-validate_xsd.py - Strikte und ehrliche XSD-Validierung für GAEB X83 Testfixtures
+validate_xsd.py - Versionierte und strikte XSD-Validierung für GAEB X83 Testdateien
 
 Prüft alle GAEB X83 Dateien ohne Namespace-Ersetzungen oder Text-Hacks:
 1. XML-Wohlgeformtheit (Well-Formedness)
-2. Strukturelle Basiskonformität (GAEB-Wurzel, Namespace, Version 3.3, DP 83)
-3. Strikte Schemavalidierung gegen GAEB_DA_XML_83_3.3_2021-05.xsd
+2. Strukturelle Basiskonformität (GAEB-Wurzel, Namespace, deklarierte Version, DP 83)
+3. Strikte Schemavalidierung gegen das offizielle Schema der jeweiligen GAEB-Version:
+   - GAEB DA XML 3.3 -> GAEB_DA_XML_83_3.3_2021-05.xsd
+   - GAEB DA XML 3.2 -> GAEB_DA_XML_83_3.2_2013-10.xsd
 
-Trennt explizit:
-- EXPECTED_VALID: Schema-konforme Referenzdateien (Muss 100% bestehen, sonst Exit != 0)
-- PROJECT_INTERNAL_MODELS: Interne Edge-Case-Testmodelle für Parser-Grenzfälle
-  (weisen bekannte Abweichungen vom DA83-Schema auf, z.B. DA_XML_3.3 Namespace)
+Strikte Klassifizierung:
+- EXPECTED_VALID:
+  1. valid_schema_reference.x83 (GAEB 3.3, projektinterne Minimalreferenz)
+  2. independent_pygaeb_da32.x83 (GAEB 3.2, unabhängige pyGAEB Open-Source-Datei)
+  BEIDE DATEIEN MÜSSEN ZU 100% BESTEHEN (0 Fehler), sonst bricht das Skript mit sys.exit(1) ab!
+- PROJECT_INTERNAL_MODELS:
+  Interne Edge-Case-Testmodelle (01-05) zur Verifikation der Parser-Resilienz mit dokumentierten
+  Abweichungen (z. B. DA_XML_3.3 Namespace statt Phasen-Namespace DA83/3.3).
+
+Zusätzlich:
+- Selbsttest (--self-test), der absichtlich korrumpierte Dateien prüft und sicherstellt,
+  dass die Engine Schemafehler hart erkennt und nicht stillschweigend grünes Licht gibt.
 """
 
 import os
 import sys
 from lxml import etree
 
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+if hasattr(sys.stderr, 'reconfigure'):
+    try:
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), 'fixtures', 'gaeb_x83')
-SCHEMA_DIR = os.path.join(os.path.dirname(__file__), 'schemas', 'gaeb_da_xml_3.3')
-XSD_83_PATH = os.path.join(SCHEMA_DIR, 'GAEB_DA_XML_83_3.3_2021-05.xsd')
+SCHEMA_33_DIR = os.path.join(os.path.dirname(__file__), 'schemas', 'gaeb_da_xml_3.3')
+SCHEMA_32_DIR = os.path.join(os.path.dirname(__file__), 'schemas', 'gaeb_da_xml_3.2')
+
+XSD_33_PATH = os.path.join(SCHEMA_33_DIR, 'GAEB_DA_XML_83_3.3_2021-05.xsd')
+XSD_32_PATH = os.path.join(SCHEMA_32_DIR, 'GAEB_DA_XML_83_3.2_2013-10.xsd')
 
 EXPECTED_VALID = [
-    'valid_schema_reference.x83'
-]
-
-INDEPENDENT_EXTERNAL_FILES = [
-    'independent_pygaeb_da32.x83'
+    {
+        'file': 'valid_schema_reference.x83',
+        'source': 'Projektintern konstruierte Minimal-Referenz (KEIN BVBS-Muster)',
+        'target_version': '3.3',
+        'schema_file': 'GAEB_DA_XML_83_3.3_2021-05.xsd',
+        'schema_path': XSD_33_PATH
+    },
+    {
+        'file': 'independent_pygaeb_da32.x83',
+        'source': 'Unabhängiges Open-Source-Projekt pyGAEB (MIT License, 100% Byte-identisch)',
+        'target_version': '3.2',
+        'schema_file': 'GAEB_DA_XML_83_3.2_2013-10.xsd',
+        'schema_path': XSD_32_PATH
+    }
 ]
 
 PROJECT_INTERNAL_MODELS = [
-    '01_standard_hierarchie.x83',
-    '02_positionstypen_wahl_bedarf.x83',
-    '03_bieterangaben_vorbemerkungen_ep.x83',
-    '04_reales_muster_hochbau.x83',
-    '05_muster_angelehnt_an_gaeb_bvbs.x83'
+    {
+        'file': '01_standard_hierarchie.x83',
+        'source': 'Projektinternes Modell (3 Hierarchie-Ebenen)',
+        'target_version': '3.3',
+        'schema_file': 'GAEB_DA_XML_83_3.3_2021-05.xsd',
+        'schema_path': XSD_33_PATH,
+        'doc_deviation': 'Verwendet DA_XML_3.3 Namespace statt Phasen-Namespace DA83/3.3'
+    },
+    {
+        'file': '02_positionstypen_wahl_bedarf.x83',
+        'source': 'Projektinternes Modell (Wahl- und Bedarfspositionen)',
+        'target_version': '3.3',
+        'schema_file': 'GAEB_DA_XML_83_3.3_2021-05.xsd',
+        'schema_path': XSD_33_PATH,
+        'doc_deviation': 'Verwendet DA_XML_3.3 Namespace statt Phasen-Namespace DA83/3.3'
+    },
+    {
+        'file': '03_bieterangaben_vorbemerkungen_ep.x83',
+        'source': 'Projektinternes Modell (BiReq, Vorbemerkungen, UPComponents)',
+        'target_version': '3.3',
+        'schema_file': 'GAEB_DA_XML_83_3.3_2021-05.xsd',
+        'schema_path': XSD_33_PATH,
+        'doc_deviation': 'Verwendet DA_XML_3.3 Namespace statt Phasen-Namespace DA83/3.3'
+    },
+    {
+        'file': '04_reales_muster_hochbau.x83',
+        'source': 'Projektinternes Modell (Hochbau-Leistungen)',
+        'target_version': '3.3',
+        'schema_file': 'GAEB_DA_XML_83_3.3_2021-05.xsd',
+        'schema_path': XSD_33_PATH,
+        'doc_deviation': 'Verwendet DA_XML_3.3 Namespace statt Phasen-Namespace DA83/3.3'
+    },
+    {
+        'file': '05_muster_angelehnt_an_gaeb_bvbs.x83',
+        'source': 'Projektinternes Modell (ZTVE-Spezifikationen; KEINE BVBS-Datei!)',
+        'target_version': '3.3',
+        'schema_file': 'GAEB_DA_XML_83_3.3_2021-05.xsd',
+        'schema_path': XSD_33_PATH,
+        'doc_deviation': 'Verwendet DA_XML_3.3 Namespace statt Phasen-Namespace DA83/3.3'
+    }
 ]
 
-def check_file(fname, schema):
+def load_schemas():
+    if not os.path.exists(XSD_33_PATH):
+        print(f"KRITISCHER FEHLER: GAEB 3.3 Schema nicht gefunden: {XSD_33_PATH}")
+        sys.exit(1)
+    if not os.path.exists(XSD_32_PATH):
+        print(f"KRITISCHER FEHLER: GAEB 3.2 Schema nicht gefunden: {XSD_32_PATH}")
+        sys.exit(1)
+
+    try:
+        schema_33 = etree.XMLSchema(file=XSD_33_PATH)
+    except Exception as e:
+        print(f"KRITISCHER FEHLER beim Laden des GAEB 3.3 Schemas: {e}")
+        sys.exit(1)
+
+    try:
+        schema_32 = etree.XMLSchema(file=XSD_32_PATH)
+    except Exception as e:
+        print(f"KRITISCHER FEHLER beim Laden des GAEB 3.2 Schemas: {e}")
+        sys.exit(1)
+
+    return schema_33, schema_32
+
+def check_file(item, schemas):
+    fname = item['file']
     fpath = os.path.join(FIXTURES_DIR, fname)
+    target_v = item.get('target_version', '3.3')
+    schema = schemas['3.2'] if target_v == '3.2' else schemas['3.3']
+    schema_name = item.get('schema_file', os.path.basename(item.get('schema_path', '')))
+
     if not os.path.exists(fpath):
         return {
             'file': fname,
+            'source': item.get('source', ''),
             'exists': False,
+            'declared_version': 'unbekannt',
+            'tested_schema': schema_name,
             'well_formed': False,
             'wf_error': 'Datei nicht gefunden',
             'structural_ok': False,
@@ -63,14 +161,15 @@ def check_file(fname, schema):
     except Exception as e:
         wf_error = str(e)
 
-    # 2. Strukturelle Basiskonformität
+    # 2. Strukturelle Basiskonformität & deklarierte GAEB-Version
     structural_ok = False
     structural_notes = []
+    declared_v = 'fehlt'
     if well_formed and doc is not None:
         root_tag = etree.QName(doc).localname
         ns = doc.nsmap.get(None, '')
-        version = doc.xpath('//*[local-name()="GAEBInfo"]/*[local-name()="Version"]')
-        dp = doc.xpath('//*[local-name()="Award"]/*[local-name()="DP"]')
+        version_nodes = doc.xpath('//*[local-name()="GAEBInfo"]/*[local-name()="Version"]')
+        dp_nodes = doc.xpath('//*[local-name()="Award"]/*[local-name()="DP"]')
 
         if root_tag == 'GAEB':
             structural_notes.append("Wurzel <GAEB> OK")
@@ -82,23 +181,25 @@ def check_file(fname, schema):
         else:
             structural_notes.append(f"Namespace abweichend ({ns})")
 
-        has_v33 = bool(version and version[0].text and version[0].text.strip() == '3.3')
-        if has_v33:
-            structural_notes.append("Version 3.3 OK")
+        if version_nodes and version_nodes[0].text:
+            declared_v = version_nodes[0].text.strip()
+            if declared_v == target_v:
+                structural_notes.append(f"Version {declared_v} OK")
+            else:
+                structural_notes.append(f"Version {declared_v} != {target_v}")
         else:
-            v_val = version[0].text.strip() if (version and version[0].text) else 'fehlt'
-            structural_notes.append(f"Version != 3.3 ({v_val})")
+            structural_notes.append("Version fehlt")
 
-        has_dp83 = bool(dp and dp[0].text and dp[0].text.strip() == '83')
+        has_dp83 = bool(dp_nodes and dp_nodes[0].text and dp_nodes[0].text.strip() == '83')
         if has_dp83:
             structural_notes.append("DP 83 OK")
         else:
-            dp_val = dp[0].text.strip() if (dp and dp[0].text) else 'fehlt'
+            dp_val = dp_nodes[0].text.strip() if (dp_nodes and dp_nodes[0].text) else 'fehlt'
             structural_notes.append(f"DP != 83 ({dp_val})")
 
-        structural_ok = (root_tag == 'GAEB' and 'http://www.gaeb.de/GAEB_DA_XML/' in ns and has_v33 and has_dp83)
+        structural_ok = (root_tag == 'GAEB' and 'http://www.gaeb.de/GAEB_DA_XML/' in ns and declared_v == target_v and has_dp83)
 
-    # 3. Strikte XSD-Validierung (OHNE jeglichen Text- oder Namespace-Hack!)
+    # 3. Strikte XSD-Validierung gegen das vorgesehene Schema (OHNE Manipulation!)
     xsd_valid = False
     xsd_errors = []
     if well_formed and doc is not None:
@@ -109,116 +210,175 @@ def check_file(fname, schema):
 
     return {
         'file': fname,
+        'source': item.get('source', ''),
         'exists': True,
+        'declared_version': declared_v,
+        'tested_schema': schema_name,
         'well_formed': well_formed,
         'wf_error': wf_error,
         'structural_ok': structural_ok,
         'structural_notes': structural_notes,
         'xsd_valid': xsd_valid,
-        'xsd_errors': xsd_errors
+        'xsd_errors': xsd_errors,
+        'doc_deviation': item.get('doc_deviation')
     }
 
 def print_table(group_name, results):
     print(f"\n--- {group_name} ---")
-    print(f"{'Dateiname':<42} | {'Wohlgeformt':<11} | {'Struktur 3.3':<12} | {'Strikte XSD':<22}")
-    print("-" * 95)
+    print(f"{'Dateiname':<34} | {'GAEB-V':<7} | {'Prüfschema':<32} | {'XML':<8} | {'XSD-Status':<18}")
+    print("-" * 110)
     for r in results:
-        wf_str = "JA (OK)" if r['well_formed'] else "NEIN (Fehler)"
-        st_str = "JA (OK)" if r['structural_ok'] else "NEIN (Abweichung)"
+        wf_str = "OK" if r['well_formed'] else "FEHLER"
         if r['xsd_valid']:
-            xsd_str = "BESTANDEN (OK)"
+            xsd_str = "BESTANDEN (0)"
         else:
             err_count = len(r['xsd_errors'])
             xsd_str = f"FEHLGESCHLAGEN ({err_count})"
-        print(f"{r['file']:<42} | {wf_str:<11} | {st_str:<12} | {xsd_str:<22}")
+        print(f"{r['file']:<34} | {r['declared_version']:<7} | {r['tested_schema']:<32} | {wf_str:<8} | {xsd_str:<18}")
+
+def run_self_test(schemas):
+    print("\n" + "=" * 95)
+    print("XSD-Validierungs-Selbsttest: Verifikation der Fehlererkennung bei korrumpierten Dateien")
+    print("=" * 95)
+
+    # Test 1: Korrumpierung von valid_schema_reference.x83 gegen GAEB 3.3 Schema (Entfernen des Pflichtfelds <DP>)
+    ref_33_path = os.path.join(FIXTURES_DIR, 'valid_schema_reference.x83')
+    if not os.path.exists(ref_33_path):
+        print(f"SELBSTTEST-FEHLER: Referenzdatei nicht gefunden: {ref_33_path}")
+        return False
+
+    doc_33 = etree.parse(ref_33_path)
+    schema_33 = schemas['3.3']
+    if not schema_33.validate(doc_33):
+        print("SELBSTTEST-FEHLER: Unkorrumpierte Referenzdatei 3.3 besteht die Validierung nicht!")
+        return False
+
+    dp_node_33 = doc_33.getroot().xpath('//*[local-name()="DP"]')
+    if not dp_node_33:
+        print("SELBSTTEST-FEHLER: <DP> Element in valid_schema_reference.x83 nicht gefunden!")
+        return False
+    dp_node_33[0].getparent().remove(dp_node_33[0])
+
+    if schema_33.validate(doc_33):
+        print("KRITISCHER FEHLER IM SELBSTTEST: Fehlendes Pflichtfeld <DP> in 3.3 wurde NICHT erkannt!")
+        return False
+    err_33 = schema_33.error_log[0].message if schema_33.error_log else "Kein Text"
+    print(f"[OK] Selbsttest 1 (GAEB 3.3 - Pflichtfeld <DP> entfernt): Hart abgefangen.")
+    print(f"  Erkannte Schemaabweichung: {err_33}")
+
+    # Test 2: Korrumpierung von independent_pygaeb_da32.x83 gegen GAEB 3.2 Schema (Entfernen des Pflichtfelds <DP>)
+    ref_32_path = os.path.join(FIXTURES_DIR, 'independent_pygaeb_da32.x83')
+    if not os.path.exists(ref_32_path):
+        print(f"SELBSTTEST-FEHLER: pyGAEB-Datei nicht gefunden: {ref_32_path}")
+        return False
+
+    doc_32 = etree.parse(ref_32_path)
+    schema_32 = schemas['3.2']
+    if not schema_32.validate(doc_32):
+        print("SELBSTTEST-FEHLER: Unkorrumpierte pyGAEB 3.2 Datei besteht die Validierung nicht!")
+        return False
+
+    dp_node_32 = doc_32.getroot().xpath('//*[local-name()="DP"]')
+    if not dp_node_32:
+        print("SELBSTTEST-FEHLER: <DP> Element in independent_pygaeb_da32.x83 nicht gefunden!")
+        return False
+    dp_node_32[0].getparent().remove(dp_node_32[0])
+
+    if schema_32.validate(doc_32):
+        print("KRITISCHER FEHLER IM SELBSTTEST: Fehlendes Pflichtfeld <DP> in 3.2 wurde NICHT erkannt!")
+        return False
+    err_32 = schema_32.error_log[0].message if schema_32.error_log else "Kein Text"
+    print(f"[OK] Selbsttest 2 (GAEB 3.2 - Pflichtfeld <DP> entfernt): Hart abgefangen.")
+    print(f"  Erkannte Schemaabweichung: {err_32}")
+
+    print("Selbsttest: BESTANDEN (Validierungs-Engine gibt bei Fehlern niemals stillschweigend grünes Licht)\n")
+    return True
 
 def main():
-    print("=" * 95)
-    print("GAEB X83 Validierungsbericht: Strikte Schema-Prüfung gegen GAEB_DA_XML_83_3.3_2021-05.xsd")
-    print("=" * 95)
+    self_test_only = '--self-test' in sys.argv
 
-    if not os.path.exists(XSD_83_PATH):
-        print(f"KRITISCHER FEHLER: XSD-Schema nicht gefunden: {XSD_83_PATH}")
-        sys.exit(1)
+    schema_33, schema_32 = load_schemas()
+    schemas = {'3.3': schema_33, '3.2': schema_32}
 
-    try:
-        schema = etree.XMLSchema(file=XSD_83_PATH)
-        print(f"Offizielles Schema geladen: {os.path.basename(XSD_83_PATH)}")
-        print("Modus: Unveränderte Prüfung im Originalzustand (keine Namespace-Ersetzungen)\n")
-    except Exception as e:
-        print(f"KRITISCHER FEHLER beim Laden des XSD-Schemas: {e}")
-        sys.exit(1)
+    if self_test_only:
+        ok = run_self_test(schemas)
+        sys.exit(0 if ok else 1)
 
-    # Gruppe 1 prüfen
-    valid_results = [check_file(f, schema) for f in EXPECTED_VALID]
-    print_table("1. EXPECTED_VALID (Schema-konforme Referenzen - müssen zwingend bestehen)", valid_results)
+    print("=" * 110)
+    print("GAEB X83 Validierungsbericht: Versionierte Schema-Prüfung (GAEB 3.2 und GAEB 3.3)")
+    print("=" * 110)
+    print(f"Geladene offizielle Schemata:")
+    print(f"  - GAEB DA XML 3.3 (2021-05): {os.path.basename(XSD_33_PATH)}")
+    print(f"  - GAEB DA XML 3.2 (2013-10): {os.path.basename(XSD_32_PATH)}")
+    print(f"Modus: Unveränderte Prüfung im Originalzustand (strikte Prüfung ohne Text- oder Namespace-Hacks)\n")
 
-    # Gruppe 2 prüfen (Unabhängige Open-Source-Datei)
-    independent_results = [check_file(f, schema) for f in INDEPENDENT_EXTERNAL_FILES]
-    print_table("2. INDEPENDENT_EXTERNAL_FILES (Unabhängige Datei aus pyGAEB, DA XML 3.2)", independent_results)
+    # 1. EXPECTED_VALID prüfen
+    valid_results = [check_file(item, schemas) for item in EXPECTED_VALID]
+    print_table("1. EXPECTED_VALID (Schema-konforme Referenzen - müssen zwingend 100% bestehen)", valid_results)
 
-    # Gruppe 3 prüfen (Interne Testmodelle)
-    internal_results = [check_file(f, schema) for f in PROJECT_INTERNAL_MODELS]
-    print_table("3. PROJECT_INTERNAL_MODELS (Interne Edge-Case-Testmodelle für Parser-Härtung)", internal_results)
+    # 2. PROJECT_INTERNAL_MODELS prüfen
+    internal_results = [check_file(item, schemas) for item in PROJECT_INTERNAL_MODELS]
+    print_table("2. PROJECT_INTERNAL_MODELS (Interne Edge-Case-Testmodelle für Parser-Härtung)", internal_results)
 
-    print("\n" + "=" * 95)
+    # Detailprotokoll
+    print("\n" + "=" * 110)
     print("Detailprotokoll der Prüfergebnisse:")
-    print("=" * 95)
+    print("=" * 110)
 
     print("\n[GRUPPE 1: EXPECTED_VALID]")
     has_expected_valid_failure = False
     for r in valid_results:
         print(f"\nDatei: {r['file']}")
-        print(f"  - XML-Wohlgeformtheit: {'OK' if r['well_formed'] else r['wf_error']}")
+        print(f"  - Quelle:               {r['source']}")
+        print(f"  - Deklarierte Version:  {r['declared_version']}")
+        print(f"  - Geprüftes Schema:     {r['tested_schema']}")
+        print(f"  - XML-Status:           {'Wohlgeformt (OK)' if r['well_formed'] else r['wf_error']}")
         print(f"  - Strukturelle Prüfung: {', '.join(r['structural_notes'])}")
         if r['xsd_valid']:
-            print("  - Strikte XSD-Validierung: BESTANDEN (0 Schema-Fehler)")
+            print("  - XSD-Validierungsstatus: BESTANDEN (0 Schema-Fehler)")
         else:
             has_expected_valid_failure = True
-            print(f"  - Strikte XSD-Validierung: FEHLGESCHLAGEN ({len(r['xsd_errors'])} Schema-Fehler):")
+            print(f"  - XSD-Validierungsstatus: FEHLGESCHLAGEN ({len(r['xsd_errors'])} Schema-Fehler):")
             for err in r['xsd_errors'][:10]:
                 print(f"      * {err}")
             if len(r['xsd_errors']) > 10:
                 print(f"      ... und {len(r['xsd_errors']) - 10} weitere Fehler")
 
-    print("\n[GRUPPE 2: INDEPENDENT_EXTERNAL_FILES (pyGAEB Open Source)]")
-    for r in independent_results:
-        print(f"\nDatei: {r['file']}")
-        print(f"  - XML-Wohlgeformtheit: {'OK' if r['well_formed'] else r['wf_error']}")
-        print(f"  - Strukturelle Prüfung: {', '.join(r['structural_notes'])}")
-        if r['xsd_valid']:
-            print("  - Strikte XSD-Validierung: BESTANDEN")
-        else:
-            print(f"  - Strikte XSD-Validierung: FEHLGESCHLAGEN ({len(r['xsd_errors'])} Abweichungen vom 3.3 DA83-Schema):")
-            print("      * Ehrlicher Befund: Datei verwendet GAEB DA XML 3.2 DA83 Namespace ('http://www.gaeb.de/GAEB_DA_XML/DA83/3.2')")
-            print("        und scheitert an der strikten Prüfung gegen das GAEB DA XML 3.3 Phasenschema (Ausgabe 2021-05).")
-            print("        Keine Manipulation der Datei oder des Namespace vorgenommen!")
-            for err in r['xsd_errors'][:4]:
-                print(f"      * {err}")
-
-    print("\n[GRUPPE 3: PROJECT_INTERNAL_MODELS]")
+    print("\n[GRUPPE 2: PROJECT_INTERNAL_MODELS]")
     for r in internal_results:
         print(f"\nDatei: {r['file']}")
-        print(f"  - XML-Wohlgeformtheit: {'OK' if r['well_formed'] else r['wf_error']}")
-        print(f"  - Strukturelle Prüfung: {', '.join(r['structural_notes'])}")
+        print(f"  - Quelle:               {r['source']}")
+        print(f"  - Deklarierte Version:  {r['declared_version']}")
+        print(f"  - Geprüftes Schema:     {r['tested_schema']}")
+        print(f"  - XML-Status:           {'Wohlgeformt (OK)' if r['well_formed'] else r['wf_error']}")
+        print(f"  - Dokumentierte Abweichung: {r.get('doc_deviation', 'Keine')}")
         if r['xsd_valid']:
-            print("  - Strikte XSD-Validierung: BESTANDEN")
+            print("  - XSD-Validierungsstatus: BESTANDEN")
         else:
-            print(f"  - Strikte XSD-Validierung: FEHLGESCHLAGEN ({len(r['xsd_errors'])} Abweichungen vom DA83-Schema):")
-            for err in r['xsd_errors'][:4]:
+            print(f"  - XSD-Validierungsstatus: FEHLGESCHLAGEN ({len(r['xsd_errors'])} Abweichungen vom DA83-Schema - erwartet):")
+            for err in r['xsd_errors'][:3]:
                 print(f"      * {err}")
-            if len(r['xsd_errors']) > 4:
-                print(f"      ... und {len(r['xsd_errors']) - 4} weitere Abweichungen (z. B. generischer Namespace DA_XML_3.3)")
+            if len(r['xsd_errors']) > 3:
+                print(f"      ... und {len(r['xsd_errors']) - 3} weitere Abweichungen")
 
-    print("\n" + "=" * 95)
-    print("Zusammenfassung:")
+    # Selbsttest ausführen
+    self_test_ok = run_self_test(schemas)
+
+    print("=" * 110)
+    print("Zusammenfassendes Gesamtergebnis:")
+    print("=" * 110)
     if has_expected_valid_failure:
         print("ERGEBNIS: FEHLER - Mindestens eine Datei aus EXPECTED_VALID hat die XSD-Validierung nicht bestanden!")
         sys.exit(1)
+    elif not self_test_ok:
+        print("ERGEBNIS: FEHLER - Der XSD-Validierungs-Selbsttest ist fehlgeschlagen!")
+        sys.exit(1)
     else:
-        print("ERGEBNIS: ERFOLG - Alle Dateien in EXPECTED_VALID validieren fehlerfrei gegen das GAEB 3.3 Schema.")
-        print("Die unabhängige pyGAEB-Datei (Version 3.2) zeigt eine dokumentierte Versionsdiskrepanz zum 3.3-Schema.")
-        print("Die Abweichungen in PROJECT_INTERNAL_MODELS sind dokumentierte Edge-Cases für den funktionalen Parser.")
+        print("ERGEBNIS: ERFOLG - Alle Dateien in EXPECTED_VALID bestehen zu 100% ihre jeweilige offizielle XSD-Validierung!")
+        print("  - valid_schema_reference.x83: 100% konform zu GAEB DA XML 83 3.3 (Ausgabe 2021-05)")
+        print("  - independent_pygaeb_da32.x83: 100% konform zu GAEB DA XML 83 3.2 (Ausgabe 2013-10)")
+        print("  - Selbsttest: Verifiziert, dass fehlerhafte Dateien hart zurückgewiesen werden.")
+        print("  - PROJECT_INTERNAL_MODELS: Dokumentierte Edge-Cases für Parser-Resilienz.")
         sys.exit(0)
 
 if __name__ == '__main__':

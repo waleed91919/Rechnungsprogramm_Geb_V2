@@ -133,9 +133,11 @@ class GAEB_ItemReader {
             };
         }
 
-        // Menge
+        // Menge: Bei QtyTBD (Mengenvorbehalt) MUSS menge zwingend null sein!
         let menge = null;
-        if (hasQty) {
+        if (isQtyTBD) {
+            menge = null;
+        } else if (hasQty) {
             const parsedQty = parseFloat(qtyElem.textContent.replace(',', '.'));
             menge = isNaN(parsedQty) ? null : parsedQty;
         }
