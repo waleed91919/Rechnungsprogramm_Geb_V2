@@ -22,8 +22,13 @@ class GAEB_XMLDomUtils {
             const { JSDOM } = require('jsdom');
             const dom = new JSDOM();
             return new dom.window.DOMParser();
-        } catch (e) {
-            throw new Error('Kein DOMParser verfügbar: ' + e.message);
+        } catch (_e1) {
+            try {
+                const { DOMParser: XMLDOMParser } = require('@xmldom/xmldom');
+                return new XMLDOMParser();
+            } catch (e) {
+                throw new Error('Kein DOMParser verfügbar: ' + e.message);
+            }
         }
     }
 

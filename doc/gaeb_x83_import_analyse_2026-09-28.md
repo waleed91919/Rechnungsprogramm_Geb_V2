@@ -1,11 +1,12 @@
 # GAEB X83 Import & Unabhängige Validierung: Prüf- und Fortschrittsbericht
 
 **Datum:** 28. September 2026  
-**Branch:** `fix/gaeb-x83-schema-and-parser-hardening` (Arbeits- und Review-Branch)  
+**Branch:** `review/gaeb-x83-persistence` (abgezweigt von Commit `24969a3`)  
 **Bezugsdokument:** `liesen.txt`  
-**Status:** Versionierte XSD-Prüfung abgeschlossen, unabhängige Open-Source-Datei (pyGAEB) 100% schemakonform validiert, modularer Parser gehärtet  
+**Status:** Vollständige, verlustfreie SQLite-Persistenz & Roundtrip-Rekonstruktion implementiert und verifiziert (100% Tests bestanden)  
 **Testsuites:**
 - `python tests/validate_xsd.py` & `python tests/validate_xsd.py --self-test`
+- `node --test tests/gaeb_x83_persistence.test.js` (14 Tests in 6 Suites)
 - `node --test tests/gaeb_x83_import_audit.test.js` (19 Tests)
 - `node --test tests/gaeb_validation.test.js` (6 Tests)
 - `node --test tests/angebot_lifecycle.test.js` (1 Test)
@@ -127,11 +128,12 @@ Die Weiterentwicklung erfolgte streng modular und ohne Code-Verschiebung in `mai
 | :--- | :--- | :---: | :---: |
 | Versionierte XSD-Prüfung | `python tests/validate_xsd.py` | 100% OK (Exit 0) | ~0.5s |
 | Validierungs-Selbsttest | `python tests/validate_xsd.py --self-test` | 100% OK (Exit 0) | ~0.3s |
+| GAEB X83 Persistenz & Roundtrip (14 Tests) | `node --test tests/gaeb_x83_persistence.test.js` | 14/14 Pass (Exit 0) | ~1.3s |
 | X83 Import Audit (19 Tests) | `node --test tests/gaeb_x83_import_audit.test.js` | 19/19 Pass (Exit 0) | ~2.5s |
 | GAEB DA XML 3.3 Export/Validierung | `node --test tests/gaeb_validation.test.js` | 6/6 Pass (Exit 0) | ~1.9s |
-| Angebots-Lebenszyklus | `node --test tests/angebot_lifecycle.test.js` | 1/1 Pass (Exit 0) | ~6.8s |
-| Angebots-UI-Workflow | `node --test tests/angebot_ui_workflow.test.js` | 1/1 Pass (Exit 0) | ~0.5s |
-| Electron DOM & PDF-Workflow | `node --test tests/angebot_true_ui_and_pdf.test.js` | 1/1 Pass (Exit 0) | ~3.4s |
+| Angebots-Lebenszyklus | `node --test tests/angebot_lifecycle.test.js` | 1/1 Pass (Exit 0) | ~12.5s |
+| Angebots-UI-Workflow | `node --test tests/angebot_ui_workflow.test.js` | 1/1 Pass (Exit 0) | ~0.6s |
+| Electron DOM & PDF-Workflow | `node --test tests/angebot_true_ui_and_pdf.test.js` | 1/1 Pass (Exit 0) | ~3.8s |
 
 ---
 
@@ -139,16 +141,89 @@ Die Weiterentwicklung erfolgte streng modular und ohne Code-Verschiebung in `mai
 
 1. **Hat die unabhängige Testdatei XSD 3.2 bestanden?**  
    **Ja, zu 100% mit 0 Fehlern.** Unter dem offiziellen GAEB DA XML 3.2 Schema (Stand 2013-10) ist `independent_pygaeb_da32.x83` formal und strukturell absolut valide.
-2. **Was hat W-Link ERP nachweislich korrekt importiert?**  
-   - Vollständige Hierarchien (Hauptkategorien und Unterabschnitte).
+2. **Was hat W-Link ERP nachweislich korrekt importiert und persistiert?**  
+   - Vollständige BoQCtgy-Hierarchien (Hauptkategorien, Abschnitte und Unterabschnitte).
    - Reale Behandlung von leeren Kategorietexten ohne Scoping-Fehler.
-   - Exakte Reihenfolge aller 6 Positionen.
+   - Exakte Reihenfolge aller Kategorien und Positionen.
    - Korrekte Differenzierung von Menge 1 (Pauschale), regulärer Menge (600, 800, 240) und Mengenvorbehalten (`QtyTBD` -> `menge: null`, `isQtyTBD: true`).
-   - Mehrzeilige Langtexte vollständig erhalten.
+   - Mehrzeilige Langtexte und Vorbemerkungen auf Titelebene vollständig erhalten.
+   - Bietertextergänzungen (`BiReq`) und Einheitspreis-Aufgliederungen (`UPComponents`).
    - Vergaberechtliche Null-Sicherheit: Alle unbepreisten Positionen bleiben `preis: null`, `isPriceMissing: true`.
-3. **Was bleibt aktuell noch unberücksichtigt (Folgeaufgaben)?**  
-   - Keine Speicherung in neuen relationalen Tabellen in `schema.js`.
-   - Keine Benutzeroberfläche zur Bearbeitung von Bieterangaben oder Langtexten.
-   - Kein hierarchischer X84-Generator (der bestehende X84-Generator exportiert flache Positionen).
+   - Re-Import-Sicherheit mit Verknüpfungsschutz und atomarem Rollback.
+3. **Was bleibt aktuell noch unberücksichtigt (Folgeaufgaben für spätere Phasen)?**  
+   - Ausschreibungs-Explorer UI zur visuellen Baum-Navigation und Bieter-Texteingabe.
+   - Bepreisungs-Maske für GAEB-Positionen zur Übernahme in Angebote (`linked_position_id`).
+   - Neuer hierarchischer X84-Generator (der bestehende X84-Generator exportiert flache Positionen).
+   - VHB-Formblätter 221/223 für automatisierte GAEB-Kalkulationsblätter.
 4. **Funktionieren die Schnittstellen in Node.js, Electron (ohne require) und der bestehende X84-Generator weiterhin?**  
    **Ja.** Alle Regressionstests, einschließlich Electron-DOM-Simulation ohne `require()` und Roundtrip-Export über `generateGAEBX84XML()`, laufen zu 100% fehlerfrei.
+
+---
+
+## 7. GAEB X83 SQLite-Persistenz & Roundtrip-Architektur
+
+### 7.1 Modulares Datenmodell (`db/schema/gaeb_schema.js`)
+Die GAEB-Ausschreibungsstrukturen wurden strikt von den produktiven Belegtabellen (`dokumente` und `positionen`) getrennt:
+1. `gaeb_imports`:
+   - Eindeutige ID, Original-Dateiname, GAEB-Version (`3.2`/`3.3`), Phase (`83`/`X83`), Projektname, Währung.
+   - `file_hash`: SHA-256 Prüfsumme des Original-XMLs mit dediziertem Index `idx_gaeb_imports_file_hash`.
+   - `file_size`: Dateigröße in Bytes.
+   - `raw_xml`: Vollständiger Original-XML-Inhalt für bitgenaue Rekonstruierbarkeit.
+   - `imported_at`, `updated_at`: Zeitstempel.
+2. `gaeb_categories`:
+   - `import_id` (FK `gaeb_imports.id` ON DELETE CASCADE).
+   - `parent_id` (FK `gaeb_categories.id` ON DELETE CASCADE für n-stufige Baumhierarchien).
+   - `cat_level`: Hierarchiestufe (0 = Gewerk, 1 = Abschnitt, 2 = Unterabschnitt etc.).
+   - `sort_index`: Exakte Reihenfolge im XML.
+   - `lbl_ctgy`, `rno_part`, `path_oz`: Pfad-Ordnungszahlen.
+   - `name`, `description`: Bezeichnung und Vorbemerkungen auf Titelebene.
+   - `raw_metadata_json`: Strukturierte Metadaten (Original-IDs, Remarks).
+3. `gaeb_items`:
+   - `import_id` (FK `gaeb_imports.id` ON DELETE CASCADE).
+   - `category_id` (FK `gaeb_categories.id` ON DELETE CASCADE).
+   - `sort_index`, `path_oz`, `rno_part`: Ordnungszahlen und XML-Reihenfolge.
+   - `item_type`: Normal-, Grund-, Wahl-, Bedarfs- und Pauschalpositionen sowie Hinweistexte.
+   - `short_text`, `long_text`: Vollständige Kurz- und mehrzeilige Langtexte.
+   - `menge`: Null bei `QtyTBD`, Hinweistexten oder fehlender Menge; kein Platzhalter 1 Stk.!
+   - `is_qty_tbd`: Kennzeichen für Mengenvorbehalt.
+   - `einheit`: Maßeinheit (`m³`, `m²`, `Psch` etc.).
+   - `preis`: Strikt `NULL` in X83 (keine Scheinwerte `0.00 €`!).
+   - `gesamtpreis`: `NULL` in X83.
+   - `is_price_missing`: `1` für unbepreiste Positionen.
+   - `in_endsumme_enthalten`: Differenzierung für Grund/Wahl/Bedarf.
+   - `aln_group_no`, `aln_ser_no`, `provis`: Vergaberechtliche Attribute.
+   - `is_hinweistext`: Kennzeichnung mengenneutraler Texte.
+   - `linked_position_id`: Nullable Fremdschlüssel als designierter Verknüpfungspunkt für spätere Angebotsübernahme.
+4. `gaeb_item_bireq`:
+   - `item_id` (FK `gaeb_items.id` ON DELETE CASCADE).
+   - `bireq_type`, `label`, `description`, `value`: Strukturierte Speicherung der Bieterangaben.
+5. `gaeb_item_up_components`:
+   - `item_id` (FK `gaeb_items.id` ON DELETE CASCADE).
+   - `lohn`, `stoff`, `geraet`, `sonstiges`, `total`: Einheitspreis-Aufgliederung.
+
+### 7.2 Repository-Operationen & Re-Import Policy (`db/repositories/gaeb_repository.js`)
+- `saveX83Import(db, parsedData, options)`:
+  - **Re-Import Policy:** Bei wiederholtem Import mit gleichem `file_hash` wird geprüft, ob Positionen mit aktiven Belegen verknüpft sind (`linked_position_id IS NOT NULL`). Wenn verknüpft, wird ein Überschreiben strikt verweigert. Wenn unverknüpft und `overwrite !== true`, wird der bestehende Import unverändert zurückgegeben (keine stillen Duplikate). Bei `overwrite === true` erfolgt ein atomarer Ersatz.
+  - **Atomare Transaktion:** Sämtliche Tabelleneinträge laufen in einer einzigen SQLite-Transaktion. Tritt an beliebiger Stelle ein Fehler auf, rollt SQLite die gesamte Transaktion zurück; es verbleiben keine verwaisten Zeilen in der Datenbank.
+- `loadX83Import(db, importId)`:
+  - Rekonstruiert die identische hierarchische Datenstruktur wie `GAEBEngine.parseGAEBXML()`: Baum (`categories` mit verschachtelten Unterkategorien und deren `items`), flache Liste (`items`), `projectInfo` und `rawXml`.
+- `listX83Imports(db)`:
+  - Liefert Übersichtsstatistiken: Kategorieanzahl, Positionsanzahl, Anzahl verknüpfter Positionen, Dateigröße, Hash und Importdatum.
+- `deleteX83Import(db, importId)`:
+  - Prüft Verknüpfungsschutz: Sind Positionen verknüpft, wird das Löschen abgewiesen. Andernfalls kaskadiert das Löschen atomar über alle Kindtabellen.
+
+### 7.3 IPC-Integration (`main/ipc/ipc-gaeb.js`)
+- Registriert IPC-Handler: `gaeb:save-import`, `gaeb:load-import`, `gaeb:list-imports`, `gaeb:delete-import`.
+- Registriert in `main/ipc/index.js`.
+- **`main.js` bleibt vollständig unberührt.**
+
+### 7.4 Testverifikation des Lebenszyklus (`tests/gaeb_x83_persistence.test.js`)
+- **14 automatisierte Tests in 6 Suites** prüfen den kompletten Zyklus:
+  1. Roundtrip auf offiziellen XSD-Referenzen (GAEB 3.3 und GAEB 3.2 pyGAEB) inklusive Schließen und Neuöffnen der SQLite-Datenbankdatei.
+  2. Prüfung aller 5 internen Edge-Case-Modelle (3-stufige Hierarchien, Wahl/Bedarf/Pauschal-Positionen, BiReq, Vorbemerkungen, UPComponents).
+  3. Fehlertoleranz: Transaktions-Rollback hinterlässt bei simuliertem Fehler 0 Zeilen in der DB.
+  4. Re-Import-Policy: Idempotenz bei Duplikaten, atomarer Ersatz bei Overwrite, Exception bei verknüpften Belegen.
+  5. Verknüpfungsschutz beim Löschen.
+  6. Migration auf bestehender Altdatenbank: Altdaten (Kunden, Rechnungen, Angebote, Positionen) bleiben zu 100% intakt.
+  7. Fremdschlüssel-Prüfung: `PRAGMA foreign_key_check` liefert in allen Tests 0 Fehler.
+

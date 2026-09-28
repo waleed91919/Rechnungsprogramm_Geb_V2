@@ -1,0 +1,52 @@
+/**
+ * main/ipc/ipc-gaeb.js
+ * IPC-Handler für GAEB X83 Import, Persistenz, Laden und Löschen.
+ */
+
+const { wrapHandler: defaultWrapHandler } = require('./ipc-util');
+const gaebRepo = require('../../db/repositories/gaeb_repository');
+
+function register(ipcMain, context = {}) {
+    const db = context.db || (context.dbAPI && context.dbAPI.db) || require('../../db').db;
+    const dbAPI = context.dbAPI || require('../../db').dbAPI;
+    const wrapHandler = context.wrapHandler || defaultWrapHandler;
+
+    // Speichert ein geparstes X83 Dokument atomar in SQLite
+    ipcMain.handle('gaeb:save-import', wrapHandler(async (e, payload = {}) => {
+        const { parsedData, options } = payload;
+        if (dbAPI && typeof dbAPI.saveX83Import === 'function') {
+            return dbAPI.saveX83Import(parsedData, options);
+        }
+        return gaebRepo.saveX83Import(db, parsedData, options);
+    }));
+
+    // Lädt einen vollständigen X83 Import (Kopfdaten, Baum, Items, BiReq, UPComponents)
+    ipcMain.handle('gaeb:load-import', wrapHandler(async (e, importId) => {
+        if (!importId) throw new Error('Import-ID fehlt.');
+        if (dbAPI && typeof dbAPI.loadX83Import === 'function') {
+            return dbAPI.loadX83Import(importId);
+        }
+        return gaebRepo.loadX83Import(db, importId);
+    }));
+
+    // Listet alle importierten Ausschreibungen mit aggregierten Statistiken
+    ipcMain.handle('gaeb:list-imports', wrapHandler(async () => {
+        if (dbAPI && typeof dbAPI.listX83Imports === 'function') {
+            return dbAPI.listX83Imports();
+        }
+        return gaebRepo.listX83Imports(db);
+    }));
+
+    // Löscht einen Import mit Verknüpfungsschutz
+    ipcMain.handle('gaeb:delete-import', wrapHandler(async (e, importId) => {
+        if (!importId) throw new Error('Import-ID fehlt.');
+        if (dbAPI && typeof dbAPI.deleteX83Import === 'function') {
+            return dbAPI.deleteX83Import(importId);
+        }
+        return gaebRepo.deleteX83Import(db, importId);
+    }));
+}
+
+module.exports = {
+    register
+};

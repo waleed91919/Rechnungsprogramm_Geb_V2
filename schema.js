@@ -1,6 +1,7 @@
 /**
  * schema.js - Database Schema Definition, Migrations & Default Seeding
  */
+const { initGaebSchema, runGaebMigrations } = require('./db/schema/gaeb_schema');
 
 function createSchema(db) {
     // Create tables if they do not exist
@@ -1346,6 +1347,9 @@ function createSchema(db) {
     )`);
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_maengel_proj ON maengel(projekt_id)`); } catch (e) { console.error('[DB Schema] Index idx_maengel_proj:', e.message); }
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_maengel_plan ON maengel(plan_id)`); } catch (e) { console.error('[DB Schema] Index idx_maengel_plan:', e.message); }
+
+    // GAEB X83 Schema modular initialisieren
+    initGaebSchema(db);
 }
 
 function runMigrations(db) {
@@ -2488,6 +2492,9 @@ function runMigrations(db) {
 
     // --- Datenintegrität: Duplikate bereinigen + UNIQUE-Indizes ---
     ensureUniqueConstraints(db);
+
+    // GAEB X83 Migrationen modular ausführen
+    runGaebMigrations(db);
 }
 
 /**
@@ -2854,5 +2861,7 @@ module.exports = {
     ensureGoBDSchemaAndTriggers,
     dedupeDuplicateDocumentNumbers,
     dedupeDuplicateVerrechnungen,
-    dedupeDuplicateRetentions
+    dedupeDuplicateRetentions,
+    initGaebSchema,
+    runGaebMigrations
 };

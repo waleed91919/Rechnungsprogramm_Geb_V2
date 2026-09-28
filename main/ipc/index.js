@@ -8,6 +8,7 @@ const zeiterfassung = require('./ipc-zeiterfassung');
 const sync = require('./ipc-sync');
 const compliance = require('./ipc-compliance');
 const system = require('./ipc-system');
+const gaeb = require('./ipc-gaeb');
 
 function registerAllIpc(ipcMain, context = {}) {
     core.register(ipcMain, context);
@@ -20,6 +21,7 @@ function registerAllIpc(ipcMain, context = {}) {
     sync.register(ipcMain, context);
     compliance.register(ipcMain, context);
     system.register(ipcMain, context);
+    gaeb.register(ipcMain, context);
 }
 
 module.exports = {
@@ -33,5 +35,6 @@ module.exports = {
     zeiterfassung,
     sync,
     compliance,
-    system
+    system,
+    gaeb
 };
