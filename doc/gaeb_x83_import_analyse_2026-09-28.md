@@ -1,17 +1,18 @@
 # GAEB X83 Import & Unabhängige Validierung: Prüf- und Fortschrittsbericht
 
 **Datum:** 28. September 2026  
-**Branch:** `review/gaeb-x83-integrity` (abgezweigt von `review/gaeb-x83-persistence` auf Commit `037493e`)  
+**Branch:** `review/gaeb-tender-pricing-ui` (abgezweigt von `review/gaeb-x83-integrity` auf Commit `a8c2c93`)  
 **Bezugsdokument:** `liesen.txt`  
-**Status:** Vollständige, revisionssichere Datenintegrität & Persistenzgarantien implementiert und verifiziert (100% Tests bestanden)  
+**Status:** Vollständige, revisionssichere Bepreisungsphase, Entwurfsdatenmodell und modulares Tender-UI implementiert und verifiziert (100% Tests bestanden)  
 **Testsuites:**
 - `python tests/validate_xsd.py` & `python tests/validate_xsd.py --self-test`
+- `node --test tests/gaeb_tender_pricing.test.js` (10 Tests)
 - `node --test tests/gaeb_x83_persistence.test.js` (23 Tests in 9 Suites)
 - `node --test tests/gaeb_x83_import_audit.test.js` (19 Tests)
 - `node --test tests/gaeb_validation.test.js` (6 Tests)
 - `node --test tests/angebot_lifecycle.test.js` (1 Test)
 - `node --test tests/angebot_ui_workflow.test.js` (1 Test)
-- `node --test tests/angebot_true_ui_and_pdf.test.js` (1 Test)  
+- `node ./node_modules/electron/cli.js tests/test_electron_runner.js` (E2E Chromium DOM Testfall 4c)  
 **Referenzschemata:**
 - GAEB DA XML 3.3 Ausgabe 2021-05 (`tests/schemas/gaeb_da_xml_3.3/`)
 - GAEB DA XML 3.2 Ausgabe 2013-10 (`tests/schemas/gaeb_da_xml_3.2/` via offizielle GAEB-Quelle `https://www.gaeb.de/wp-content/uploads/2019/04/Leistungsverzeichnis.zip`)  
@@ -262,4 +263,145 @@ Die GAEB-Ausschreibungsstrukturen wurden strikt von den produktiven Belegtabelle
   7. *Legacy-String-Pfad:* Speichern ohne Buffer liefert `hasOriginalBytes: false` und `getImportOriginalBuffer: null`.
   8. *Reale Angebotsverknüpfung (Garantie 1):* Verknüpfung mit Angebot in `dokumente`; Prüfung gegen Fremdkörper (Rechnung oder ungültige ID wirft Fehler).
   9. *Lösch- und Überschreibschutz:* Verknüpfter Import kann weder über das Repository noch über SQL direkt gelöscht werden; Overwrite wird hart abgewiesen; unverknüpfter Import darf gelöscht werden.
+
+---
+
+## 8. GAEB Ausschreibungs- und Bepreisungsphase (Tender Pricing UI & Drafts Architecture)
+
+Gemäß der Anforderungen aus `liesen.txt` (Phase «Ausschreibungs- und Bepreisungsphase») wurde die Anwendung um ein vollständiges, modulares Bepreisungs- und Bieterangaben-Subsystem erweitert. Es ermöglicht das verlustfreie Betrachten, Bepreisen, Beantworten von Bietertextergänzungen und versionierte Speichern von Ausschreibungsentwürfen, ohne die ursprünglichen X83-Daten jemals zu verändern.
+
+### 8.1 Datenmodell & Revisionssichere Entwurfsverwaltung (`db/schema/gaeb_schema.js`)
+
+Zur sauberen Entkopplung von Ausschreibungsdaten (Leistungsverzeichnis des Auftraggebers) und Kalkulationsdaten des Bieters wurden drei neue Tabellen eingeführt:
+
+1. **`gaeb_tender_drafts` (Kopfdaten des Bepreisungs-Entwurfs):**
+   - `id`: Eindeutiger Primärschlüssel.
+   - `import_id`: Fremdschlüssel auf `gaeb_imports.id` (`ON DELETE CASCADE`).
+   - `angebot_id`: Optionaler Fremdschlüssel auf `dokumente.id` (`ON DELETE SET NULL`) für spätere formale Angebotsübernahme.
+   - `version`: Versionszähler (z. B. 1 für «Hauptangebot v1», 2 für «v2» etc.).
+   - `name`: Frei wählbarer Entwurfsname.
+   - `status`: Statusfeld (`IN_BEARBEITUNG`, `VOLLSTAENDIG`, `ABGESCHLOSSEN`).
+   - `total_netto`, `total_tax`, `total_brutto`: Berechnete Summen der Bepreisung.
+   - `unpriced_count`: Anzahl verbleibender unbepreister Normalpositionen.
+   - `missing_bireq_count`: Anzahl verbleibender unbeantworteter Bietertextergänzungen.
+   - `created_at`, `updated_at`: Revisionszeitstempel.
+   - `UNIQUE(import_id, version)`: Gewährleistet strikte Versionsindizierung je Import.
+
+2. **`gaeb_tender_item_prices` (Positionsbezogene Bepreisung):**
+   - `draft_id`: Fremdschlüssel auf `gaeb_tender_drafts.id` (`ON DELETE CASCADE`).
+   - `gaeb_item_id`: Fremdschlüssel auf `gaeb_items.id` (`ON DELETE CASCADE`).
+   - `unit_price` (REAL): Der eingegebene Einheitspreis.
+     - **Strikte Differenzierung dreier Zustände:**
+       - `NULL`: Unbepreist (Warnung «Preis fehlt», fließt nicht in Gesamtsumme ein).
+       - `0.00` mit `is_zero_confirmed = 1`: Bewusst kostenlos / im Einheitspreis anderer Positionen enthalten (Null-Bestätigung).
+       - `> 0.00`: Regulär bepreiste Position.
+   - `is_zero_confirmed` (INTEGER): Kennzeichen, dass 0,00 € bewusst gewählt wurde.
+   - `total_price` (REAL): Berechneter Gesamtpreis (`menge * unit_price`). Bleibt `NULL`, wenn `unit_price` `NULL` ist oder wenn Mengenvorbehalt vorliegt (`is_qty_tbd = 1`).
+   - `tax_rate` (REAL DEFAULT 19.0): Steuersatz.
+   - `in_total` (INTEGER DEFAULT 1): Steuerung, ob Position in die Angebotssumme einfließt (Wahl- und Bedarfspositionen standardmäßig `0`).
+   - `notes` (TEXT): Bieternotizen.
+   - `UNIQUE(draft_id, gaeb_item_id)`.
+
+3. **`gaeb_tender_bireq_answers` (Bietertextergänzungen):**
+   - `draft_id`: Fremdschlüssel auf `gaeb_tender_drafts.id` (`ON DELETE CASCADE`).
+   - `gaeb_bireq_id`: Fremdschlüssel auf `gaeb_item_bireq.id` (`ON DELETE CASCADE`).
+   - `answer_value` (TEXT): Vom Bieter eingegebener Text (z. B. Fabrikat, Typ, Kennwerte).
+   - `UNIQUE(draft_id, gaeb_bireq_id)`.
+   - **Revisionssicherheit:** Änderungen an Bieterangaben in Version 2 verändern weder die Antworten in Version 1 noch die Vorgaben der Original-X83.
+
+4. **Datenbank-Trigger zur Typsicherheit:**
+   - `trg_validate_gaeb_import_angebot_type` und `trg_validate_gaeb_import_angebot_type_update` erzwingen auf nativer SQLite-Ebene, dass Verknüpfungen in `gaeb_import_angebote` ausschließlich auf Datensätze in `dokumente` mit `type = 'angebot'` verweisen dürfen.
+
+### 8.2 Repository-Architektur (`db/repositories/gaeb_tender_repo.js`)
+
+Das Tender-Repository kapselt die gesamte Geschäftslogik für Bepreisungen:
+- **`createTenderDraft(db, importId, options)`:** Erstellt einen neuen Entwurf mit deterministischer Versionsvergabe.
+- **`saveTenderDraft(db, draftId, draftData)`:**
+  - Wird als **vollständig atomare SQLite-Transaktion** ausgeführt.
+  - Prüft Positions- und BiReq-IDs auf Zugehörigkeit zum referenzierten Import.
+  - Verhindert das Bepreisen von Hinweistexten (`is_hinweistext = 1`).
+  - Hält `total_price = NULL` bei Mengenvorbehalten (`is_qty_tbd = 1`).
+  - Schließt Positionen mit `in_total = 0` (z. B. Wahlpositionen) aus der Gesamtsumme aus.
+  - Aktualisiert Zähler für unvollständige Positionen und fehlende Bieterangaben.
+  - Führt bei Fehlern ein vollständiges Rollback aus.
+- **`loadTenderDraft(db, draftId)`:**
+  - Lädt den unberührten X83-Katalog (`gaeb_imports`, `gaeb_categories`, `gaeb_items`, `gaeb_item_bireq`, `gaeb_item_up_components`).
+  - Überlagert (Overlay) die Bepreisungs- und BiReq-Daten des gewählten Entwurfs.
+  - Gewährleistet, dass die Original-Tabelle `gaeb_items` (Felder `preis`, `gesamtpreis`) zu 100% unverändert bleibt.
+- **`cloneTenderDraft(db, sourceDraftId, newName)`:**
+  - Dupliziert eine Bepreisung inklusive aller Preise, Bestätigungen und BiReq-Antworten in eine neue Revisionsversion (z. B. zur Erstellung von Nebenangeboten oder Kalkulationsvarianten).
+- **`listTenderDrafts(db, importId)` & `deleteTenderDraft(db, draftId)`:**
+  - Auflistung aller Entwürfe mit Fortschritts- und Summenstatistiken sowie kaskadierendes Löschen ohne Beeinträchtigung des Basiskatalogs.
+
+### 8.3 IPC- und Renderer-Schnittstelle (`main/ipc/ipc-gaeb.js`, `preload.js`)
+
+- Alle IPC-Aufrufe sind standardisiert registriert:
+  - `gaeb:create-tender-draft`, `gaeb:save-tender-draft`, `gaeb:load-tender-draft`, `gaeb:list-tender-drafts`, `gaeb:clone-tender-draft`, `gaeb:delete-tender-draft`.
+- In `preload.js` über `window.api.gaeb` bzw. `window.api.invoke` verfügbar gemacht.
+- **Renderer-Compliance:** Im gesamten Frontend-Code wird strikt **kein Node.js `require()`** verwendet. Die Kommunikation erfolgt ausschließlich asynchron über Context-Bridge-IPC.
+- `main.js` blieb zu 100% unberührt.
+
+### 8.4 Modulare Benutzeroberfläche (`views/modals/gaeb-tender-modal.html`, `js/gaeb_tender/`)
+
+Die Benutzeroberfläche wurde nach dem MVC-Muster modular strukturiert:
+- **`views/modals/gaeb-tender-modal.html`:**
+  - Split-Screen-Layout mit responsiver Aufteilung:
+    - **Links (BoQCtgy-Baum):** Hierarchische Baumdarstellung aller Gewerke, Abschnitte und Positionen mit OZs, Statussymbolen (grün = bepreist, gelb = unbepreist, blau = Hinweistext/Wahlposition, orange = BiReq ausstehend).
+    - **Rechts (Positionsdetail & Bepreisung):**
+      - Vollständige Anzeige von OZ, Ordnungsbegriff, Mengeneinheit, Menge (oder deutlichem «QtyTBD Mengenvorbehalt»-Badge).
+      - Vollständiger Kurz- und mehrzeiliger Langtext.
+      - Vorbemerkungen der übergeordneten Titelebene.
+      - Bepreisungsmaske mit Live-Validierung, Berechnung von Gesamtpreisen und bewusster Bestätigungs-Checkbox für `0,00 €`-Eingaben.
+      - Eingabefelder für Bieterangaben (`BiReq`) mit Kennzeichnung von Pflichtangaben.
+    - **Unten (Footer & Statusleiste):**
+      - Live-Anzeige von Netto-, MwSt- und Bruttobetrag des Entwurfs.
+      - Fertigstellungsgrad (z. B. «3 / 3 bepreist, 2 / 2 BiReq»).
+      - Dropdown zur Auswahl und Neuanlage von Entwurfsversionen (v1, v2 etc.).
+      - Aktionen: Speichern, Version klonen, Schließen.
+- **`js/gaeb_tender/tender_state.js`:** Zustandsverwaltung im Renderer (aktiver Import, aktiver Entwurf, ausgewählte Position, Dirty-Tracking).
+- **`js/gaeb_tender/tender_view.js`:** DOM-Rendering des Baumes, der Detailansicht, der BiReq-Eingaben und der Summenzeile.
+- **`js/gaeb_tender/tender_controller.js`:** Event-Handling, Validierung, IPC-Kopplung und Navigation.
+- **Integration:** Das Modal wurde über `scripts/sync_modals.js` in `js/modal-loader.js` kompiliert und in `code.html` mit Menüzugang und Skript-Tags eingebunden.
+
+### 8.5 Testverifikation der Bepreisungsphase
+
+Alle neuen Funktionen wurden umfassend durch automatisierte Testsuites auf Datenbank-, Repository- und echter Chromium-DOM-Ebene abgesichert:
+
+1. **Repository- & SQLite-Testsuite (`tests/gaeb_tender_pricing.test.js` - 10 Tests):**
+   - `1.1 Pre-check SHA-256 Konsistenz:` Verifiziert, dass Diskrepanzen zwischen `rawBytes` und `rawXml` hart abgelehnt werden.
+   - `1.2 Native Trigger-Typsicherheit:` Verifiziert, dass `gaeb_import_angebote` Rechnungs-IDs auf DB-Ebene abweist.
+   - `2.1 Roundtrip & Persistenz:` Erstellen eines Entwurfs, Eingabe von Einheitspreisen und BiReq-Antworten, `db.close()`, Wiedereröffnen und verlustfreie Wiederherstellung.
+   - `2.2 Datenerhalt der Original-X83:` Snapshot-Vergleich bestätigt, dass `gaeb_items` vor und nach dem Bepreisen 100% byte- und wertidentisch bleibt.
+   - `2.3 Bepreisungsdifferenzierung:` Exakte Trennung von `NULL` (unbepreist) vs. `0.00` (bewusst bestätigt) vs. `> 0.00`.
+   - `2.4 QtyTBD Mengenvorbehalt:` Bepreisung einer QtyTBD-Position führt zu gültigem Einheitspreis, aber Gesamtpreis bleibt strikt `NULL`.
+   - `2.5 Mengenneutrale Hinweistexte:` Verhindert Bepreisung von Hinweistexten (`unit_price` bleibt `NULL`).
+   - `2.6 Wahl- und Bedarfspositionen:` Positionen mit `in_total = 0` werden bepreist, fließen jedoch nicht in die Hauptangebotssumme ein.
+   - `2.7 Revisionsunabhängigkeit (v1 vs v2):` Modifikation von Preisen und BiReqs in Version 2 hat keinerlei Auswirkung auf Version 1 oder das Original.
+   - `2.8 Atomare Transaktionen & Rollback:` Provozierter Fehler während `saveTenderDraft` rollt alle Änderungen vollständig zurück.
+   - `2.9 Kaskadierende Löschung:` Löschen eines Entwurfs entfernt dessen Preise und Antworten rückstandslos, während X83-Katalog und andere Entwürfe intakt bleiben.
+
+2. **Electron Chromium E2E-DOM-Testsuite (`tests/test_electron_runner.js` / Testfall 4c):**
+   - Öffnen des `gaeb-tender-modal` in echter Electron-Laufzeit.
+   - Rendern des BoQCtgy-Baums und Überprüfung der Baumknoten.
+   - Interaktive Auswahl einer Position, DOM-Eingabe eines Preises (`64,50 €`).
+   - Verifikation der dynamischen Neuberechnung im DOM.
+   - Ausfüllen einer Bietertextergänzung (`BiReq`).
+   - Klick auf «Entwurf speichern», atomares Speichern via IPC in SQLite.
+   - Schließen und Wiederöffnen des Modals, Verifikation der Wiederherstellung aller Werte.
+
+---
+
+## 9. Ausdrücklich vertagte Folgeaufgaben (Roadmap nach `liesen.txt`)
+
+In Übereinstimmung mit den klaren Vorgaben aus `liesen.txt` wurden folgende Komponenten bewusst **nicht** in diesem Branch umgesetzt, sondern als eigenständige, nachgelagerte Arbeitspakete definiert:
+
+1. **Hierarchischer GAEB DA XML X84 Export (Phase 84):**
+   - Erzeugung einer standardkonformen X84-Angebotsdatei aus einem bepreisten Entwurf (`gaeb_tender_drafts`).
+   - Rekonstruktion der vollständigen BoQCtgy-Hierarchie mit ausgefüllten `<UP>`-, `<IT>`- und `<BiReq>`-Knoten.
+2. **Kalkulationsblätter nach EFB-Preis (VHB 221 / VHB 223):**
+   - Aufschlüsselung der Einheitspreise nach Lohn-, Stoff-, Geräte- und Sonstigen Anteilen.
+   - Generierung formaler EFB-Formulare für öffentliche Vergaben.
+3. **Formale Angebotsübernahme & Dokumentenversand:**
+   - Verbindliche Übernahme eines fertigen GAEB-Entwurfs in ein juristisches Belegdokument (`type = 'angebot'` in Tabelle `dokumente`).
+   - PDF-Generierung des bepreisten Leistungsverzeichnisses und digitaler Versand.
 

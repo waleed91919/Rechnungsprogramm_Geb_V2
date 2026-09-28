@@ -73,6 +73,28 @@ function saveX83Import(db, parsedData, options = {}) {
     let fileHash = '';
     let fileSize = 0;
 
+    // Vorprüfung: Wenn BEIDE Optionen (rawBytes bzw. buffer UND rawXml als String) übergeben werden:
+    // Verifiziere serverseitig, dass beide denselben Inhalt darstellen!
+    const providedBuffer = Buffer.isBuffer(options.rawBytes)
+        ? options.rawBytes
+        : (Buffer.isBuffer(options.buffer)
+            ? options.buffer
+            : (Buffer.isBuffer(options.rawContent) ? options.rawContent : null));
+
+    const providedXml = typeof options.rawXml === 'string'
+        ? options.rawXml
+        : (typeof options.xmlString === 'string'
+            ? options.xmlString
+            : (typeof options.rawContent === 'string' ? options.rawContent : null));
+
+    if (providedBuffer && providedXml !== null) {
+        const hashFromBytes = crypto.createHash('sha256').update(providedBuffer).digest('hex');
+        const hashFromXml = crypto.createHash('sha256').update(providedXml, 'utf-8').digest('hex');
+        if (hashFromBytes !== hashFromXml) {
+            throw new Error('Konsistenzfehler: rawBytes und rawXml stimmen inhaltlich nicht überein.');
+        }
+    }
+
     if (rawBuffer) {
         // Garantierter Original-Byte-Pfad
         rawBytes = rawBuffer;
@@ -464,6 +486,8 @@ function loadX83Import(db, importId) {
         const upComp = upMap.get(row.id) || null;
 
         const biReqFormatted = biReqs.length > 0 ? biReqs.map(b => ({
+            id: b.id,
+            _dbId: b.id,
             type: b.bireq_type,
             label: b.label,
             description: b.description,

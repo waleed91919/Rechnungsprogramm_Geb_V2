@@ -4,6 +4,8 @@ const os = require('os');
 const fs = require('fs');
 const assert = require('assert');
 const { PDFDocument } = require('@cantoo/pdf-lib');
+const GAEBEngine = require('../js/gaeb');
+const { saveX83Import } = require('../db/repositories/gaeb_repository');
 
 const tmpDbPath = path.join(os.tmpdir(), `angebot-true-ui-test-${Date.now()}-${process.pid}.sqlite`);
 process.env.RECHNUNGSPROGRAMM_DB_PATH = tmpDbPath;
@@ -755,6 +757,96 @@ app.whenReady().then(async () => {
             assert.strictEqual(savedDocInDb.sicherheitseinbehalt_prozent, 0, 'sicherheitseinbehalt_prozent must be 0 after clearing');
             assert.strictEqual(savedDocInDb.sicherheitseinbehalt, 0, 'sicherheitseinbehalt must be 0 after clearing');
             console.log('✓ Testfall 4b (§ 13b Abwahl & Feldleerung) erfolgreich bestanden!');
+
+            // =================================================================
+            // TESTFALL 4c: GAEB Ausschreibung & Bepreisung (Chromium DOM, Button-Clicks, Tree, Pricing, BiReq, Draft Save & Close)
+            // =================================================================
+            console.log('Testfall 4c: GAEB Ausschreibung & Bepreisung UI...');
+            const xml03 = fs.readFileSync(path.join(__dirname, 'fixtures', 'gaeb_x83', '03_bieterangaben_vorbemerkungen_ep.x83'), 'utf8');
+            const parsed03 = GAEBEngine.parseGAEBXML(xml03);
+            const savedTenderImport = saveX83Import(db, parsed03, { fileName: 'test_tender_ui.x83', rawXml: xml03 });
+            const tenderImportId = savedTenderImport.importId;
+            const origSnapshot = db.prepare('SELECT id, preis, gesamtpreis FROM gaeb_items WHERE import_id = ?').all(tenderImportId);
+
+            await win.webContents.executeJavaScript(`
+                (async () => {
+                    // 1. Prüfe, ob GAEB-Tender-Module im DOM geladen sind
+                    if (!window.GaebTenderController || !window.GaebTenderState || !window.GaebTenderView) {
+                        throw new Error('GAEB Tender Skripte nicht in window verfügbar');
+                    }
+
+                    // 2. Öffne GAEB Tender Modal über window.openGaebTenderModal
+                    await window.openGaebTenderModal(${tenderImportId});
+
+                    const modal = document.getElementById('gaeb-tender-modal');
+                    if (!modal || modal.classList.contains('hidden')) {
+                        throw new Error('GAEB Tender Modal ist nach openGaebTenderModal nicht sichtbar');
+                    }
+
+                    // 3. Baum-Prüfung
+                    const treeContainer = document.getElementById('gt-tree-container');
+                    if (!treeContainer || treeContainer.children.length === 0) {
+                        throw new Error('Baumstruktur wurde nicht im DOM gerendert');
+                    }
+
+                    // 4. Erste bepreisbare Position wählen
+                    const priceable = window.GaebTenderState.items.find(i => !i.isHinweistext);
+                    if (!priceable) throw new Error('Keine bepreisbare Position gefunden');
+                    window.GaebTenderController.selectItem(priceable._dbId);
+
+                    // 5. Details prüfen
+                    const kurztextEl = document.getElementById('gt-item-kurztext');
+                    if (!kurztextEl || !kurztextEl.textContent.trim()) {
+                        throw new Error('Kurztext fehlt im Detailbereich');
+                    }
+
+                    const langtextEl = document.getElementById('gt-item-langtext');
+                    if (!langtextEl || !langtextEl.textContent.trim()) {
+                        throw new Error('Langtext fehlt im Detailbereich');
+                    }
+
+                    // 6. Preis eingeben
+                    const unitPriceInput = document.getElementById('gt-input-unit-price');
+                    unitPriceInput.value = '64.50';
+                    window.GaebTenderController.onUnitPriceInput('64.50');
+
+                    const totalCalcInput = document.getElementById('gt-calculated-total-price');
+                    if (!totalCalcInput.value.includes('€')) {
+                        throw new Error('Gesamtpreis wurde bei Eingabe nicht dynamisch berechnet');
+                    }
+
+                    // 7. BiReq ausfüllen
+                    const bireqItem = window.GaebTenderState.items.find(i => i.bieterangaben && i.bieterangaben.length > 0);
+                    if (bireqItem) {
+                        window.GaebTenderController.selectItem(bireqItem._dbId);
+                        const bId = bireqItem.bieterangaben[0].id || bireqItem.bieterangaben[0]._dbId;
+                        window.GaebTenderController.onBiReqInput(bId, 'Hersteller Alpha Model 1');
+                    }
+
+                    // 8. Entwurf speichern
+                    await window.GaebTenderController.saveDraft();
+
+                    // 9. Modal schließen
+                    window.GaebTenderController.closeModal();
+                    if (!modal.classList.contains('hidden')) {
+                        throw new Error('Modal wurde nach closeModal() nicht ausgeblendet');
+                    }
+
+                    return { success: true };
+                })()
+            `);
+
+            // SQLite-Verifikation
+            const tenderDraftInDb = db.prepare('SELECT * FROM gaeb_tender_drafts WHERE import_id = ?').get(tenderImportId);
+            assert.ok(tenderDraftInDb, 'Tender-Draft must be created in SQLite DB');
+            const pricedItemsInDb = db.prepare('SELECT COUNT(*) AS cnt FROM gaeb_tender_item_prices WHERE draft_id = ? AND unit_price IS NOT NULL').get(tenderDraftInDb.id).cnt;
+            assert.ok(pricedItemsInDb > 0, 'At least 1 item price must be persisted in SQLite DB');
+
+            // Original X83 Daten in gaeb_items blieben 100% unangetastet
+            const currentItems = db.prepare('SELECT id, preis, gesamtpreis FROM gaeb_items WHERE import_id = ?').all(tenderImportId);
+            assert.deepStrictEqual(currentItems, origSnapshot, 'Original gaeb_items must remain 100% untouched');
+
+            console.log('✓ Testfall 4c (GAEB Ausschreibung & Bepreisung UI) erfolgreich bestanden!');
 
             // =================================================================
             // TESTFALL 5: DB-Reload & Integrität

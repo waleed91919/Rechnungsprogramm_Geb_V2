@@ -1,0 +1,271 @@
+<div id="gaeb-tender-modal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm hidden flex items-center justify-center p-3">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-7xl h-[92vh] flex flex-col overflow-hidden">
+        
+        <!-- Kopfbereich (Header) -->
+        <div class="px-6 py-3.5 bg-slate-50 border-b border-slate-200 flex flex-wrap justify-between items-center gap-3 shrink-0">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="p-2 bg-indigo-50 border border-indigo-200 text-indigo-600 rounded-xl flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined text-[24px]">gavel</span>
+                </div>
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h3 id="gt-header-project-name" class="font-bold text-slate-800 text-base md:text-lg truncate max-w-md">GAEB Ausschreibung</h3>
+                        <span id="gt-header-phase-badge" class="px-2 py-0.5 text-[11px] font-bold rounded bg-slate-200 text-slate-700">GAEB X83</span>
+                        <span id="gt-header-status-badge" class="px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                            In Bearbeitung
+                        </span>
+                    </div>
+                    <div class="text-xs text-slate-500 flex items-center gap-3 mt-0.5">
+                        <span id="gt-header-file-name" class="truncate max-w-xs">datei.x83</span>
+                        <span>•</span>
+                        <span id="gt-header-import-date">Importiert: --</span>
+                        <span>•</span>
+                        <span id="gt-header-gaeb-version">GAEB 3.3</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Version Switcher & Actions -->
+            <div class="flex items-center gap-2">
+                <div class="flex items-center gap-1.5 bg-white border border-slate-300 rounded-lg px-2.5 py-1 shadow-sm">
+                    <label for="gt-draft-select" class="text-xs font-semibold text-slate-600">Entwurf:</label>
+                    <select id="gt-draft-select" onchange="window.GaebTenderController.switchDraft(this.value)" class="text-xs font-bold text-slate-800 bg-transparent border-0 p-0 focus:ring-0 cursor-pointer">
+                        <option value="">Lade Entwürfe...</option>
+                    </select>
+                </div>
+                <button type="button" onclick="window.GaebTenderController.createNewVersion()" title="Neue Version / Verhandlungsstand erstellen" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1 shadow-sm transition-colors">
+                    <span class="material-symbols-outlined text-[16px]">content_copy</span>
+                    <span>Neue Version</span>
+                </button>
+                <button type="button" onclick="window.GaebTenderController.closeModal()" title="Schließen" class="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-lg transition-colors ml-1">
+                    <span class="material-symbols-outlined text-[22px]">close</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Hauptbereich: Split Screen (Links Baum, Rechts Details & Bepreisung) -->
+        <div class="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden bg-slate-100/50">
+            
+            <!-- Linker Bereich: BoQCtgy-Baum -->
+            <div class="w-full md:w-[420px] lg:w-[460px] bg-white border-r border-slate-200 flex flex-col shrink-0 h-full">
+                <!-- Such- und Filterleiste -->
+                <div class="p-3 border-b border-slate-200 bg-slate-50 space-y-2 shrink-0">
+                    <div class="relative">
+                        <span class="material-symbols-outlined absolute left-2.5 top-2 text-slate-400 text-[18px]">search</span>
+                        <input type="text" id="gt-tree-search" placeholder="OZ oder Text suchen..." oninput="window.GaebTenderController.onSearchInput(this.value)" class="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-slate-300 rounded-lg focus:ring-1 focus:ring-primary focus:border-primary">
+                    </div>
+                    <div class="flex gap-1">
+                        <button type="button" id="gt-filter-all" onclick="window.GaebTenderController.setFilter('all')" class="flex-1 py-1 text-[11px] font-bold rounded bg-slate-200 text-slate-800 border border-slate-300">Alle</button>
+                        <button type="button" id="gt-filter-unpriced" onclick="window.GaebTenderController.setFilter('unpriced')" class="flex-1 py-1 text-[11px] font-semibold rounded bg-white text-slate-600 border border-slate-200 hover:bg-slate-50">Unbepreist</button>
+                        <button type="button" id="gt-filter-bireq" onclick="window.GaebTenderController.setFilter('bireq')" class="flex-1 py-1 text-[11px] font-semibold rounded bg-white text-slate-600 border border-slate-200 hover:bg-slate-50">BiReq offen</button>
+                    </div>
+                </div>
+
+                <!-- Baum-Container -->
+                <div id="gt-tree-container" class="flex-1 overflow-y-auto p-2 space-y-1 text-xs">
+                    <!-- Wird per JS dynamisch aufgebaut -->
+                    <div class="text-center py-10 text-slate-400">
+                        <span class="material-symbols-outlined text-3xl mb-1 animate-spin">progress_activity</span>
+                        <p>Lade Ausschreibungsstruktur...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Rechter Detailbereich: Gewählte Position & Bepreisung -->
+            <div id="gt-detail-container" class="flex-1 flex flex-col h-full bg-slate-50 overflow-y-auto p-4 md:p-6 space-y-5">
+                
+                <!-- Platzhalter wenn nichts gewählt -->
+                <div id="gt-empty-detail-state" class="hidden flex-1 flex flex-col items-center justify-center text-slate-400 p-8 text-center my-auto">
+                    <span class="material-symbols-outlined text-5xl mb-2 text-slate-300">format_list_bulleted</span>
+                    <h4 class="font-semibold text-slate-600 text-sm">Keine Position ausgewählt</h4>
+                    <p class="text-xs text-slate-400 max-w-sm mt-1">Wähle in der linken Baumstruktur eine Position aus, um Langtexte einzusehen und Preise oder Bieterangaben zu erfassen.</p>
+                </div>
+
+                <!-- Positions-Inhalt (aktiv wenn Item gewählt) -->
+                <div id="gt-item-detail-content" class="space-y-4">
+                    
+                    <!-- Kopfdaten der Position -->
+                    <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-2">
+                        <div class="flex items-center justify-between flex-wrap gap-2">
+                            <div class="flex items-center gap-2">
+                                <span id="gt-item-oz" class="font-mono font-bold text-sm bg-slate-100 text-slate-800 px-2 py-0.5 rounded border border-slate-300">01.01.0010</span>
+                                <span id="gt-item-type-badge" class="px-2 py-0.5 text-[11px] font-bold rounded bg-blue-50 text-blue-700 border border-blue-200">NORMAL</span>
+                                <span id="gt-item-pricing-badge" class="px-2 py-0.5 text-[11px] font-semibold rounded bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[13px]">warning</span>
+                                    Unbepreist
+                                </span>
+                            </div>
+                            <div class="text-xs text-slate-500 font-mono">
+                                RNoPart: <span id="gt-item-rnopart" class="font-bold text-slate-700">0010</span>
+                            </div>
+                        </div>
+
+                        <h4 id="gt-item-kurztext" class="text-base font-bold text-slate-900 leading-snug">Kurztext der Position</h4>
+                        
+                        <!-- Vorbemerkung des übergeordneten Bereichs -->
+                        <div id="gt-item-vorbemerkung-box" class="hidden p-2.5 bg-amber-50/70 border border-amber-200 rounded-lg text-xs text-amber-900 space-y-1">
+                            <div class="font-bold flex items-center gap-1 text-[11px] uppercase tracking-wider text-amber-800">
+                                <span class="material-symbols-outlined text-[14px]">info</span>
+                                Vorbemerkung übergeordneter Titel / Bereich:
+                            </div>
+                            <div id="gt-item-vorbemerkung-text" class="text-amber-950 whitespace-pre-line leading-relaxed"></div>
+                        </div>
+
+                        <!-- Mehrzeiliger Langtext -->
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Vollständiger Leistungsbeschrieb (Langtext)</div>
+                            <div id="gt-item-langtext" class="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 font-normal leading-relaxed whitespace-pre-line max-h-56 overflow-y-auto">
+                                Kein Langtext vorhanden.
+                            </div>
+                        </div>
+
+                        <!-- Mengenzeile -->
+                        <div class="flex items-center justify-between p-2.5 bg-slate-100 rounded-lg text-xs">
+                            <div class="flex items-center gap-2">
+                                <span class="text-slate-500">Ausschreibungsmenge:</span>
+                                <span id="gt-item-menge" class="font-mono font-bold text-slate-900 text-sm">1,000</span>
+                                <span id="gt-item-einheit" class="font-semibold text-slate-700">m²</span>
+                            </div>
+                            <!-- QtyTBD Warnhinweis -->
+                            <div id="gt-qty-tbd-warning" class="hidden px-2.5 py-1 bg-amber-100 border border-amber-300 text-amber-900 rounded font-bold text-[11px] flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[15px]">help</span>
+                                Menge noch unbestimmt (QtyTBD) - Nicht in Gesamtsumme enthalten
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Preiseingabe-Bereich -->
+                    <div id="gt-pricing-box" class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-4">
+                        <div class="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                            <h5 class="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-emerald-600 text-[20px]">payments</span>
+                                Bepreisung dieser Position
+                            </h5>
+                            <span id="gt-hinweistext-notice" class="hidden text-xs font-semibold text-slate-400 italic">Hinweistext - nicht bepreisbar</span>
+                        </div>
+
+                        <div id="gt-pricing-inputs" class="space-y-3">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <!-- Einheitspreis -->
+                                <div>
+                                    <label for="gt-input-unit-price" class="block text-xs font-bold text-slate-700 mb-1">Einheitspreis (€)</label>
+                                    <div class="relative">
+                                        <input type="number" step="0.01" min="0" id="gt-input-unit-price" placeholder="z. B. 48.50" oninput="window.GaebTenderController.onUnitPriceInput(this.value)" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500">
+                                        <span class="absolute right-3 top-2 text-slate-400 text-xs font-semibold">€</span>
+                                    </div>
+                                    <p id="gt-unpriced-hint" class="text-[11px] text-amber-600 mt-1 flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-[13px]">info</span>
+                                        Unbepreist (noch kein Angebotspreis)
+                                    </p>
+                                </div>
+
+                                <!-- Berechneter Gesamtpreis -->
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-700 mb-1">Berechneter Gesamtpreis (€)</label>
+                                    <div class="relative">
+                                        <input type="text" id="gt-calculated-total-price" readonly disabled value="--" class="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-lg text-sm font-mono font-bold text-slate-800 cursor-not-allowed">
+                                        <span class="absolute right-3 top-2 text-slate-400 text-xs font-semibold">€</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 mt-1">Automatisch: EP × Menge</p>
+                                </div>
+
+                                <!-- Steuersatz & Summen-Einrechnung -->
+                                <div class="space-y-2">
+                                    <div>
+                                        <label for="gt-input-tax-rate" class="block text-xs font-bold text-slate-700 mb-1">MwSt-Satz (%)</label>
+                                        <select id="gt-input-tax-rate" onchange="window.GaebTenderController.onTaxRateChange(this.value)" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs bg-white">
+                                            <option value="19.0">19% (Standard)</option>
+                                            <option value="7.0">7% (Ermäßigt)</option>
+                                            <option value="0.0">0% (Steuerfrei / § 13b)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Bestätigungen & Flags -->
+                            <div class="pt-2 flex flex-col md:flex-row gap-4 border-t border-slate-100">
+                                <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                                    <input type="checkbox" id="gt-check-in-total" onchange="window.GaebTenderController.onInTotalChange(this.checked)" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500">
+                                    <span>In Angebotssumme einrechnen</span>
+                                </label>
+                                
+                                <label id="gt-zero-confirm-container" class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded border border-amber-200">
+                                    <input type="checkbox" id="gt-check-zero-confirm" onchange="window.GaebTenderController.onZeroConfirmChange(this.checked)" class="rounded border-amber-400 text-amber-600 focus:ring-amber-500">
+                                    <span>0,00 € ausdrücklich bestätigen (Null-Preis)</span>
+                                </label>
+                            </div>
+
+                            <!-- Notizen -->
+                            <div>
+                                <label for="gt-input-notes" class="block text-xs font-semibold text-slate-600 mb-1">Interne Notiz / Kalkulationshinweis zur Position</label>
+                                <textarea id="gt-input-notes" rows="2" placeholder="Optionale Notizen für die Kalkulation..." oninput="window.GaebTenderController.onNotesInput(this.value)" class="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-xs focus:ring-1 focus:ring-primary focus:border-primary resize-y"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bieterangaben-Bereich (BiReq) -->
+                    <div id="gt-bireq-box" class="bg-white border border-slate-200 rounded-xl p-4 shadow-sm space-y-3">
+                        <div class="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                            <h5 class="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-indigo-600 text-[20px]">edit_note</span>
+                                Bietertextergänzungen (&lt;BiReq&gt;)
+                            </h5>
+                            <span id="gt-bireq-count-badge" class="px-2 py-0.5 text-[11px] font-bold rounded bg-indigo-50 text-indigo-700 border border-indigo-200">0 Angaben erforderlich</span>
+                        </div>
+
+                        <div id="gt-bireq-list" class="space-y-3">
+                            <!-- Wird per JS dynamisch befüllt -->
+                            <p class="text-xs text-slate-400 italic">Keine Bieterangaben für diese Position gefordert.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fußbereich (Footer): Summen, Statistiken & Aktionsbuttons -->
+        <div class="px-6 py-3 bg-white border-t border-slate-200 flex flex-wrap items-center justify-between gap-4 shrink-0 shadow-inner">
+            <!-- Statistiken -->
+            <div class="flex items-center gap-4 text-xs">
+                <div class="flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-emerald-600 text-[18px]">verified</span>
+                    <span class="text-slate-600">Bepreist:</span>
+                    <span id="gt-stat-priced-ratio" class="font-bold text-slate-800 font-mono">0 / 0</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-amber-500 text-[18px]">help</span>
+                    <span class="text-slate-600">Offene BiReq:</span>
+                    <span id="gt-stat-missing-bireq" class="font-bold text-slate-800 font-mono">0</span>
+                </div>
+            </div>
+
+            <!-- Summen-Block -->
+            <div class="flex items-center gap-4 bg-slate-50 border border-slate-200 px-4 py-1.5 rounded-xl">
+                <div>
+                    <span class="text-[11px] font-semibold text-slate-500 block">Netto</span>
+                    <span id="gt-footer-netto" class="text-sm font-bold font-mono text-slate-800">0,00 €</span>
+                </div>
+                <div class="border-l border-slate-200 pl-4">
+                    <span class="text-[11px] font-semibold text-slate-500 block">MwSt (19%)</span>
+                    <span id="gt-footer-tax" class="text-sm font-bold font-mono text-slate-700">0,00 €</span>
+                </div>
+                <div class="border-l border-slate-200 pl-4">
+                    <span class="text-[11px] font-semibold text-slate-500 block">Gesamt Brutto</span>
+                    <span id="gt-footer-brutto" class="text-base font-bold font-mono text-emerald-700">0,00 €</span>
+                </div>
+            </div>
+
+            <!-- Buttons -->
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="window.GaebTenderController.closeModal()" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-50 shadow-sm transition-colors">
+                    Schließen
+                </button>
+                <button type="button" id="gt-btn-save-draft" onclick="window.GaebTenderController.saveDraft()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow hover:shadow-md flex items-center gap-1.5 transition-all">
+                    <span class="material-symbols-outlined text-[16px]">save</span>
+                    <span>Entwurf speichern</span>
+                </button>
+            </div>
+        </div>
+
+    </div>
+</div>

@@ -5,6 +5,7 @@
 
 const { wrapHandler: defaultWrapHandler } = require('./ipc-util');
 const gaebRepo = require('../../db/repositories/gaeb_repository');
+const gaebTenderRepo = require('../../db/repositories/gaeb_tender_repo');
 
 function register(ipcMain, context = {}) {
     const db = context.db || (context.dbAPI && context.dbAPI.db) || require('../../db').db;
@@ -71,6 +72,92 @@ function register(ipcMain, context = {}) {
             return dbAPI.getImportOriginalBuffer(importId);
         }
         return gaebRepo.getImportOriginalBuffer(db, importId);
+    }));
+
+    // --- Tender Bepreisung & Entwürfe ---
+
+    // Erstellt einen neuen Tender-Entwurf
+    ipcMain.handle('gaeb:create-tender-draft', wrapHandler(async (e, payload = {}, maybeOptions) => {
+        const importId = (typeof payload === 'object' && payload !== null && payload.importId !== undefined)
+            ? payload.importId
+            : payload;
+        const options = (typeof payload === 'object' && payload !== null && payload.options !== undefined)
+            ? payload.options
+            : (maybeOptions || (typeof payload === 'object' && payload !== null && payload.importId !== undefined ? payload : {}));
+
+        if (!importId) throw new Error('Import-ID fehlt für Tender-Draft-Erstellung.');
+        if (dbAPI && typeof dbAPI.createTenderDraft === 'function') {
+            return dbAPI.createTenderDraft(importId, options);
+        }
+        return gaebTenderRepo.createTenderDraft(db, importId, options);
+    }));
+
+    // Speichert Preise und BiReq-Antworten eines Tender-Entwurfs
+    ipcMain.handle('gaeb:save-tender-draft', wrapHandler(async (e, payload = {}, maybeData) => {
+        const draftId = (typeof payload === 'object' && payload !== null && payload.draftId !== undefined)
+            ? payload.draftId
+            : payload;
+        const draftData = (typeof payload === 'object' && payload !== null && payload.draftData !== undefined)
+            ? payload.draftData
+            : (maybeData || (typeof payload === 'object' && payload !== null ? payload : {}));
+
+        if (!draftId) throw new Error('Draft-ID fehlt für Speicherung.');
+        if (dbAPI && typeof dbAPI.saveTenderDraft === 'function') {
+            return dbAPI.saveTenderDraft(draftId, draftData);
+        }
+        return gaebTenderRepo.saveTenderDraft(db, draftId, draftData);
+    }));
+
+    // Lädt einen Tender-Entwurf inkl. Items, Preisen und Baum
+    ipcMain.handle('gaeb:load-tender-draft', wrapHandler(async (e, payload) => {
+        const draftId = (typeof payload === 'object' && payload !== null && payload.draftId !== undefined)
+            ? payload.draftId
+            : payload;
+        if (!draftId) throw new Error('Draft-ID fehlt für Laden.');
+        if (dbAPI && typeof dbAPI.loadTenderDraft === 'function') {
+            return dbAPI.loadTenderDraft(draftId);
+        }
+        return gaebTenderRepo.loadTenderDraft(db, draftId);
+    }));
+
+    // Listet alle Entwürfe eines Imports auf
+    ipcMain.handle('gaeb:list-tender-drafts', wrapHandler(async (e, payload) => {
+        const importId = (typeof payload === 'object' && payload !== null && payload.importId !== undefined)
+            ? payload.importId
+            : payload;
+        if (!importId) throw new Error('Import-ID fehlt.');
+        if (dbAPI && typeof dbAPI.listTenderDrafts === 'function') {
+            return dbAPI.listTenderDrafts(importId);
+        }
+        return gaebTenderRepo.listTenderDrafts(db, importId);
+    }));
+
+    // Klont einen Entwurf zu einer neuen Version
+    ipcMain.handle('gaeb:clone-tender-draft', wrapHandler(async (e, payload = {}, maybeOptions) => {
+        const draftId = (typeof payload === 'object' && payload !== null && payload.draftId !== undefined)
+            ? payload.draftId
+            : payload;
+        const options = (typeof payload === 'object' && payload !== null && payload.options !== undefined)
+            ? payload.options
+            : (maybeOptions || (typeof payload === 'object' && payload !== null ? payload : {}));
+
+        if (!draftId) throw new Error('Draft-ID fehlt für Klonen.');
+        if (dbAPI && typeof dbAPI.cloneTenderDraft === 'function') {
+            return dbAPI.cloneTenderDraft(draftId, options);
+        }
+        return gaebTenderRepo.cloneTenderDraft(db, draftId, options);
+    }));
+
+    // Löscht einen Tender-Entwurf
+    ipcMain.handle('gaeb:delete-tender-draft', wrapHandler(async (e, payload) => {
+        const draftId = (typeof payload === 'object' && payload !== null && payload.draftId !== undefined)
+            ? payload.draftId
+            : payload;
+        if (!draftId) throw new Error('Draft-ID fehlt für Löschung.');
+        if (dbAPI && typeof dbAPI.deleteTenderDraft === 'function') {
+            return dbAPI.deleteTenderDraft(draftId);
+        }
+        return gaebTenderRepo.deleteTenderDraft(db, draftId);
     }));
 }
 

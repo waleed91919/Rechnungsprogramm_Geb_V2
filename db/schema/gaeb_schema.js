@@ -130,13 +130,121 @@ function initGaebSchema(db) {
     } catch (e) {
         console.error('[GAEB Schema] Indizes gaeb_import_angebote:', e.message);
     }
+
+    // Trigger zur datenbankseitigen Erzwingung des Dokument-Typs 'angebot'
+    try {
+        db.exec(`
+            CREATE TRIGGER IF NOT EXISTS trg_validate_gaeb_import_angebot_type
+            BEFORE INSERT ON gaeb_import_angebote
+            FOR EACH ROW
+            WHEN (SELECT type FROM dokumente WHERE id = NEW.angebot_id) != 'angebot'
+            BEGIN
+                SELECT RAISE(ABORT, 'Ungültige Verknüpfung: Das referenzierte Dokument muss vom Typ angebot sein.');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_validate_gaeb_import_angebot_type_update
+            BEFORE UPDATE OF angebot_id ON gaeb_import_angebote
+            FOR EACH ROW
+            WHEN (SELECT type FROM dokumente WHERE id = NEW.angebot_id) != 'angebot'
+            BEGIN
+                SELECT RAISE(ABORT, 'Ungültige Verknüpfung: Das referenzierte Dokument muss vom Typ angebot sein.');
+            END;
+        `);
+    } catch (e) {
+        console.error('[GAEB Schema] Trigger trg_validate_gaeb_import_angebot_type:', e.message);
+    }
+
+    // 7. gaeb_tender_drafts: Bepreisungsentwürfe & Verhandlungsstände
+    db.exec(`CREATE TABLE IF NOT EXISTS gaeb_tender_drafts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        import_id INTEGER NOT NULL REFERENCES gaeb_imports(id) ON DELETE RESTRICT,
+        angebot_id INTEGER REFERENCES dokumente(id) ON DELETE SET NULL,
+        version INTEGER NOT NULL DEFAULT 1,
+        name TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'IN_BEARBEITUNG',
+        total_netto REAL DEFAULT 0,
+        total_tax REAL DEFAULT 0,
+        total_brutto REAL DEFAULT 0,
+        unpriced_count INTEGER DEFAULT 0,
+        missing_bireq_count INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )`);
+    try {
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_gaeb_tender_drafts_import ON gaeb_tender_drafts(import_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_gaeb_tender_drafts_angebot ON gaeb_tender_drafts(angebot_id)`);
+    } catch (e) {
+        console.error('[GAEB Schema] Indizes gaeb_tender_drafts:', e.message);
+    }
+
+    // 8. gaeb_tender_item_prices: Positions-Preise des Entwurfs
+    db.exec(`CREATE TABLE IF NOT EXISTS gaeb_tender_item_prices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        draft_id INTEGER NOT NULL REFERENCES gaeb_tender_drafts(id) ON DELETE CASCADE,
+        gaeb_item_id INTEGER NOT NULL REFERENCES gaeb_items(id) ON DELETE RESTRICT,
+        unit_price REAL,
+        is_zero_confirmed INTEGER NOT NULL DEFAULT 0,
+        total_price REAL,
+        tax_rate REAL DEFAULT 19.0,
+        in_total INTEGER NOT NULL DEFAULT 1,
+        notes TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(draft_id, gaeb_item_id)
+    )`);
+    try {
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_gaeb_item_prices_draft ON gaeb_tender_item_prices(draft_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_gaeb_item_prices_item ON gaeb_tender_item_prices(gaeb_item_id)`);
+    } catch (e) {
+        console.error('[GAEB Schema] Indizes gaeb_tender_item_prices:', e.message);
+    }
+
+    // 9. gaeb_tender_bireq_answers: Bieterangaben-Antworten des Entwurfs
+    db.exec(`CREATE TABLE IF NOT EXISTS gaeb_tender_bireq_answers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        draft_id INTEGER NOT NULL REFERENCES gaeb_tender_drafts(id) ON DELETE CASCADE,
+        gaeb_bireq_id INTEGER NOT NULL REFERENCES gaeb_item_bireq(id) ON DELETE RESTRICT,
+        answer_value TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(draft_id, gaeb_bireq_id)
+    )`);
+    try {
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_gaeb_bireq_answers_draft ON gaeb_tender_bireq_answers(draft_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_gaeb_bireq_answers_bireq ON gaeb_tender_bireq_answers(gaeb_bireq_id)`);
+    } catch (e) {
+        console.error('[GAEB Schema] Indizes gaeb_tender_bireq_answers:', e.message);
+    }
 }
 
 function runGaebMigrations(db) {
     // 1. Initialisiere / erstelle alle Basistabellen und Indizes idempotent
     initGaebSchema(db);
 
-    // 2. Migration: raw_bytes Spalte zu gaeb_imports hinzufügen, falls Alt-Tabelle ohne Spalte vorliegt
+    // 2. Trigger sicherstellen
+    try {
+        db.exec(`
+            CREATE TRIGGER IF NOT EXISTS trg_validate_gaeb_import_angebot_type
+            BEFORE INSERT ON gaeb_import_angebote
+            FOR EACH ROW
+            WHEN (SELECT type FROM dokumente WHERE id = NEW.angebot_id) != 'angebot'
+            BEGIN
+                SELECT RAISE(ABORT, 'Ungültige Verknüpfung: Das referenzierte Dokument muss vom Typ angebot sein.');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_validate_gaeb_import_angebot_type_update
+            BEFORE UPDATE OF angebot_id ON gaeb_import_angebote
+            FOR EACH ROW
+            WHEN (SELECT type FROM dokumente WHERE id = NEW.angebot_id) != 'angebot'
+            BEGIN
+                SELECT RAISE(ABORT, 'Ungültige Verknüpfung: Das referenzierte Dokument muss vom Typ angebot sein.');
+            END;
+        `);
+    } catch (e) {
+        // Falls dokumente-Tabelle in isolierten Tests noch nicht existiert
+    }
+
+    // 3. Migration: raw_bytes Spalte zu gaeb_imports hinzufügen, falls Alt-Tabelle ohne Spalte vorliegt
     try {
         const tableInfo = db.prepare(`PRAGMA table_info(gaeb_imports)`).all();
         if (tableInfo && tableInfo.length > 0) {
