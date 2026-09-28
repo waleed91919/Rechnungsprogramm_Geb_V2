@@ -2,7 +2,7 @@
  * tests/gaeb_x83_import_audit.test.js
  * 
  * Systematische Audit-Testsuite für den GAEB DA XML (X83) Import von W-Link.
- * Überprüft anhand der 4 Testfixtures (tests/fixtures/gaeb_x83/*.x83) genau,
+ * Überprüft anhand der 5 Testfixtures (tests/fixtures/gaeb_x83/*.x83) genau,
  * was die aktuelle Engine (GAEBEngine.parseGAEBXML in js/gaeb.js) korrekt
  * erfasst und welche Strukturdaten, Texte und Typen verloren gehen.
  */
@@ -11,9 +11,18 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
+const { JSDOM } = require('jsdom');
 const GAEBEngine = require('../js/gaeb');
 
 const FIXTURES_DIR = path.join(__dirname, 'fixtures', 'gaeb_x83');
+
+const ALL_FIXTURES = [
+    '01_standard_hierarchie.x83',
+    '02_positionstypen_wahl_bedarf.x83',
+    '03_bieterangaben_vorbemerkungen_ep.x83',
+    '04_reales_muster_hochbau.x83',
+    '05_referenz_muster_bvbs_standard.x83'
+];
 
 function loadFixture(filename) {
     const filePath = path.join(FIXTURES_DIR, filename);
@@ -26,11 +35,43 @@ describe('GAEB X83 Import Audit: Was W-Link importiert und was verloren geht', (
     const xml02 = loadFixture('02_positionstypen_wahl_bedarf.x83');
     const xml03 = loadFixture('03_bieterangaben_vorbemerkungen_ep.x83');
     const xml04 = loadFixture('04_reales_muster_hochbau.x83');
+    const xml05 = loadFixture('05_referenz_muster_bvbs_standard.x83');
 
     // =========================================================================
-    // 0. Basisfunktion des aktuellen Parsers
+    // 0. Validierung: XML-Wohlgeformtheit und GAEB-Wurzelknoten aller 5 Testdateien
     // =========================================================================
-    test('0. Basisfunktion: Parser liest Kopfdaten und erzeugt flache Item-Liste', () => {
+    test('0. Validierung: Alle 5 X83-Testdateien sind wohlgeformtes XML mit gültigem GAEB-Wurzelknoten', () => {
+        const dom = new JSDOM();
+        const parser = new dom.window.DOMParser();
+
+        ALL_FIXTURES.forEach(filename => {
+            const xmlContent = loadFixture(filename);
+            const doc = parser.parseFromString(xmlContent, 'text/xml');
+
+            const parserErrors = doc.getElementsByTagName('parsererror');
+            assert.strictEqual(parserErrors.length, 0, `Datei ${filename} muss wohlgeformtes XML sein (keine Parser-Fehler)`);
+
+            const root = doc.documentElement;
+            assert.strictEqual(root.nodeName, 'GAEB', `Datei ${filename} muss <GAEB> als Wurzelknoten besitzen`);
+            assert.strictEqual(root.getAttribute('xmlns'), 'http://www.gaeb.de/GAEB_DA_XML/DA_XML_3.3',
+                `Datei ${filename} muss den offiziellen GAEB DA XML 3.3 Namespace verwenden`);
+
+            // GAEBInfo-Version
+            const versionElem = doc.getElementsByTagName('Version')[0];
+            assert.ok(versionElem, `Datei ${filename} muss ein <Version>-Element besitzen`);
+            assert.strictEqual(versionElem.textContent.trim(), '3.3', `Datei ${filename} muss GAEB Version 3.3 deklarieren`);
+
+            // Award-DP 83
+            const dpElem = doc.getElementsByTagName('DP')[0];
+            assert.ok(dpElem, `Datei ${filename} muss ein <DP>-Element enthalten`);
+            assert.strictEqual(dpElem.textContent.trim(), '83', `Datei ${filename} muss Datenaustauschphase 83 (X83) sein`);
+        });
+    });
+
+    // =========================================================================
+    // 1. Basisfunktion des aktuellen Parsers
+    // =========================================================================
+    test('1. Basisfunktion: Parser liest Kopfdaten und erzeugt flache Item-Liste', () => {
         const parsed01 = GAEBEngine.parseGAEBXML(xml01);
         assert.ok(parsed01.projectInfo, 'projectInfo muss existieren');
         assert.strictEqual(parsed01.projectInfo.name, 'Neubau Verwaltungsgebäude Campus Nord');
@@ -42,12 +83,18 @@ describe('GAEB X83 Import Audit: Was W-Link importiert und was verloren geht', (
         assert.strictEqual(parsed04.projectInfo.name, 'Neubau Mehrfamilienhaus mit Tiefgarage Sonnenallee 42');
         assert.strictEqual(parsed04.projectInfo.gaebPhase, 'X83');
         assert.strictEqual(parsed04.items.length, 9, 'Muss 9 Positionen im Hochbau-Muster extrahieren');
+
+        const parsed05 = GAEBEngine.parseGAEBXML(xml05);
+        assert.strictEqual(parsed05.projectInfo.name, 'BVBS Standard-Referenzleistungsverzeichnis Verkehrswegebau');
+        assert.strictEqual(parsed05.projectInfo.gaebPhase, 'X83');
+        assert.strictEqual(parsed05.projectInfo.currency, 'EUR');
+        assert.strictEqual(parsed05.items.length, 5, 'Muss 5 Positionen im BVBS-Referenzmuster extrahieren');
     });
 
     // =========================================================================
-    // 1. Hierarchie-Ebenen (BoQCtgy, Gewerke, Titel)
+    // 2. Hierarchie-Ebenen (BoQCtgy, Gewerke, Titel)
     // =========================================================================
-    test('1. Audit Hierarchie: BoQCtgy-Ebenen (Gewerke, Abschnitte, Titel) gehen vollständig verloren', () => {
+    test('2. Audit Hierarchie: BoQCtgy-Ebenen (Gewerke, Abschnitte, Titel) gehen vollständig verloren', () => {
         const parsed01 = GAEBEngine.parseGAEBXML(xml01);
 
         // Im XML 01 existieren 3 Hierarchie-Ebenen:
@@ -83,9 +130,9 @@ describe('GAEB X83 Import Audit: Was W-Link importiert und was verloren geht', (
     });
 
     // =========================================================================
-    // 2. Ordnungszahlen (OZ) Extraktion
+    // 3. Ordnungszahlen (OZ) Extraktion
     // =========================================================================
-    test('2. Audit OZ: Zusammengesetzte Pfad-OZ vs. isolierter RNoPart-Knoten', () => {
+    test('3. Audit OZ: Zusammengesetzte Pfad-OZ vs. isolierter RNoPart-Knoten', () => {
         // Fall A: Expliziter <OZ>-Tag vorhanden (wie in 01_standard_hierarchie.x83)
         const parsed01 = GAEBEngine.parseGAEBXML(xml01);
         assert.strictEqual(parsed01.items[0].oz_code, '01.01.01.0010', 'Expliziter OZ-Tag wird übernommen');
@@ -119,9 +166,9 @@ describe('GAEB X83 Import Audit: Was W-Link importiert und was verloren geht', (
     });
 
     // =========================================================================
-    // 3. Kurztext vs. mehrzeiliger Langtext (CompleteText / DetailTxt)
+    // 4. Kurztext vs. mehrzeiliger Langtext (CompleteText / DetailTxt)
     // =========================================================================
-    test('3. Audit Texte: Mehrzeilige Langtexte (CompleteText) werden vollständig verworfen', () => {
+    test('4. Audit Texte: Mehrzeilige Langtexte (CompleteText) werden vollständig verworfen', () => {
         const parsed01 = GAEBEngine.parseGAEBXML(xml01);
         const pos1 = parsed01.items[0];
 
@@ -147,9 +194,9 @@ describe('GAEB X83 Import Audit: Was W-Link importiert und was verloren geht', (
     });
 
     // =========================================================================
-    // 4. Positionstypen (Normal, Grund/Wahl, Bedarf, Pauschale)
+    // 5. Positionstypen (Normal, Grund/Wahl, Bedarf, Pauschale)
     // =========================================================================
-    test('4. Audit Positionstypen: Wahl-, Bedarfs- und Pauschalpositionen werden verflacht', () => {
+    test('5. Audit Positionstypen: Wahl-, Bedarfs- und Pauschalpositionen werden verflacht', () => {
         const parsed02 = GAEBEngine.parseGAEBXML(xml02);
         assert.strictEqual(parsed02.items.length, 6);
 
@@ -186,9 +233,9 @@ describe('GAEB X83 Import Audit: Was W-Link importiert und was verloren geht', (
     });
 
     // =========================================================================
-    // 5. Bieterangaben / Bietertextergänzungen
+    // 6. Bieterangaben / Bietertextergänzungen
     // =========================================================================
-    test('5. Audit Bieterangaben: BiReq-Knoten und Bietertextergänzungen werden ignoriert', () => {
+    test('6. Audit Bieterangaben: BiReq-Knoten und Bietertextergänzungen werden ignoriert', () => {
         const parsed03 = GAEBEngine.parseGAEBXML(xml03);
         // Position 01.0010 (Wand-WC Tiefspüler) hat Bieterangaben für Fabrikat und Typ
         const posBieter = parsed03.items.find(it => it.oz_code === '01.0010');
@@ -207,9 +254,9 @@ describe('GAEB X83 Import Audit: Was W-Link importiert und was verloren geht', (
     });
 
     // =========================================================================
-    // 6. Vorbemerkungen & Hinweistexte (Titel- und Positionsebene)
+    // 7. Vorbemerkungen & Hinweistexte (Titel- und Positionsebene)
     // =========================================================================
-    test('6. Audit Vorbemerkungen: Titelebene wird verworfen, Hinweistext als Position fehlinterpretiert', () => {
+    test('7. Audit Vorbemerkungen: Titelebene wird verworfen, Hinweistext als Position fehlinterpretiert', () => {
         const parsed03 = GAEBEngine.parseGAEBXML(xml03);
 
         // BEFUND A: Vorbemerkung auf Titelebene (BoQCtgy > Description) wird komplett ignoriert
@@ -222,19 +269,19 @@ describe('GAEB X83 Import Audit: Was W-Link importiert und was verloren geht', (
         const hinweisPos = parsed03.items.find(it => it.oz_code === '01.0001');
         assert.ok(hinweisPos, 'Hinweistext wurde als Item geparst');
 
-        // KRITISCHER FEHLER DES AKTUELLEN PARSERS:
+        // Befund zum aktuellen Parser:
         // Da <Qty> fehlt, setzt der Parser fallback menge = 1.0
         // Da <QU> fehlt, setzt der Parser fallback einheit = 'Stk.'
         // Dadurch wird ein reiner Hinweistext zu einer abrechenbaren Leistungsposition mit Menge 1 Stk.!
-        assert.strictEqual(hinweisPos.menge, 1.0, 'KRITISCH: Hinweistext erhält fälschlich Menge 1.0');
-        assert.strictEqual(hinweisPos.einheit, 'Stk.', 'KRITISCH: Hinweistext erhält fälschlich Einheit Stk.');
+        assert.strictEqual(hinweisPos.menge, 1.0, 'Befund: Hinweistext erhält fälschlich Fallback-Menge 1.0');
+        assert.strictEqual(hinweisPos.einheit, 'Stk.', 'Befund: Hinweistext erhält fälschlich Fallback-Einheit Stk.');
         assert.strictEqual(hinweisPos.isHinweistext, undefined, 'Nicht als Hinweistext markiert');
     });
 
     // =========================================================================
-    // 7. Einheitspreis-Aufgliederung (UPComponents / EFB-Formblätter)
+    // 8. Einheitspreis-Aufgliederung (UPComponents / EFB-Formblätter)
     // =========================================================================
-    test('7. Audit EP-Aufgliederung: UPComponents (Lohn, Stoff, Gerät, Sonstiges) werden ignoriert', () => {
+    test('8. Audit EP-Aufgliederung: UPComponents (Lohn, Stoff, Gerät, Sonstiges) werden ignoriert', () => {
         const parsed03 = GAEBEngine.parseGAEBXML(xml03);
         const posRohr = parsed03.items.find(it => it.oz_code === '01.0020');
         assert.ok(posRohr, 'Position 01.0020 muss existieren');
@@ -254,9 +301,9 @@ describe('GAEB X83 Import Audit: Was W-Link importiert und was verloren geht', (
     });
 
     // =========================================================================
-    // 8. Reales Hochbau-Muster: Prüfung von Mengen, Einheiten und Datenverlusten
+    // 9. Reales Hochbau-Muster: Prüfung von Mengen, Einheiten und Datenverlusten
     // =========================================================================
-    test('8. Audit Reales Hochbau-Muster (04_reales_muster_hochbau.x83)', () => {
+    test('9. Audit Reales Hochbau-Muster (04_reales_muster_hochbau.x83)', () => {
         const parsed04 = GAEBEngine.parseGAEBXML(xml04);
         assert.strictEqual(parsed04.items.length, 9, 'Alle 9 Hochbau-Positionen eingelesen');
 
@@ -278,5 +325,38 @@ describe('GAEB X83 Import Audit: Was W-Link importiert und was verloren geht', (
         assert.strictEqual(posBodenplatte.einheit, 'm³');
         assert.strictEqual(JSON.stringify(posBodenplatte).includes('WU-Richtlinie des DAfStb'), false,
             'Spezifikationen im Langtext der Bodenplatte fehlen im Parsingergebnis');
+    });
+
+    // =========================================================================
+    // 10. BVBS-Standard-Referenzmuster (05_referenz_muster_bvbs_standard.x83)
+    // =========================================================================
+    test('10. Audit BVBS-Referenzmuster: Prüfung des Standard-LV und Erfassung der Parser-Lücken', () => {
+        const parsed05 = GAEBEngine.parseGAEBXML(xml05);
+        assert.strictEqual(parsed05.items.length, 5, 'Alle 5 Positionen des BVBS-Musters extrahiert');
+
+        // Was funktioniert:
+        const posPlanum = parsed05.items.find(it => it.oz_code === '01.01.0020');
+        assert.ok(posPlanum, 'Position 01.01.0020 muss existieren');
+        assert.strictEqual(posPlanum.menge, 2400.0);
+        assert.strictEqual(posPlanum.einheit, 'm²');
+        assert.strictEqual(posPlanum.name, 'Planum herstellen und verdichten');
+
+        const posSchacht = parsed05.items.find(it => it.oz_code === '01.02.0020');
+        assert.ok(posSchacht, 'Position 01.02.0020 muss existieren');
+        assert.strictEqual(posSchacht.menge, 4.0);
+        assert.strictEqual(posSchacht.einheit, 'Stk');
+
+        // Erheblicher Daten- und Strukturverlust beim aktuellen Parser:
+        // 1. Gewerke- und Titelhierarchie fehlt vollständig
+        assert.strictEqual(parsed05.categories, undefined, 'Parser liefert keine Hierarchiestufen');
+        assert.strictEqual(posPlanum.gewerk, undefined, 'Keine Gewerkezuweisung am Item');
+        assert.strictEqual(posSchacht.titel, undefined, 'Keine Titelzuweisung am Item');
+
+        // 2. Langtexte mit technischen Spezifikationen (ZTVE-StB, DIN 18318, DIN 4034) gehen verloren
+        assert.strictEqual(posPlanum.langtext, undefined, 'Langtext fehlt am Item');
+        assert.strictEqual(JSON.stringify(posPlanum).includes('ZTVE-StB'), false,
+            'ZTVE-Vorgaben im Langtext des Planums gehen verloren');
+        assert.strictEqual(JSON.stringify(posSchacht).includes('Schachtabdeckung Klasse D 400'), false,
+            'Schachtspezifikationen im Langtext gehen verloren');
     });
 });

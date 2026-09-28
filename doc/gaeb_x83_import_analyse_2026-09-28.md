@@ -5,7 +5,7 @@
 **Status:** Audit & Gap-Analyse abgeschlossen (Erste praktische Aufgabe aus `liesen.txt`)  
 **Bezugsdokument:** `liesen.txt` (Abschnitt Ausschreibung & Import-First-Strategie)  
 **Testsuite:** `tests/gaeb_x83_import_audit.test.js`  
-**Testdaten:** `tests/fixtures/gaeb_x83/*.x83`  
+**Testdaten:** `tests/fixtures/gaeb_x83/*.x83` (5 Test- und Referenzdateien inkl. BVBS-Referenz)  
 
 ---
 
@@ -15,7 +15,12 @@
 Gemäß der strategischen Leitlinie in `liesen.txt` lautet die oberste Priorität vor jeder UI-Entwicklung und vor jeder X84-Angebotserzeugung:
 > «أول مهمة عملية الآن: إعداد مجموعة اختبار من ملفات X83 متنوعة وتقرير واضح بعنوان «ما يستورده W‑Link صحيحًا وما يفقده». بناء واجهة المناقصات قبل هذه الخطوة قد يجعلك تصممها حول بيانات ناقصة. ابدأ المناقصات بالاستيراد فقط: خذ ملفات X83 حقيقية ومسموحًا لك استخدامها، واختبر هل يحافظ W‑Link على الألواح/العناوين/OZ، النصوص، الكميات والوحدات. أنشئ تقريرًا بما يُفقد قبل تعديل الواجهة أو كتابة X84 جديد.»
 
-Zur Erfüllung dieser Vorgabe wurde eine repräsentative Testsuite aus vier standardkonformen GAEB DA XML 3.3 Dateien (`01_standard_hierarchie.x83`, `02_positionstypen_wahl_bedarf.x83`, `03_bieterangaben_vorbemerkungen_ep.x83`, `04_reales_muster_hochbau.x83`) erstellt und der bestehende Import-Parser von W-Link (`GAEBEngine.parseGAEBXML` in `js/gaeb.js`) einem schonungslosen Audit unterzogen.
+Zur Erfüllung dieser Vorgabe wurde eine fundierte Testsuite aus fünf GAEB DA XML 3.3 Dateien (`01_standard_hierarchie.x83`, `02_positionstypen_wahl_bedarf.x83`, `03_bieterangaben_vorbemerkungen_ep.x83`, `04_reales_muster_hochbau.x83`, `05_referenz_muster_bvbs_standard.x83`) herangezogen und der bestehende Import-Parser von W-Link (`GAEBEngine.parseGAEBXML` in `js/gaeb.js`) einem systematischen Audit unterzogen.
+
+**Status und Einordnung der Testdateien:**
+- Die Dateien `01` bis `04` sind gezielt erstellte Projekt-Testmodelle zur Untersuchung spezifischer Randfälle und Strukturen (geschachtelte Hierarchien, Positionstypen, Vorbemerkungen/Bieterangaben, praxisnaher Hochbau-Auszug).
+- Die Datei `05_referenz_muster_bvbs_standard.x83` ist eine saubere, unabhängige Referenz-Ausschreibungsdatei nach den Richtlinien des Bundesverbandes Bausoftware e.V. (BVBS) / GAEB DA XML 3.3.
+- *Methodischer Hinweis:* Die offizielle GAEB-Software-Zertifizierung verwendet standardisierte BVBS-Prüfdateien und validiert die Konformität erzeugter X84-Dateien mit dem offiziellen Prüfwerkzeug `GAEBXml-Checker`. Der vorliegende Auditbericht dient als interne Mängelliste und technisches Anforderungsprofil (Backlog) für die Entwicklung.
 
 ### Ist-Zustand des aktuellen W-Link Parsers
 Der aktuelle Parser in `js/gaeb.js` basiert auf einem vereinfachten Regulären Ausdruck:
@@ -32,14 +37,14 @@ Er durchsucht den XML-String linear nach `<Item>`-Tags und erzeugt daraus eine *
   3. Den Kurztext (`TextOutl`) einfacher Positionen (abgelegt im Feld `name`).
   4. Die Ordnungszahl (`OZ`), sofern sie als redundanter Volleintrag im `<OZ>`-Knoten der Blattposition vorliegt.
 
-* **Was W-Link aktuell verliert oder fatal verfälscht (Datenverlust > 70%):**
+* **Was W-Link aktuell verliert oder fehlerhaft interpretiert (Erheblicher Daten- und Strukturverlust bei den getesteten Elementen / فقدان كبير في العناصر التي اختبرناها):**
   1. **Die gesamte Projekt- und Leistungsverzeichnishierarchie** (`BoQCtgy`: Gewerke, Abschnitte, Titel). Alle Positionen landen ungeordnet in einem flachen Array.
   2. **Zusammengesetzte Ordnungszahlen (OZ)**, falls das ausschreibende AVA-System dem GAEB-Standard folgt und nur die Teil-OZ (`RNoPart`) in den Hierarchieebenen ablegt.
   3. **Vollständige Langtexte (`CompleteText` / `DetailTxt`)**: Technische Spezifikationen, DIN-Normen und Ausführungsanweisungen werden abgeschnitten und verworfen.
   4. **Positionstypen**: Grund-, Wahl- (Alternativ-) und Bedarfspositionen (mit/ohne Gesamtbetrag) sowie Pauschalen werden zu identischen Normalpositionen verflacht.
-  5. **Vergaberechtliches Ausschlussrisiko**: Wahl- und Bedarfspositionen ohne Gesamtbetrag werden fälschlicherweise in Angebotssummen eingerechnet; dies führt zum **zwingenden Ausschluss des Bieters nach § 16 VOB/A**.
+  5. **Vergaberechtliche Wertungsrisiken**: Wahl- und Bedarfspositionen ohne Gesamtbetrag werden fälschlicherweise in Angebotssummen eingerechnet; fehlerhafte Berechnungen oder Auslassungen geforderter Preise können je nach Vergabeunterlagen und Einzelfall zum Ausschluss führen. Es bestehen zwar differenzierte Regeln und Nachforderungsmöglichkeiten (z. B. nach § 16a VOB/A sowie Regelungen zu unwesentlichen Positionen), die Software darf jedoch keine rechnerischen Risiken erzeugen oder Vorwegurteile fällen.
   6. **Vorbemerkungen & Hinweistexte**: Vorbemerkungen auf Titelebene verschwinden spurlos; Hinweistexte auf Positionsebene werden fehlerhaft als abrechenbare Positionen mit `Menge = 1.0 Stk.` importiert!
-  7. **Bieterangaben & Bietertextergänzungen (`BiReq`)**: Pflichtfelder für Fabrikats- und Typangaben werden ignoriert.
+  7. **Bieterangaben & Bietertextergänzungen (`BiReq`)**: Pflichtfelder für Fabrikats- und Typangaben werden ignoriert, was zu unvollständigen Angeboten führen kann.
   8. **Einheitspreis-Aufgliederung (`UPComponents`)**: Kalkulatorische Anteile (Lohn, Stoff, Gerät, Sonstiges) für EFB-Formblätter (221/223) werden nicht erfasst.
 
 ---
@@ -130,8 +135,8 @@ Er durchsucht den XML-String linear nach `<Item>`-Tags und erzeugt daraus eine *
   Jedes Item erhält blind `cost_type: 'MATERIAL'`.
 * **Audit-Ergebnis (`test 4`):**  
   Alle 6 Positionen aus `02_positionstypen_wahl_bedarf.x83` werden identisch verarbeitet.  
-* **Praktische Auswirkung (Vergaberechtliches KO-Kriterium):**  
-  Wenn W-Link die Wahlposition und die Eventualposition ohne Gesamtbetrag mit der Menge multipliziert und zur Angebotssumme addiert, weicht die berechnete Netto-Angebotssumme von den gesetzlichen GAEB-Vorgaben ab. Die Vergabestelle schließt das Angebot zwingend aus (§ 16 VOB/A).
+* **Praktische Auswirkung (Vergaberechtliches Wertungsrisiko):**  
+  Wenn W-Link die Wahlposition und die Eventualposition ohne Gesamtbetrag mit der Menge multipliziert und zur Angebotssumme addiert, weicht die berechnete Netto-Angebotssumme von den Vorgaben der Ausschreibung ab. Dies birgt bei öffentlichen Ausschreibungen ein erhebliches Risiko für die Wertung des Angebots und kann je nach Ausschreibungsbedingungen zum Ausschluss führen. Zwar existieren im Vergaberecht differenzierte Regeln (z. B. Nachforderungen nach § 16a VOB/A oder Ausnahmen für unwesentliche Positionen), die Kalkulationssoftware darf jedoch keine Vorwegentscheidung treffen, sondern muss Risiken transparent aufzeigen und Wahlpositionen rechnerisch sauber isolieren.
 
 ---
 
@@ -143,7 +148,7 @@ Er durchsucht den XML-String linear nach `<Item>`-Tags und erzeugt daraus eine *
 * **Audit-Ergebnis (`test 5`):**  
   Weder das Vorhandensein einer Bieterangabe noch die zu füllenden Felder (`Fabrikat`, `Typ`) werden im Datenobjekt vermerkt.
 * **Praktische Auswirkung:**  
-  Der Kalkulator erfährt in W-Link überhaupt nicht, dass er Angaben machen muss. Die Ausschreibung wird ohne Bieterangaben abgegeben und gilt vergaberechtlich als **unvollständig** -> Ausschluss nach § 16 Abs. 1 Nr. 3 VOB/A.
+  Der Kalkulator erfährt in W-Link überhaupt nicht, dass er Angaben machen muss. Das Angebot läuft Gefahr, ohne geforderte Erklärungen abgegeben zu werden, was – sofern keine Nachforderung nach § 16a VOB/A greift – zum Ausschluss wegen Unvollständigkeit führen kann. Die Software muss auf fehlende Angaben hinweisen.
 
 ---
 
@@ -177,7 +182,7 @@ Er durchsucht den XML-String linear nach `<Item>`-Tags und erzeugt daraus eine *
 | **Wahl-/Alternativpos.** | `<ALNGroup>`, `<ALNSerNo>`, `ItemType` | Verflacht zu Normalposition | ❌ **Verloren** (Verfälscht Gesamtangebotssumme) | 🔴 KRITISCH |
 | **Bedarfspositionen** | `<Provis WithTotal="true/false">` | Verflacht zu Normalposition | ❌ **Verloren** (Verfälscht Wertungssumme) | 🔴 KRITISCH |
 | **Pauschalpositionen** | Kennzeichnung / `<QU>Psch</QU>` | Nur Textstring `Psch`, keine Sonderlogik | ⚠️ **Eingeschränkt** (Menge bleibt numerisch 1) | 🟡 MITTEL |
-| **Bieterangaben** | `<BiReq>` mit Feldern (Fabrikat, Typ) | Komplett ignoriert | ❌ **Verloren** (Ausschlussrisiko nach § 16 VOB/A) | 🔴 KRITISCH |
+| **Bieterangaben** | `<BiReq>` mit Feldern (Fabrikat, Typ) | Komplett ignoriert | ❌ **Verloren** (Wertungsrisiko / Unvollständigkeit) | 🔴 KRITISCH |
 | **EP-Aufgliederung** | `<UPComponents>` (Lohn/Stoff/Gerät) | Komplett ignoriert | ❌ **Verloren** (EFB-Formblattdaten fehlen) | 🟠 HOCH |
 | **Projektmetadaten** | Name, Phase, Währung | Übernommen in `projectInfo` | ✅ **Korrekt importiert** | 🟢 OK |
 
@@ -287,14 +292,17 @@ CREATE TABLE IF NOT EXISTS gaeb_bieterangaben (
 
 ## 5. Fazit & Freigabekriterium für den nächsten Meilenstein
 
-Die Vorgabe aus `liesen.txt` hat sich als **hochgradig berechtigt und risikovermeidend** erwiesen. Wäre die Benutzeroberfläche direkt auf dem bestehenden Regex-Parser aufgesetzt worden, hätte W-Link:
-1. Den Anwendern keine Gewerke- oder Titelstrukturen bieten können.
-2. Technische Langtexte dauerhaft vernichtet.
-3. Angebote mit unzulässig aufsummierten Wahlpositionen erzeugt, was zur Disqualifikation unserer Baukunden bei öffentlichen Ausschreibungen geführt hätte.
+Die Überprüfung anhand der Vorgaben aus `liesen.txt` liefert eine fundierte, sachliche Mängelliste und dient als priorisierter Anforderungskatalog (Backlog) für die Neuentwicklung des GAEB-X83-Imports.
 
-Mit den in diesem Audit geschaffenen Grundlagen:
-- Der 4-teiligen Referenzsuite (`tests/fixtures/gaeb_x83/`),
-- Dem automatisierten Audit-Test (`tests/gaeb_x83_import_audit.test.js`),
-- Und der vorliegenden Detailanalyse (`doc/gaeb_x83_import_analyse_2026-09-28.md`)
+Der Bericht versteht sich als exakte Erfassung der Defizite der bisherigen Implementierung und erhebt nicht den Anspruch, sämtliche in der AVA-Praxis vorkommenden GAEB-Dateien oder rechtliche Wertungsentscheidungen abschließend abzubilden. Er dokumentiert objektiv anhand der Testmodelle und des BVBS-konformen Referenzmusters die zu lösenden Kernprobleme:
+1. Fehlen jeglicher Gewerke-, Abschnitts- und Titelhierarchien.
+2. Verwerfen technischer Langtexte samt Ausführungsbestimmungen und Normen.
+3. Fehlerhafte rechnerische Gleichbehandlung von Wahl- und Bedarfspositionen, die zu Summenabweichungen und damit verbundenen Wertungsrisiken führt.
+4. Fehlinterpretation von Hinweistexten als bezifferte Abrechnungspositionen.
 
-liegt nun das exakte Pflichtenheft für die Implementierung des neuen GAEB-Importkerns vor.
+Mit den in diesem Schritt geschaffenen Grundlagen:
+- Der 5-teiligen Test- und Referenzsuite (`tests/fixtures/gaeb_x83/`), einschließlich der BVBS-Referenzdatei `05_referenz_muster_bvbs_standard.x83`,
+- Dem automatisierten Test zur Prüfung von Wohlgeformtheit, GAEB-Wurzelknoten und Gap-Erkennung (`tests/gaeb_x83_import_audit.test.js`),
+- Und der vorliegenden sachlich präzisierten Detailanalyse (`doc/gaeb_x83_import_analyse_2026-09-28.md`)
+
+liegt ein verlässliches Fundament vor, um nun den neuen GAEB-Importkern nach BVBS / GAEB DA XML 3.3 zu entwickeln und künftige X84-Exporte gegen den offiziellen `GAEBXml-Checker` abzusichern.
