@@ -20,34 +20,50 @@ const ItemTypes = (typeof require === 'function')
     ? require('./gaeb/item_types.js') 
     : (typeof window !== 'undefined' ? window.GAEB_ItemTypes : null);
 
+const getXMLDomUtils = () => (typeof XMLDomUtils !== 'undefined' && XMLDomUtils) || 
+    (typeof require === 'function' ? require('./gaeb/xml_dom_utils.js') : (typeof window !== 'undefined' ? window.GAEB_XMLDomUtils : null));
+const getHierarchyBuilder = () => (typeof HierarchyBuilder !== 'undefined' && HierarchyBuilder) || 
+    (typeof require === 'function' ? require('./gaeb/hierarchy_builder.js') : (typeof window !== 'undefined' ? window.GAEB_HierarchyBuilder : null));
+const getItemReader = () => (typeof ItemReader !== 'undefined' && ItemReader) || 
+    (typeof require === 'function' ? require('./gaeb/item_reader.js') : (typeof window !== 'undefined' ? window.GAEB_ItemReader : null));
+const getItemTypes = () => (typeof ItemTypes !== 'undefined' && ItemTypes) || 
+    (typeof require === 'function' ? require('./gaeb/item_types.js') : (typeof window !== 'undefined' ? window.GAEB_ItemTypes : null));
+
 class GAEBEngine {
     // Delegationsmethoden für Abwärtskompatibilität
     static getDOMParser() {
-        return XMLDomUtils ? XMLDomUtils.getDOMParser() : new DOMParser();
+        const u = getXMLDomUtils();
+        return u ? u.getDOMParser() : new DOMParser();
     }
 
     static getDirectChildElements(parent, tagName = null) {
-        return XMLDomUtils ? XMLDomUtils.getDirectChildElements(parent, tagName) : [];
+        const u = getXMLDomUtils();
+        return u ? u.getDirectChildElements(parent, tagName) : [];
     }
 
     static findFirstDescendant(element, tagName) {
-        return XMLDomUtils ? XMLDomUtils.findFirstDescendant(element, tagName) : null;
+        const u = getXMLDomUtils();
+        return u ? u.findFirstDescendant(element, tagName) : null;
     }
 
     static extractTextLines(containerElement) {
-        return XMLDomUtils ? XMLDomUtils.extractTextLines(containerElement) : '';
+        const u = getXMLDomUtils();
+        return u ? u.extractTextLines(containerElement) : '';
     }
 
     static extractKurztext(itemElem, ozCode) {
-        return ItemReader ? ItemReader.extractKurztext(itemElem, ozCode) : '';
+        const r = getItemReader();
+        return r ? r.extractKurztext(itemElem, ozCode) : '';
     }
 
     static extractLangtext(itemElem) {
-        return ItemReader ? ItemReader.extractLangtext(itemElem) : '';
+        const r = getItemReader();
+        return r ? r.extractLangtext(itemElem) : '';
     }
 
     static escapeXML(str) {
-        return XMLDomUtils ? XMLDomUtils.escapeXML(str) : String(str || '');
+        const u = getXMLDomUtils();
+        return u ? u.escapeXML(str) : String(str || '');
     }
 
     /**
@@ -118,7 +134,8 @@ class GAEBEngine {
         }
 
         // Hierarchie & Positionen aufbauen
-        const buildResult = HierarchyBuilder.build(doc);
+        const hb = getHierarchyBuilder();
+        const buildResult = hb ? hb.build(doc) : { allItems: [], topLevelCategories: [], warnings: [] };
 
         return {
             projectInfo,
@@ -211,6 +228,7 @@ class GAEBEngine {
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = GAEBEngine;
-} else if (typeof window !== 'undefined') {
+}
+if (typeof window !== 'undefined') {
     window.GAEBEngine = GAEBEngine;
 }

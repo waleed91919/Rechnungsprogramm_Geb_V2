@@ -19,10 +19,14 @@ class GAEB_HierarchyBuilder {
      * @returns {Object} { allItems, topLevelCategories, warnings }
      */
     static build(doc) {
-        const find = XMLUtils ? XMLUtils.findFirstDescendant : (el, tag) => el.getElementsByTagName(tag)[0];
-        const getChildren = XMLUtils ? XMLUtils.getDirectChildElements : (el, tag) => [];
-        const extractLines = XMLUtils ? XMLUtils.extractTextLines : el => (el ? el.textContent.trim() : '');
-        const clean = XMLUtils ? XMLUtils.cleanText : str => (str || '').replace(/\s+/g, ' ').trim();
+        const xmlUtils = (typeof XMLUtils !== 'undefined' && XMLUtils) || (typeof window !== 'undefined' ? window.GAEB_XMLDomUtils : null);
+        const itemReader = (typeof ItemReader !== 'undefined' && ItemReader) || (typeof window !== 'undefined' ? window.GAEB_ItemReader : null);
+        const itemTypes = (typeof ItemTypes !== 'undefined' && ItemTypes) || (typeof window !== 'undefined' ? window.GAEB_ItemTypes : null);
+
+        const find = xmlUtils ? xmlUtils.findFirstDescendant : (el, tag) => el.getElementsByTagName(tag)[0];
+        const getChildren = xmlUtils ? xmlUtils.getDirectChildElements : (el, tag) => [];
+        const extractLines = xmlUtils ? xmlUtils.extractTextLines : el => (el ? el.textContent.trim() : '');
+        const clean = xmlUtils ? xmlUtils.cleanText : str => (str || '').replace(/\s+/g, ' ').trim();
 
         const allItems = [];
         const topLevelCategories = [];
@@ -59,11 +63,11 @@ class GAEB_HierarchyBuilder {
             }
 
             // Kurztext & Langtext
-            const kurztext = ItemReader 
-                ? ItemReader.extractKurztext(itemElem, fullOZ)
+            const kurztext = itemReader 
+                ? itemReader.extractKurztext(itemElem, fullOZ)
                 : clean(find(itemElem, 'OutlineText')?.textContent || `Position ${fullOZ}`);
-            const langtext = ItemReader 
-                ? ItemReader.extractLangtext(itemElem)
+            const langtext = itemReader 
+                ? itemReader.extractLangtext(itemElem)
                 : extractLines(find(itemElem, 'CompleteText') || find(itemElem, 'DetailTxt'));
 
             // Hinweistext-Erkennung
@@ -82,19 +86,20 @@ class GAEB_HierarchyBuilder {
             const isHinweistext = isExplicitHinweis || isImplicitHinweis;
 
             // Mengen & Preise (strikter Null-Erhalt bei fehlendem UP nach liesen.txt)
-            const qp = ItemReader
-                ? ItemReader.extractQuantitiesAndPrices(itemElem, isHinweistext)
+            const qp = itemReader
+                ? itemReader.extractQuantitiesAndPrices(itemElem, isHinweistext)
                 : {
                     menge: hasQty ? parseFloat(qtyElem.textContent.replace(',', '.')) : null,
                     einheit: hasUnit ? unitElem.textContent.trim() : '',
                     preis: hasUP ? parseFloat(upElem.textContent.replace(',', '.')) : null,
                     gesamtpreis: null,
-                    isPriceMissing: !hasUP
+                    isPriceMissing: !hasUP,
+                    isQtyTBD: false
                 };
 
             // Typen & Kennzeichen
-            const typeInfo = ItemTypes
-                ? ItemTypes.determineItemType(itemElem, itemTypeAttr, isHinweistext, qp.einheit)
+            const typeInfo = itemTypes
+                ? itemTypes.determineItemType(itemElem, itemTypeAttr, isHinweistext, qp.einheit)
                 : {
                     positions_art: isHinweistext ? 'HINWEISTEXT' : 'NORMAL',
                     itemType: isHinweistext ? 'Hinweistext' : 'Normal',
@@ -106,11 +111,11 @@ class GAEB_HierarchyBuilder {
                 };
 
             // Bieterangaben (<BiReq>)
-            const bieterangaben = ItemTypes ? ItemTypes.extractBieterangaben(itemElem) : undefined;
+            const bieterangaben = itemTypes ? itemTypes.extractBieterangaben(itemElem) : undefined;
             const requiresBidderInfo = Boolean(bieterangaben && bieterangaben.length > 0);
 
             // EP-Aufgliederung (<UPComponents>)
-            const upInfo = ItemTypes ? ItemTypes.extractUPComponents(itemElem) : undefined;
+            const upInfo = itemTypes ? itemTypes.extractUPComponents(itemElem) : undefined;
 
             const categoryNames = categoryPath.map(c => c.name);
             const gewerk = categoryPath[0] ? categoryPath[0].name : undefined;
@@ -134,6 +139,7 @@ class GAEB_HierarchyBuilder {
                 preis: qp.preis,
                 gesamtpreis: qp.gesamtpreis,
                 isPriceMissing: qp.isPriceMissing,
+                isQtyTBD: qp.isQtyTBD ? true : undefined,
                 cost_type: 'MATERIAL',
                 positions_art: typeInfo.positions_art,
                 itemType: typeInfo.itemType,
@@ -171,32 +177,59 @@ class GAEB_HierarchyBuilder {
         function traverseBoQBody(boqBodyElem, currentPath, parentCategory) {
             if (!boqBodyElem) return;
 
+            // 0. Remarks auf BoQBody-Ebene erfassen
+            const childRemarks = getChildren(boqBodyElem, 'Remark');
+            for (let r = 0; r < childRemarks.length; r++) {
+                const remarkElem = childRemarks[r];
+                const text = extractLines(remarkElem);
+                if (text) {
+                    if (parentCategory) {
+                        if (!parentCategory.remarks) parentCategory.remarks = [];
+                        parentCategory.remarks.push(text);
+                    }
+                }
+            }
+
             // 1. Kind-Elemente <BoQCtgy> durchlaufen
             const childCtgys = getChildren(boqBodyElem, 'BoQCtgy');
             for (let i = 0; i < childCtgys.length; i++) {
                 const ctgElem = childCtgys[i];
                 const ctgId = ctgElem.getAttribute('ID') || `ctg_${i + 1}`;
+                const rnoPartElem = getChildren(ctgElem, 'RNoPart')[0];
                 const rnoPart = ctgElem.getAttribute('RNoPart') ||
-                                find(ctgElem, 'RNoPart')?.textContent.trim() || '';
+                                (rnoPartElem ? rnoPartElem.textContent.trim() : '');
                 const lblCtgy = ctgElem.getAttribute('lblCtgy') || ctgElem.getAttribute('LblCtgy') || rnoPart;
 
-                // Name aus LblTx oder OutlineText
+                // Name aus direktem LblTx, OutlineText oder Description (niemals aus Kind-BoQBody / Items!)
                 let ctgName = '';
-                const lblTxElem = getChildren(ctgElem, 'LblTx')[0] || find(ctgElem, 'LblTx');
+                const lblTxElem = getChildren(ctgElem, 'LblTx')[0];
                 if (lblTxElem) {
                     ctgName = clean(lblTxElem.textContent);
                 }
                 if (!ctgName) {
-                    const outlElem = find(ctgElem, 'OutlineText');
-                    if (outlElem) ctgName = clean(outlElem.textContent);
+                    const outlElem = getChildren(ctgElem, 'OutlineText')[0];
+                    if (outlElem) {
+                        const textOutl = find(outlElem, 'TextOutlTxt') || find(outlElem, 'TextOutl') || find(outlElem, 'OutlTxt') || outlElem;
+                        ctgName = clean(textOutl.textContent);
+                    }
+                }
+                if (!ctgName) {
+                    const descElem = getChildren(ctgElem, 'Description')[0];
+                    if (descElem) {
+                        const outlElem = find(descElem, 'OutlineText');
+                        if (outlElem) {
+                            const textOutl = find(outlElem, 'TextOutlTxt') || find(outlElem, 'TextOutl') || find(outlElem, 'OutlTxt') || outlElem;
+                            ctgName = clean(textOutl.textContent);
+                        }
+                    }
                 }
                 if (!ctgName) {
                     ctgName = `Kategorie ${rnoPart || i + 1}`;
                 }
 
-                // Vorbemerkung / Description auf BoQCtgy-Ebene
+                // Vorbemerkung / Description auf BoQCtgy-Ebene (NUR direkte Description!)
                 let vorbemerkung = null;
-                const descElem = getChildren(ctgElem, 'Description')[0] || find(ctgElem, 'Description');
+                const descElem = getChildren(ctgElem, 'Description')[0];
                 if (descElem) {
                     const text = extractLines(descElem);
                     if (text) vorbemerkung = text;

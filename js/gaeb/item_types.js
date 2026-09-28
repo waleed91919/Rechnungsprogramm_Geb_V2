@@ -16,7 +16,8 @@ class GAEB_ItemTypes {
      * @returns {Object}
      */
     static determineItemType(itemElem, itemTypeAttr = '', isHinweistext = false, einheit = '') {
-        const find = XMLUtils ? XMLUtils.findFirstDescendant : (el, tag) => el.getElementsByTagName(tag)[0];
+        const utils = (typeof XMLUtils !== 'undefined' && XMLUtils) || (typeof window !== 'undefined' ? window.GAEB_XMLDomUtils : null);
+        const find = utils ? utils.findFirstDescendant : (el, tag) => el.getElementsByTagName(tag)[0];
 
         let positions_art = 'NORMAL';
         let itemType = 'Normal';
@@ -97,7 +98,8 @@ class GAEB_ItemTypes {
      * @returns {Array|undefined}
      */
     static extractBieterangaben(itemElem) {
-        const find = XMLUtils ? XMLUtils.findFirstDescendant : (el, tag) => el.getElementsByTagName(tag)[0];
+        const utils = (typeof XMLUtils !== 'undefined' && XMLUtils) || (typeof window !== 'undefined' ? window.GAEB_XMLDomUtils : null);
+        const find = utils ? utils.findFirstDescendant : (el, tag) => el.getElementsByTagName(tag)[0];
         const biReqElem = find(itemElem, 'BiReq');
         if (!biReqElem) return undefined;
 
@@ -125,7 +127,8 @@ class GAEB_ItemTypes {
      * @returns {Object|undefined}
      */
     static extractUPComponents(itemElem) {
-        const find = XMLUtils ? XMLUtils.findFirstDescendant : (el, tag) => el.getElementsByTagName(tag)[0];
+        const utils = (typeof XMLUtils !== 'undefined' && XMLUtils) || (typeof window !== 'undefined' ? window.GAEB_XMLDomUtils : null);
+        const find = utils ? utils.findFirstDescendant : (el, tag) => el.getElementsByTagName(tag)[0];
         const upCompElem = find(itemElem, 'UPComponents');
         if (!upCompElem) return undefined;
 

@@ -42,6 +42,7 @@ describe('GAEB X83 Import: Vollständige Verifikation des Datenerhalts (Phasen 1
     const xml04 = loadFixture('04_reales_muster_hochbau.x83');
     const xml05 = loadFixture('05_muster_angelehnt_an_gaeb_bvbs.x83');
     const xmlValid = loadFixture('valid_schema_reference.x83');
+    const xmlIndependent = loadFixture('independent_pygaeb_da32.x83');
 
     // =========================================================================
     // 0. Validierung: XML-Wohlgeformtheit & strukturelle Basiskonformität vs. XSD
@@ -597,5 +598,160 @@ describe('GAEB X83 Import: Vollständige Verifikation des Datenerhalts (Phasen 1
 
         // 4. GAEB_HierarchyBuilder
         assert.ok(typeof GAEB_HierarchyBuilder.build === 'function');
+    });
+
+    // =========================================================================
+    // 17. Unabhängige Open-Source-Datei aus pyGAEB (independent_pygaeb_da32.x83)
+    // =========================================================================
+    test('17. Unabhängige pyGAEB-Datei: Vollständige Parser-Verifikation (Hierarchien, QtyTBD, Langtexte, Null-Preise)', () => {
+        const parsed = GAEBEngine.parseGAEBXML(xmlIndependent);
+
+        // 1. Kopfdaten
+        assert.ok(parsed.projectInfo, 'projectInfo muss existieren');
+        assert.strictEqual(parsed.projectInfo.name, 'Neubau Lagerhalle');
+        assert.strictEqual(parsed.projectInfo.gaebPhase, 'X83');
+        assert.strictEqual(parsed.projectInfo.currency, '€');
+
+        // 2. Hierarchiestruktur
+        assert.ok(parsed.categories, 'categories-Array muss existieren');
+        assert.strictEqual(parsed.categories.length, 1, 'Muss genau 1 Hauptkategorie auf oberster Ebene besitzen');
+        const mainCat = parsed.categories[0];
+        assert.strictEqual(mainCat.name, 'Lagerhalle');
+        assert.strictEqual(mainCat.oz_prefix, '01');
+        assert.strictEqual(mainCat.level, 1);
+        assert.strictEqual(mainCat.categories.length, 2, 'Hauptkategorie muss 2 Unterkategorien besitzen');
+
+        // Unterkategorie 01.01 (hat leeres LblTx -> Fallback auf Kategorie 01, keine Kontamination durch Item-OutlineText)
+        const subCat1 = mainCat.categories[0];
+        assert.strictEqual(subCat1.oz_prefix, '01.01');
+        assert.strictEqual(subCat1.name, 'Kategorie 01');
+        assert.strictEqual(subCat1.items.length, 1, 'Unterkategorie 01.01 hat 1 Position');
+
+        // Unterkategorie 01.02 (Rohbau)
+        const subCat2 = mainCat.categories[1];
+        assert.strictEqual(subCat2.oz_prefix, '01.02');
+        assert.strictEqual(subCat2.name, 'Rohbau');
+        assert.strictEqual(subCat2.items.length, 5, 'Unterkategorie 01.02 hat 5 Positionen');
+
+        // 3. Positionsprüfung (6 Positionen insgesamt)
+        assert.strictEqual(parsed.items.length, 6, 'Muss exakt 6 Positionen einlesen');
+
+        // Position 01.01.001: Pauschale Baustelleneinrichtung
+        const pos1 = parsed.items[0];
+        assert.strictEqual(pos1.oz_code, '01.01.001');
+        assert.strictEqual(pos1.kurztext, 'Baustelleneinrichtung');
+        assert.strictEqual(pos1.menge, 1);
+        assert.strictEqual(pos1.einheit, 'psch');
+        assert.strictEqual(pos1.positions_art, 'PAUSCHALE');
+        assert.strictEqual(pos1.isPauschal, true);
+        assert.strictEqual(pos1.preis, null, 'Unbepreiste Ausschreibung: preis muss null bleiben');
+        assert.strictEqual(pos1.gesamtpreis, null);
+        assert.strictEqual(pos1.isPriceMissing, true);
+        assert.ok(pos1.langtext.includes('Einrichten der Baustelle'), 'Langtext muss enthalten sein');
+
+        // Position 01.02.001: Bodenaushub mit QtyTBD
+        const pos2 = parsed.items[1];
+        assert.strictEqual(pos2.oz_code, '01.02.001');
+        assert.strictEqual(pos2.kurztext, 'Bodenaushub');
+        assert.strictEqual(pos2.menge, null, 'QtyTBD: menge muss null sein');
+        assert.strictEqual(pos2.isQtyTBD, true, 'isQtyTBD Flag muss gesetzt sein');
+        assert.strictEqual(pos2.einheit, 'm³');
+        assert.strictEqual(pos2.positions_art, 'NORMAL');
+        assert.strictEqual(pos2.preis, null);
+        assert.strictEqual(pos2.isPriceMissing, true);
+        assert.ok(pos2.langtext.includes('Bodenaushub für die Baugrube herstellen.'));
+
+        // Position 01.02.002: Verfüllung mit regulärer Menge
+        const pos3 = parsed.items[2];
+        assert.strictEqual(pos3.oz_code, '01.02.002');
+        assert.strictEqual(pos3.kurztext, 'Verfüllung');
+        assert.strictEqual(pos3.menge, 600);
+        assert.strictEqual(pos3.einheit, 'm³');
+        assert.strictEqual(pos3.preis, null);
+
+        // Position 01.02.003: Bodenabfuhr mit QtyTBD
+        const pos4 = parsed.items[3];
+        assert.strictEqual(pos4.oz_code, '01.02.003');
+        assert.strictEqual(pos4.kurztext, 'Bodenabfuhr');
+        assert.strictEqual(pos4.menge, null);
+        assert.strictEqual(pos4.isQtyTBD, true);
+        assert.strictEqual(pos4.einheit, 'm³');
+
+        // Position 01.02.004: Betonsohle
+        const pos5 = parsed.items[4];
+        assert.strictEqual(pos5.oz_code, '01.02.004');
+        assert.strictEqual(pos5.kurztext, 'Betonsohle');
+        assert.strictEqual(pos5.menge, 800);
+        assert.strictEqual(pos5.einheit, 'm²');
+
+        // Position 01.02.005: Betonwände
+        const pos6 = parsed.items[5];
+        assert.strictEqual(pos6.oz_code, '01.02.005');
+        assert.strictEqual(pos6.kurztext, 'Betonwände');
+        assert.strictEqual(pos6.menge, 240);
+        assert.strictEqual(pos6.einheit, 'm²');
+
+        // Verifikation: Keine einzige Position hat erfundene 0.00-Preise
+        parsed.items.forEach(pos => {
+            assert.strictEqual(pos.preis, null, `Position ${pos.oz_code} darf keinen erfundenen Preis haben`);
+            assert.strictEqual(pos.isPriceMissing, true, `Position ${pos.oz_code} muss isPriceMissing = true haben`);
+        });
+    });
+
+    // =========================================================================
+    // 18. Browser- / Electron-Script-Loading (Simulation ohne Node require)
+    // =========================================================================
+    test('18. Electron-Script-Loading: Reihenfolge in code.html & Ausführung im DOM ohne require()', () => {
+        // 1. Skript-Reihenfolge in code.html prüfen
+        const codeHtml = fs.readFileSync(path.join(__dirname, '..', 'code.html'), 'utf8');
+        const expectedScriptOrder = [
+            'js/gaeb/xml_dom_utils.js',
+            'js/gaeb/hierarchy_builder.js',
+            'js/gaeb/item_reader.js',
+            'js/gaeb/item_types.js',
+            'js/gaeb.js'
+        ];
+
+        let lastIndex = -1;
+        for (const scriptSrc of expectedScriptOrder) {
+            const pattern = `<script src="${scriptSrc}"></script>`;
+            const idx = codeHtml.indexOf(pattern);
+            assert.ok(idx !== -1, `code.html muss '${pattern}' enthalten`);
+            assert.ok(idx > lastIndex, `Skript '${scriptSrc}' muss nach vorherigem Skript geladen werden`);
+            lastIndex = idx;
+        }
+
+        // 2. Simulation des Electron-Fensters ohne require
+        const dom = new JSDOM('<!DOCTYPE html><html><head></head><body></body></html>', {
+            runScripts: 'outside-only'
+        });
+        const win = dom.window;
+
+        // Sicherstellen, dass kein require im Fenster verfügbar ist
+        win.require = undefined;
+
+        // Skripte nacheinander im Fenster ausführen (wie der Browser sie lädt)
+        for (const scriptSrc of expectedScriptOrder) {
+            const scriptFullPath = path.join(__dirname, '..', scriptSrc);
+            const scriptCode = fs.readFileSync(scriptFullPath, 'utf8');
+            win.eval(scriptCode);
+        }
+
+        // Verifikation: Alle Klassen auf window registriert
+        assert.ok(win.GAEB_XMLDomUtils, 'window.GAEB_XMLDomUtils muss registriert sein');
+        assert.ok(win.GAEB_HierarchyBuilder, 'window.GAEB_HierarchyBuilder muss registriert sein');
+        assert.ok(win.GAEB_ItemReader, 'window.GAEB_ItemReader muss registriert sein');
+        assert.ok(win.GAEB_ItemTypes, 'window.GAEB_ItemTypes muss registriert sein');
+        assert.ok(win.GAEBEngine, 'window.GAEBEngine muss registriert sein');
+        assert.strictEqual(typeof win.GAEBEngine.parseGAEBXML, 'function');
+
+        // Funktionstest von window.GAEBEngine.parseGAEBXML
+        const result = win.GAEBEngine.parseGAEBXML(xmlIndependent);
+        assert.ok(result.projectInfo, 'projectInfo muss existieren');
+        assert.strictEqual(result.projectInfo.name, 'Neubau Lagerhalle');
+        assert.strictEqual(result.items.length, 6, 'Muss 6 Positionen extrahieren');
+        assert.strictEqual(result.categories.length, 1, 'Muss 1 Hauptkategorie haben');
+        assert.strictEqual(result.items[0].kurztext, 'Baustelleneinrichtung');
+        assert.strictEqual(result.items[0].preis, null);
     });
 });

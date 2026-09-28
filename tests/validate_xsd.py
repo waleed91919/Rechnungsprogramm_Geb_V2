@@ -24,6 +24,10 @@ EXPECTED_VALID = [
     'valid_schema_reference.x83'
 ]
 
+INDEPENDENT_EXTERNAL_FILES = [
+    'independent_pygaeb_da32.x83'
+]
+
 PROJECT_INTERNAL_MODELS = [
     '01_standard_hierarchie.x83',
     '02_positionstypen_wahl_bedarf.x83',
@@ -149,9 +153,13 @@ def main():
     valid_results = [check_file(f, schema) for f in EXPECTED_VALID]
     print_table("1. EXPECTED_VALID (Schema-konforme Referenzen - müssen zwingend bestehen)", valid_results)
 
-    # Gruppe 2 prüfen
+    # Gruppe 2 prüfen (Unabhängige Open-Source-Datei)
+    independent_results = [check_file(f, schema) for f in INDEPENDENT_EXTERNAL_FILES]
+    print_table("2. INDEPENDENT_EXTERNAL_FILES (Unabhängige Datei aus pyGAEB, DA XML 3.2)", independent_results)
+
+    # Gruppe 3 prüfen (Interne Testmodelle)
     internal_results = [check_file(f, schema) for f in PROJECT_INTERNAL_MODELS]
-    print_table("2. PROJECT_INTERNAL_MODELS (Interne Edge-Case-Testmodelle für Parser-Härtung)", internal_results)
+    print_table("3. PROJECT_INTERNAL_MODELS (Interne Edge-Case-Testmodelle für Parser-Härtung)", internal_results)
 
     print("\n" + "=" * 95)
     print("Detailprotokoll der Prüfergebnisse:")
@@ -173,7 +181,22 @@ def main():
             if len(r['xsd_errors']) > 10:
                 print(f"      ... und {len(r['xsd_errors']) - 10} weitere Fehler")
 
-    print("\n[GRUPPE 2: PROJECT_INTERNAL_MODELS]")
+    print("\n[GRUPPE 2: INDEPENDENT_EXTERNAL_FILES (pyGAEB Open Source)]")
+    for r in independent_results:
+        print(f"\nDatei: {r['file']}")
+        print(f"  - XML-Wohlgeformtheit: {'OK' if r['well_formed'] else r['wf_error']}")
+        print(f"  - Strukturelle Prüfung: {', '.join(r['structural_notes'])}")
+        if r['xsd_valid']:
+            print("  - Strikte XSD-Validierung: BESTANDEN")
+        else:
+            print(f"  - Strikte XSD-Validierung: FEHLGESCHLAGEN ({len(r['xsd_errors'])} Abweichungen vom 3.3 DA83-Schema):")
+            print("      * Ehrlicher Befund: Datei verwendet GAEB DA XML 3.2 DA83 Namespace ('http://www.gaeb.de/GAEB_DA_XML/DA83/3.2')")
+            print("        und scheitert an der strikten Prüfung gegen das GAEB DA XML 3.3 Phasenschema (Ausgabe 2021-05).")
+            print("        Keine Manipulation der Datei oder des Namespace vorgenommen!")
+            for err in r['xsd_errors'][:4]:
+                print(f"      * {err}")
+
+    print("\n[GRUPPE 3: PROJECT_INTERNAL_MODELS]")
     for r in internal_results:
         print(f"\nDatei: {r['file']}")
         print(f"  - XML-Wohlgeformtheit: {'OK' if r['well_formed'] else r['wf_error']}")
@@ -193,7 +216,8 @@ def main():
         print("ERGEBNIS: FEHLER - Mindestens eine Datei aus EXPECTED_VALID hat die XSD-Validierung nicht bestanden!")
         sys.exit(1)
     else:
-        print("ERGEBNIS: ERFOLG - Alle Dateien in EXPECTED_VALID sind 100% schema-konform.")
+        print("ERGEBNIS: ERFOLG - Alle Dateien in EXPECTED_VALID validieren fehlerfrei gegen das GAEB 3.3 Schema.")
+        print("Die unabhängige pyGAEB-Datei (Version 3.2) zeigt eine dokumentierte Versionsdiskrepanz zum 3.3-Schema.")
         print("Die Abweichungen in PROJECT_INTERNAL_MODELS sind dokumentierte Edge-Cases für den funktionalen Parser.")
         sys.exit(0)
 

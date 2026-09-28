@@ -14,8 +14,9 @@ class GAEB_ItemReader {
      * @returns {string}
      */
     static extractKurztext(itemElem, ozCode = '') {
-        const find = XMLUtils ? XMLUtils.findFirstDescendant : (el, tag) => el.getElementsByTagName(tag)[0];
-        const clean = XMLUtils ? XMLUtils.cleanText : str => (str || '').replace(/\s+/g, ' ').trim();
+        const utils = (typeof XMLUtils !== 'undefined' && XMLUtils) || (typeof window !== 'undefined' ? window.GAEB_XMLDomUtils : null);
+        const find = utils ? utils.findFirstDescendant : (el, tag) => el.getElementsByTagName(tag)[0];
+        const clean = utils ? utils.cleanText : str => (str || '').replace(/\s+/g, ' ').trim();
 
         // 1. TextOutlTxt (offizielles GAEB DA XML 3.3 Element)
         const textOutlTxt = find(itemElem, 'TextOutlTxt');
@@ -38,11 +39,23 @@ class GAEB_ItemReader {
             if (text) return text;
         }
 
-        // 4. OutlineText
+        // 4. OutlineText (ohne OutlTSA / OutlTSB Flags)
         const outlineText = find(itemElem, 'OutlineText');
         if (outlineText) {
-            const text = clean(outlineText.textContent);
-            if (text) return text;
+            let text = '';
+            for (let i = 0; i < outlineText.childNodes.length; i++) {
+                const node = outlineText.childNodes[i];
+                if (node.nodeType === 3) {
+                    text += node.textContent + ' ';
+                } else if (node.nodeType === 1) {
+                    const tag = (node.localName || node.nodeName || '').toLowerCase();
+                    if (!tag.startsWith('outlts')) {
+                        text += node.textContent + ' ';
+                    }
+                }
+            }
+            const cleaned = clean(text || outlineText.textContent);
+            if (cleaned) return cleaned;
         }
 
         // 5. Description Fallback
@@ -66,8 +79,9 @@ class GAEB_ItemReader {
      * @returns {string}
      */
     static extractLangtext(itemElem) {
-        const find = XMLUtils ? XMLUtils.findFirstDescendant : (el, tag) => el.getElementsByTagName(tag)[0];
-        const extractLines = XMLUtils ? XMLUtils.extractTextLines : el => (el ? el.textContent.trim() : '');
+        const utils = (typeof XMLUtils !== 'undefined' && XMLUtils) || (typeof window !== 'undefined' ? window.GAEB_XMLDomUtils : null);
+        const find = utils ? utils.findFirstDescendant : (el, tag) => el.getElementsByTagName(tag)[0];
+        const extractLines = utils ? utils.extractTextLines : el => (el ? el.textContent.trim() : '');
 
         const detailTxt = find(itemElem, 'DetailTxt');
         if (detailTxt) {
@@ -89,15 +103,19 @@ class GAEB_ItemReader {
      * Fehlende Preise in Ausschreibungen (X83) bleiben null und werden nicht zu 0.00 verfälscht!
      * @param {Element} itemElem 
      * @param {boolean} isHinweistext 
-     * @returns {Object} { menge, einheit, preis, gesamtpreis, isPriceMissing }
+     * @returns {Object} { menge, einheit, preis, gesamtpreis, isPriceMissing, isQtyTBD }
      */
     static extractQuantitiesAndPrices(itemElem, isHinweistext = false) {
-        const find = XMLUtils ? XMLUtils.findFirstDescendant : (el, tag) => el.getElementsByTagName(tag)[0];
+        const utils = (typeof XMLUtils !== 'undefined' && XMLUtils) || (typeof window !== 'undefined' ? window.GAEB_XMLDomUtils : null);
+        const find = utils ? utils.findFirstDescendant : (el, tag) => el.getElementsByTagName(tag)[0];
 
         const qtyElem = find(itemElem, 'Qty');
         const unitElem = find(itemElem, 'QU') || find(itemElem, 'Unit');
         const upElem = find(itemElem, 'UP') || find(itemElem, 'UnitPrice');
         const itElem = find(itemElem, 'IT') || find(itemElem, 'TotalPrice');
+        const qtyTBDElem = find(itemElem, 'QtyTBD');
+
+        const isQtyTBD = qtyTBDElem !== null && qtyTBDElem.textContent.trim().toLowerCase() === 'yes';
 
         const hasQty = qtyElem !== null && qtyElem.textContent.trim() !== '';
         const hasUnit = unitElem !== null && unitElem.textContent.trim() !== '';
@@ -110,7 +128,8 @@ class GAEB_ItemReader {
                 einheit: '',
                 preis: null,
                 gesamtpreis: null,
-                isPriceMissing: false
+                isPriceMissing: false,
+                isQtyTBD: false
             };
         }
 
@@ -156,7 +175,8 @@ class GAEB_ItemReader {
             einheit,
             preis,
             gesamtpreis,
-            isPriceMissing
+            isPriceMissing,
+            isQtyTBD
         };
     }
 }
