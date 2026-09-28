@@ -2,9 +2,9 @@
  * tests/gaeb_x83_import_audit.test.js
  * 
  * Verifikations- und Audit-Testsuite für den GAEB DA XML (X83) Import von W-Link.
- * Überprüft anhand der 5 Testfixtures (tests/fixtures/gaeb_x83/*.x83) den
- * vollständigen Erhalt von Hierarchien (BoQCtgy), Pfad-OZs, RNoPart, Langtexten,
- * Vorbemerkungen, Positionstypen, Bieterangaben und UPComponents.
+ * Überprüft anhand der Testfixtures den vollständigen Erhalt von Hierarchien (BoQCtgy),
+ * Pfad-OZs, RNoPart, Langtexten, Vorbemerkungen, Positionstypen, Bieterangaben und UPComponents.
+ * Stellt sicher, dass fehlende Preise in X83 nicht zu 0.00 verfälscht werden (liesen.txt).
  */
 
 const { test, describe } = require('node:test');
@@ -13,6 +13,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { JSDOM } = require('jsdom');
 const GAEBEngine = require('../js/gaeb');
+const GAEB_XMLDomUtils = require('../js/gaeb/xml_dom_utils');
+const GAEB_HierarchyBuilder = require('../js/gaeb/hierarchy_builder');
+const GAEB_ItemReader = require('../js/gaeb/item_reader');
+const GAEB_ItemTypes = require('../js/gaeb/item_types');
 
 const FIXTURES_DIR = path.join(__dirname, 'fixtures', 'gaeb_x83');
 
@@ -21,7 +25,8 @@ const ALL_FIXTURES = [
     '02_positionstypen_wahl_bedarf.x83',
     '03_bieterangaben_vorbemerkungen_ep.x83',
     '04_reales_muster_hochbau.x83',
-    '05_muster_angelehnt_an_gaeb_bvbs.x83'
+    '05_muster_angelehnt_an_gaeb_bvbs.x83',
+    'valid_schema_reference.x83'
 ];
 
 function loadFixture(filename) {
@@ -36,11 +41,12 @@ describe('GAEB X83 Import: Vollständige Verifikation des Datenerhalts (Phasen 1
     const xml03 = loadFixture('03_bieterangaben_vorbemerkungen_ep.x83');
     const xml04 = loadFixture('04_reales_muster_hochbau.x83');
     const xml05 = loadFixture('05_muster_angelehnt_an_gaeb_bvbs.x83');
+    const xmlValid = loadFixture('valid_schema_reference.x83');
 
     // =========================================================================
     // 0. Validierung: XML-Wohlgeformtheit & strukturelle Basiskonformität vs. XSD
     // =========================================================================
-    test('0. Validierung: Alle 5 X83-Testdateien sind wohlgeformtes XML mit struktureller Basiskonformität', () => {
+    test('0. Validierung: Alle X83-Testdateien sind wohlgeformtes XML mit struktureller Basiskonformität', () => {
         const dom = new JSDOM();
         const parser = new dom.window.DOMParser();
 
@@ -55,8 +61,9 @@ describe('GAEB X83 Import: Vollständige Verifikation des Datenerhalts (Phasen 1
             // 2. Strukturelle Basiskonformität
             const root = doc.documentElement;
             assert.strictEqual(root.nodeName, 'GAEB', `Datei ${filename} muss <GAEB> als Wurzelknoten besitzen`);
-            assert.strictEqual(root.getAttribute('xmlns'), 'http://www.gaeb.de/GAEB_DA_XML/DA_XML_3.3',
-                `Datei ${filename} muss den allgemeinen GAEB DA XML 3.3 Namespace verwenden`);
+            const ns = root.getAttribute('xmlns') || '';
+            assert.ok(ns.includes('http://www.gaeb.de/GAEB_DA_XML/'),
+                `Datei ${filename} muss einen gültigen GAEB DA XML Namespace verwenden (gefunden: ${ns})`);
 
             // GAEBInfo-Version
             const versionElem = doc.getElementsByTagName('Version')[0];
@@ -67,11 +74,6 @@ describe('GAEB X83 Import: Vollständige Verifikation des Datenerhalts (Phasen 1
             const dpElem = doc.getElementsByTagName('DP')[0];
             assert.ok(dpElem, `Datei ${filename} muss ein <DP>-Element enthalten`);
             assert.strictEqual(dpElem.textContent.trim(), '83', `Datei ${filename} muss Datenaustauschphase 83 (X83) sein`);
-
-            // Hinweis zur Abgrenzung: Die strikte Schemaprüfung nach der phasenbezogenen
-            // XSD GAEB_DA_XML_83_3.3_2021-05.xsd erwartet den phasenspezifischen Namespace
-            // 'http://www.gaeb.de/GAEB_DA_XML/DA83/3.3' sowie strikte Elementreihenfolgen.
-            // Der W-Link Import-Parser verarbeitet beide Varianten tolerant und fehlertolerant.
         });
     });
 
@@ -467,7 +469,7 @@ describe('GAEB X83 Import: Vollständige Verifikation des Datenerhalts (Phasen 1
     // 13. Konsistenzprüfung zwischen Kategorien-Baum und flacher Item-Liste
     // =========================================================================
     test('13. Konsistenzprüfung: Baum-Struktur (categories) und flache Liste (items) sind synchron', () => {
-        [xml01, xml02, xml03, xml04, xml05].forEach((xml, idx) => {
+        [xml01, xml02, xml03, xml04, xml05, xmlValid].forEach((xml, idx) => {
             const parsed = GAEBEngine.parseGAEBXML(xml);
             assert.ok(parsed.items.length > 0, `Datei ${ALL_FIXTURES[idx]} muss Positionen haben`);
 
@@ -497,5 +499,103 @@ describe('GAEB X83 Import: Vollständige Verifikation des Datenerhalts (Phasen 1
                 assert.strictEqual(tItem.oz_code, flatItem.oz_code);
             });
         });
+    });
+
+    // =========================================================================
+    // 14. Bepreisungslogik nach liesen.txt: Fehlende Preise bleiben null
+    // =========================================================================
+    test('14. Strikte Bepreisungslogik (liesen.txt): Fehlende Preise in X83 bleiben null (keine 0.00 Erfindung)', () => {
+        // In 01_standard_hierarchie.x83 gibt es keine <UP>-Tags (reine Ausschreibung)
+        const parsed01 = GAEBEngine.parseGAEBXML(xml01);
+        parsed01.items.forEach(pos => {
+            assert.strictEqual(pos.preis, null, `Position ${pos.oz_code} darf keinen erfundenen Einheitspreis 0.00 haben`);
+            assert.strictEqual(pos.gesamtpreis, null, `Position ${pos.oz_code} darf keinen erfundenen Gesamtpreis 0.00 haben`);
+            assert.strictEqual(pos.isPriceMissing, true, `Position ${pos.oz_code} muss isPriceMissing = true haben`);
+        });
+
+        // Test mit einer bepreisten XML-Struktur (z.B. X84 oder bepreistes LV)
+        const pricedXML = `
+        <GAEB xmlns="http://www.gaeb.de/GAEB_DA_XML/DA_XML_3.3">
+          <Award><DP>84</DP><BoQ ID="B_PRICED"><BoQBody><Itemlist>
+            <Item ID="POS_P1" RNoPart="0010">
+              <OZ>01.0010</OZ>
+              <Qty>10.0</Qty><QU>m²</QU>
+              <UP>45.50</UP>
+              <IT>455.00</IT>
+            </Item>
+            <Item ID="POS_P2" RNoPart="0020">
+              <OZ>01.0020</OZ>
+              <Qty>5.0</Qty><QU>m²</QU>
+            </Item>
+          </Itemlist></BoQBody></BoQ></Award>
+        </GAEB>`;
+        const parsedPriced = GAEBEngine.parseGAEBXML(pricedXML);
+        assert.strictEqual(parsedPriced.items[0].preis, 45.50, 'Vorhandener UP muss exakt übernommen werden');
+        assert.strictEqual(parsedPriced.items[0].gesamtpreis, 455.00, 'Vorhandener IT muss übernommen werden');
+        assert.strictEqual(parsedPriced.items[0].isPriceMissing, false, 'isPriceMissing muss false sein');
+
+        assert.strictEqual(parsedPriced.items[1].preis, null, 'Fehlender UP muss null bleiben');
+        assert.strictEqual(parsedPriced.items[1].gesamtpreis, null, 'Fehlender IT muss null bleiben');
+        assert.strictEqual(parsedPriced.items[1].isPriceMissing, true, 'isPriceMissing muss true sein');
+    });
+
+    // =========================================================================
+    // 15. Unabhängige Schema-Referenzdatei (valid_schema_reference.x83)
+    // =========================================================================
+    test('15. Schema-Referenzdatei: Fehlerfreier Import & vollständiger Hierarchie-Erhalt', () => {
+        const parsedValid = GAEBEngine.parseGAEBXML(xmlValid);
+        assert.strictEqual(parsedValid.projectInfo.name, 'Verwaltungsbau NORD');
+        assert.strictEqual(parsedValid.projectInfo.gaebPhase, 'X83');
+        assert.strictEqual(parsedValid.projectInfo.currency, 'EUR');
+
+        // Kategorien prüfen: 1 Gewerk mit 2 Abschnitten
+        assert.ok(parsedValid.categories);
+        assert.strictEqual(parsedValid.categories.length, 1);
+        const gewerk = parsedValid.categories[0];
+        assert.strictEqual(gewerk.name, '01 Rohbauarbeiten');
+        assert.strictEqual(gewerk.categories.length, 2, 'Muss 2 Abschnitte enthalten');
+        assert.strictEqual(gewerk.categories[0].name, 'Abschnitt 01: Erdarbeiten');
+        assert.strictEqual(gewerk.categories[1].name, 'Abschnitt 02: Entwässerung');
+
+        // Gesamtpositionen: 3 (2 in Abschnitt 01, 1 in Abschnitt 02)
+        assert.strictEqual(parsedValid.items.length, 3);
+        const pos1 = parsedValid.items[0];
+        assert.strictEqual(pos1.oz_code, '01.01.0010');
+        assert.strictEqual(pos1.rno_part, '0010');
+        assert.strictEqual(pos1.menge, 350.0);
+        assert.strictEqual(pos1.einheit, 'm3');
+        assert.strictEqual(pos1.preis, null);
+        assert.strictEqual(pos1.isPriceMissing, true);
+        assert.strictEqual(pos1.name, 'Mutterboden abtragen d=20cm');
+        assert.ok(pos1.langtext.includes('Mutterboden bis 20 cm Dicke'));
+
+        const pos3 = parsedValid.items[2];
+        assert.strictEqual(pos3.oz_code, '01.02.0010');
+        assert.strictEqual(pos3.name, 'Grundleitungen PVC DN 150 verlegen');
+        assert.strictEqual(pos3.menge, 85.0);
+        assert.strictEqual(pos3.einheit, 'm');
+    });
+
+    // =========================================================================
+    // 16. Modulare Schnittstellen unter js/gaeb/
+    // =========================================================================
+    test('16. Modulare Architektur: Direkte Funktionsprüfung der Einzelmodule unter js/gaeb/', () => {
+        // 1. GAEB_XMLDomUtils
+        assert.ok(typeof GAEB_XMLDomUtils.getDOMParser === 'function');
+        assert.ok(typeof GAEB_XMLDomUtils.escapeXML === 'function');
+        assert.strictEqual(GAEB_XMLDomUtils.escapeXML('A & B <C>'), 'A &amp; B &lt;C&gt;');
+
+        // 2. GAEB_ItemReader
+        assert.ok(typeof GAEB_ItemReader.extractKurztext === 'function');
+        assert.ok(typeof GAEB_ItemReader.extractLangtext === 'function');
+        assert.ok(typeof GAEB_ItemReader.extractQuantitiesAndPrices === 'function');
+
+        // 3. GAEB_ItemTypes
+        assert.ok(typeof GAEB_ItemTypes.determineItemType === 'function');
+        assert.ok(typeof GAEB_ItemTypes.extractBieterangaben === 'function');
+        assert.ok(typeof GAEB_ItemTypes.extractUPComponents === 'function');
+
+        // 4. GAEB_HierarchyBuilder
+        assert.ok(typeof GAEB_HierarchyBuilder.build === 'function');
     });
 });
