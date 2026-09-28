@@ -79,6 +79,11 @@ class GAEBEngine {
             throw new Error('Ungültiger GAEB-Inhalt.');
         }
 
+        // BOM (Byte Order Mark \uFEFF) am Stringanfang für DOMParser entfernen
+        if (xmlString.charCodeAt(0) === 0xFEFF) {
+            xmlString = xmlString.slice(1);
+        }
+
         const parser = GAEBEngine.getDOMParser();
         let doc;
         try {

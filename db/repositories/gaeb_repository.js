@@ -54,26 +54,68 @@ function saveX83Import(db, parsedData, options = {}) {
         throw new Error('Ungültige GAEB-Daten für Speicherung.');
     }
 
-    const rawXml = options.rawXml || options.xmlString || parsedData.rawXml || '';
-    const fileHash = options.fileHash || calculateFileHash(rawXml || JSON.stringify(parsedData));
-    const fileSize = rawXml ? Buffer.byteLength(rawXml, 'utf8') : (options.fileSize || 0);
+    // Puffer-Erkennung (striktes Trennen von binärem Original und decodiertem XML-Text)
+    let rawBuffer = null;
+    if (Buffer.isBuffer(options.rawBytes)) {
+        rawBuffer = options.rawBytes;
+    } else if (Buffer.isBuffer(options.buffer)) {
+        rawBuffer = options.buffer;
+    } else if (Buffer.isBuffer(options.rawContent)) {
+        rawBuffer = options.rawContent;
+    } else if (Buffer.isBuffer(parsedData.rawBytes)) {
+        rawBuffer = parsedData.rawBytes;
+    } else if (Buffer.isBuffer(parsedData.rawBuffer)) {
+        rawBuffer = parsedData.rawBuffer;
+    }
+
+    let rawBytes = null;
+    let rawXml = '';
+    let fileHash = '';
+    let fileSize = 0;
+
+    if (rawBuffer) {
+        // Garantierter Original-Byte-Pfad
+        rawBytes = rawBuffer;
+        fileHash = crypto.createHash('sha256').update(rawBuffer).digest('hex');
+        fileSize = rawBuffer.length;
+        rawXml = typeof options.rawXml === 'string' && options.rawXml.length > 0
+            ? options.rawXml
+            : (typeof parsedData.rawXml === 'string' && parsedData.rawXml.length > 0 ? parsedData.rawXml : rawBuffer.toString('utf8'));
+    } else {
+        // Legacy-String-Pfad: Keine Original-Bytes vorhanden; keine Scheingenauigkeit vortäuschen
+        rawXml = options.rawXml || options.xmlString || (typeof options.rawContent === 'string' ? options.rawContent : '') || (typeof parsedData.rawXml === 'string' ? parsedData.rawXml : '');
+        rawBytes = null;
+        fileHash = crypto.createHash('sha256').update(rawXml, 'utf8').digest('hex');
+        fileSize = Buffer.byteLength(rawXml, 'utf8');
+    }
+
     const fileName = options.fileName || parsedData.projectInfo?.name || 'import.x83';
     const gaebVersion = options.gaebVersion || detectGaebVersion(rawXml);
     const exchangePhase = parsedData.projectInfo?.gaebPhase || 'X83';
 
     // 1. Re-Import-Policy: Existiert file_hash bereits?
-    const existing = db.prepare('SELECT id, file_name, imported_at FROM gaeb_imports WHERE file_hash = ?').get(fileHash);
+    const existing = db.prepare('SELECT id, file_name, imported_at, raw_bytes FROM gaeb_imports WHERE file_hash = ?').get(fileHash);
     if (existing) {
-        // Prüfe Verknüpfungen mit Angeboten / Rechnungen
-        const linked = db.prepare(`
+        // Verknüpfungsprüfung 1: Explizite Verknüpfung mit Angeboten (gaeb_import_angebote)
+        const isLinked = isImportLinked(db, existing.id);
+
+        // Verknüpfungsprüfung 2: Legacy-Verknüpfung über gaeb_items.linked_position_id
+        const linkedItems = db.prepare(`
             SELECT COUNT(*) AS cnt 
             FROM gaeb_items 
             WHERE import_id = ? AND linked_position_id IS NOT NULL
         `).get(existing.id);
 
-        if (linked && linked.cnt > 0) {
+        if (isLinked) {
             throw new Error(
-                `Import kann nicht überschrieben werden: ${linked.cnt} Position(en) des bestehenden Imports (ID: ${existing.id}) ` +
+                `Import kann nicht überschrieben werden: Der bestehende Import (ID: ${existing.id}) ` +
+                `ist bereits mit mindestens einem Angebot verknüpft.`
+            );
+        }
+
+        if (linkedItems && linkedItems.cnt > 0) {
+            throw new Error(
+                `Import kann nicht überschrieben werden: ${linkedItems.cnt} Position(en) des bestehenden Imports (ID: ${existing.id}) ` +
                 `sind bereits mit aktiven Angeboten/Positionen verknüpft.`
             );
         }
@@ -84,6 +126,7 @@ function saveX83Import(db, parsedData, options = {}) {
                 importId: existing.id,
                 fileHash,
                 isExisting: true,
+                hasOriginalBytes: Boolean(existing.raw_bytes !== null && existing.raw_bytes !== undefined),
                 itemCount: db.prepare('SELECT COUNT(*) AS cnt FROM gaeb_items WHERE import_id = ?').get(existing.id).cnt,
                 categoryCount: db.prepare('SELECT COUNT(*) AS cnt FROM gaeb_categories WHERE import_id = ?').get(existing.id).cnt,
                 message: 'Import mit diesem Datei-Hash existiert bereits (unverändert zurückgegeben).'
@@ -102,8 +145,8 @@ function saveX83Import(db, parsedData, options = {}) {
         const insertImportStmt = db.prepare(`
             INSERT INTO gaeb_imports (
                 file_name, gaeb_version, exchange_phase, project_name, project_id_ext,
-                currency, file_hash, file_size, raw_xml, imported_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                currency, file_hash, file_size, raw_bytes, raw_xml, imported_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
         `);
 
         const importRes = insertImportStmt.run(
@@ -115,6 +158,7 @@ function saveX83Import(db, parsedData, options = {}) {
             parsedData.projectInfo?.currency || 'EUR',
             fileHash,
             fileSize,
+            rawBytes,
             rawXml || null
         );
         const importId = importRes.lastInsertRowid;
@@ -308,7 +352,8 @@ function saveX83Import(db, parsedData, options = {}) {
             fileHash,
             itemCount: totalItems,
             categoryCount: totalCategories,
-            isExisting: false
+            isExisting: false,
+            hasOriginalBytes: Boolean(rawBytes !== null)
         };
     })();
 }
@@ -317,9 +362,13 @@ function saveX83Import(db, parsedData, options = {}) {
  * Lädt einen gespeicherten GAEB X83 Import vollständig aus der Datenbank.
  * Rekonstruiert die identische Baum- und Listenstruktur wie GAEBEngine.parseGAEBXML().
  * 
+ * Gibt standardmäßig KEINEN riesigen Buffer im Rückgabeobjekt zurück,
+ * um JSON/IPC zum Renderer nicht zu belasten. Stattdessen wird hasOriginalBytes gesetzt.
+ * Der Puffer kann bei Bedarf gezielt über getImportOriginalBuffer(db, importId) geladen werden.
+ * 
  * @param {Object} db - better-sqlite3 Instanz
  * @param {number} importId - ID aus gaeb_imports
- * @returns {Object|null} { importId, projectInfo, categories, hierarchy, sections, items, rawXml }
+ * @returns {Object|null} { importId, projectInfo, hasOriginalBytes, categories, hierarchy, sections, items, rawXml }
  */
 function loadX83Import(db, importId) {
     if (!db) throw new Error('Datenbankverbindung erforderlich.');
@@ -497,6 +546,8 @@ function loadX83Import(db, importId) {
         }
     });
 
+    const hasOriginalBytes = Boolean(importRow.raw_bytes !== null && importRow.raw_bytes !== undefined);
+
     const projectInfo = {
         name: importRow.project_name || 'GAEB Import',
         gaebPhase: importRow.exchange_phase || 'X83',
@@ -506,6 +557,7 @@ function loadX83Import(db, importId) {
         file_name: importRow.file_name,
         file_hash: importRow.file_hash,
         file_size: importRow.file_size,
+        hasOriginalBytes,
         imported_at: importRow.imported_at,
         updated_at: importRow.updated_at
     };
@@ -513,12 +565,114 @@ function loadX83Import(db, importId) {
     return {
         importId: importRow.id,
         projectInfo,
+        hasOriginalBytes,
         categories: topLevelCategories.length > 0 ? topLevelCategories : undefined,
         hierarchy: topLevelCategories.length > 0 ? topLevelCategories : undefined,
         sections: topLevelCategories.length > 0 ? topLevelCategories : undefined,
         items: allItems,
         rawXml: importRow.raw_xml
     };
+}
+
+/**
+ * Gibt gezielt den echten Original-Dateipuffer (BLOB) eines GAEB-Imports zurück.
+ * Für Altdaten mit nur raw_xml TEXT wird null zurückgegeben.
+ * 
+ * @param {Object} db - better-sqlite3 Instanz
+ * @param {number} importId - ID aus gaeb_imports
+ * @returns {Buffer|null} Buffer mit exakten Original-Bytes oder null
+ */
+function getImportOriginalBuffer(db, importId) {
+    if (!db) throw new Error('Datenbankverbindung erforderlich.');
+    if (!importId) throw new Error('Import-ID fehlt.');
+
+    const row = db.prepare('SELECT raw_bytes FROM gaeb_imports WHERE id = ?').get(importId);
+    if (!row) return null;
+    return row.raw_bytes || null;
+}
+
+/**
+ * Verknüpft einen GAEB X83 Import mit einer echten Angebotsversion in `dokumente`.
+ * 
+ * @param {Object} db - better-sqlite3 Instanz
+ * @param {number} importId - ID aus gaeb_imports
+ * @param {number} angebotId - ID aus dokumente
+ * @param {string|null} [notes] - Optionale Notizen / Referenzhinweise
+ * @returns {Object} { success: true, id, importId, angebotId, notes }
+ */
+function linkImportToAngebot(db, importId, angebotId, notes = null) {
+    if (!db) throw new Error('Datenbankverbindung erforderlich.');
+    if (!importId) throw new Error('Import-ID erforderlich.');
+    if (!angebotId) throw new Error('Angebots-ID erforderlich.');
+
+    // 1. Prüfe, dass importId in gaeb_imports existiert
+    const imp = db.prepare('SELECT id FROM gaeb_imports WHERE id = ?').get(importId);
+    if (!imp) {
+        throw new Error(`GAEB-Import mit ID ${importId} existiert nicht.`);
+    }
+
+    // 2. Prüfe, dass angebotId in dokumente existiert UND type === 'angebot'
+    const doc = db.prepare('SELECT id, type, nr FROM dokumente WHERE id = ?').get(angebotId);
+    if (!doc) {
+        throw new Error(`Dokument mit ID ${angebotId} existiert nicht.`);
+    }
+    if (doc.type !== 'angebot') {
+        throw new Error(`Dokument mit ID ${angebotId} ist kein Angebot (Typ: '${doc.type}'). Verknüpfung verweigert.`);
+    }
+
+    // 3. In gaeb_import_angebote eintragen
+    const stmt = db.prepare(`
+        INSERT INTO gaeb_import_angebote (import_id, angebot_id, notes)
+        VALUES (?, ?, ?)
+    `);
+    const res = stmt.run(importId, angebotId, notes ? String(notes) : null);
+
+    return {
+        success: true,
+        id: res.lastInsertRowid,
+        importId,
+        angebotId,
+        notes: notes ? String(notes) : null
+    };
+}
+
+/**
+ * Gibt alle mit einem GAEB-Import verknüpften Angebote mit Details zurück.
+ * @param {Object} db - better-sqlite3 Instanz
+ * @param {number} importId - ID aus gaeb_imports
+ * @returns {Array<Object>} Verknüpfte Angebote mit { angebot_id, nr, version, status, datum, linked_at, notes }
+ */
+function getLinkedAngebote(db, importId) {
+    if (!db) throw new Error('Datenbankverbindung erforderlich.');
+    if (!importId) throw new Error('Import-ID fehlt.');
+
+    const stmt = db.prepare(`
+        SELECT 
+            gia.angebot_id,
+            d.nr,
+            d.version,
+            COALESCE(d.angebot_status, d.status) AS status,
+            d.datum,
+            gia.linked_at,
+            gia.notes
+        FROM gaeb_import_angebote gia
+        JOIN dokumente d ON gia.angebot_id = d.id
+        WHERE gia.import_id = ?
+        ORDER BY gia.linked_at ASC, gia.id ASC
+    `);
+    return stmt.all(importId);
+}
+
+/**
+ * Prüft, ob ein GAEB-Import mit mindestens einem Angebot verknüpft ist.
+ * @param {Object} db - better-sqlite3 Instanz
+ * @param {number} importId - ID aus gaeb_imports
+ * @returns {boolean} true, wenn mindestens eine Verknüpfung in gaeb_import_angebote existiert
+ */
+function isImportLinked(db, importId) {
+    if (!db || !importId) return false;
+    const row = db.prepare('SELECT COUNT(*) AS cnt FROM gaeb_import_angebote WHERE import_id = ?').get(importId);
+    return Boolean(row && row.cnt > 0);
 }
 
 /**
@@ -539,14 +693,17 @@ function listX83Imports(db) {
             i.currency,
             i.file_hash,
             i.file_size,
+            (i.raw_bytes IS NOT NULL) AS has_original_bytes,
             i.imported_at,
             i.updated_at,
             COUNT(DISTINCT c.id) AS category_count,
             COUNT(DISTINCT it.id) AS item_count,
-            COUNT(DISTINCT CASE WHEN it.linked_position_id IS NOT NULL THEN it.id END) AS linked_item_count
+            COUNT(DISTINCT CASE WHEN it.linked_position_id IS NOT NULL THEN it.id END) AS linked_item_count,
+            COUNT(DISTINCT gia.angebot_id) AS linked_angebot_count
         FROM gaeb_imports i
         LEFT JOIN gaeb_categories c ON c.import_id = i.id
         LEFT JOIN gaeb_items it ON it.import_id = i.id
+        LEFT JOIN gaeb_import_angebote gia ON gia.import_id = i.id
         GROUP BY i.id
         ORDER BY i.imported_at DESC, i.id DESC
     `);
@@ -563,7 +720,12 @@ function deleteX83Import(db, importId) {
     if (!db) throw new Error('Datenbankverbindung erforderlich.');
     if (!importId) throw new Error('Import-ID fehlt.');
 
-    // Verknüpfungsschutz
+    // Verknüpfungsschutz: Prüfung gegen gaeb_import_angebote
+    if (isImportLinked(db, importId)) {
+        throw new Error('Löschen der GAEB-Ausschreibung verhindert: Dieser Import ist mit mindestens einem Angebot verknüpft.');
+    }
+
+    // Zusätzlicher Schutz für Legacy-Positionen
     const linked = db.prepare(`
         SELECT COUNT(*) AS cnt 
         FROM gaeb_items 
@@ -595,7 +757,11 @@ function createGaebRepo(deps) {
         saveX83Import: (parsedData, options) => saveX83Import(db, parsedData, options),
         loadX83Import: (importId) => loadX83Import(db, importId),
         listX83Imports: () => listX83Imports(db),
-        deleteX83Import: (importId) => deleteX83Import(db, importId)
+        deleteX83Import: (importId) => deleteX83Import(db, importId),
+        linkImportToAngebot: (importId, angebotId, notes) => linkImportToAngebot(db, importId, angebotId, notes),
+        getLinkedAngebote: (importId) => getLinkedAngebote(db, importId),
+        isImportLinked: (importId) => isImportLinked(db, importId),
+        getImportOriginalBuffer: (importId) => getImportOriginalBuffer(db, importId)
     };
 }
 
@@ -606,5 +772,9 @@ module.exports = {
     loadX83Import,
     listX83Imports,
     deleteX83Import,
+    linkImportToAngebot,
+    getLinkedAngebote,
+    isImportLinked,
+    getImportOriginalBuffer,
     createGaebRepo
 };

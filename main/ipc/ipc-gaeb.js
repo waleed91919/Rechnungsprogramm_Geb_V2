@@ -45,6 +45,33 @@ function register(ipcMain, context = {}) {
         }
         return gaebRepo.deleteX83Import(db, importId);
     }));
+
+    // Verknüpft einen GAEB-Import mit einem echten Angebot in dokumente
+    ipcMain.handle('gaeb:link-angebot', wrapHandler(async (e, payload = {}) => {
+        const { importId, angebotId, notes } = payload;
+        if (dbAPI && typeof dbAPI.linkImportToAngebot === 'function') {
+            return dbAPI.linkImportToAngebot(importId, angebotId, notes);
+        }
+        return gaebRepo.linkImportToAngebot(db, importId, angebotId, notes);
+    }));
+
+    // Gibt alle mit dem Import verknüpften Angebote zurück
+    ipcMain.handle('gaeb:get-linked-angebote', wrapHandler(async (e, importId) => {
+        if (!importId) throw new Error('Import-ID fehlt.');
+        if (dbAPI && typeof dbAPI.getLinkedAngebote === 'function') {
+            return dbAPI.getLinkedAngebote(importId);
+        }
+        return gaebRepo.getLinkedAngebote(db, importId);
+    }));
+
+    // Gibt gezielt den echten Original-Dateipuffer (BLOB) des Imports zurück
+    ipcMain.handle('gaeb:get-original-buffer', wrapHandler(async (e, importId) => {
+        if (!importId) throw new Error('Import-ID fehlt.');
+        if (dbAPI && typeof dbAPI.getImportOriginalBuffer === 'function') {
+            return dbAPI.getImportOriginalBuffer(importId);
+        }
+        return gaebRepo.getImportOriginalBuffer(db, importId);
+    }));
 }
 
 module.exports = {

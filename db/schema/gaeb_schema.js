@@ -18,6 +18,7 @@ function initGaebSchema(db) {
         currency TEXT DEFAULT 'EUR',
         file_hash TEXT NOT NULL,
         file_size INTEGER,
+        raw_bytes BLOB,
         raw_xml TEXT,
         imported_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -113,11 +114,40 @@ function initGaebSchema(db) {
     } catch (e) {
         console.error('[GAEB Schema] Index idx_gaeb_item_up_components_item:', e.message);
     }
+
+    // 6. gaeb_import_angebote: Reale, SQLite-gestützte Verknüpfung mit echten Angebotsversionen in dokumente
+    db.exec(`CREATE TABLE IF NOT EXISTS gaeb_import_angebote (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        import_id INTEGER NOT NULL REFERENCES gaeb_imports(id) ON DELETE RESTRICT,
+        angebot_id INTEGER NOT NULL REFERENCES dokumente(id) ON DELETE RESTRICT,
+        linked_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        notes TEXT,
+        UNIQUE(import_id, angebot_id)
+    )`);
+    try {
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_gaeb_import_angebote_import ON gaeb_import_angebote(import_id)`);
+        db.exec(`CREATE INDEX IF NOT EXISTS idx_gaeb_import_angebote_angebot ON gaeb_import_angebote(angebot_id)`);
+    } catch (e) {
+        console.error('[GAEB Schema] Indizes gaeb_import_angebote:', e.message);
+    }
 }
 
 function runGaebMigrations(db) {
-    // Stellt sicher, dass das GAEB-Schema auch auf Alt-Datenbanken idempotent initialisiert wird.
+    // 1. Initialisiere / erstelle alle Basistabellen und Indizes idempotent
     initGaebSchema(db);
+
+    // 2. Migration: raw_bytes Spalte zu gaeb_imports hinzufügen, falls Alt-Tabelle ohne Spalte vorliegt
+    try {
+        const tableInfo = db.prepare(`PRAGMA table_info(gaeb_imports)`).all();
+        if (tableInfo && tableInfo.length > 0) {
+            const hasRawBytes = tableInfo.some(col => col.name === 'raw_bytes');
+            if (!hasRawBytes) {
+                db.exec(`ALTER TABLE gaeb_imports ADD COLUMN raw_bytes BLOB;`);
+            }
+        }
+    } catch (e) {
+        console.error('[GAEB Migration] Fehler bei raw_bytes Migration:', e.message);
+    }
 }
 
 module.exports = {

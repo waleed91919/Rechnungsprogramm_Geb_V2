@@ -68,6 +68,7 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
     return;
 }
 
+const crypto = require('crypto');
 const Database = require('better-sqlite3');
 const GAEBEngine = require('../js/gaeb');
 const { initGaebSchema, runGaebMigrations } = require('../db/schema/gaeb_schema');
@@ -76,6 +77,10 @@ const {
     loadX83Import,
     listX83Imports,
     deleteX83Import,
+    linkImportToAngebot,
+    getLinkedAngebote,
+    isImportLinked,
+    getImportOriginalBuffer,
     calculateFileHash
 } = require('../db/repositories/gaeb_repository');
 const { createSchema, runMigrations } = require('../schema');
@@ -710,6 +715,83 @@ describe('GAEB X83 Persistenz: Vollständiger SQLite-Lebenszyklus & Datenintegri
                 cleanupDb(legacyDb, dbPath);
             }
         });
+
+        test('4.2 Idempotente Altdaten-Migration: Alt-GAEB-Tabelle ohne raw_bytes wird sauber migriert (zweimaliger Aufruf ohne Fehler)', () => {
+            const dbPath = path.join(os.tmpdir(), `legacy_gaeb_test_${Date.now()}_${Math.random().toString(36).slice(2)}.sqlite`);
+            const legacyDb = new Database(dbPath);
+            legacyDb.pragma('foreign_keys = ON');
+
+            try {
+                // Erstelle Altdatenbank mit dokumente und Alt-GAEB-Tabelle OHNE raw_bytes und OHNE gaeb_import_angebote
+                legacyDb.exec(`
+                    CREATE TABLE dokumente (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        type TEXT NOT NULL,
+                        nr TEXT NOT NULL,
+                        datum TEXT,
+                        status TEXT,
+                        angebot_status TEXT,
+                        version INTEGER DEFAULT 1
+                    );
+                    CREATE TABLE gaeb_imports (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        file_name TEXT NOT NULL,
+                        gaeb_version TEXT,
+                        exchange_phase TEXT,
+                        project_name TEXT,
+                        project_id_ext TEXT,
+                        currency TEXT DEFAULT 'EUR',
+                        file_hash TEXT NOT NULL,
+                        file_size INTEGER,
+                        raw_xml TEXT,
+                        imported_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                    );
+                `);
+
+                // Altdaten einfügen
+                legacyDb.prepare(`
+                    INSERT INTO dokumente (type, nr, datum, status, angebot_status)
+                    VALUES ('angebot', 'ANG-2026-LEGACY', '2026-09-01', 'ENTWURF', 'ENTWURF')
+                `).run();
+
+                legacyDb.prepare(`
+                    INSERT INTO gaeb_imports (file_name, gaeb_version, exchange_phase, file_hash, file_size, raw_xml)
+                    VALUES ('legacy.x83', '3.3', 'X83', 'dummy_hash_123', 100, '<GAEB></GAEB>')
+                `).run();
+
+                // Führe Migrationen aus
+                runGaebMigrations(legacyDb);
+
+                // Führe Migrationen ein zweites Mal aus (Idempotenz)
+                runGaebMigrations(legacyDb);
+
+                // Prüfe Fremdschlüssel-Integrität
+                const fkErrors = legacyDb.pragma('foreign_key_check');
+                assert.strictEqual(fkErrors.length, 0, 'foreign_key_check muss 0 Fehler liefern');
+
+                // Verifiziere: raw_bytes Spalte existiert nun
+                const columns = legacyDb.prepare(`PRAGMA table_info(gaeb_imports)`).all();
+                const hasRawBytesCol = columns.some(c => c.name === 'raw_bytes');
+                assert.strictEqual(hasRawBytesCol, true, 'raw_bytes Spalte muss vorhanden sein');
+
+                // Verifiziere: gaeb_import_angebote existiert
+                const tables = legacyDb.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='gaeb_import_angebote'`).all();
+                assert.strictEqual(tables.length, 1, 'gaeb_import_angebote Tabelle muss existieren');
+
+                // Verifiziere: Altdaten unverändert
+                const oldImport = legacyDb.prepare('SELECT * FROM gaeb_imports WHERE id = 1').get();
+                assert.strictEqual(oldImport.file_name, 'legacy.x83');
+                assert.strictEqual(oldImport.raw_bytes, null, 'Altdatensatz hat raw_bytes = NULL');
+
+                // Teste Verknüpfung auf migrierter DB
+                const linkRes = linkImportToAngebot(legacyDb, 1, 1, 'Migrated Link');
+                assert.strictEqual(linkRes.success, true);
+                assert.strictEqual(isImportLinked(legacyDb, 1), true);
+            } finally {
+                cleanupDb(legacyDb, dbPath);
+            }
+        });
     });
 
     // =========================================================================
@@ -736,6 +818,323 @@ describe('GAEB X83 Persistenz: Vollständiger SQLite-Lebenszyklus & Datenintegri
                 assert.ok(item1.category_count > 0);
                 assert.strictEqual(item1.linked_item_count, 0);
                 assert.strictEqual(item1.file_hash, calculateFileHash(xml1));
+            } finally {
+                cleanupDb(db, dbPath);
+            }
+        });
+    });
+
+    // =========================================================================
+    // 6. Byte-genauer Buffer-Roundtrip (Garantie 2) & Legacy-String-Pfad
+    // =========================================================================
+    describe('6. Byte-genauer Buffer-Roundtrip & Legacy-String-Pfad (Garantie 2)', () => {
+
+        test('6.1 Byte-genauer Roundtrip mit Buffer (inkl. UTF-8 BOM und CRLF-Zeilenumbrüchen)', () => {
+            const { db, dbPath } = createTempDb();
+
+            try {
+                // Erstelle Test-Buffer mit echtem UTF-8 BOM (\uFEFF) und CRLF (\r\n)
+                const bomHeader = Buffer.from([0xEF, 0xBB, 0xBF]); // UTF-8 BOM
+                const contentWithCrlf = Buffer.from(
+                    '<?xml version="1.0" encoding="utf-8"?>\r\n' +
+                    '<GAEB xmlns="http://www.gaeb.de/GAEB_DA_XML/DA83/3.3">\r\n' +
+                    '  <PrjInfo>\r\n' +
+                    '    <NamePrj>BOM und CRLF Testprojekt</NamePrj>\r\n' +
+                    '  </PrjInfo>\r\n' +
+                    '  <Award>\r\n' +
+                    '    <BoQ>\r\n' +
+                    '      <BoQBody>\r\n' +
+                    '        <Itemlist>\r\n' +
+                    '          <Item>\r\n' +
+                    '            <RNoPart>01</RNoPart>\r\n' +
+                    '            <Description>\r\n' +
+                    '              <CompleteText><DetailTxt><Text><p><span>Test CRLF Zeile 1\r\nZeile 2</span></p></Text></DetailTxt></CompleteText>\r\n' +
+                    '            </Description>\r\n' +
+                    '          </Item>\r\n' +
+                    '        </Itemlist>\r\n' +
+                    '      </BoQBody>\r\n' +
+                    '    </BoQ>\r\n' +
+                    '  </Award>\r\n' +
+                    '</GAEB>\r\n',
+                    'utf8'
+                );
+                const originalBuffer = Buffer.concat([bomHeader, contentWithCrlf]);
+                const originalSha256 = crypto.createHash('sha256').update(originalBuffer).digest('hex');
+
+                // Parsen via GAEBEngine
+                const parsed = GAEBEngine.parseGAEBXML(originalBuffer.toString('utf8'));
+
+                // Speichern mit rawBytes (Buffer)
+                const saveRes = saveX83Import(db, parsed, {
+                    fileName: 'bom_crlf_sample.x83',
+                    rawBytes: originalBuffer
+                });
+
+                assert.ok(saveRes.importId > 0);
+                assert.strictEqual(saveRes.hasOriginalBytes, true);
+                assert.strictEqual(saveRes.fileHash, originalSha256);
+
+                // DB komplett schließen und neu öffnen
+                db.close();
+                const dbReopened = new Database(dbPath);
+                dbReopened.pragma('foreign_keys = ON');
+
+                try {
+                    // 1. Hole gezielten Original-Puffer via getImportOriginalBuffer
+                    const reloadedBuffer = getImportOriginalBuffer(dbReopened, saveRes.importId);
+                    assert.ok(Buffer.isBuffer(reloadedBuffer), 'Rückgabe muss ein echter Buffer sein');
+                    assert.strictEqual(reloadedBuffer.length, originalBuffer.length, 'Länge in Bytes muss exakt übereinstimmen');
+                    assert.strictEqual(Buffer.compare(originalBuffer, reloadedBuffer), 0, '100% Byte-identisch inklusive BOM und CRLF');
+
+                    const reloadedSha256 = crypto.createHash('sha256').update(reloadedBuffer).digest('hex');
+                    assert.strictEqual(reloadedSha256, originalSha256, 'SHA-256 Prüfsumme muss 100% identisch sein');
+
+                    // 2. Prüfe loadX83Import: Kein riesiger Buffer im Objekt, aber hasOriginalBytes = true
+                    const loaded = loadX83Import(dbReopened, saveRes.importId);
+                    assert.strictEqual(loaded.hasOriginalBytes, true);
+                    assert.strictEqual(loaded.projectInfo.hasOriginalBytes, true);
+                    assert.strictEqual(loaded.rawBytes, undefined, 'raw_bytes darf nicht im Rückgabeobjekt liegen');
+                    assert.ok(typeof loaded.rawXml === 'string' && loaded.rawXml.length > 0);
+                } finally {
+                    dbReopened.close();
+                }
+            } finally {
+                cleanupDb(db, dbPath);
+            }
+        });
+
+        test('6.2 Legacy-String-Pfad: Speichern nur mit rawXml liefert hasOriginalBytes = false und getImportOriginalBuffer = null', () => {
+            const { db, dbPath } = createTempDb();
+
+            try {
+                const xmlString = '<GAEB xmlns="http://www.gaeb.de/GAEB_DA_XML/DA83/3.3"><PrjInfo><NamePrj>Legacy String</NamePrj></PrjInfo></GAEB>';
+                const parsed = GAEBEngine.parseGAEBXML(xmlString);
+
+                // Speichern rein als String ohne Buffer
+                const saveRes = saveX83Import(db, parsed, {
+                    fileName: 'legacy.x83',
+                    rawXml: xmlString
+                });
+
+                assert.ok(saveRes.importId > 0);
+                assert.strictEqual(saveRes.hasOriginalBytes, false, 'Keine Scheingenauigkeit: hasOriginalBytes muss false sein');
+
+                const loaded = loadX83Import(db, saveRes.importId);
+                assert.strictEqual(loaded.hasOriginalBytes, false);
+                assert.strictEqual(loaded.projectInfo.hasOriginalBytes, false);
+                assert.strictEqual(loaded.rawXml, xmlString);
+
+                const retrievedBuf = getImportOriginalBuffer(db, saveRes.importId);
+                assert.strictEqual(retrievedBuf, null, 'getImportOriginalBuffer muss bei String-Imports strikt null liefern');
+            } finally {
+                cleanupDb(db, dbPath);
+            }
+        });
+    });
+
+    // =========================================================================
+    // 7. Reale Verknüpfung mit dokumente (Garantie 1)
+    // =========================================================================
+    describe('7. Reale Verknüpfung mit dokumente (Garantie 1)', () => {
+
+        test('7.1 Verknüpfung eines GAEB-Imports mit einem echten Angebot in dokumente', () => {
+            const { db, dbPath } = createTempDb();
+
+            try {
+                // 1. Erstelle echtes Angebot in dokumente
+                const insertDokStmt = db.prepare(`
+                    INSERT INTO dokumente (type, nr, datum, status, angebot_status, version, netto, steuer, brutto)
+                    VALUES ('angebot', 'ANG-2026-TEST', '2026-09-28', 'ENTWURF', 'ENTWURF', 1, 12500.0, 2375.0, 14875.0)
+                `);
+                const dokRes = insertDokStmt.run();
+                const angebotId = dokRes.lastInsertRowid;
+
+                // 2. Erstelle GAEB-Import
+                const xml = loadFixture('valid_schema_reference.x83');
+                const parsed = GAEBEngine.parseGAEBXML(xml);
+                const saveRes = saveX83Import(db, parsed, { fileName: 'ref.x83', rawXml: xml });
+                const importId = saveRes.importId;
+
+                // Vorher: Nicht verknüpft
+                assert.strictEqual(isImportLinked(db, importId), false);
+                assert.strictEqual(getLinkedAngebote(db, importId).length, 0);
+
+                // 3. Verknüpfen
+                const linkRes = linkImportToAngebot(db, importId, angebotId, 'Grundlage für Kalkulation LV 01');
+                assert.strictEqual(linkRes.success, true);
+                assert.strictEqual(linkRes.importId, importId);
+                assert.strictEqual(linkRes.angebotId, angebotId);
+
+                // Nachher: Verknüpft
+                assert.strictEqual(isImportLinked(db, importId), true);
+                const linkedAngebote = getLinkedAngebote(db, importId);
+                assert.strictEqual(linkedAngebote.length, 1);
+                assert.strictEqual(linkedAngebote[0].angebot_id, angebotId);
+                assert.strictEqual(linkedAngebote[0].nr, 'ANG-2026-TEST');
+                assert.strictEqual(linkedAngebote[0].version, 1);
+                assert.strictEqual(linkedAngebote[0].status, 'ENTWURF');
+                assert.strictEqual(linkedAngebote[0].notes, 'Grundlage für Kalkulation LV 01');
+
+                // Fremdschlüssel-Prüfung
+                assert.strictEqual(db.pragma('foreign_key_check').length, 0);
+            } finally {
+                cleanupDb(db, dbPath);
+            }
+        });
+
+        test('7.2 Verknüpfung verweigert bei nicht-existenten IDs oder Nicht-Angebot (z.B. Rechnung)', () => {
+            const { db, dbPath } = createTempDb();
+
+            try {
+                const xml = loadFixture('valid_schema_reference.x83');
+                const parsed = GAEBEngine.parseGAEBXML(xml);
+                const saveRes = saveX83Import(db, parsed, { fileName: 'ref.x83', rawXml: xml });
+                const importId = saveRes.importId;
+
+                // Erstelle eine Rechnung (type = 'rechnung')
+                const rechnungRes = db.prepare(`
+                    INSERT INTO dokumente (type, nr, datum, status, netto, steuer, brutto)
+                    VALUES ('rechnung', 'RE-2026-001', '2026-09-28', 'OFFEN', 5000.0, 950.0, 5950.0)
+                `).run();
+                const rechnungId = rechnungRes.lastInsertRowid;
+
+                // A) Ungültige importId
+                assert.throws(() => {
+                    linkImportToAngebot(db, 999999, rechnungId);
+                }, /GAEB-Import mit ID 999999 existiert nicht/);
+
+                // B) Ungültige angebotId
+                assert.throws(() => {
+                    linkImportToAngebot(db, importId, 888888);
+                }, /Dokument mit ID 888888 existiert nicht/);
+
+                // C) Dokument ist eine Rechnung statt ein Angebot
+                assert.throws(() => {
+                    linkImportToAngebot(db, importId, rechnungId);
+                }, /kein Angebot/);
+
+                assert.strictEqual(isImportLinked(db, importId), false);
+            } finally {
+                cleanupDb(db, dbPath);
+            }
+        });
+    });
+
+    // =========================================================================
+    // 8. Lösch- und Überschreibschutz (Repo-Ebene & SQLite RESTRICT)
+    // =========================================================================
+    describe('8. Lösch- und Überschreibschutz (Repo & SQLite ON DELETE RESTRICT)', () => {
+
+        test('8.1 Löschschutz: Verknüpfter Import kann weder über Repo noch über direktes SQL gelöscht werden', () => {
+            const { db, dbPath } = createTempDb();
+
+            try {
+                // Erstelle Angebot und Import
+                const dokRes = db.prepare(`
+                    INSERT INTO dokumente (type, nr, datum, status, angebot_status)
+                    VALUES ('angebot', 'ANG-2026-PROT', '2026-09-28', 'ENTWURF', 'ENTWURF')
+                `).run();
+                const angebotId = dokRes.lastInsertRowid;
+
+                const xml = loadFixture('valid_schema_reference.x83');
+                const parsed = GAEBEngine.parseGAEBXML(xml);
+                const saveRes = saveX83Import(db, parsed, { fileName: 'ref.x83', rawXml: xml });
+                const importId = saveRes.importId;
+
+                linkImportToAngebot(db, importId, angebotId);
+
+                // 1. Repo-Löschen wird hart verhindert
+                assert.throws(() => {
+                    deleteX83Import(db, importId);
+                }, /Löschen der GAEB-Ausschreibung verhindert: Dieser Import ist mit mindestens einem Angebot verknüpft/);
+
+                // 2. Direktes SQL-Löschen wird durch SQLite Foreign Key Constraint (RESTRICT) verhindert
+                assert.throws(() => {
+                    db.prepare('DELETE FROM gaeb_imports WHERE id = ?').run(importId);
+                }, /FOREIGN KEY constraint failed/);
+
+                // Verifiziere: Import existiert noch unverändert
+                const checkRow = db.prepare('SELECT id FROM gaeb_imports WHERE id = ?').get(importId);
+                assert.ok(checkRow, 'Import muss nach abgefangenen Löschversuchen vollständig erhalten sein');
+            } finally {
+                cleanupDb(db, dbPath);
+            }
+        });
+
+        test('8.2 Überschreibschutz: saveX83Import mit overwrite: true wird bei verknüpftem Import abgewiesen', () => {
+            const { db, dbPath } = createTempDb();
+
+            try {
+                const dokRes = db.prepare(`
+                    INSERT INTO dokumente (type, nr, datum, status, angebot_status)
+                    VALUES ('angebot', 'ANG-2026-OVERWRITE', '2026-09-28', 'ENTWURF', 'ENTWURF')
+                `).run();
+                const angebotId = dokRes.lastInsertRowid;
+
+                const xml = loadFixture('valid_schema_reference.x83');
+                const parsed = GAEBEngine.parseGAEBXML(xml);
+                const saveRes = saveX83Import(db, parsed, { fileName: 'ref.x83', rawXml: xml });
+                const importId = saveRes.importId;
+
+                linkImportToAngebot(db, importId, angebotId);
+
+                // Versuch des Überschreibens mit overwrite: true muss fehlschlagen
+                assert.throws(() => {
+                    saveX83Import(db, parsed, {
+                        fileName: 'ref.x83',
+                        rawXml: xml,
+                        overwrite: true
+                    });
+                }, /verknüpft/);
+            } finally {
+                cleanupDb(db, dbPath);
+            }
+        });
+
+        test('8.3 Unverknüpfter Import darf überschrieben oder gelöscht werden', () => {
+            const { db, dbPath } = createTempDb();
+
+            try {
+                const xml = loadFixture('valid_schema_reference.x83');
+                const parsed = GAEBEngine.parseGAEBXML(xml);
+                const saveRes = saveX83Import(db, parsed, { fileName: 'unlinked.x83', rawXml: xml });
+                const importId = saveRes.importId;
+
+                assert.strictEqual(isImportLinked(db, importId), false);
+
+                // Overwrite = true darf bei unverknüpftem Import ausgeführt werden
+                const overwriteRes = saveX83Import(db, parsed, {
+                    fileName: 'unlinked_replaced.x83',
+                    rawXml: xml,
+                    overwrite: true
+                });
+                assert.strictEqual(overwriteRes.isExisting, false);
+
+                // Löschen des unverknüpften Imports gelingt
+                const delRes = deleteX83Import(db, overwriteRes.importId);
+                assert.strictEqual(delRes.success, true);
+                assert.strictEqual(db.prepare('SELECT COUNT(*) AS cnt FROM gaeb_imports WHERE id = ?').get(overwriteRes.importId).cnt, 0);
+            } finally {
+                cleanupDb(db, dbPath);
+            }
+        });
+
+        test('8.4 Geänderter Dateiinhalt bei gleichem Dateinamen erzeugt neuen Importdatensatz', () => {
+            const { db, dbPath } = createTempDb();
+
+            try {
+                const xml1 = '<GAEB xmlns="http://www.gaeb.de/GAEB_DA_XML/DA83/3.3"><PrjInfo><NamePrj>Version 1</NamePrj></PrjInfo></GAEB>';
+                const xml2 = '<GAEB xmlns="http://www.gaeb.de/GAEB_DA_XML/DA83/3.3"><PrjInfo><NamePrj>Version 2 Geaendert</NamePrj></PrjInfo></GAEB>';
+
+                const parsed1 = GAEBEngine.parseGAEBXML(xml1);
+                const parsed2 = GAEBEngine.parseGAEBXML(xml2);
+
+                const res1 = saveX83Import(db, parsed1, { fileName: 'ausschreibung.x83', rawXml: xml1 });
+                const res2 = saveX83Import(db, parsed2, { fileName: 'ausschreibung.x83', rawXml: xml2 });
+
+                assert.notStrictEqual(res1.importId, res2.importId, 'Muss zwei verschiedene Import-IDs vergeben');
+                assert.notStrictEqual(res1.fileHash, res2.fileHash, 'Hashes müssen unterschiedlich sein');
+                assert.strictEqual(db.prepare('SELECT COUNT(*) AS cnt FROM gaeb_imports').get().cnt, 2);
             } finally {
                 cleanupDb(db, dbPath);
             }

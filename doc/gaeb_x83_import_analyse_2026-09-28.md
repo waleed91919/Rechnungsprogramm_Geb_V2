@@ -1,12 +1,12 @@
 # GAEB X83 Import & Unabhängige Validierung: Prüf- und Fortschrittsbericht
 
 **Datum:** 28. September 2026  
-**Branch:** `review/gaeb-x83-persistence` (abgezweigt von Commit `24969a3`)  
+**Branch:** `review/gaeb-x83-integrity` (abgezweigt von `review/gaeb-x83-persistence` auf Commit `037493e`)  
 **Bezugsdokument:** `liesen.txt`  
-**Status:** Vollständige, verlustfreie SQLite-Persistenz & Roundtrip-Rekonstruktion implementiert und verifiziert (100% Tests bestanden)  
+**Status:** Vollständige, revisionssichere Datenintegrität & Persistenzgarantien implementiert und verifiziert (100% Tests bestanden)  
 **Testsuites:**
 - `python tests/validate_xsd.py` & `python tests/validate_xsd.py --self-test`
-- `node --test tests/gaeb_x83_persistence.test.js` (14 Tests in 6 Suites)
+- `node --test tests/gaeb_x83_persistence.test.js` (23 Tests in 9 Suites)
 - `node --test tests/gaeb_x83_import_audit.test.js` (19 Tests)
 - `node --test tests/gaeb_validation.test.js` (6 Tests)
 - `node --test tests/angebot_lifecycle.test.js` (1 Test)
@@ -166,9 +166,10 @@ Die Weiterentwicklung erfolgte streng modular und ohne Code-Verschiebung in `mai
 Die GAEB-Ausschreibungsstrukturen wurden strikt von den produktiven Belegtabellen (`dokumente` und `positionen`) getrennt:
 1. `gaeb_imports`:
    - Eindeutige ID, Original-Dateiname, GAEB-Version (`3.2`/`3.3`), Phase (`83`/`X83`), Projektname, Währung.
-   - `file_hash`: SHA-256 Prüfsumme des Original-XMLs mit dediziertem Index `idx_gaeb_imports_file_hash`.
-   - `file_size`: Dateigröße in Bytes.
-   - `raw_xml`: Vollständiger Original-XML-Inhalt für bitgenaue Rekonstruierbarkeit.
+   - `file_hash`: SHA-256 Prüfsumme, serverseitig aus dem Original-Byte-Puffer berechnet (mit Index `idx_gaeb_imports_file_hash`).
+   - `file_size`: Exakte Dateigröße in Bytes.
+   - `raw_bytes` (BLOB): Unveränderte Original-Datei-Bytes (inklusive evtl. UTF-8 BOM `\uFEFF` und CRLF-Zeilenumbrüchen).
+   - `raw_xml` (TEXT): Decodierter XML-Text für schnelle Volltextsuchen und Parser-Verarbeitung.
    - `imported_at`, `updated_at`: Zeitstempel.
 2. `gaeb_categories`:
    - `import_id` (FK `gaeb_imports.id` ON DELETE CASCADE).
@@ -193,37 +194,72 @@ Die GAEB-Ausschreibungsstrukturen wurden strikt von den produktiven Belegtabelle
    - `in_endsumme_enthalten`: Differenzierung für Grund/Wahl/Bedarf.
    - `aln_group_no`, `aln_ser_no`, `provis`: Vergaberechtliche Attribute.
    - `is_hinweistext`: Kennzeichnung mengenneutraler Texte.
-   - `linked_position_id`: Nullable Fremdschlüssel als designierter Verknüpfungspunkt für spätere Angebotsübernahme.
+   - `linked_position_id`: Optionales Kennzeichen für zukünftige Positionsverknüpfung im Pricing-Editor.
 4. `gaeb_item_bireq`:
    - `item_id` (FK `gaeb_items.id` ON DELETE CASCADE).
    - `bireq_type`, `label`, `description`, `value`: Strukturierte Speicherung der Bieterangaben.
 5. `gaeb_item_up_components`:
    - `item_id` (FK `gaeb_items.id` ON DELETE CASCADE).
    - `lohn`, `stoff`, `geraet`, `sonstiges`, `total`: Einheitspreis-Aufgliederung.
+6. `gaeb_import_angebote` (Neu gemäß Garantie 1 aus `liesen.txt`):
+   - `import_id` (INTEGER NOT NULL REFERENCES `gaeb_imports(id)` ON DELETE RESTRICT).
+   - `angebot_id` (INTEGER NOT NULL REFERENCES `dokumente(id)` ON DELETE RESTRICT).
+   - `linked_at` (TEXT DEFAULT CURRENT_TIMESTAMP).
+   - `notes` (TEXT): Dokumentierte Referenzinformationen.
+   - `UNIQUE(import_id, angebot_id)` sowie Indizes `idx_gaeb_import_angebote_import` und `idx_gaeb_import_angebote_angebot`.
 
-### 7.2 Repository-Operationen & Re-Import Policy (`db/repositories/gaeb_repository.js`)
-- `saveX83Import(db, parsedData, options)`:
-  - **Re-Import Policy:** Bei wiederholtem Import mit gleichem `file_hash` wird geprüft, ob Positionen mit aktiven Belegen verknüpft sind (`linked_position_id IS NOT NULL`). Wenn verknüpft, wird ein Überschreiben strikt verweigert. Wenn unverknüpft und `overwrite !== true`, wird der bestehende Import unverändert zurückgegeben (keine stillen Duplikate). Bei `overwrite === true` erfolgt ein atomarer Ersatz.
-  - **Atomare Transaktion:** Sämtliche Tabelleneinträge laufen in einer einzigen SQLite-Transaktion. Tritt an beliebiger Stelle ein Fehler auf, rollt SQLite die gesamte Transaktion zurück; es verbleiben keine verwaisten Zeilen in der Datenbank.
-- `loadX83Import(db, importId)`:
-  - Rekonstruiert die identische hierarchische Datenstruktur wie `GAEBEngine.parseGAEBXML()`: Baum (`categories` mit verschachtelten Unterkategorien und deren `items`), flache Liste (`items`), `projectInfo` und `rawXml`.
-- `listX83Imports(db)`:
-  - Liefert Übersichtsstatistiken: Kategorieanzahl, Positionsanzahl, Anzahl verknüpfter Positionen, Dateigröße, Hash und Importdatum.
-- `deleteX83Import(db, importId)`:
-  - Prüft Verknüpfungsschutz: Sind Positionen verknüpft, wird das Löschen abgewiesen. Andernfalls kaskadiert das Löschen atomar über alle Kindtabellen.
+### 7.2 Repository-Operationen & Integritäts-Garantien (`db/repositories/gaeb_repository.js`)
+
+#### Garantie 1: Reale, SQLite-gestützte Verknüpfung mit echten Angebotsversionen
+- **Verknüpfungsmethode:** `linkImportToAngebot(db, importId, angebotId, notes = null)`:
+  - Verifiziert serverseitig die Existenz von `importId` in `gaeb_imports`.
+  - Verifiziert serverseitig die Existenz von `angebotId` in `dokumente` UND prüft strikt, dass `type === 'angebot'`. Ungültige Belege (wie Rechnungen) oder Dummy-IDs werden hart abgewiesen.
+- **Abfrage:** `getLinkedAngebote(db, importId)` und `isImportLinked(db, importId)` liefern verknüpfte Angebote mit Belegnummer, Versionsstand, Belegstatus und Verknüpfungszeitstempel.
+- **Zweistufiger Löschschutz:**
+  1. *Repository-Ebene:* `deleteX83Import()` prüft `isImportLinked()`. Bei mindestens einem verknüpften Angebot wird das Löschen mit einer klaren Fehlermeldung verweigert.
+  2. *Datenbank-Ebene:* Durch `ON DELETE RESTRICT` schlägt auch ein direkter SQL-Aufruf `DELETE FROM gaeb_imports WHERE id = ?` fehl (`FOREIGN KEY constraint failed`).
+- **Re-Import Policy & Überschreibschutz:**
+  - Ist ein bestehender Import mit mindestens einem Angebot verknüpft, wird ein Überschreiben (`overwrite: true`) strikt abgewiesen. Das historische Original eines aktiven Angebots darf nicht überschrieben werden.
+  - Bei unverknüpften Importen erlaubt `overwrite: true` ein sauberes atomares Ersetzen.
+  - Ohne `overwrite: true` wird der existierende Datensatz unverändert zurückgegeben (`isExisting: true`).
+  - Ändert sich der Datei-Inhalt (anderer Hash), wird stets ein neuer Importdatensatz angelegt, selbst wenn der Dateiname identisch ist.
+- **Sachliche Abgrenzung:** Die Verknüpfung zwischen der GAEB-Ausschreibung und dem Gesamt-Angebot in `dokumente` ist durch dieses Datenmodell revisionssicher geschützt. Die kleinteilige Zuordnung einzelner LV-Positionen zu Positionen in Entwürfen (`linked_position_id`) bleibt ausdrücklich der späteren Bepreisungs- und Kalkulationsmaske vorbehalten, da Entwurfspositionen beim Zwischenspeichern neu generiert werden können.
+
+#### Garantie 2: Speicherung der echten Original-Datei-Bytes (BLOB)
+- **Strikte Trennung von Bytes und Text:**
+  - Wenn `rawBytes` (Buffer) übergeben wird, verifiziert das Repository `Buffer.isBuffer(buf)`.
+  - `file_hash` (SHA-256) und `file_size` werden direkt aus dem binären Puffer berechnet. Clientseitigen Prüfsummen oder `JSON.stringify()` wird niemals blind vertraut.
+  - Die Original-Bytes werden bitgenau im Feld `raw_bytes` (BLOB) gespeichert; der decodierte UTF-8 Text wird in `raw_xml` hinterlegt.
+  - Dies garantiert 100%ige Bit-Identität bei Roundtrips auch bei Dateien mit UTF-8 BOM (`\uFEFF`) oder Windows-spezifischen Zeilenumbrüchen (`\r\n`).
+- **Legacy-String-Pfad:**
+  - Wird lediglich ein XML-String übergeben, wird dieser in `raw_xml` gespeichert.
+  - Das Feld `raw_bytes` bleibt `NULL`, und `hasOriginalBytes` wird auf `false` gesetzt. Es wird keine Scheingenauigkeit vorgetäuscht.
+- **Ressourcenschonende Lade-Policy:**
+  - `loadX83Import(db, importId)` liefert standardmäßig keinen speicherintensiven Buffer im Rückgabeobjekt, um IPC und Renderer nicht zu belasten. Es wird lediglich `hasOriginalBytes: boolean` gesetzt.
+  - `getImportOriginalBuffer(db, importId)` erlaubt das gezielte Abrufen des Original-Puffers als Node.js `Buffer`.
 
 ### 7.3 IPC-Integration (`main/ipc/ipc-gaeb.js`)
-- Registriert IPC-Handler: `gaeb:save-import`, `gaeb:load-import`, `gaeb:list-imports`, `gaeb:delete-import`.
-- Registriert in `main/ipc/index.js`.
-- **`main.js` bleibt vollständig unberührt.**
+- Registrierte Handler:
+  - `gaeb:save-import` -> atomares Speichern
+  - `gaeb:load-import` -> Laden des Imports (strukturiert, ohne BLOB-Payload)
+  - `gaeb:list-imports` -> Übersichtsstatistiken mit `has_original_bytes` und `linked_angebot_count`
+  - `gaeb:delete-import` -> geschütztes Löschen
+  - `gaeb:link-angebot` -> Verknüpfen mit einem Angebot
+  - `gaeb:get-linked-angebote` -> Abrufen der verknüpften Angebote
+  - `gaeb:get-original-buffer` -> gezieltes Auslesen des Original-Dateipuffers
+- **`main.js` bleibt 100% unberührt.**
 
 ### 7.4 Testverifikation des Lebenszyklus (`tests/gaeb_x83_persistence.test.js`)
-- **14 automatisierte Tests in 6 Suites** prüfen den kompletten Zyklus:
-  1. Roundtrip auf offiziellen XSD-Referenzen (GAEB 3.3 und GAEB 3.2 pyGAEB) inklusive Schließen und Neuöffnen der SQLite-Datenbankdatei.
-  2. Prüfung aller 5 internen Edge-Case-Modelle (3-stufige Hierarchien, Wahl/Bedarf/Pauschal-Positionen, BiReq, Vorbemerkungen, UPComponents).
-  3. Fehlertoleranz: Transaktions-Rollback hinterlässt bei simuliertem Fehler 0 Zeilen in der DB.
-  4. Re-Import-Policy: Idempotenz bei Duplikaten, atomarer Ersatz bei Overwrite, Exception bei verknüpften Belegen.
-  5. Verknüpfungsschutz beim Löschen.
-  6. Migration auf bestehender Altdatenbank: Altdaten (Kunden, Rechnungen, Angebote, Positionen) bleiben zu 100% intakt.
-  7. Fremdschlüssel-Prüfung: `PRAGMA foreign_key_check` liefert in allen Tests 0 Fehler.
+- **23 automatisierte Tests in 9 Suites** verifizieren alle Aspekte:
+  1. *Roundtrip auf offiziellen XSD-Referenzen (3.3 & 3.2):* Vollständiger Tiefenvergleich aller Attribute, Hierarchien und OZs nach `db.close()` und Wiedereröffnung.
+  2. *Interne Testmodelle (Edge Cases):* 3-stufige Hierarchien, Wahl-/Bedarfs-/Pauschalpositionen, Vorbemerkungen, BiReq, UPComponents.
+  3. *Fehlertoleranz & Rollback:* Fehler mitten im Insert führt zu vollständigem Transaktions-Rollback (0 Zeilen verbleiben).
+  4. *Altdaten-Migration & Idempotenz:*
+     - Alt-Schema ohne GAEB wird migriert, ohne Kunden/Rechnungen/Angebote zu beeinträchtigen.
+     - Alt-GAEB-Tabelle ohne `raw_bytes` und ohne `gaeb_import_angebote` wird migriert; zweimaliger Aufruf führt zu keinen Fehlern; `PRAGMA foreign_key_check` liefert 0 Fehler.
+  5. *Übersicht & Statistik:* `listX83Imports` liefert exakte Zähler für Items, Kategorien, Bytes und Verknüpfungen.
+  6. *Byte-genauer Buffer-Roundtrip (Garantie 2):* Speichern mit BOM und CRLF; Neuöffnen der DB; `Buffer.compare() === 0`, identischer Hash und exakte Byte-Länge.
+  7. *Legacy-String-Pfad:* Speichern ohne Buffer liefert `hasOriginalBytes: false` und `getImportOriginalBuffer: null`.
+  8. *Reale Angebotsverknüpfung (Garantie 1):* Verknüpfung mit Angebot in `dokumente`; Prüfung gegen Fremdkörper (Rechnung oder ungültige ID wirft Fehler).
+  9. *Lösch- und Überschreibschutz:* Verknüpfter Import kann weder über das Repository noch über SQL direkt gelöscht werden; Overwrite wird hart abgewiesen; unverknüpfter Import darf gelöscht werden.
 
