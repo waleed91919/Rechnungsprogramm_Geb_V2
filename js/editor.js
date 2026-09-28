@@ -2301,7 +2301,7 @@ function createRechnungPositionRow(pos, index) {
         cb13b.className = 'rounded border-slate-300 text-primary focus:ring-primary h-3 w-3 cursor-pointer';
         const lbl13b = document.createElement('span');
         lbl13b.className = 'text-xs font-semibold text-slate-500 cursor-pointer uppercase tracking-wider';
-        lbl13b.textContent = '13b (0%)';
+        lbl13b.textContent = '13b (Reverse Charge)';
         if (!isReadOnly) lbl13b.onclick = () => cb13b.click();
         div13b.appendChild(cb13b);
         div13b.appendChild(lbl13b);
@@ -2501,7 +2501,7 @@ function calculateRechnungTotals() {
                 const div = document.createElement('div');
                 div.className = 'flex justify-between items-center text-xs text-slate-500';
                 if (data.is13b || (rate === '0' && Boolean(data.notice || unterliegt_13b))) {
-                    div.innerHTML = `<span>MwSt. 0% (§ 13b Steuerschuldnerschaft d. Leistungsempfängers auf ${formatCurrency(data.base)})</span><span class="font-mono text-slate-700">${formatCurrency(data.tax)}</span>`;
+                    div.innerHTML = `<span>USt. nicht erhoben (§ 13b Steuerschuldnerschaft d. Leistungsempfängers auf ${formatCurrency(data.base)})</span><span class="font-mono text-slate-700">${formatCurrency(data.tax)}</span>`;
                 } else {
                     div.innerHTML = `<span>MwSt. ${rate}% (auf ${formatCurrency(data.base)})</span><span class="font-mono text-slate-700">${formatCurrency(data.tax)}</span>`;
                 }

@@ -585,7 +585,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
 
         const tdMwst = document.createElement('td');
         tdMwst.className = 'py-2 px-2 text-right tabular-nums text-slate-500';
-        tdMwst.textContent = isPos13b ? '0%' : `${pos.mwst}%`;
+        tdMwst.textContent = isPos13b ? '§ 13b' : `${pos.mwst}%`;
         tr.appendChild(tdMwst);
 
         const tdRabatt = document.createElement('td');
@@ -680,7 +680,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                 <span class="tabular-nums font-mono">${formatCurrency(nettoNormal)}</span>
             </div>
             <div class="flex justify-between text-xs text-slate-500 py-0.5">
-                <span>Netto (§ 13b steuerfrei):</span>
+                <span>Netto (§ 13b – Steuerschuldnerschaft des Leistungsempfängers):</span>
                 <span class="tabular-nums font-mono">${formatCurrency(netto13b)}</span>
             </div>
         `;
@@ -705,7 +705,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
     if (hat13bNetto && !hatNormalNetto) {
         taxHtml += `
             <div class="flex justify-between text-xs text-slate-600 py-0.5">
-                <span>zzgl. 0% MwSt (§ 13b):</span>
+                <span>USt. nicht ausgewiesen (§ 13b UStG – Steuerschuldnerschaft des Leistungsempfängers):</span>
                 <span class="tabular-nums font-mono">${formatCurrency(0)}</span>
             </div>
         `;
@@ -1680,7 +1680,7 @@ function generateMahnungItemsHtml(rech, MAHNGEBUHR) {
 
         const tdMwst = document.createElement('td');
         tdMwst.className = 'py-2 px-2 text-right tabular-nums text-slate-500 font-mono';
-        tdMwst.textContent = isPos13b ? '0%' : `${pos.mwst}%`;
+        tdMwst.textContent = isPos13b ? '§ 13b' : `${pos.mwst}%`;
         tr.appendChild(tdMwst);
 
         const tdRabatt = document.createElement('td');
