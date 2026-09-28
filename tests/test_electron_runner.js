@@ -235,8 +235,12 @@ app.whenReady().then(async () => {
                     // Click PDF preview button
                     await previewBtn.onclick();
 
-                    // Wait for PDF preview rendering
-                    await new Promise(r => setTimeout(r, 120));
+                    // Wait for PDF preview rendering (resilient polling up to 2s)
+                    for (let i = 0; i < 40; i++) {
+                        const m = document.getElementById('pdf-preview-modal');
+                        if (m && m.classList.contains('flex') && !m.classList.contains('hidden')) break;
+                        await new Promise(r => setTimeout(r, 50));
+                    }
 
                     const pdfModal = document.getElementById('pdf-preview-modal');
                     const modalVisible = pdfModal && pdfModal.classList.contains('flex') && !pdfModal.classList.contains('hidden');
@@ -359,7 +363,11 @@ app.whenReady().then(async () => {
                     const html13b = await window.buildInvoiceDocumentHtml(test13bOffer, kunde13b, true);
                     window.openPdfPreview(html13b, 'Angebot_ANG-2026-TEST-13B.pdf');
 
-                    await new Promise(r => setTimeout(r, 120));
+                    for (let i = 0; i < 40; i++) {
+                        const m = document.getElementById('pdf-preview-modal');
+                        if (m && m.classList.contains('flex') && !m.classList.contains('hidden')) break;
+                        await new Promise(r => setTimeout(r, 50));
+                    }
 
                     const pdfModal = document.getElementById('pdf-preview-modal');
                     const modalVisible = pdfModal && pdfModal.classList.contains('flex') && !pdfModal.classList.contains('hidden');
