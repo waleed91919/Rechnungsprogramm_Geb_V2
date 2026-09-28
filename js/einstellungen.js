@@ -538,8 +538,15 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
         const rabatt = parseFloat(pos.rabatt) || 0;
         const gesamt = (pos.menge * pos.preis) * (1 - rabatt / 100);
 
-        const global13b = Boolean(rech.unterliegt_13b || rech.isGlobal13b);
-        const isPos13b = (pos.is13b !== undefined && pos.is13b !== null) ? Boolean(pos.is13b) : global13b;
+        const global13b = Boolean(rech.unterliegt_13b || rech.isGlobal13b || rech.is13b);
+        const explicit13b = (pos.is13b !== undefined && pos.is13b !== null)
+            ? pos.is13b
+            : ((pos.unterliegt_13b !== undefined && pos.unterliegt_13b !== null)
+                ? pos.unterliegt_13b
+                : (pos.ist13b !== undefined && pos.ist13b !== null ? pos.ist13b : undefined));
+        const isPos13b = (explicit13b !== undefined && explicit13b !== null)
+            ? Boolean(explicit13b)
+            : global13b;
         const descText = pos.beschreibung || pos.text || art.beschreibung || '';
 
         const tr = document.createElement('tr');
@@ -610,8 +617,15 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
         let rowBrutto = 0;
         let tax = 0;
 
-        const global13b = Boolean(rech.unterliegt_13b || rech.isGlobal13b);
-        const isPos13b = (pos.is13b !== undefined && pos.is13b !== null) ? Boolean(pos.is13b) : global13b;
+        const global13b = Boolean(rech.unterliegt_13b || rech.isGlobal13b || rech.is13b);
+        const explicit13b = (pos.is13b !== undefined && pos.is13b !== null)
+            ? pos.is13b
+            : ((pos.unterliegt_13b !== undefined && pos.unterliegt_13b !== null)
+                ? pos.unterliegt_13b
+                : (pos.ist13b !== undefined && pos.ist13b !== null ? pos.ist13b : undefined));
+        const isPos13b = (explicit13b !== undefined && explicit13b !== null)
+            ? Boolean(explicit13b)
+            : global13b;
 
         if (mode === 'netto') {
             rowNetto = (pos.menge * pos.preis) * (1 - rabatt / 100);
@@ -648,13 +662,15 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
 
     const leistungsstandNetto = rech.kumulierte_leistung_netto || ((mode === 'netto' ? positionenNetto : positionenBrutto - Object.keys(taxes).filter(k => k !== '13b_netto' && k !== 'normal_netto').map(k => taxes[k]).reduce((a,b)=>a+b,0)) - globalRabattAbzug);
     
-    const steuerpflichtigesNetto = rech.netto;
+    const steuerpflichtigesNetto = (rech.netto !== undefined && rech.netto !== null) ? rech.netto : (positionenNetto - globalRabattAbzug);
     const taxableRatio = leistungsstandNetto > 0 ? (steuerpflichtigesNetto / leistungsstandNetto) : (steuerpflichtigesNetto === 0 ? 0 : 1);
 
     let taxHtml = '';
     
-    const global13b = Boolean(rech.unterliegt_13b || rech.isGlobal13b);
-    if (global13b && taxes['13b_netto'] > 0 && taxes['normal_netto'] > 0) {
+    const hat13bNetto = (taxes['13b_netto'] && taxes['13b_netto'] > 0);
+    const hatNormalNetto = (taxes['normal_netto'] && taxes['normal_netto'] > 0);
+
+    if (hat13bNetto && hatNormalNetto) {
         const netto13b = taxes['13b_netto'] * rabattFaktor * taxableRatio;
         const nettoNormal = taxes['normal_netto'] * rabattFaktor * taxableRatio;
         
@@ -685,6 +701,15 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
             `;
         }
     });
+
+    if (hat13bNetto && !hatNormalNetto) {
+        taxHtml += `
+            <div class="flex justify-between text-xs text-slate-600 py-0.5">
+                <span>zzgl. 0% MwSt (§ 13b):</span>
+                <span class="tabular-nums font-mono">${formatCurrency(0)}</span>
+            </div>
+        `;
+    }
 
     const hatKumulationOderSicherheit = (rech.sicherheitseinbehalt > 0) || (rech.verrechnungen && rech.verrechnungen.length > 0);
     let deductionsHtml = '';
@@ -726,13 +751,23 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
         deductionsHtml += `<div class="border-b border-slate-200 my-1"></div>`;
     }
 
-    const zahlbetragNumerical = rech.zahlbetrag || rech.brutto;
+    const totalTaxVal = Object.keys(taxes)
+        .filter(k => k !== '13b_netto' && k !== 'normal_netto')
+        .reduce((sum, r) => sum + (taxes[r] * rabattFaktor * taxableRatio), 0);
+
+    const calculatedNetto = mode === 'netto'
+        ? (positionenNetto - globalRabattAbzug)
+        : (positionenBrutto - totalTaxVal - globalRabattAbzug);
+
+    const effectiveNetto = (rech.netto !== undefined && rech.netto !== null) ? rech.netto : calculatedNetto;
+    const effectiveBrutto = (rech.brutto !== undefined && rech.brutto !== null) ? rech.brutto : (effectiveNetto + totalTaxVal);
+    const zahlbetragNumerical = (rech.zahlbetrag !== undefined && rech.zahlbetrag !== null) ? rech.zahlbetrag : effectiveBrutto;
 
     let totalsHtml = `
         ${rech.globalRabattAbzug > 0 ? `
             <div class="flex justify-between text-slate-500 py-0.5">
                 <span>Zwischensumme:</span>
-                <span class="tabular-nums font-mono">${formatCurrency(rech.netto + rech.globalRabattAbzug)}</span>
+                <span class="tabular-nums font-mono">${formatCurrency(effectiveNetto + rech.globalRabattAbzug)}</span>
             </div>
             <div class="flex justify-between text-emerald-600 py-0.5 pb-1 border-b border-slate-200">
                 <span>Gesamtrabatt:</span>
@@ -744,14 +779,14 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
 
         <div class="flex justify-between font-medium text-slate-700 py-0.5">
             <span>${hatKumulationOderSicherheit ? 'Steuerpflichtig (Netto):' : 'Nettobetrag:'}</span>
-            <span class="tabular-nums font-mono">${formatCurrency(rech.netto)}</span>
+            <span class="tabular-nums font-mono">${formatCurrency(effectiveNetto)}</span>
         </div>
 
         ${taxHtml}
 
         <div class="flex justify-between font-bold text-slate-900 pt-1 mt-1 border-t border-slate-200">
             <span>Gesamtbetrag (Brutto):</span>
-            <span class="tabular-nums font-mono">${formatCurrency(rech.brutto)}</span>
+            <span class="tabular-nums font-mono">${formatCurrency(effectiveBrutto)}</span>
         </div>
 
         ${rech.anzahlung > 0 ? `
@@ -782,7 +817,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
         }
     }
     
-    const isReverseCharge = Boolean(rech.unterliegt_13b || rech.isGlobal13b) || (Object.keys(taxes).length === 0 && positionenNetto > 0 && kunde && kunde.ist_bauleistender_13b);
+    const isReverseCharge = Boolean(rech.unterliegt_13b || rech.isGlobal13b || rech.is13b) || (taxes['13b_netto'] > 0) || (Object.keys(taxes).length === 0 && positionenNetto > 0 && kunde && kunde.ist_bauleistender_13b);
     if (isReverseCharge) {
         legalTextsHtml += `<p><strong>Steuerschuldnerschaft des Leistungsempfängers:</strong> Leistungen unterliegen gemäß § 13b UStG dem Reverse-Charge-Verfahren. Die Steuerschuldnerschaft geht auf den Leistungsempfänger über.</p>`;
     }

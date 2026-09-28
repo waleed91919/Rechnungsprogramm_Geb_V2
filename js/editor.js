@@ -2468,8 +2468,8 @@ function calculateRechnungTotals() {
             sicherheitseinbehalt_prozent,
             kumulierte_leistung_netto: totals.netto,
             zahlbetrag: totals.brutto,
-            netto13b: totals.totals13bNetto || (unterliegt_13b ? totals.netto : 0),
-            nettoNormal: totals.totalsNormalNetto || (unterliegt_13b ? 0 : totals.netto)
+            netto13b: (totals.totals13bNetto !== undefined && totals.totals13bNetto !== null) ? totals.totals13bNetto : (unterliegt_13b ? totals.netto : 0),
+            nettoNormal: (totals.totalsNormalNetto !== undefined && totals.totalsNormalNetto !== null) ? totals.totalsNormalNetto : (unterliegt_13b ? 0 : totals.netto)
         };
 
         const nettoEl = document.getElementById('rechnung-netto');
@@ -2500,7 +2500,7 @@ function calculateRechnungTotals() {
             for (const [rate, data] of Object.entries(totals.taxBreakdown || {})) {
                 const div = document.createElement('div');
                 div.className = 'flex justify-between items-center text-xs text-slate-500';
-                if (data.is13b || rate === '0' || unterliegt_13b) {
+                if (data.is13b || (rate === '0' && Boolean(data.notice || unterliegt_13b))) {
                     div.innerHTML = `<span>MwSt. 0% (§ 13b Steuerschuldnerschaft d. Leistungsempfängers auf ${formatCurrency(data.base)})</span><span class="font-mono text-slate-700">${formatCurrency(data.tax)}</span>`;
                 } else {
                     div.innerHTML = `<span>MwSt. ${rate}% (auf ${formatCurrency(data.base)})</span><span class="font-mono text-slate-700">${formatCurrency(data.tax)}</span>`;

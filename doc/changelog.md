@@ -1,5 +1,39 @@
 # Changelog / Fortschritt
 
+## 28.09.2026 (liesen.txt: Vollständige Behebung der verbleibenden § 13b UStG- und PDF-Mängel)
+- **Korrektur der Berechnungslogik für § 13b und gemischte Steuersätze (`controllers/AngebotController.js`):**
+  - **Beseitigung der pauschalen Nullsteuer bei globalem 13b:** Zuvor überschrieb `is13bRate = Boolean(isGlobal13b || ...)` im `taxBreakdown` alle Steuersätze pauschal auf 0 €, wenn das Angebot global als § 13b deklariert war, selbst wenn Positionen explizit `pos.is13b === false` trugen.
+  - **Saubere Trennung von Steuerbasen:** 
+    * Positionen mit `pos13b = true` werden in einer separaten Basis `taxBases['13b']` geführt (0 % Reverse Charge, Steuer = 0,00 €, Brutto = Netto).
+    * Positionen mit `pos13b = false` werden nach regulärem Steuersatz in `taxBases[mwstRate]` geführt.
+  - **Mathematische Konsistenz:** Endsummensteuer (`endsummeSteuer`) und `totalsByType[pType].steuer` stimmen in allen Szenarien exakt überein (z. B. bei 100 € § 13b + 100 € regulär 19 %: Netto 200 €, Steuer 19 €, Brutto 219 €).
+  - `taxBreakdown` enthält getrennte Einträge für reguläre Steuersätze und den § 13b-Anteil mit rechtlichem Hinweis zur Steuerschuldnerschaft.
+- **Harmonisierung der Darstellung im Editor-Modal (`js/editor.js`):**
+  - Im Steuercontainer von `js/editor.js` wird die Beschriftung `MwSt. 0% (§ 13b Steuerschuldnerschaft...)` nun nur noch für Positionen mit `data.is13b === true` (oder 0 % mit § 13b-Hinweis) ausgegeben. Reguläre Steuersätze (wie 19 %) werden auch in gemischten Angeboten korrekt mit ihrem Satz ausgewiesen.
+  - Sichere Zuweisung von `netto13b` und `nettoNormal` mit Prüfung auf `!== undefined`.
+- **Präzisierung des PDF- und Druckdokuments (`buildInvoiceDocumentHtml` in `js/einstellungen.js`):**
+  - Explizite Flags `pos.is13b`, `pos.unterliegt_13b`, `pos.ist13b` werden vorrangig vor dem Dokumentflag ausgewertet.
+  - Bei reinem § 13b Angebot: Netto entspricht exakt der Bruttosumme (Steuer 0,00 €), Zeile `zzgl. 0% MwSt (§ 13b): 0,00 €` und rechtlicher Hinweis zur Steuerschuldnerschaft des Leistungsempfängers nach § 13b UStG werden sauber ausgewiesen.
+  - Bei gemischten Angeboten:
+    * `Netto (regulär)` und `Netto (§ 13b steuerfrei)` werden getrennt ausgewiesen.
+    * Die 19 % MwSt für den regulären Teil wird korrekt berechnet und aufgeführt.
+    * Der gesetzliche Hinweis zum Übergang der Steuerschuldnerschaft wird zuverlässig beigefügt.
+- **Gründliche mathematische Lifecycle-Tests (`tests/angebot_lifecycle.test.js`):**
+  - Test 1b wurde um 3 präzise Szenarien erweitert:
+    1. Reines § 13b Angebot (Netto 700 €, Steuer 0 €, Brutto 700 €, `taxBreakdown['0']` mit 13b-Hinweis).
+    2. Gemischtes Angebot mit `unterliegt_13b: true`, aber Pos 2 mit `is13b: false` (Pos 1: 100 € / 0 €, Pos 2: 100 € / 19 € -> Netto 200 €, Steuer 19 €, Brutto 219 €; `totalsByType.NORMAL.steuer === 19`).
+    3. Gemischtes Angebot mit `unterliegt_13b: false`, aber Pos 1 mit `is13b: true` (Pos 1: 100 € / 0 €, Pos 2: 100 € / 19 € -> identische mathematische Konsistenz).
+- **Echter Chromium DOM- & PDF-Test in `tests/test_electron_runner.js`:**
+  - Testfall 2 erweitert:
+    1. Rendert ein echtes § 13b Angebot im DOM des `#pdf-preview-modal`.
+    2. Prüft im DOM von `#pdf-preview-container`: `Steuerschuldnerschaft des Leistungsempfängers`, `Reverse-Charge`, `§ 13b`, Ausweisung von 0 % MwSt bzw. 0,00 € Steuer, und Identität von Netto- und Bruttobetrag (2.500,00 €).
+    3. Prüft zusätzlich ein gemischtes Angebot auf getrennten Ausweis von regulärem Netto, 13b-Netto, 19% MwSt und § 13b-Klausel.
+    4. Generiert echte PDF-Bytes für das § 13b Angebot mit `@cantoo/pdf-lib` und validiert die magischen Bytes `%PDF-` sowie eine Dateigröße > 500 Bytes.
+- **Testergebnisse:**
+  - `node --test tests/angebot_true_ui_and_pdf.test.js`: 100 % bestanden (alle 5 Testfälle inkl. 4b grün).
+  - `node --test tests/angebot_ui_workflow.test.js`: 100 % bestanden.
+  - `node --test tests/angebot_lifecycle.test.js`: 100 % bestanden.
+
 ## 27.09.2026 (liesen.txt: Deterministische Erfassung von § 13b UStG und Beseitigung fehlerhafter Fallbacks beim Leeren von Angebotsfeldern)
 - **§ 13b UStG (Reverse Charge) sauber und deterministisch erfassen (`js/editor.js` & `views/modals/rechnung-modal.html`):**
   - **Entfernung der fehlerhaften Koppelung:** Die unzuverlässige Bedingung `(angebot-13b-ustg?.checked || rechnung-13b-ustg?.checked) ? 1 : (existing?.unterliegt_13b ? 1 : 0)` wurde beseitigt.

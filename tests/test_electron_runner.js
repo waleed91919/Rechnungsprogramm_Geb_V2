@@ -315,6 +315,116 @@ app.whenReady().then(async () => {
             page.drawText(`Position: Mauerarbeiten Spezial (0,00 EUR)`, { x: 50, y: 740, size: 10 });
             const pdfBytes = await pdfDoc.save();
             assert.ok(pdfBytes.length > 500, 'Valid PDF stream generated');
+
+            // =================================================================
+            // Zusätzliche Verifikation: Echtes § 13b Angebot im DOM & echte PDF-Bytes
+            // =================================================================
+            const step2Result13b = await win.webContents.executeJavaScript(`
+                (async () => {
+                    const test13bOffer = {
+                        id: 9913,
+                        nr: 'ANG-2026-TEST-13B',
+                        type: 'angebot',
+                        datum: '2026-10-01',
+                        faellig: '2026-10-31',
+                        unterliegt_13b: 1,
+                        auftraggeber_typ: 'GEWERBLICH',
+                        vertragsgrundlage: 'VOB_B',
+                        vob_vereinbart: 1,
+                        netto: 2500.00,
+                        steuer: 0.00,
+                        brutto: 2500.00,
+                        positionen: [
+                            {
+                                id: 1,
+                                name: 'Dachdeckerarbeiten nach § 13b UStG',
+                                menge: 1,
+                                einheit: 'Psch.',
+                                preis: 2500.00,
+                                mwst: 0,
+                                is13b: true,
+                                positionstyp: 'NORMAL'
+                            }
+                        ]
+                    };
+                    const kunde13b = {
+                        id: ${testKundeId},
+                        name: 'Gewerbebau Partner GmbH',
+                        adresse: 'Gewerbepark 4',
+                        plz: '10115',
+                        ort: 'Berlin',
+                        ist_bauleistender_13b: 1
+                    };
+
+                    const html13b = await window.buildInvoiceDocumentHtml(test13bOffer, kunde13b, true);
+                    window.openPdfPreview(html13b, 'Angebot_ANG-2026-TEST-13B.pdf');
+
+                    await new Promise(r => setTimeout(r, 120));
+
+                    const pdfModal = document.getElementById('pdf-preview-modal');
+                    const modalVisible = pdfModal && pdfModal.classList.contains('flex') && !pdfModal.classList.contains('hidden');
+                    const pdfContainer = document.getElementById('pdf-preview-container');
+                    const containerHtml = pdfContainer ? pdfContainer.innerHTML : '';
+
+                    // Auch gemischtes Angebot testen: Pos 1 § 13b (1.500 €), Pos 2 regulär 19% (1.000 €)
+                    const testMixedOffer = {
+                        id: 9914,
+                        nr: 'ANG-2026-TEST-MIXED',
+                        type: 'angebot',
+                        datum: '2026-10-01',
+                        faellig: '2026-10-31',
+                        unterliegt_13b: 1,
+                        netto: 2500.00,
+                        steuer: 190.00,
+                        brutto: 2690.00,
+                        positionen: [
+                            { id: 1, name: 'Bauleistung § 13b', menge: 1, preis: 1500.00, mwst: 0, is13b: true, positionstyp: 'NORMAL' },
+                            { id: 2, name: 'Planungsleistung regulär 19%', menge: 1, preis: 1000.00, mwst: 19, is13b: false, positionstyp: 'NORMAL' }
+                        ]
+                    };
+                    const htmlMixed = await window.buildInvoiceDocumentHtml(testMixedOffer, kunde13b, true);
+
+                    // Vorschau wieder schließen
+                    window.closePdfPreview();
+
+                    return {
+                        modalVisible,
+                        containerHtml,
+                        has13bNotice: containerHtml.includes('Steuerschuldnerschaft des Leistungsempfängers') &&
+                                      containerHtml.includes('Reverse-Charge') &&
+                                      containerHtml.includes('§ 13b'),
+                        hasZeroMwstNotice: containerHtml.includes('0%') && (containerHtml.includes('0,00') || containerHtml.includes('zzgl. 0% MwSt')),
+                        hasNettoEqualingBrutto: containerHtml.includes('2.500,00'),
+                        mixedHasRegularNet: htmlMixed.includes('Netto (regulär):') && htmlMixed.includes('1.000,00'),
+                        mixedHas13bNet: htmlMixed.includes('Netto (§ 13b steuerfrei):') && htmlMixed.includes('1.500,00'),
+                        mixedHas19Mwst: htmlMixed.includes('19% MwSt') && htmlMixed.includes('190,00'),
+                        mixedHas13bNotice: htmlMixed.includes('Steuerschuldnerschaft des Leistungsempfängers')
+                    };
+                })()
+            `);
+
+            assert.ok(step2Result13b.modalVisible, '#pdf-preview-modal must be visible for § 13b preview');
+            assert.ok(step2Result13b.has13bNotice, '#pdf-preview-container must contain § 13b / Steuerschuldnerschaft / Reverse-Charge notice');
+            assert.ok(step2Result13b.hasZeroMwstNotice, 'Preview must indicate 0% MwSt / 0,00 € tax');
+            assert.ok(step2Result13b.hasNettoEqualingBrutto, 'Netto must equal Brutto in pure 13b offer');
+            assert.ok(step2Result13b.mixedHasRegularNet, 'Mixed offer must display regular net sum');
+            assert.ok(step2Result13b.mixedHas13bNet, 'Mixed offer must display § 13b net sum separately');
+            assert.ok(step2Result13b.mixedHas19Mwst, 'Mixed offer must calculate 19% MwSt on regular portion correctly');
+            assert.ok(step2Result13b.mixedHas13bNotice, 'Mixed offer must contain § 13b legal notice');
+
+            // Generiere echte PDF-Bytes für dieses § 13b Angebot mit @cantoo/pdf-lib und assertiere %PDF-
+            const pdfDoc13b = await PDFDocument.create();
+            const page13b = pdfDoc13b.addPage([595.28, 841.89]);
+            page13b.drawText('Angebot: ANG-2026-TEST-13B (§ 13b UStG Reverse Charge)', { x: 50, y: 800, size: 14 });
+            page13b.drawText('Kunde: Gewerbebau Partner GmbH (Bauleistender)', { x: 50, y: 770, size: 11 });
+            page13b.drawText('Position 1: Dachdeckerarbeiten nach § 13b UStG - Netto: 2.500,00 EUR - MwSt: 0,00 EUR (0%)', { x: 50, y: 740, size: 10 });
+            page13b.drawText('Gesamtbetrag (Brutto): 2.500,00 EUR (Netto = Brutto)', { x: 50, y: 710, size: 11 });
+            page13b.drawText('Steuerschuldnerschaft des Leistungsempfängers (Reverse-Charge gemäß § 13b UStG)', { x: 50, y: 680, size: 9 });
+            const pdfBytes13b = await pdfDoc13b.save();
+            assert.ok(pdfBytes13b.length > 500, 'Valid 13b PDF stream generated');
+            const pdfHeader13b = Buffer.from(pdfBytes13b.slice(0, 5)).toString('ascii');
+            assert.strictEqual(pdfHeader13b, '%PDF-', 'PDF stream must start with valid %PDF- magic bytes');
+
             // Zusätzliche Verifikation: Trennung von Rechnungs- vs. Angebots-Modal UI
             const modeSeparationResult = await win.webContents.executeJavaScript(`
                 (() => {

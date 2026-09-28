@@ -150,26 +150,77 @@ test('Test 1: Summenberechnung mit Normal-, Alternativ- und Bedarfspositionen', 
 });
 
 test('Test 1b: § 13b UStG Steuerschuldnerschaft & 0% MwSt-Effekt in calculateTotals', () => {
+    // 1. Reines § 13b Angebot: Alle Positionen § 13b -> Steuer 0 €, Netto = Brutto, Steuerschuldnerschaft im Breakdown
     const positionen = [
         { menge: 5, preis: 100, mwst: 19, positionstyp: 'NORMAL' },
         { menge: 1, preis: 200, mwst: 7, positionstyp: 'PAUSCHALE' }
     ];
     // Ohne 13b: Netto 700, Steuer 19%*500 + 7%*200 = 95 + 14 = 109, Brutto 809
     const totalsNormal = AngebotController.calculateTotals(positionen);
-    assert.equal(totalsNormal.netto, 700.00);
-    assert.equal(totalsNormal.steuer, 109.00);
-    assert.equal(totalsNormal.brutto, 809.00);
+    assert.strictEqual(totalsNormal.netto, 700.00);
+    assert.strictEqual(totalsNormal.steuer, 109.00);
+    assert.strictEqual(totalsNormal.brutto, 809.00);
 
     // Mit unterliegt_13b: Netto 700, Steuer 0, Brutto 700
     const totals13b = AngebotController.calculateTotals(positionen, { unterliegt_13b: true });
-    assert.equal(totals13b.netto, 700.00);
-    assert.equal(totals13b.steuer, 0.00);
-    assert.equal(totals13b.brutto, 700.00);
-    assert.equal(totals13b.taxBreakdown['0'].base, 700.00);
-    assert.equal(totals13b.taxBreakdown['0'].tax, 0.00);
+    assert.strictEqual(totals13b.netto, 700.00);
+    assert.strictEqual(totals13b.steuer, 0.00);
+    assert.strictEqual(totals13b.brutto, 700.00);
+    assert.strictEqual(totals13b.taxBreakdown['0'].base, 700.00);
+    assert.strictEqual(totals13b.taxBreakdown['0'].tax, 0.00);
     assert.ok(totals13b.taxBreakdown['0'].is13b);
     assert.ok(totals13b.taxBreakdown['0'].notice.includes('13b'));
     assert.ok(totals13b.steuerschuldnerschaft.includes('13b'));
+    assert.strictEqual(totals13b.totals13bNetto, 700.00);
+    assert.strictEqual(totals13b.totalsNormalNetto, 0.00);
+
+    // 2. Gemischtes Angebot mit options.unterliegt_13b = true, aber Position 2 mit is13b: false
+    // Pos 1 (§ 13b): Netto 100 €, MwSt 0 €, Brutto 100 €
+    // Pos 2 (regulär 19 %): Netto 100 €, MwSt 19 €, Brutto 119 €
+    const mixedPos1 = [
+        { menge: 1, preis: 100, mwst: 19, positionstyp: 'NORMAL' }, // erbt global unterliegt_13b
+        { menge: 1, preis: 100, mwst: 19, is13b: false, positionstyp: 'NORMAL' } // explizit non-13b
+    ];
+    const totalsMixed1 = AngebotController.calculateTotals(mixedPos1, { unterliegt_13b: true });
+    assert.strictEqual(totalsMixed1.netto, 200.00);
+    assert.strictEqual(totalsMixed1.steuer, 19.00);
+    assert.strictEqual(totalsMixed1.brutto, 219.00);
+    assert.strictEqual(totalsMixed1.totalsByType.NORMAL.steuer, 19.00);
+    assert.strictEqual(totalsMixed1.totalsByType.NORMAL.brutto, 219.00);
+    assert.strictEqual(totalsMixed1.totals13bNetto, 100.00);
+    assert.strictEqual(totalsMixed1.totalsNormalNetto, 100.00);
+    assert.ok(totalsMixed1.taxBreakdown['19']);
+    assert.strictEqual(totalsMixed1.taxBreakdown['19'].base, 100.00);
+    assert.strictEqual(totalsMixed1.taxBreakdown['19'].tax, 19.00);
+    assert.strictEqual(totalsMixed1.taxBreakdown['19'].is13b, false);
+    assert.ok(totalsMixed1.taxBreakdown['0']);
+    assert.strictEqual(totalsMixed1.taxBreakdown['0'].base, 100.00);
+    assert.strictEqual(totalsMixed1.taxBreakdown['0'].tax, 0.00);
+    assert.strictEqual(totalsMixed1.taxBreakdown['0'].is13b, true);
+    assert.ok(totalsMixed1.steuerschuldnerschaft.includes('13b'));
+
+    // 3. Gemischtes Angebot mit options.unterliegt_13b = false, aber Position 1 mit is13b: true
+    const mixedPos2 = [
+        { menge: 1, preis: 100, mwst: 19, is13b: true, positionstyp: 'NORMAL' }, // explizit 13b
+        { menge: 1, preis: 100, mwst: 19, positionstyp: 'NORMAL' } // regulär 19%
+    ];
+    const totalsMixed2 = AngebotController.calculateTotals(mixedPos2, { unterliegt_13b: false });
+    assert.strictEqual(totalsMixed2.netto, 200.00);
+    assert.strictEqual(totalsMixed2.steuer, 19.00);
+    assert.strictEqual(totalsMixed2.brutto, 219.00);
+    assert.strictEqual(totalsMixed2.totalsByType.NORMAL.steuer, 19.00);
+    assert.strictEqual(totalsMixed2.totalsByType.NORMAL.brutto, 219.00);
+    assert.strictEqual(totalsMixed2.totals13bNetto, 100.00);
+    assert.strictEqual(totalsMixed2.totalsNormalNetto, 100.00);
+    assert.ok(totalsMixed2.taxBreakdown['19']);
+    assert.strictEqual(totalsMixed2.taxBreakdown['19'].base, 100.00);
+    assert.strictEqual(totalsMixed2.taxBreakdown['19'].tax, 19.00);
+    assert.strictEqual(totalsMixed2.taxBreakdown['19'].is13b, false);
+    assert.ok(totalsMixed2.taxBreakdown['0']);
+    assert.strictEqual(totalsMixed2.taxBreakdown['0'].base, 100.00);
+    assert.strictEqual(totalsMixed2.taxBreakdown['0'].tax, 0.00);
+    assert.strictEqual(totalsMixed2.taxBreakdown['0'].is13b, true);
+    assert.ok(totalsMixed2.steuerschuldnerschaft.includes('13b'));
 });
 
 test('Test 2: Freeze-Mechanismus (Snapshot unveränderlich bei Versand)', () => {

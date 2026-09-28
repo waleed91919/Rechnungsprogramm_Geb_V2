@@ -89,7 +89,11 @@ class AngebotController {
 
             if (inEndsumme) {
                 endsummeNetto = this.round2(endsummeNetto + posNetto);
-                taxBases[mwstRate] = (taxBases[mwstRate] || 0) + posNetto;
+                if (pos13b) {
+                    taxBases['13b'] = (taxBases['13b'] || 0) + posNetto;
+                } else {
+                    taxBases[mwstRate] = (taxBases[mwstRate] || 0) + posNetto;
+                }
                 endsummePositionen.push(pos);
             }
         }
@@ -98,36 +102,52 @@ class AngebotController {
         const taxBreakdown = {};
         let endsummeSteuer = 0;
 
+        // 1. Reguläre Steuersätze (nicht 13b)
         for (const [rateStr, base] of Object.entries(taxBases)) {
+            if (rateStr === '13b') continue;
             const rate = parseFloat(rateStr);
             const roundedBase = this.round2(base);
-            const is13bRate = Boolean(isGlobal13b || (rate === 0 && positionen.some(p => p.is13b || p.unterliegt_13b)));
-            const taxAmount = (rate === 0 || is13bRate) ? 0 : this.round2(roundedBase * (rate / 100));
+            const taxAmount = rate === 0 ? 0 : this.round2(roundedBase * (rate / 100));
             taxBreakdown[rateStr] = {
                 rate,
                 base: roundedBase,
                 tax: taxAmount,
                 brutto: this.round2(roundedBase + taxAmount),
-                is13b: is13bRate,
-                steuerschuldner: is13bRate ? 'Leistungsempfänger' : undefined,
-                notice: is13bRate ? 'Steuerschuldnerschaft des Leistungsempfängers (Reverse Charge) gemäß § 13b UStG' : undefined
+                is13b: false
             };
             endsummeSteuer = this.round2(endsummeSteuer + taxAmount);
         }
 
-        if (isGlobal13b && Object.keys(taxBases).length === 0) {
-            taxBreakdown['0'] = {
+        // 2. § 13b Anteil (Reverse Charge)
+        const has13bPositions = taxBases['13b'] !== undefined;
+        if (has13bPositions || isGlobal13b) {
+            const rounded13bBase = this.round2(taxBases['13b'] || 0);
+            const entry13b = {
                 rate: 0,
-                base: 0,
+                base: rounded13bBase,
                 tax: 0,
-                brutto: 0,
+                brutto: rounded13bBase,
                 is13b: true,
                 steuerschuldner: 'Leistungsempfänger',
                 notice: 'Steuerschuldnerschaft des Leistungsempfängers (Reverse Charge) gemäß § 13b UStG'
             };
+
+            // Falls noch kein '0'-Eintrag für reguläre 0%-Steuer existiert, unter '0' einhängen (Rückwärtskompatibilität)
+            if (!taxBreakdown['0']) {
+                taxBreakdown['0'] = entry13b;
+                Object.defineProperty(taxBreakdown, '13b', {
+                    value: entry13b,
+                    enumerable: false,
+                    writable: true,
+                    configurable: true
+                });
+            } else {
+                taxBreakdown['13b'] = entry13b;
+            }
         }
 
-        if (isGlobal13b) {
+        const has13b = Boolean(isGlobal13b || (taxBases['13b'] && taxBases['13b'] > 0));
+        if (has13b) {
             Object.defineProperty(taxBreakdown, 'notice', {
                 value: 'Steuerschuldnerschaft des Leistungsempfängers (Reverse Charge) gemäß § 13b UStG',
                 enumerable: false,
@@ -149,6 +169,8 @@ class AngebotController {
         }
 
         const endsummeBrutto = this.round2(endsummeNetto + endsummeSteuer);
+        const totals13bNetto = this.round2(taxBases['13b'] || 0);
+        const totalsNormalNetto = this.round2(endsummeNetto - totals13bNetto);
 
         return {
             netto: endsummeNetto,
@@ -159,10 +181,10 @@ class AngebotController {
             positionenCount: positionen.length,
             inEndsummeCount: endsummePositionen.length,
             unterliegt_13b: isGlobal13b ? 1 : 0,
-            is13b: isGlobal13b,
-            totals13bNetto: isGlobal13b ? endsummeNetto : 0,
-            totalsNormalNetto: isGlobal13b ? 0 : endsummeNetto,
-            steuerschuldnerschaft: isGlobal13b ? 'Steuerschuldnerschaft des Leistungsempfängers (Reverse Charge) gemäß § 13b UStG' : null
+            is13b: has13b,
+            totals13bNetto,
+            totalsNormalNetto,
+            steuerschuldnerschaft: has13b ? 'Steuerschuldnerschaft des Leistungsempfängers (Reverse Charge) gemäß § 13b UStG' : null
         };
     }
 
