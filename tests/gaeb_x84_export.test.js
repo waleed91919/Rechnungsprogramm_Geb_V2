@@ -104,7 +104,8 @@ function validateX84WithLxml(xmlFilePath, targetVersion) {
     if (targetVersion) {
         args.push('--version', targetVersion);
     }
-    const output = execFileSync('python', args, { encoding: 'utf-8' });
+    // we use python3 directly
+    const output = execFileSync('python3', args, { encoding: 'utf-8' });
     return output;
 }
 
@@ -170,8 +171,15 @@ describe('GAEB DA XML X84 Export Suite', () => {
         const tmpFile = path.join(os.tmpdir(), `x84_test1_${Date.now()}.x84`);
         fs.writeFileSync(tmpFile, exportRes.xml, 'utf-8');
 
+        let pyOutput = "";
         try {
-            const pyOutput = validateX84WithLxml(tmpFile, '3.3');
+            pyOutput = validateX84WithLxml(tmpFile, '3.3');
+        } catch (err) {
+            console.error(err.stdout);
+            throw err;
+        }
+
+        try {
             assert.ok(pyOutput.includes('BESTANDEN (0 Schema-Fehler)'), 'lxml Validierung gegen GAEB 3.3 X84 XSD muss 100% bestehen');
             assert.ok(pyOutput.includes('ERFOLG'), 'Erfolgsmeldung muss vorliegen');
         } finally {
@@ -231,8 +239,15 @@ describe('GAEB DA XML X84 Export Suite', () => {
         const tmpFile = path.join(os.tmpdir(), `x84_test2_${Date.now()}.x84`);
         fs.writeFileSync(tmpFile, exportRes.xml, 'utf-8');
 
+        let pyOutput = "";
         try {
-            const pyOutput = validateX84WithLxml(tmpFile, '3.2');
+            pyOutput = validateX84WithLxml(tmpFile, '3.2');
+        } catch (err) {
+            console.error(err.stdout);
+            throw err;
+        }
+
+        try {
             assert.ok(pyOutput.includes('BESTANDEN (0 Schema-Fehler)'), 'lxml Validierung gegen GAEB 3.2 X84 XSD muss 100% bestehen');
             assert.ok(pyOutput.includes('ERFOLG'), 'Erfolgsmeldung muss vorliegen');
         } finally {
@@ -642,13 +657,179 @@ describe('GAEB DA XML X84 Export Suite', () => {
 
         if (fs.existsSync(tmpTarget)) fs.unlinkSync(tmpTarget);
 
-        // H: Headless / direkter Pfad-Export (options.filePath)
+        // H: Headless / direkter Pfad-Export (options.filePath) is now fully removed from the IPC handler.
+        // It must always fallback to the mock dialog.
         const tmpHeadless = path.join(os.tmpdir(), `headless_x84_test_${Date.now()}.x84`);
-        const expHeadless = await exportHandler({}, { draftId: draft.id, options: { filePath: tmpHeadless } });
+        dialogCanceled = false;
+        dialogChosenPath = tmpHeadless;
+
+        const expHeadless = await exportHandler({}, { draftId: draft.id, options: { isTestEnv: true, filePath: "this-path-must-be-ignored" } });
         assert.strictEqual(expHeadless.success, true);
         assert.strictEqual(expHeadless.filePath, tmpHeadless);
         assert.ok(fs.existsSync(tmpHeadless));
         if (fs.existsSync(tmpHeadless)) fs.unlinkSync(tmpHeadless);
+
+        db.close();
+    });
+
+    test('Test 12: Fehlerprüfung bei falschen XSD-Dateien, fehlenden Includes oder fehlschlagendem process.chdir()', async () => {
+        const db = createTestDb();
+        const refFile = path.join(FIXTURES_DIR, 'valid_schema_reference.x83');
+        const rawBytes = fs.readFileSync(refFile);
+        const parsed = GAEBEngine.parseGAEBXML(rawBytes.toString('utf-8'));
+        const saveRes = saveX83Import(db, parsed, { fileName: 'valid_schema_reference.x83', rawBytes, rawXml: rawBytes.toString('utf-8') });
+        const draft = createTenderDraft(db, saveRes.importId);
+
+        const loadedDraft = loadTenderDraft(db, draft.id);
+        saveTenderDraft(db, draft.id, {
+            prices: [
+                { gaeb_item_id: loadedDraft.items[0]._dbId, unit_price: 10.00, in_total: 1 },
+                { gaeb_item_id: loadedDraft.items[1]._dbId, unit_price: 20.00, in_total: 1 },
+                { gaeb_item_id: loadedDraft.items[2]._dbId, unit_price: 15.00, in_total: 1 }
+            ]
+        });
+
+        // Wir rufen den echten ipc-gaeb.js Handler auf, mocken aber die Umgebung
+        const handlers = new Map();
+        const mockIpcMain = { handle: (channel, fn) => handlers.set(channel, fn) };
+        const mockDialog = { showSaveDialog: async () => ({ canceled: false, filePath: path.join(os.tmpdir(), 'test_fail.x84') }) };
+        const ipcGaeb = require('../main/ipc/ipc-gaeb');
+        ipcGaeb.register(mockIpcMain, { db, dialog: mockDialog, BrowserWindow: { getFocusedWindow: () => ({}) } });
+
+        const exportHandler = handlers.get('gaeb:export-x84');
+
+        const gaebX84 = require('../js/gaeb_x84');
+        const originalMap = gaebX84.mapDraftToX84Model;
+
+        // 1. Test the "No matching global declaration available" by breaking the root element.
+        // Das manipulierte XML erzeugen, ohne mapDraftToX84Model zu zerstören.
+        const originalExport = gaebX84.exportTenderDraftToX84;
+        gaebX84.exportTenderDraftToX84 = (db, id, opt) => {
+            const result = originalExport(db, id, opt);
+            // Breche die XML Struktur vor der Validierung, e.g. `<GAEBInfo>`
+            result.xml = result.xml.replace('<GAEBInfo>', '<GAEBInfo><InvalidElement>1</InvalidElement>');
+            return result;
+        };
+
+        const res = await exportHandler({}, { draftId: draft.id });
+
+        gaebX84.exportTenderDraftToX84 = originalExport;
+
+        assert.strictEqual(res.success, false);
+        assert.ok(res.error.includes('XSD-Validierung fehlgeschlagen'));
+        assert.ok(!fs.existsSync(path.join(os.tmpdir(), 'test_fail.x84')), "Die Fehlerhafte Datei durfte nicht geschrieben werden");
+
+        // 2. Testen des leeren Error-Arrays (sollte gefangen werden im Validator wenn validationErrors empty ist)
+        const libxmljs = require('libxmljs2');
+        const originalParse = libxmljs.parseXml;
+        libxmljs.parseXml = (xmlStr, opts) => {
+            const doc = originalParse(xmlStr, opts);
+            if (!opts) {
+                // das ist das Target Doc
+                const origValidate = doc.validate.bind(doc);
+                doc.validate = (xsd) => {
+                    const valid = origValidate(xsd);
+                    doc.validationErrors = []; // zwinge leeres error array
+                    return false; // zwinge false
+                }
+            }
+            return doc;
+        }
+
+        const resEmptyErr = await exportHandler({}, { draftId: draft.id });
+        libxmljs.parseXml = originalParse;
+
+        assert.strictEqual(resEmptyErr.success, false);
+        assert.ok(resEmptyErr.error.includes('Unbekannter XSD-Validierungsfehler'));
+        assert.ok(!fs.existsSync(path.join(os.tmpdir(), 'test_fail.x84')), "Die Fehlerhafte Datei durfte nicht geschrieben werden");
+
+        db.close();
+    });
+
+    test('Test 13: Ablehnung gemischter Kategorien (Itemlist + BoQCtgy)', () => {
+        const db = createTestDb();
+        const refFile = path.join(FIXTURES_DIR, 'valid_schema_reference.x83');
+        const rawBytes = fs.readFileSync(refFile);
+        const parsed = GAEBEngine.parseGAEBXML(rawBytes.toString('utf-8'));
+        const saveRes = saveX83Import(db, parsed, { fileName: 'valid_schema_reference.x83', rawBytes, rawXml: rawBytes.toString('utf-8') });
+        const draft = createTenderDraft(db, saveRes.importId);
+
+        const loadedDraft = loadTenderDraft(db, draft.id);
+        saveTenderDraft(db, draft.id, {
+            prices: [
+                { gaeb_item_id: loadedDraft.items[0]._dbId, unit_price: 10.00, in_total: 1 },
+                { gaeb_item_id: loadedDraft.items[1]._dbId, unit_price: 20.00, in_total: 1 },
+                { gaeb_item_id: loadedDraft.items[2]._dbId, unit_price: 15.00, in_total: 1 }
+            ]
+        });
+
+        // Wir fügen in der Datenbank eine Unterkategorie und ein Item in dieselbe Kategorie ein (via DB manipulation)
+        // Stattdessen nutzen wir mapDraftToX84Model mit injizierten Daten
+        const originalLoad = require('../db/repositories/gaeb_tender_repo').loadTenderDraft;
+        require('../db/repositories/gaeb_tender_repo').loadTenderDraft = (d, id) => {
+            const data = originalLoad(d, id);
+            // Wir mischen jetzt Items und Categories in der ersten Kategorie
+            const firstCat = data.categories[0];
+            // Die Property im Repo-Output heißt `categories`
+            firstCat.categories = [{ id: 'SubCat', rno_part: '01.01', categories: [], items: [] }];
+            // firstCat hat bereits items. Wir müssen sicherstellen, dass firstCat.items definiert ist und > 0 ist.
+            if (!firstCat.items || firstCat.items.length === 0) {
+                 firstCat.items = [{ _dbId: 9999, id: 'Pos1', rno_part: '0010', unit_price: 1, in_total: 1 }];
+            }
+            return data;
+        };
+
+        const { mapDraftToX84Model } = require('../js/gaeb_x84');
+        try {
+            mapDraftToX84Model(db, draft.id);
+            assert.fail('Sollte bei gemischten Kategorien eine Exception werfen');
+        } catch (e) {
+            if (e.message.includes('Sollte bei gemischten')) throw e; // Pass through fail
+            if (!e.message.includes('enthält sowohl Unterkategorien als auch direkte Positionen')) {
+                console.log("Error message was:", e.message);
+            }
+            assert.ok(e.message.includes('enthält sowohl Unterkategorien als auch direkte Positionen'), 'Fehlermeldung muss Mischen von Elementen anmahnen');
+        }
+
+        require('../db/repositories/gaeb_tender_repo').loadTenderDraft = originalLoad; // Restore
+
+        db.close();
+    });
+
+    test('Test 14: Strikte in_total = 0 Behandlung im Validator und Mapper', () => {
+        const db = createTestDb();
+        const refFile = path.join(FIXTURES_DIR, 'valid_schema_reference.x83');
+        const rawBytes = fs.readFileSync(refFile);
+        const parsed = GAEBEngine.parseGAEBXML(rawBytes.toString('utf-8'));
+        const saveRes = saveX83Import(db, parsed, { fileName: 'valid_schema_reference.x83', rawBytes, rawXml: rawBytes.toString('utf-8') });
+        const draft = createTenderDraft(db, saveRes.importId);
+
+        const loadedDraft = loadTenderDraft(db, draft.id);
+        saveTenderDraft(db, draft.id, {
+            prices: [
+                { gaeb_item_id: loadedDraft.items[0]._dbId, unit_price: 10.00, in_total: 1 },
+                { gaeb_item_id: loadedDraft.items[1]._dbId, unit_price: 20.00, in_total: 0 }, // Ausdrücklich 0!
+                { gaeb_item_id: loadedDraft.items[2]._dbId, unit_price: 15.00, in_total: 1 }
+            ]
+        });
+
+        const gaebX84 = require('../js/gaeb_x84');
+        const valRes = gaebX84.validateDraftForExport(db, draft.id);
+        assert.strictEqual(valRes.valid, true); // Ist weiterhin bepreist
+
+        const model = gaebX84.mapDraftToX84Model(db, draft.id);
+        const cat = model.award.boq.categories[0];
+        const getItems = (c) => {
+            let i = [...(c.items || [])];
+            for (let sub of (c.subCategories || [])) i.push(...getItems(sub));
+            return i;
+        }
+
+        const allItems = getItems(cat);
+
+        assert.strictEqual(allItems[0].inTotal, true);
+        assert.strictEqual(allItems[1].inTotal, false, 'Sollte false sein, da im Draft in_total = 0 gesetzt ist.');
+        assert.strictEqual(allItems[2].inTotal, true);
 
         db.close();
     });

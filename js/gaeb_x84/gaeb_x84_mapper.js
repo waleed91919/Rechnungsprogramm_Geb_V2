@@ -214,10 +214,15 @@ function mapItemForX84(item) {
     const id = sanitizeXmlId(item.id || `POS_${item._dbId || oz.replace(/[^a-zA-Z0-9_]/g, '_')}`);
     const rnoPart = item.rno_part || oz.split('.').pop() || '0010';
 
+    const shortText = item.kurztext || item.short_text || item.name || '';
+    const longText = item.langtext || item.long_text || item.description || item.detailTxt || item.completeText || null;
+
     if (isHinweistext) {
         return {
             id,
             rnoPart,
+            shortText,
+            longText,
             isHinweistext: true,
             inTotal: false,
             qty: null,
@@ -229,7 +234,10 @@ function mapItemForX84(item) {
         };
     }
 
-    const inTotal = Boolean(item.in_total === 1 || item.in_total === true || item.in_endsumme_enthalten === 1);
+    const inTotal = item.in_total !== undefined && item.in_total !== null
+        ? Boolean(Number(item.in_total))
+        : Boolean(item.in_endsumme_enthalten);
+
     const menge = (item.menge !== null && item.menge !== undefined) ? Number(item.menge) : null;
     const up = (item.unit_price !== null && item.unit_price !== undefined) ? Number(item.unit_price) : null;
 
@@ -264,6 +272,8 @@ function mapItemForX84(item) {
     return {
         id,
         rnoPart,
+        shortText,
+        longText,
         isHinweistext: false,
         inTotal,
         qty: qtyFormatted,
@@ -302,6 +312,11 @@ function mapCategoryRecursive(cat) {
                 catTotal += mappedItem.itNumeric;
             }
         }
+    }
+
+    // GAEB X84 validation rule: A BoQCtgy cannot contain both sub-categories and items.
+    if (subCategories.length > 0 && mappedItems.length > 0) {
+        throw new Error(`Kategorie "${cat.rno_part || cat.id || 'Unbekannt'}" enthält sowohl Unterkategorien als auch direkte Positionen. Dies ist im GAEB X84 Format unzulässig.`);
     }
 
     catTotal = Math.round(catTotal * 100) / 100;

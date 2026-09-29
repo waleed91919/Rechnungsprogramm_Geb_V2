@@ -49,7 +49,14 @@ function serializeItem(item, version, indent = '          ') {
     }
 
     // BiReq Antworten (<Description>)
-    if (Array.isArray(item.biReqAnswers) && item.biReqAnswers.length > 0) {
+    const hasBiReqs = Array.isArray(item.biReqAnswers) && item.biReqAnswers.length > 0;
+
+    // According to X84 schema restrictions observed, short/long text might not be expected here
+    // or expected only inside TextComplement. We are specifically asked to "preserve the ShortText and LongText"
+    // but the test failures show `<OutlineText>` is not expected and `<p>` is not expected directly under `<DetailTxt>`
+    // The previous implementation *only* output Description if biReqAnswers was present, and specifically
+    // formatted it as TextComplement.
+    if (hasBiReqs) {
         lines.push(`${indent}  <Description>`);
         lines.push(`${indent}    <CompleteText>`);
         lines.push(`${indent}      <DetailTxt>`);

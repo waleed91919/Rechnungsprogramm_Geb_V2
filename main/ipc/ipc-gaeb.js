@@ -209,31 +209,75 @@ function register(ipcMain, context = {}) {
             }
         } catch (_e) {}
 
-        let targetFilePath = options.filePath || null;
+        const win = (e && e.sender && browserWindowModule && typeof browserWindowModule.fromWebContents === 'function')
+            ? browserWindowModule.fromWebContents(e.sender)
+            : (browserWindowModule && typeof browserWindowModule.getFocusedWindow === 'function' ? browserWindowModule.getFocusedWindow() : null);
 
-        // Wenn kein filePath vorgegeben wurde (Standardfall im Renderer), nativen Save-Dialog öffnen
-        if (!targetFilePath) {
-            const win = (e && e.sender && browserWindowModule && typeof browserWindowModule.fromWebContents === 'function')
-                ? browserWindowModule.fromWebContents(e.sender)
-                : (browserWindowModule && typeof browserWindowModule.getFocusedWindow === 'function' ? browserWindowModule.getFocusedWindow() : null);
-            const { filePath, canceled } = await dialogModule.showSaveDialog(win, {
-                title: 'GAEB DA XML X84 (Angebotsabgabe) speichern',
-                defaultPath,
-                filters: [
-                    { name: 'GAEB DA XML Phase X84 (*.x84)', extensions: ['x84'] },
-                    { name: 'Alle Dateien (*.*)', extensions: ['*'] }
-                ]
-            });
+        const { filePath, canceled } = await dialogModule.showSaveDialog(win, {
+            title: 'GAEB DA XML X84 (Angebotsabgabe) speichern',
+            defaultPath,
+            filters: [
+                { name: 'GAEB DA XML Phase X84 (*.x84)', extensions: ['x84'] },
+                { name: 'Alle Dateien (*.*)', extensions: ['*'] }
+            ]
+        });
 
-            if (canceled || !filePath) {
-                return { canceled: true };
-            }
-            targetFilePath = filePath;
+        if (canceled || !filePath) {
+            return { canceled: true };
         }
 
-        // Export durchführen und Datei schreiben
+        const targetFilePath = filePath;
+
+        // Export durchführen (XML erzeugen)
         const exportResult = gaebX84.exportTenderDraftToX84(db, draftId, options);
-        fs.writeFileSync(targetFilePath, exportResult.xml, 'utf-8');
+        const xml = exportResult.xml;
+
+        // XSD-Prüfung vor dem Schreiben
+        const gaebVersion = exportResult.model.gaebVersion || '3.3';
+        const schemaDir = path.join(__dirname, '..', '..', 'tests', 'schemas', `gaeb_da_xml_${gaebVersion}`);
+        const schemaFile = gaebVersion === '3.2' ? 'GAEB_DA_XML_84_3.2_2013-10.xsd' : 'GAEB_DA_XML_84_3.3_2021-05.xsd';
+        const schemaPath = path.join(schemaDir, schemaFile);
+
+        try {
+            if (fs.existsSync(schemaPath)) {
+                // libxmljs2 handles libxmljs seamlessly for our needs and fixes Node 22 compat
+                const libxmljs = require('libxmljs2');
+                const xsdStr = fs.readFileSync(schemaPath, 'utf8');
+
+                const xsdDoc = libxmljs.parseXml(xsdStr, { baseUrl: 'file://' + schemaPath, nonet: true });
+                const xmlDoc = libxmljs.parseXml(xml);
+                const isValid = xmlDoc.validate(xsdDoc);
+
+                if (!isValid) {
+                    let errs = [];
+                    if (xmlDoc.validationErrors && xmlDoc.validationErrors.length > 0) {
+                        errs = xmlDoc.validationErrors.map(e => `Zeile ${e.line}: ${e.message}`);
+                    } else {
+                        errs = ['Unbekannter XSD-Validierungsfehler (isValid war false, aber keine Details)'];
+                    }
+                    return {
+                        success: false,
+                        validationErrors: errs,
+                        error: 'XSD-Validierung fehlgeschlagen:\n' + errs.join('\n')
+                    };
+                }
+            } else {
+                return {
+                    success: false,
+                    validationErrors: ['Schema nicht gefunden'],
+                    error: 'XSD-Schema nicht gefunden: ' + schemaPath
+                };
+            }
+        } catch (e) {
+            return {
+                success: false,
+                validationErrors: [e.message],
+                error: 'Fehler bei der XSD-Prüfung: ' + e.message
+            };
+        }
+
+        // Datei schreiben, nachdem sie validiert wurde
+        fs.writeFileSync(targetFilePath, xml, 'utf-8');
 
         return {
             success: true,
