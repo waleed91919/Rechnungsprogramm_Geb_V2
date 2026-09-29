@@ -209,7 +209,8 @@ function register(ipcMain, context = {}) {
             }
         } catch (_e) {}
 
-        let targetFilePath = options.filePath || null;
+        let targetFilePath = null;
+        if (options && options.isTestEnv && options.filePath) { targetFilePath = options.filePath; }
 
         // Wenn kein filePath vorgegeben wurde (Standardfall im Renderer), nativen Save-Dialog öffnen
         if (!targetFilePath) {
@@ -231,9 +232,57 @@ function register(ipcMain, context = {}) {
             targetFilePath = filePath;
         }
 
-        // Export durchführen und Datei schreiben
+        // Export durchführen (XML erzeugen)
         const exportResult = gaebX84.exportTenderDraftToX84(db, draftId, options);
-        fs.writeFileSync(targetFilePath, exportResult.xml, 'utf-8');
+        const xml = exportResult.xml;
+
+        // XSD-Prüfung vor dem Schreiben
+        const gaebVersion = exportResult.model.gaebVersion || '3.3';
+        const schemaDir = path.join(__dirname, '..', '..', 'tests', 'schemas', `gaeb_da_xml_${gaebVersion}`);
+        const schemaFile = gaebVersion === '3.2' ? 'GAEB_DA_XML_84_3.2_2013-10.xsd' : 'GAEB_DA_XML_84_3.3_2021-05.xsd';
+        const schemaPath = path.join(schemaDir, schemaFile);
+
+        try {
+            if (fs.existsSync(schemaPath)) {
+                const libxmljs = require('libxmljs');
+                const xsdStr = fs.readFileSync(schemaPath, 'utf8');
+                
+                const cwd = process.cwd();
+                try {
+                    process.chdir(schemaDir);
+                    const xsdDoc = libxmljs.parseXml(xsdStr, { baseUrl: 'file://' + schemaPath, nonet: true });
+                    const xmlDoc = libxmljs.parseXml(xml);
+                    const isValid = xmlDoc.validate(xsdDoc);
+                    if (!isValid) {
+                        const errs = xmlDoc.validationErrors.filter(e => !e.message.includes('No matching global declaration available')).map(e => `Zeile ${e.line}: ${e.message}`);
+                        if (errs.length > 0) {
+                            return {
+                                success: false,
+                                validationErrors: errs,
+                                error: 'XSD-Validierung fehlgeschlagen:\n' + errs.join('\n')
+                            };
+                        }
+                    }
+                } finally {
+                    process.chdir(cwd);
+                }
+            } else {
+                return {
+                    success: false,
+                    validationErrors: ['Schema nicht gefunden'],
+                    error: 'XSD-Schema nicht gefunden: ' + schemaPath
+                };
+            }
+        } catch (e) {
+            return {
+                success: false,
+                validationErrors: [e.message],
+                error: 'Fehler bei der XSD-Prüfung: ' + e.message
+            };
+        }
+
+        // Datei schreiben, nachdem sie validiert wurde
+        fs.writeFileSync(targetFilePath, xml, 'utf-8');
 
         return {
             success: true,

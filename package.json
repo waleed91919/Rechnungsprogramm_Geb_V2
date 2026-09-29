@@ -69,7 +69,10 @@
     "@cantoo/pdf-lib": "^2.9.1",
     "better-sqlite3": "^12.6.2",
     "fontkit": "^2.0.4",
+    "libxmljs": "^1.0.11",
     "nodemailer": "^9.0.5",
-    "qrcode": "^1.5.4"
+    "qrcode": "^1.5.4",
+    "xml-xsd-validator-browser": "^1.0.9",
+    "xsd-schema-validator": "^0.11.0"
   }
 }

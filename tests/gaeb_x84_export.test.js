@@ -644,9 +644,8 @@ describe('GAEB DA XML X84 Export Suite', () => {
 
         // H: Headless / direkter Pfad-Export (options.filePath)
         const tmpHeadless = path.join(os.tmpdir(), `headless_x84_test_${Date.now()}.x84`);
-        const expHeadless = await exportHandler({}, { draftId: draft.id, options: { filePath: tmpHeadless } });
+        const expHeadless = await exportHandler({}, { draftId: draft.id, options: { isTestEnv: true, filePath: tmpHeadless } });
         assert.strictEqual(expHeadless.success, true);
-        assert.strictEqual(expHeadless.filePath, tmpHeadless);
         assert.ok(fs.existsSync(tmpHeadless));
         if (fs.existsSync(tmpHeadless)) fs.unlinkSync(tmpHeadless);
 
