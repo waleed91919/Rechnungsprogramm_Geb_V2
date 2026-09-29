@@ -3,14 +3,20 @@
  * IPC-Handler für GAEB X83 Import, Persistenz, Laden und Löschen.
  */
 
+const fs = require('fs');
+const path = require('path');
+const { dialog, BrowserWindow } = require('electron');
 const { wrapHandler: defaultWrapHandler } = require('./ipc-util');
 const gaebRepo = require('../../db/repositories/gaeb_repository');
 const gaebTenderRepo = require('../../db/repositories/gaeb_tender_repo');
+const gaebX84 = require('../../js/gaeb_x84');
 
 function register(ipcMain, context = {}) {
     const db = context.db || (context.dbAPI && context.dbAPI.db) || require('../../db').db;
     const dbAPI = context.dbAPI || require('../../db').dbAPI;
     const wrapHandler = context.wrapHandler || defaultWrapHandler;
+    const dialogModule = context.dialog || dialog;
+    const browserWindowModule = context.BrowserWindow || BrowserWindow;
 
     // Speichert ein geparstes X83 Dokument atomar in SQLite
     ipcMain.handle('gaeb:save-import', wrapHandler(async (e, payload = {}) => {
@@ -159,7 +165,85 @@ function register(ipcMain, context = {}) {
         }
         return gaebTenderRepo.deleteTenderDraft(db, draftId);
     }));
+
+    // --- GAEB DA XML X84 Export (Phase 84: Angebotsabgabe) ---
+
+    // Validiert einen Tender-Entwurf für den X84-Export
+    ipcMain.handle('gaeb:validate-x84-export', wrapHandler(async (e, payload) => {
+        const draftId = (typeof payload === 'object' && payload !== null && payload.draftId !== undefined)
+            ? payload.draftId
+            : payload;
+        if (!draftId) throw new Error('Draft-ID fehlt für Validierung.');
+        return gaebX84.validateDraftForExport(db, draftId);
+    }));
+
+    // Exportiert einen Tender-Entwurf als GAEB DA XML X84 Datei
+    ipcMain.handle('gaeb:export-x84', wrapHandler(async (e, payload = {}, maybeOptions) => {
+        const draftId = (typeof payload === 'object' && payload !== null && payload.draftId !== undefined)
+            ? payload.draftId
+            : payload;
+        const options = (typeof payload === 'object' && payload !== null && payload.options !== undefined)
+            ? payload.options
+            : (maybeOptions || (typeof payload === 'object' && payload !== null && payload.draftId === undefined ? payload : {}));
+
+        if (!draftId) throw new Error('Draft-ID fehlt für X84-Export.');
+
+        const validation = gaebX84.validateDraftForExport(db, draftId, options);
+        if (!validation.valid) {
+            return {
+                success: false,
+                validationErrors: validation.errors,
+                error: validation.errors.join('\n')
+            };
+        }
+
+        // Standard-Dateiname vorbereiten: z.B. [Projektname]_v[Version].x84
+        const draftName = (validation.draftSummary?.name || 'Ausschreibung').replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+        const defaultFileName = `${draftName}_v${validation.draftSummary?.version || 1}.x84`;
+
+        let defaultPath = defaultFileName;
+        try {
+            const { app } = require('electron');
+            if (app && typeof app.getPath === 'function') {
+                defaultPath = path.join(app.getPath('documents'), defaultFileName);
+            }
+        } catch (_e) {}
+
+        let targetFilePath = options.filePath || null;
+
+        // Wenn kein filePath vorgegeben wurde (Standardfall im Renderer), nativen Save-Dialog öffnen
+        if (!targetFilePath) {
+            const win = (e && e.sender && browserWindowModule && typeof browserWindowModule.fromWebContents === 'function')
+                ? browserWindowModule.fromWebContents(e.sender)
+                : (browserWindowModule && typeof browserWindowModule.getFocusedWindow === 'function' ? browserWindowModule.getFocusedWindow() : null);
+            const { filePath, canceled } = await dialogModule.showSaveDialog(win, {
+                title: 'GAEB DA XML X84 (Angebotsabgabe) speichern',
+                defaultPath,
+                filters: [
+                    { name: 'GAEB DA XML Phase X84 (*.x84)', extensions: ['x84'] },
+                    { name: 'Alle Dateien (*.*)', extensions: ['*'] }
+                ]
+            });
+
+            if (canceled || !filePath) {
+                return { canceled: true };
+            }
+            targetFilePath = filePath;
+        }
+
+        // Export durchführen und Datei schreiben
+        const exportResult = gaebX84.exportTenderDraftToX84(db, draftId, options);
+        fs.writeFileSync(targetFilePath, exportResult.xml, 'utf-8');
+
+        return {
+            success: true,
+            filePath: targetFilePath,
+            stats: exportResult.stats,
+            validation: exportResult.validation
+        };
+    }));
 }
+
 
 module.exports = {
     register

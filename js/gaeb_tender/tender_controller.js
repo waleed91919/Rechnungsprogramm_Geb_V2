@@ -481,7 +481,88 @@
                 alert(`Fehler beim Laden des Entwurfs: ${err.message}`);
             }
         }
+
+        /**
+         * Führt den GAEB DA XML X84 Export des aktuellen oder angegebenen Entwurfs durch.
+         * @param {number} [targetDraftId] 
+         */
+        async exportX84(targetDraftId) {
+            const draftId = targetDraftId ? Number(targetDraftId) : window.GaebTenderState.currentDraftId;
+            if (!draftId) {
+                alert('Bitte wählen Sie zuerst einen Bepreisungsentwurf aus.');
+                return;
+            }
+
+            const exportBtn = document.getElementById('gt-btn-export-x84');
+            const origHtml = exportBtn ? exportBtn.innerHTML : null;
+
+            try {
+                const api = await this.getIpc();
+
+                if (exportBtn) {
+                    exportBtn.disabled = true;
+                    exportBtn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span> <span>Prüfe Export...</span>';
+                }
+
+                // 1. Vorvalidierung
+                const validation = await api.invoke('gaeb:validate-x84-export', draftId);
+                if (!validation.valid) {
+                    const errList = (validation.errors || []).join('\n• ');
+                    if (window.GaebTenderView && typeof window.GaebTenderView.showExportInfo === 'function') {
+                        window.GaebTenderView.showExportInfo(`Export nicht möglich (${validation.errors.length} Fehler)`, true);
+                    }
+                    alert(`Der Bepreisungsentwurf kann nicht als X84 exportiert werden:\n\n• ${errList}`);
+                    return;
+                }
+
+                if (exportBtn) {
+                    exportBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">file_download</span> <span>Wähle Speicherort...</span>';
+                }
+
+                // 2. Export und Dateidialog
+                const res = await api.invoke('gaeb:export-x84', { draftId });
+
+                if (res.canceled) {
+                    // Benutzer hat den Speichern-Dialog abgebrochen
+                    return;
+                }
+
+                if (!res.success) {
+                    const msg = res.error || (res.validationErrors ? res.validationErrors.join('\n') : 'Unbekannter Export-Fehler');
+                    if (window.GaebTenderView && typeof window.GaebTenderView.showExportInfo === 'function') {
+                        window.GaebTenderView.showExportInfo(`Fehler beim Export: ${msg}`, true);
+                    }
+                    alert(`Fehler beim X84-Export:\n${msg}`);
+                    return;
+                }
+
+                // 3. Erfolgsmeldung
+                const successMsg = `GAEB DA XML X84 erfolgreich exportiert!\n\nDatei: ${res.filePath}\nNetto: ${res.stats?.totalNetto || '0.00'} €`;
+                if (window.GaebTenderView && typeof window.GaebTenderView.showExportInfo === 'function') {
+                    window.GaebTenderView.showExportInfo(`X84 erfolgreich exportiert: ${res.filePath} (${res.stats?.totalNetto || '0.00'} € Netto)`, false);
+                }
+
+                if (typeof showToast === 'function') {
+                    showToast('GAEB X84 erfolgreich exportiert.', 'success');
+                }
+
+                alert(successMsg);
+
+            } catch (err) {
+                console.error('[GAEB Tender Controller] Unerwarteter Fehler beim X84-Export:', err);
+                if (window.GaebTenderView && typeof window.GaebTenderView.showExportInfo === 'function') {
+                    window.GaebTenderView.showExportInfo(`Fehler beim Export: ${err.message}`, true);
+                }
+                alert(`Fehler beim X84-Export: ${err.message}`);
+            } finally {
+                if (exportBtn && origHtml) {
+                    exportBtn.disabled = false;
+                    exportBtn.innerHTML = origHtml;
+                }
+            }
+        }
     }
+
 
     const controller = new GaebTenderController();
     window.GaebTenderController = controller;

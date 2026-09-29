@@ -43,6 +43,8 @@ SCHEMA_32_DIR = os.path.join(os.path.dirname(__file__), 'schemas', 'gaeb_da_xml_
 
 XSD_33_PATH = os.path.join(SCHEMA_33_DIR, 'GAEB_DA_XML_83_3.3_2021-05.xsd')
 XSD_32_PATH = os.path.join(SCHEMA_32_DIR, 'GAEB_DA_XML_83_3.2_2013-10.xsd')
+XSD_84_33_PATH = os.path.join(SCHEMA_33_DIR, 'GAEB_DA_XML_84_3.3_2021-05.xsd')
+XSD_84_32_PATH = os.path.join(SCHEMA_32_DIR, 'GAEB_DA_XML_84_3.2_2013-10.xsd')
 
 EXPECTED_VALID = [
     {
@@ -294,7 +296,140 @@ def run_self_test(schemas):
     print("Selbsttest: BESTANDEN (Validierungs-Engine gibt bei Fehlern niemals stillschweigend grünes Licht)\n")
     return True
 
+def validate_x84_file(fpath, target_version=None):
+    if not os.path.exists(fpath):
+        return {
+            'file': fpath,
+            'exists': False,
+            'declared_version': 'unbekannt',
+            'tested_schema': 'unbekannt',
+            'well_formed': False,
+            'wf_error': f"Datei nicht gefunden: {fpath}",
+            'structural_ok': False,
+            'structural_notes': ['Datei fehlt'],
+            'xsd_valid': False,
+            'xsd_errors': ['Datei existiert nicht']
+        }
+
+    with open(fpath, 'rb') as f:
+        raw_bytes = f.read()
+
+    # 1. XML-Wohlgeformtheit
+    well_formed = False
+    wf_error = None
+    doc = None
+    try:
+        doc = etree.fromstring(raw_bytes)
+        well_formed = True
+    except Exception as e:
+        wf_error = str(e)
+
+    # 2. Strukturelle Basiskonformität & deklarierte GAEB-Version
+    structural_ok = False
+    structural_notes = []
+    declared_v = 'fehlt'
+    schema_name = 'unbekannt'
+    xsd_valid = False
+    xsd_errors = []
+
+    if well_formed and doc is not None:
+        root_tag = etree.QName(doc).localname
+        ns = doc.nsmap.get(None, '')
+        version_nodes = doc.xpath('//*[local-name()="GAEBInfo"]/*[local-name()="Version"]')
+        dp_nodes = doc.xpath('//*[local-name()="Award"]/*[local-name()="DP"]')
+
+        if root_tag == 'GAEB':
+            structural_notes.append("Wurzel <GAEB> OK")
+        else:
+            structural_notes.append(f"Wurzel '{root_tag}' != GAEB")
+
+        if version_nodes and version_nodes[0].text:
+            declared_v = version_nodes[0].text.strip()
+        else:
+            structural_notes.append("Version fehlt in GAEBInfo")
+
+        v_to_use = target_version or declared_v
+        if v_to_use not in ('3.2', '3.3'):
+            structural_notes.append(f"Nicht unterstützte Version: {v_to_use}")
+        else:
+            expected_ns = f"http://www.gaeb.de/GAEB_DA_XML/DA84/{v_to_use}"
+            if ns == expected_ns:
+                structural_notes.append(f"Namespace OK ({ns})")
+            else:
+                structural_notes.append(f"Namespace abweichend: {ns} (Erwartet: {expected_ns})")
+
+            has_dp84 = bool(dp_nodes and dp_nodes[0].text and dp_nodes[0].text.strip() in ('84', '84Z'))
+            if has_dp84:
+                structural_notes.append(f"DP {dp_nodes[0].text.strip()} OK")
+            else:
+                dp_val = dp_nodes[0].text.strip() if (dp_nodes and dp_nodes[0].text) else 'fehlt'
+                structural_notes.append(f"DP != 84 ({dp_val})")
+
+            structural_ok = (root_tag == 'GAEB' and ns == expected_ns and declared_v == v_to_use and has_dp84)
+
+            schema_path = XSD_84_32_PATH if v_to_use == '3.2' else XSD_84_33_PATH
+            schema_name = os.path.basename(schema_path)
+
+            if not os.path.exists(schema_path):
+                xsd_errors.append(f"X84 Schema nicht gefunden: {schema_path}")
+            else:
+                try:
+                    schema = etree.XMLSchema(file=schema_path)
+                    xsd_valid = schema.validate(doc)
+                    if not xsd_valid:
+                        for err in schema.error_log:
+                            xsd_errors.append(f"Zeile {err.line}: {err.message}")
+                except Exception as e:
+                    xsd_errors.append(f"Schemafehler beim Laden/Validieren: {e}")
+
+    return {
+        'file': fpath,
+        'exists': True,
+        'declared_version': declared_v,
+        'tested_schema': schema_name,
+        'well_formed': well_formed,
+        'wf_error': wf_error,
+        'structural_ok': structural_ok,
+        'structural_notes': structural_notes,
+        'xsd_valid': xsd_valid,
+        'xsd_errors': xsd_errors
+    }
+
 def main():
+    if '--x84' in sys.argv:
+        x84_idx = sys.argv.index('--x84')
+        if x84_idx + 1 >= len(sys.argv):
+            print("FEHLER: Pfad zur X84-Datei nach --x84 erforderlich.")
+            sys.exit(1)
+        x84_path = sys.argv[x84_idx + 1]
+        target_v = None
+        if '--version' in sys.argv:
+            v_idx = sys.argv.index('--version')
+            if v_idx + 1 < len(sys.argv):
+                target_v = sys.argv[v_idx + 1]
+
+        res = validate_x84_file(x84_path, target_v)
+        print("=" * 110)
+        print(f"GAEB X84 Validierungsprüfung: {x84_path}")
+        print("=" * 110)
+        print(f"  - Datei existiert:      {'Ja' if res['exists'] else 'Nein'}")
+        print(f"  - Deklarierte Version:  {res['declared_version']}")
+        print(f"  - Geprüftes Schema:     {res['tested_schema']}")
+        print(f"  - XML-Status:           {'Wohlgeformt (OK)' if res['well_formed'] else res['wf_error']}")
+        print(f"  - Strukturelle Prüfung: {', '.join(res['structural_notes'])}")
+        if res['xsd_valid'] and res['structural_ok']:
+            print("  - XSD-Validierungsstatus: BESTANDEN (0 Schema-Fehler)")
+            print("=" * 110)
+            print("ERGEBNIS: ERFOLG - Die X84 Datei ist zu 100% schemakonform.")
+            sys.exit(0)
+        else:
+            print(f"  - XSD-Validierungsstatus: FEHLGESCHLAGEN ({len(res['xsd_errors'])} Schema-Fehler):")
+            for err in res['xsd_errors']:
+                print(f"      * {err}")
+            print("=" * 110)
+            print("ERGEBNIS: FEHLER - Die X84 Datei ist nicht schemakonform!")
+            sys.exit(1)
+
     self_test_only = '--self-test' in sys.argv
 
     schema_33, schema_32 = load_schemas()

@@ -213,10 +213,16 @@
                             <td class="py-3 px-4 font-mono font-bold text-emerald-700">${formatCurrency(d.total_brutto)}</td>
                             <td class="py-3 px-4 text-slate-400 text-[11px]">${escapeHtml(updatedAt)}</td>
                             <td class="py-3 px-4 text-right">
-                                <button type="button" onclick="window.GaebTenderController.openDraft(${d.id}, ${importInfo.id})" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-sm hover:shadow transition-all inline-flex items-center gap-1">
-                                    <span>Öffnen</span>
-                                    <span class="material-symbols-outlined text-[14px]">edit</span>
-                                </button>
+                                <div class="inline-flex items-center gap-1 justify-end">
+                                    <button type="button" onclick="window.GaebTenderController.openDraft(${d.id}, ${importInfo.id})" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-sm hover:shadow transition-all inline-flex items-center gap-1">
+                                        <span>Öffnen</span>
+                                        <span class="material-symbols-outlined text-[14px]">edit</span>
+                                    </button>
+                                    <button type="button" onclick="window.GaebTenderController.exportX84(${d.id})" title="Als GAEB DA XML X84 exportieren" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm hover:shadow transition-all inline-flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-[14px]">file_download</span>
+                                        <span>X84</span>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                     `;
@@ -272,6 +278,38 @@
                     </option>
                 `).join('');
             }
+
+            const exportBtnLabel = document.getElementById('gt-export-btn-label');
+            if (exportBtnLabel) {
+                const v = state.draft?.version || state.stats?.version || 1;
+                exportBtnLabel.textContent = `Als GAEB X84 exportieren (v${v})`;
+            }
+        }
+
+        /**
+         * Zeigt eine Infobox zum Status des X84-Exports an
+         */
+        showExportInfo(msg, isError = false) {
+            const box = document.getElementById('gt-export-info-box');
+            const textEl = document.getElementById('gt-export-info-text');
+            if (!box || !textEl) return;
+
+            textEl.textContent = msg;
+            const iconEl = box.querySelector('.material-symbols-outlined');
+            if (isError) {
+                box.className = 'mx-6 mt-3 p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-xs flex items-center justify-between gap-2 shrink-0';
+                if (iconEl) {
+                    iconEl.textContent = 'error';
+                    iconEl.className = 'material-symbols-outlined text-red-600 text-[20px]';
+                }
+            } else {
+                box.className = 'mx-6 mt-3 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs flex items-center justify-between gap-2 shrink-0';
+                if (iconEl) {
+                    iconEl.textContent = 'check_circle';
+                    iconEl.className = 'material-symbols-outlined text-emerald-600 text-[20px]';
+                }
+            }
+            box.classList.remove('hidden');
         }
 
         /**

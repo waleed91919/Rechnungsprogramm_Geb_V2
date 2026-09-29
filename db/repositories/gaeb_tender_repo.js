@@ -442,8 +442,13 @@ function loadTenderDraft(db, draftId) {
     return {
         draft,
         tree,
+        categories: tree,
+        hierarchy: tree,
+        sections: tree,
         items,
         projectInfo: loadedOriginal.projectInfo,
+        rawXml: loadedOriginal.rawXml,
+        hasOriginalBytes: loadedOriginal.hasOriginalBytes,
         stats
     };
 }
@@ -575,6 +580,33 @@ function deleteTenderDraft(db, draftId) {
 }
 
 /**
+ * Lädt und validiert einen Tender-Entwurf für den X84-Export.
+ * 
+ * @param {Object} db - better-sqlite3 Instanz
+ * @param {number} draftId - ID aus gaeb_tender_drafts
+ * @param {Object} [options] - Optionen
+ * @returns {Object} { draftData, validation, model }
+ */
+function getTenderDraftForExport(db, draftId, options = {}) {
+    if (!db) throw new Error('Datenbankverbindung erforderlich.');
+    if (!draftId) throw new Error('Draft-ID erforderlich.');
+
+    const gaebX84 = require('../../js/gaeb_x84');
+    const validation = gaebX84.validateDraftForExport(db, draftId, options);
+    const draftData = loadTenderDraft(db, draftId);
+    let model = null;
+    if (validation.valid) {
+        model = gaebX84.mapDraftToX84Model(db, draftId, options);
+    }
+
+    return {
+        draftData,
+        validation,
+        model
+    };
+}
+
+/**
  * Factory-Funktion zur Integration in das zentrale Repositories-Setup.
  * @param {Object} deps - Abhängigkeiten ({ db, dbAPI })
  */
@@ -586,7 +618,8 @@ function createGaebTenderRepo(deps) {
         loadTenderDraft: (draftId) => loadTenderDraft(db, draftId),
         cloneTenderDraft: (draftId, options) => cloneTenderDraft(db, draftId, options),
         listTenderDrafts: (importId) => listTenderDrafts(db, importId),
-        deleteTenderDraft: (draftId) => deleteTenderDraft(db, draftId)
+        deleteTenderDraft: (draftId) => deleteTenderDraft(db, draftId),
+        getTenderDraftForExport: (draftId, options) => getTenderDraftForExport(db, draftId, options)
     };
 }
 
@@ -597,5 +630,7 @@ module.exports = {
     cloneTenderDraft,
     listTenderDrafts,
     deleteTenderDraft,
+    getTenderDraftForExport,
     createGaebTenderRepo
 };
+

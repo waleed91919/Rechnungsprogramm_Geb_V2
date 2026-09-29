@@ -168,6 +168,17 @@
 
         <!-- Ansicht 3: Editor (Split Screen: Links Baum, Rechts Details & Bepreisung) -->
         <div id="gt-view-editor" class="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <!-- Export Status / Info Box -->
+            <div id="gt-export-info-box" class="hidden mx-6 mt-3 p-3 bg-indigo-50 border border-indigo-200 text-indigo-800 rounded-xl text-xs flex items-center justify-between gap-2 shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-indigo-600 text-[20px]">check_circle</span>
+                    <span id="gt-export-info-text">X84-Datei erfolgreich exportiert.</span>
+                </div>
+                <button type="button" onclick="document.getElementById('gt-export-info-box').classList.add('hidden')" class="text-indigo-500 hover:text-indigo-800 p-0.5 rounded">
+                    <span class="material-symbols-outlined text-[16px]">close</span>
+                </button>
+            </div>
+
             <div class="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden bg-slate-100/50">
                 
                 <!-- Linker Bereich: BoQCtgy-Baum -->
@@ -389,11 +400,16 @@
                     <button type="button" onclick="window.GaebTenderController.closeModal()" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-50 shadow-sm transition-colors">
                         Schließen
                     </button>
-                    <button type="button" id="gt-btn-save-draft" onclick="window.GaebTenderController.saveDraft()" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow hover:shadow-md flex items-center gap-1.5 transition-all">
+                    <button type="button" id="gt-btn-save-draft" onclick="window.GaebTenderController.saveDraft()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow hover:shadow-md flex items-center gap-1.5 transition-all">
                         <span class="material-symbols-outlined text-[16px]">save</span>
                         <span>Entwurf speichern</span>
                     </button>
+                    <button type="button" id="gt-btn-export-x84" onclick="window.GaebTenderController.exportX84()" title="Als GAEB DA XML X84 Angebotsdatei exportieren" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow hover:shadow-md flex items-center gap-1.5 transition-all">
+                        <span class="material-symbols-outlined text-[16px]">file_download</span>
+                        <span id="gt-export-btn-label">Als GAEB X84 exportieren</span>
+                    </button>
                 </div>
+
             </div>
         </div>
 
