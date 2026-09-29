@@ -88,9 +88,10 @@ function saveX83Import(db, parsedData, options = {}) {
             : (typeof options.rawContent === 'string' ? options.rawContent : null));
 
     if (providedBuffer && providedXml !== null) {
-        const textFromBuf = providedBuffer.toString('utf-8').replace(/^\uFEFF/, '');
-        const textFromXml = providedXml.replace(/^\uFEFF/, '');
-        if (textFromBuf.trim() !== textFromXml.trim()) {
+        const textFromBuf = providedBuffer.toString('utf-8');
+        const textFromBufNoBom = textFromBuf.replace(/^\uFEFF/, '');
+        const textFromXmlNoBom = providedXml.replace(/^\uFEFF/, '');
+        if (textFromBufNoBom !== textFromXmlNoBom) {
             throw new Error('Konsistenzfehler: rawBytes und rawXml stimmen inhaltlich nicht überein.');
         }
     }

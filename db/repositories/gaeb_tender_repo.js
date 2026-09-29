@@ -7,6 +7,7 @@
  */
 
 const { loadX83Import } = require('./gaeb_repository');
+const { calculateDraftCounts } = require('../schema/gaeb_schema');
 
 /**
  * Erstellt einen neuen Tender-Entwurf für einen importierten X83-Datensatz.
@@ -248,37 +249,8 @@ function saveTenderDraft(db, draftId, draftData = {}) {
             upsertBireqStmt.run(draftId, bireqId, answerVal);
         }
 
-        // 3. Zähler und Summen ermitteln
-        // Unpriced count: Alle bepreisbaren Positionen ohne gültigen unit_price
-        const unpricedRow = db.prepare(`
-            SELECT COUNT(i.id) AS cnt 
-            FROM gaeb_items i
-            LEFT JOIN gaeb_tender_item_prices p ON p.gaeb_item_id = i.id AND p.draft_id = ?
-            WHERE i.import_id = ? AND i.is_hinweistext = 0 AND (p.unit_price IS NULL)
-        `).get(draftId, importId);
-        const unpricedCount = unpricedRow ? unpricedRow.cnt : 0;
-
-        // Missing BiReq count: Alle BiReqs ohne ausgefüllte Antwort
-        const missingBireqRow = db.prepare(`
-            SELECT COUNT(b.id) AS cnt
-            FROM gaeb_item_bireq b
-            JOIN gaeb_items i ON b.item_id = i.id
-            LEFT JOIN gaeb_tender_bireq_answers a ON a.gaeb_bireq_id = b.id AND a.draft_id = ?
-            WHERE i.import_id = ? AND (a.answer_value IS NULL OR TRIM(a.answer_value) = '')
-        `).get(draftId, importId);
-        const missingBireqCount = missingBireqRow ? missingBireqRow.cnt : 0;
-
-        // Unresolved QtyTBD count: Positionen mit in_total = 1, bei denen Menge noch unbestimmt ist
-        const qtyTbdRow = db.prepare(`
-            SELECT COUNT(i.id) AS cnt
-            FROM gaeb_items i
-            LEFT JOIN gaeb_tender_item_prices p ON p.gaeb_item_id = i.id AND p.draft_id = ?
-            WHERE i.import_id = ? 
-              AND i.is_hinweistext = 0 
-              AND COALESCE(p.in_total, i.in_endsumme_enthalten) = 1
-              AND (i.is_qty_tbd = 1 OR i.menge IS NULL)
-        `).get(draftId, importId);
-        const unresolvedQtyTbdCount = qtyTbdRow ? qtyTbdRow.cnt : 0;
+        // 3. Zähler und Summen ermitteln (einheitliche Zähllogik mit Migration geteilt)
+        const { unresolvedQtyTbdCount, unpricedCount, missingBireqCount } = calculateDraftCounts(db, draftId, importId);
 
         // Summen berechnen: Berücksichtigt nur in_total === 1 mit gültigem totalPrice
         const sumsRow = db.prepare(`

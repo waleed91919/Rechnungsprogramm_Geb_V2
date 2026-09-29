@@ -1345,6 +1345,12 @@ test('Test 10 (Erweiterung): Migration einer Altdatenbank mit Duplikaten bei sou
                 value TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS dokumente (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type TEXT NOT NULL,
+                nr TEXT NOT NULL
+            );
+
             CREATE TABLE projekte (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
@@ -2043,6 +2049,11 @@ test('Test 15: Fresh DB & Legacy Upgraded DB - Integrität, Datenmigration und P
     try {
         legacyDb.exec(`
             CREATE TABLE einstellungen (key TEXT PRIMARY KEY, value TEXT);
+            CREATE TABLE IF NOT EXISTS dokumente (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type TEXT NOT NULL,
+                nr TEXT NOT NULL
+            );
             CREATE TABLE projekte (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,

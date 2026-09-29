@@ -1,16 +1,16 @@
 # GAEB X83 Import & Unabhängige Validierung: Prüf- und Fortschrittsbericht
 
 **Datum:** 29. September 2026  
-**Branch:** `review/gaeb-tender-pricing-hardening` (abgezweigt von `review/gaeb-tender-pricing-ui` auf Commit `7c829d9`)  
+**Branch:** `review/gaeb-tender-final-integrity` (abgezweigt von `review/gaeb-tender-pricing-hardening` auf Commit `fcf5f67e2e628280940f07df71890609e2dd980b`)  
 **Bezugsdokument:** `liesen.txt`  
-**Status:** Gehärtete Bepreisungsphase, revisionssicheres Entwurfsdatenmodell und modulares Tender-UI implementiert und durch automatisierte Regressionstests verifiziert  
+**Status:** Gehärtete Bepreisungsphase, revisionssicheres Entwurfsdatenmodell, strikte Byte-Konsistenzprüfung (rawBytes vs. rawXml), Altdaten-Reconciliation für QtyTBD-Entwürfe und verifizierte SQLite-Trigger/Unique-Index-Integrität vollständig implementiert und durch automatisierte Regressionstests verifiziert  
 **Testsuites:**
-- `python tests/validate_xsd.py` & `python tests/validate_xsd.py --self-test`
-- `node --test tests/gaeb_tender_pricing.test.js` (16 Tests in 7 Suites)
+- `python tests/validate_xsd.py` & `python tests/validate_xsd.py --self-test` (Erfolgreich, 0 Schema-Fehler)
+- `node --test tests/gaeb_tender_pricing.test.js` (25 Tests in 8 Suites inkl. 8.A, 8.B, 8.C)
 - `node --test tests/gaeb_x83_persistence.test.js` (23 Tests in 9 Suites)
 - `node --test tests/gaeb_x83_import_audit.test.js` (19 Tests)
 - `node --test tests/gaeb_validation.test.js` (6 Tests)
-- `node --test tests/angebot_lifecycle.test.js` (1 Test)
+- `node --test tests/angebot_lifecycle.test.js` (1 Test / 17 Subtests)
 - `node --test tests/angebot_ui_workflow.test.js` (1 Test)
 - `node --test tests/angebot_true_ui_and_pdf.test.js` (1 Test)
 - `node ./node_modules/electron/cli.js tests/test_electron_runner.js` (E2E Chromium DOM Testfall 4c)  
@@ -129,14 +129,15 @@ Die Weiterentwicklung erfolgte streng modular und ohne Code-Verschiebung in `mai
 
 | Prüfschritt / Testsuite | Befehl | Ergebnis | Dauer |
 | :--- | :--- | :---: | :---: |
-| Versionierte XSD-Prüfung | `python tests/validate_xsd.py` | 100% OK (Exit 0) | ~0.5s |
-| Validierungs-Selbsttest | `python tests/validate_xsd.py --self-test` | 100% OK (Exit 0) | ~0.3s |
-| GAEB X83 Persistenz & Roundtrip (14 Tests) | `node --test tests/gaeb_x83_persistence.test.js` | 14/14 Pass (Exit 0) | ~1.3s |
-| X83 Import Audit (19 Tests) | `node --test tests/gaeb_x83_import_audit.test.js` | 19/19 Pass (Exit 0) | ~2.5s |
-| GAEB DA XML 3.3 Export/Validierung | `node --test tests/gaeb_validation.test.js` | 6/6 Pass (Exit 0) | ~1.9s |
-| Angebots-Lebenszyklus | `node --test tests/angebot_lifecycle.test.js` | 1/1 Pass (Exit 0) | ~12.5s |
+| Versionierte XSD-Prüfung | `python tests/validate_xsd.py` | 100% OK (0 Fehler, Exit 0) | ~0.5s |
+| Validierungs-Selbsttest | `python tests/validate_xsd.py --self-test` | 100% OK (0 Fehler, Exit 0) | ~0.3s |
+| GAEB Tender Bepreisung & Integrität (25 Tests in 8 Suites) | `node --test tests/gaeb_tender_pricing.test.js` | 25/25 Pass (Exit 0) | ~1.6s |
+| GAEB X83 Persistenz & Roundtrip (23 Tests in 9 Suites) | `node --test tests/gaeb_x83_persistence.test.js` | 23/23 Pass (Exit 0) | ~1.6s |
+| X83 Import Audit (19 Tests) | `node --test tests/gaeb_x83_import_audit.test.js` | 19/19 Pass (Exit 0) | ~0.7s |
+| GAEB DA XML 3.3 Export/Validierung (6 Tests) | `node --test tests/gaeb_validation.test.js` | 6/6 Pass (Exit 0) | ~2.3s |
+| Angebots-Lebenszyklus (17 Subtests) | `node --test tests/angebot_lifecycle.test.js` | 1/1 Pass (Exit 0) | ~11.4s |
 | Angebots-UI-Workflow | `node --test tests/angebot_ui_workflow.test.js` | 1/1 Pass (Exit 0) | ~0.6s |
-| Electron DOM & PDF-Workflow | `node --test tests/angebot_true_ui_and_pdf.test.js` | 1/1 Pass (Exit 0) | ~3.8s |
+| Electron DOM & PDF-Workflow | `node --test tests/angebot_true_ui_and_pdf.test.js` | 1/1 Pass (Exit 0) | ~5.0s |
 
 ---
 
@@ -354,7 +355,7 @@ Das Tender-Repository kapselt die gesamte Geschäftslogik für Bepreisungen:
   - Setzt `angebot_id` zwingend auf `NULL`, um eine unbeabsichtigte Kopplung an offizielle Belege zu unterbinden.
   - Weist die nächste freie Versionsnummer über die Datenbank zu.
 - **`saveX83Import(db, parsedData, options)` (in `gaeb_repository.js`):**
-  - **BOM-sichere Konsistenzprüfung:** Bei Übergabe von `rawBytes` und `rawXml` werden beide als UTF-8 ohne BOM (`replace(/^\uFEFF/, '').trim()`) verglichen. Dies verhindert Fehlalarme bei korrekten UTF-8-Dateien mit BOM, schützt jedoch bit-genau vor inhaltlichen Abweichungen. Die Original-Bytes im BLOB-Feld `raw_bytes` bleiben unberührt.
+  - **Strikte Konsistenzprüfung (rawBytes vs. rawXml):** Bei Übergabe von `rawBytes` (Buffer) und `rawXml` (String) werden beide als UTF-8 decodiert und strikt Zeichen für Zeichen verglichen. `.trim()` und Whitespace-/Zeilenumbruch-Normalisierungen wurden vollständig eliminiert. Führende oder nachgestellte Whitespaces, Newlines oder CRLF/LF-Diskrepanzen führen zur harten Ablehnung. Zulässig ist ausschließlich das optionale führende UTF-8 Byte Order Mark (`\uFEFF`), welches beim Decodieren des binären Puffers auftreten kann. Die unveränderten Original-Bytes bleiben bitgenau im BLOB-Feld `raw_bytes` erhalten, Hash und Dateigröße werden direkt aus dem binären Puffer berechnet.
 - **`listTenderDrafts(db, importId)` & `deleteTenderDraft(db, draftId)`:**
   - Auflistung aller Entwürfe mit Fortschritts- und Summenstatistiken sowie kaskadierendes Löschen ohne Beeinträchtigung des Basiskatalogs.
 
@@ -398,11 +399,11 @@ Die Benutzeroberfläche wurde nach dem MVC-Muster modular strukturiert und um ei
 - **`js/gaeb_tender/tender_controller.js`:** Event-Handling, Navigation, Validierung von `importId` und `draftId`, Warnung bei ungespeicherten Daten.
 - **Kompilierung:** Das Modal wurde über `scripts/sync_modals.js` in `js/modal-loader.js` kompiliert.
 
-### 8.5 Testverifikation der Bepreisungsphase
+### 8.5 Testverifikation der Bepreisungsphase & Integritätshärtung
 
 Alle Funktionen werden durch automatisierte Testsuites auf Datenbank-, Repository- und Chromium-DOM-Ebene abgesichert:
 
-1. **Repository- & SQLite-Testsuite (`tests/gaeb_tender_pricing.test.js` - 16 Tests in 7 Suites):**
+1. **Repository- & SQLite-Testsuite (`tests/gaeb_tender_pricing.test.js` - 25 Tests in 8 Suites):**
    - `1.1 SHA-256 Konsistenzprüfung:` Verifiziert, dass inhaltliche Diskrepanzen zwischen `rawBytes` und `rawXml` hart abgelehnt werden.
    - `1.2 Identischer Inhalt:` Verifiziert, dass übereinstimmende Daten anstandslos akzeptiert werden.
    - `1.3 Native Trigger-Typsicherheit:` Verifiziert, dass `gaeb_import_angebote` Rechnungs-IDs auf DB-Ebene abweist.
@@ -419,6 +420,25 @@ Alle Funktionen werden durch automatisierte Testsuites auf Datenbank-, Repositor
    - `7.4 Versionierungs-Integrität & Unique Constraint:` Nachweis der automatischen `MAX(version) + 1`-Vergabe und des Scheiterns doppelter Versionsinserts am UNIQUE-Constraint.
    - `7.5 Datenbank-Trigger Typ-Schutz:` Nachweis, dass `trg_prevent_type_change_linked_gaeb_angebot` das Ändern des Dokumenttyps verknüpfter Angebote auf `rechnung` blockiert, während unverknüpfte Angebote und Inhaltsupdates erlaubt bleiben.
    - `7.6 BOM-Konsistenzprüfung:` Nachweis, dass UTF-8-Dateien mit BOM (`\uFEFF`) korrekt erkannt und gespeichert werden, während echte inhaltliche Abweichungen zuverlässig abgelehnt werden.
+   - **Suite 8: Spezifische Härtungsanforderungen (Branch `review/gaeb-tender-final-integrity`):**
+     - `8.A.1 Exakte Übereinstimmung:` Buffer und XML-String ohne BOM stimmen überein -> Import erfolgreich.
+     - `8.A.2 UTF-8 BOM Toleranz:` Buffer mit UTF-8 BOM (`0xEF, 0xBB, 0xBF`) und decodierter XML-String stimmen überein -> Import erfolgreich.
+     - `8.A.3 Whitespace-Diskrepanz-Ablehnung:` Führende oder nachgestellte Leerzeichen/Zeilenumbrüche im XML-String werden strikt abgelehnt (kein `.trim()`-Verschleiern!).
+     - `8.A.4 CRLF vs. LF Ablehnung:` Zeilenumbruchsunterschiede zwischen Buffer (CRLF) und XML (LF) werden strikt abgelehnt.
+     - `8.A.5 Inhaltsunterschied & BLOB-Roundtrip:` Inhaltlich unterschiedlicher XML-Text wird abgelehnt; `getImportOriginalBuffer` liefert bitgenau denselben Puffer inklusive BOM und CRLF zurück.
+     - `8.B.1 Altdatenbank-Migration & QtyTBD-Reconciliation:` Simulation einer SQLite-Altdatenbank vor Einführung von `unresolved_qty_tbd_count`. Automatische Migration via `runGaebMigrations(db)`:
+       - Entwurf 1 (mit QtyTBD) wird deterministisch von `VOLLSTAENDIG_BEPREIST` auf `IN_BEARBEITUNG` herabgestuft und `unresolved_qty_tbd_count = 1` gesetzt.
+       - Entwurf 2 (vollständig bepreist ohne QtyTBD) bleibt auf `VOLLSTAENDIG_BEPREIST` mit `unresolved_qty_tbd_count = 0`.
+       - Entwurf 3 (`status = 'VERWORFEN'`) bleibt strikt `VERWORFEN`.
+       - Persistenzprüfung nach DB-Schließen und Wiedereröffnung: Werte und Status bleiben exakt erhalten.
+       - Idempotenzprüfung: Erneute Migration verändert weder Zähler noch Status oder Nutzerdaten.
+     - `8.C.1 Trigger- & Index-Verifikation in sqlite_master:` Verifiziert das tatsächliche Vorhandensein aller 5 Trigger (`trg_validate_gaeb_import_angebot_type`, `trg_validate_gaeb_import_angebot_type_update`, `trg_validate_gaeb_tender_draft_angebot_type`, `trg_validate_gaeb_tender_draft_angebot_type_update`, `trg_prevent_type_change_linked_gaeb_angebot`) sowie des Unique-Index `idx_gaeb_tender_drafts_import_version`.
+     - `8.C.2 Direkte SQL-Integritätsprüfungen:`
+       - Verknüpfung einer Rechnung in `gaeb_import_angebote` schlägt fehl (Trigger `trg_validate_gaeb_import_angebot_type`).
+       - Verknüpfung einer Rechnung in `gaeb_tender_drafts.angebot_id` schlägt fehl (Trigger `trg_validate_gaeb_tender_draft_angebot_type`).
+       - Typänderung eines verknüpften Angebots von `angebot` auf `rechnung` wird blockiert (Trigger `trg_prevent_type_change_linked_gaeb_angebot`).
+       - Unverknüpftes Angebot kann regulär modifiziert werden.
+     - `8.C.3 Negativtest für Schema-Prüfung:` Fehlende Tabelle `dokumente` führt zu explizitem Migrationsabbruch mit klarer Fehlermeldung (kein stiller `catch`).
 
 2. **Electron Chromium E2E-DOM-Testsuite (`tests/test_electron_runner.js` / Testfall 4c):**
    - Öffnen des `gaeb-tender-modal` in echter Electron-Laufzeit.

@@ -80,7 +80,7 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
 const Database = require('better-sqlite3');
 const GAEBEngine = require('../js/gaeb');
 const { createSchema } = require('../schema');
-const { saveX83Import, loadX83Import, listX83Imports, linkImportToAngebot } = require('../db/repositories/gaeb_repository');
+const { saveX83Import, loadX83Import, listX83Imports, linkImportToAngebot, getImportOriginalBuffer } = require('../db/repositories/gaeb_repository');
 const {
     createTenderDraft,
     saveTenderDraft,
@@ -89,6 +89,12 @@ const {
     listTenderDrafts,
     deleteTenderDraft
 } = require('../db/repositories/gaeb_tender_repo');
+const {
+    initGaebSchema,
+    runGaebMigrations,
+    REQUIRED_GAEB_TRIGGERS,
+    REQUIRED_GAEB_INDICES
+} = require('../db/schema/gaeb_schema');
 
 const FIXTURES_DIR = path.join(__dirname, 'fixtures', 'gaeb_x83');
 
@@ -1015,6 +1021,491 @@ describe('GAEB Tender Bepreisung & Entwurfsverwaltung', () => {
             } finally {
                 cleanupDb(db, dbPath);
             }
+        });
+    });
+
+    // =========================================================================
+    // 8. Finale Integritätsprüfung (liesen.txt review/gaeb-tender-final-integrity)
+    // =========================================================================
+    describe('8. Finale Integritätsprüfung (liesen.txt Anforderungen A, B, C)', () => {
+
+        // ---------------------------------------------------------------------
+        // A. Präzise XML-Vergleichslogik mit den Original-Bytes (rawBytes vs rawXml)
+        // ---------------------------------------------------------------------
+        describe('8.A XML-Vergleichslogik mit Original-Bytes', () => {
+
+            test('8.A.1 Buffer und XML-Text sind exakt identisch -> Bestanden', () => {
+                const { db, dbPath } = createTempDb();
+                try {
+                    const xml = loadFixture('valid_schema_reference.x83');
+                    const buf = Buffer.from(xml, 'utf8');
+                    const parsed = GAEBEngine.parseGAEBXML(xml);
+
+                    const res = saveX83Import(db, parsed, {
+                        fileName: 'case1_exact.x83',
+                        rawBytes: buf,
+                        rawXml: xml
+                    });
+                    assert.ok(res.importId > 0);
+                    assert.strictEqual(res.hasOriginalBytes, true);
+                } finally {
+                    cleanupDb(db, dbPath);
+                }
+            });
+
+            test('8.A.2 Buffer beginnt mit UTF-8 BOM, XML-Text ist ohne BOM -> Bestanden', () => {
+                const { db, dbPath } = createTempDb();
+                try {
+                    const xml = loadFixture('valid_schema_reference.x83');
+                    const utf8Bom = Buffer.from([0xEF, 0xBB, 0xBF]);
+                    const bufWithBom = Buffer.concat([utf8Bom, Buffer.from(xml, 'utf8')]);
+                    const parsed = GAEBEngine.parseGAEBXML(xml);
+
+                    const res = saveX83Import(db, parsed, {
+                        fileName: 'case2_bom.x83',
+                        rawBytes: bufWithBom,
+                        rawXml: xml
+                    });
+                    assert.ok(res.importId > 0);
+                    assert.strictEqual(res.hasOriginalBytes, true);
+
+                    const retrieved = getImportOriginalBuffer(db, res.importId);
+                    assert.strictEqual(retrieved[0], 0xEF);
+                    assert.strictEqual(retrieved[1], 0xBB);
+                    assert.strictEqual(retrieved[2], 0xBF);
+                } finally {
+                    cleanupDb(db, dbPath);
+                }
+            });
+
+            test('8.A.3 Buffer und XML-Text unterscheiden sich in Leerzeichen oder Zeilenumbruch -> Hart abgewiesen (Konsistenzfehler)', () => {
+                const { db, dbPath } = createTempDb();
+                try {
+                    const xml = loadFixture('valid_schema_reference.x83');
+                    const parsed = GAEBEngine.parseGAEBXML(xml);
+
+                    // Fall 3a: Führendes Leerzeichen im Buffer
+                    assert.throws(() => {
+                        saveX83Import(db, parsed, {
+                            fileName: 'leading_space.x83',
+                            rawBytes: Buffer.from(' ' + xml, 'utf8'),
+                            rawXml: xml
+                        });
+                    }, /Konsistenzfehler: rawBytes und rawXml stimmen inhaltlich nicht überein/);
+
+                    // Fall 3b: Nachfolgendes Leerzeichen im Buffer
+                    assert.throws(() => {
+                        saveX83Import(db, parsed, {
+                            fileName: 'trailing_space.x83',
+                            rawBytes: Buffer.from(xml + ' ', 'utf8'),
+                            rawXml: xml
+                        });
+                    }, /Konsistenzfehler: rawBytes und rawXml stimmen inhaltlich nicht überein/);
+
+                    // Fall 3c: Führender Zeilenumbruch im Buffer
+                    assert.throws(() => {
+                        saveX83Import(db, parsed, {
+                            fileName: 'leading_newline.x83',
+                            rawBytes: Buffer.from('\n' + xml, 'utf8'),
+                            rawXml: xml
+                        });
+                    }, /Konsistenzfehler: rawBytes und rawXml stimmen inhaltlich nicht überein/);
+
+                    // Fall 3d: Nachfolgender Zeilenumbruch im Buffer
+                    assert.throws(() => {
+                        saveX83Import(db, parsed, {
+                            fileName: 'trailing_newline.x83',
+                            rawBytes: Buffer.from(xml + '\n', 'utf8'),
+                            rawXml: xml
+                        });
+                    }, /Konsistenzfehler: rawBytes und rawXml stimmen inhaltlich nicht überein/);
+
+                    // Fall 3e: Führendes Leerzeichen in rawXml gegenüber Buffer
+                    assert.throws(() => {
+                        saveX83Import(db, parsed, {
+                            fileName: 'xml_leading_space.x83',
+                            rawBytes: Buffer.from(xml, 'utf8'),
+                            rawXml: ' ' + xml
+                        });
+                    }, /Konsistenzfehler: rawBytes und rawXml stimmen inhaltlich nicht überein/);
+
+                    // Fall 3f: Zeilenumbruch-Diskrepanz (CRLF vs LF darf nicht stillschweigend normalisiert werden)
+                    const lfXml = xml.replace(/\r\n/g, '\n');
+                    const crlfXml = lfXml.replace(/\n/g, '\r\n');
+                    assert.throws(() => {
+                        saveX83Import(db, parsed, {
+                            fileName: 'crlf_mismatch.x83',
+                            rawBytes: Buffer.from(crlfXml, 'utf8'),
+                            rawXml: lfXml
+                        });
+                    }, /Konsistenzfehler: rawBytes und rawXml stimmen inhaltlich nicht überein/);
+                } finally {
+                    cleanupDb(db, dbPath);
+                }
+            });
+
+            test('8.A.4 Buffer und XML-Text unterscheiden sich im XML-Inhalt -> Hart abgewiesen (Konsistenzfehler)', () => {
+                const { db, dbPath } = createTempDb();
+                try {
+                    const xml = loadFixture('valid_schema_reference.x83');
+                    const parsed = GAEBEngine.parseGAEBXML(xml);
+                    const alteredXml = xml.replace('<Name>Verwaltungsbau NORD</Name>', '<Name>Manipuliertes Projekt</Name>');
+                    assert.notStrictEqual(alteredXml, xml, 'Test-Fixture muss manipuliert worden sein');
+
+                    assert.throws(() => {
+                        saveX83Import(db, parsed, {
+                            fileName: 'content_mismatch.x83',
+                            rawBytes: Buffer.from(xml, 'utf8'),
+                            rawXml: alteredXml
+                        });
+                    }, /Konsistenzfehler: rawBytes und rawXml stimmen inhaltlich nicht überein/);
+                } finally {
+                    cleanupDb(db, dbPath);
+                }
+            });
+
+            test('8.A.5 getImportOriginalBuffer liefert byte-identischen Puffer inkl. BOM und CRLF zurueck', () => {
+                const { db, dbPath } = createTempDb();
+                try {
+                    const xml = '<?xml version="1.0" encoding="utf-8"?>\r\n<GAEB xmlns="http://www.gaeb.de/GAEB_DA_XML/DA83/3.3">\r\n  <PrjInfo><NamePrj>BOM CRLF Test</NamePrj></PrjInfo>\r\n</GAEB>\r\n';
+                    const utf8Bom = Buffer.from([0xEF, 0xBB, 0xBF]);
+                    const originalBuffer = Buffer.concat([utf8Bom, Buffer.from(xml, 'utf8')]);
+
+                    const parsed = GAEBEngine.parseGAEBXML(xml);
+                    const res = saveX83Import(db, parsed, {
+                        fileName: 'bom_crlf.x83',
+                        rawBytes: originalBuffer,
+                        rawXml: xml
+                    });
+
+                    const retrievedBuffer = getImportOriginalBuffer(db, res.importId);
+                    assert.ok(Buffer.isBuffer(retrievedBuffer), 'Muss ein Buffer sein');
+                    assert.strictEqual(retrievedBuffer.length, originalBuffer.length, 'Laenge muss exakt uebereinstimmen');
+                    assert.deepStrictEqual(retrievedBuffer, originalBuffer, 'Original-Bytes muessen 100% uebereinstimmen');
+                    assert.strictEqual(retrievedBuffer[0], 0xEF);
+                    assert.strictEqual(retrievedBuffer[1], 0xBB);
+                    assert.strictEqual(retrievedBuffer[2], 0xBF);
+                    assert.ok(retrievedBuffer.toString('utf8').includes('\r\n'), 'CRLF-Zeilenumbrueche muessen bitgenau erhalten bleiben');
+                } finally {
+                    cleanupDb(db, dbPath);
+                }
+            });
+        });
+
+        // ---------------------------------------------------------------------
+        // B. Bereinigung & Status-Aktualisierung von Altdaten-Entwürfen (QtyTBD)
+        // ---------------------------------------------------------------------
+        describe('8.B Bereinigung & Status-Aktualisierung von Altdaten-Entwürfen (QtyTBD)', () => {
+
+            test('8.B.1 Migration einer echten Altdatenbank ohne unresolved_qty_tbd_count korrigiert Entwurfsstatus und Zaehler', () => {
+                const dbPath = path.join(os.tmpdir(), `legacy_drafts_mig_test_${Date.now()}_${Math.random().toString(36).slice(2)}.sqlite`);
+                const legacyDb = new Database(dbPath);
+                legacyDb.pragma('foreign_keys = ON');
+
+                try {
+                    // Erstelle echte Altdatenbank:
+                    // gaeb_tender_drafts existiert OHNE unresolved_qty_tbd_count Spalte
+                    legacyDb.exec(`
+                        CREATE TABLE dokumente (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            type TEXT NOT NULL,
+                            nr TEXT NOT NULL,
+                            datum TEXT,
+                            status TEXT,
+                            netto REAL DEFAULT 0,
+                            steuer REAL DEFAULT 0,
+                            brutto REAL DEFAULT 0
+                        );
+                        CREATE TABLE gaeb_imports (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            file_name TEXT NOT NULL,
+                            gaeb_version TEXT DEFAULT '3.3',
+                            exchange_phase TEXT DEFAULT 'X83',
+                            project_name TEXT,
+                            currency TEXT DEFAULT 'EUR',
+                            file_hash TEXT NOT NULL,
+                            file_size INTEGER,
+                            raw_xml TEXT,
+                            imported_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                        );
+                        CREATE TABLE gaeb_items (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            import_id INTEGER NOT NULL REFERENCES gaeb_imports(id),
+                            category_id INTEGER,
+                            sort_index INTEGER NOT NULL,
+                            path_oz TEXT NOT NULL,
+                            item_type TEXT NOT NULL,
+                            short_text TEXT,
+                            menge REAL,
+                            is_qty_tbd INTEGER NOT NULL DEFAULT 0,
+                            einheit TEXT,
+                            preis REAL,
+                            gesamtpreis REAL,
+                            is_price_missing INTEGER NOT NULL DEFAULT 1,
+                            in_endsumme_enthalten INTEGER NOT NULL DEFAULT 1,
+                            is_hinweistext INTEGER NOT NULL DEFAULT 0
+                        );
+                        CREATE TABLE gaeb_item_bireq (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            item_id INTEGER NOT NULL REFERENCES gaeb_items(id),
+                            sort_index INTEGER NOT NULL,
+                            bireq_type TEXT,
+                            label TEXT,
+                            value TEXT
+                        );
+                        CREATE TABLE gaeb_tender_drafts (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            import_id INTEGER NOT NULL REFERENCES gaeb_imports(id),
+                            angebot_id INTEGER REFERENCES dokumente(id),
+                            version INTEGER NOT NULL DEFAULT 1,
+                            name TEXT NOT NULL,
+                            status TEXT NOT NULL DEFAULT 'IN_BEARBEITUNG',
+                            total_netto REAL DEFAULT 0,
+                            total_tax REAL DEFAULT 0,
+                            total_brutto REAL DEFAULT 0,
+                            unpriced_count INTEGER DEFAULT 0,
+                            missing_bireq_count INTEGER DEFAULT 0,
+                            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                        );
+                        CREATE TABLE gaeb_tender_item_prices (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            draft_id INTEGER NOT NULL REFERENCES gaeb_tender_drafts(id),
+                            gaeb_item_id INTEGER NOT NULL REFERENCES gaeb_items(id),
+                            unit_price REAL,
+                            is_zero_confirmed INTEGER NOT NULL DEFAULT 0,
+                            total_price REAL,
+                            tax_rate REAL DEFAULT 19.0,
+                            in_total INTEGER NOT NULL DEFAULT 1
+                        );
+                        CREATE TABLE gaeb_tender_bireq_answers (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            draft_id INTEGER NOT NULL REFERENCES gaeb_tender_drafts(id),
+                            gaeb_bireq_id INTEGER NOT NULL REFERENCES gaeb_item_bireq(id),
+                            answer_value TEXT NOT NULL
+                        );
+                    `);
+
+                    // Import anlegen
+                    legacyDb.prepare(`
+                        INSERT INTO gaeb_imports (id, file_name, file_hash, file_size, raw_xml)
+                        VALUES (1, 'legacy_tender.x83', 'hash_legacy_1', 1000, '<GAEB></GAEB>')
+                    `).run();
+
+                    // Position 1: QtyTBD = 1, menge = NULL, in_endsumme_enthalten = 1
+                    legacyDb.prepare(`
+                        INSERT INTO gaeb_items (id, import_id, sort_index, path_oz, item_type, menge, is_qty_tbd, in_endsumme_enthalten, is_hinweistext)
+                        VALUES (101, 1, 1, '01.01.001', 'Normal', NULL, 1, 1, 0)
+                    `).run();
+
+                    // Position 2: Normale Position ohne QtyTBD, menge = 10, in_endsumme_enthalten = 1
+                    legacyDb.prepare(`
+                        INSERT INTO gaeb_items (id, import_id, sort_index, path_oz, item_type, menge, is_qty_tbd, in_endsumme_enthalten, is_hinweistext)
+                        VALUES (102, 1, 2, '01.01.002', 'Normal', 10.0, 0, 1, 0)
+                    `).run();
+
+                    // Entwurf 1: status = 'VOLLSTAENDIG_BEPREIST', hat aber einbezogene QtyTBD-Position (101)
+                    legacyDb.prepare(`
+                        INSERT INTO gaeb_tender_drafts (id, import_id, version, name, status, unpriced_count, missing_bireq_count)
+                        VALUES (1, 1, 1, 'Entwurf 1 (Alt fälschlich vollstaendig)', 'VOLLSTAENDIG_BEPREIST', 0, 0)
+                    `).run();
+                    legacyDb.prepare(`
+                        INSERT INTO gaeb_tender_item_prices (draft_id, gaeb_item_id, unit_price, total_price, in_total)
+                        VALUES (1, 101, 75.0, NULL, 1),
+                               (1, 102, 100.0, 1000.0, 1)
+                    `).run();
+
+                    // Entwurf 2: status = 'VOLLSTAENDIG_BEPREIST', hat KEINE QtyTBD-Position (nur Position 102 ist in_total=1, Position 101 ist in_total=0)
+                    legacyDb.prepare(`
+                        INSERT INTO gaeb_tender_drafts (id, import_id, version, name, status, unpriced_count, missing_bireq_count)
+                        VALUES (2, 1, 2, 'Entwurf 2 (Echt vollstaendig)', 'VOLLSTAENDIG_BEPREIST', 0, 0)
+                    `).run();
+                    legacyDb.prepare(`
+                        INSERT INTO gaeb_tender_item_prices (draft_id, gaeb_item_id, unit_price, total_price, in_total)
+                        VALUES (2, 101, 75.0, NULL, 0),
+                               (2, 102, 100.0, 1000.0, 1)
+                    `).run();
+
+                    // Entwurf 3: status = 'VERWORFEN', hat einbezogene QtyTBD-Position (101)
+                    legacyDb.prepare(`
+                        INSERT INTO gaeb_tender_drafts (id, import_id, version, name, status, unpriced_count, missing_bireq_count)
+                        VALUES (3, 1, 3, 'Entwurf 3 (Verworfen)', 'VERWORFEN', 0, 0)
+                    `).run();
+                    legacyDb.prepare(`
+                        INSERT INTO gaeb_tender_item_prices (draft_id, gaeb_item_id, unit_price, total_price, in_total)
+                        VALUES (3, 101, 75.0, NULL, 1),
+                               (3, 102, 100.0, 1000.0, 1)
+                    `).run();
+
+                    // Führe Migration aus
+                    runGaebMigrations(legacyDb);
+
+                    // Schließe DB und öffne neu von Disk
+                    legacyDb.close();
+                    const dbReopened = new Database(dbPath);
+                    dbReopened.pragma('foreign_keys = ON');
+
+                    try {
+                        // Assertiere Entwurf 1:
+                        // unresolved_qty_tbd_count > 0 (genau 1) und status korrigiert auf 'IN_BEARBEITUNG'
+                        const d1 = dbReopened.prepare('SELECT id, name, status, unresolved_qty_tbd_count, unpriced_count, missing_bireq_count FROM gaeb_tender_drafts WHERE id = 1').get();
+                        assert.strictEqual(d1.unresolved_qty_tbd_count, 1, 'Entwurf 1 muss unresolved_qty_tbd_count = 1 haben');
+                        assert.strictEqual(d1.status, 'IN_BEARBEITUNG', 'Entwurf 1 muss von VOLLSTAENDIG_BEPREIST auf IN_BEARBEITUNG zurueckgestuft werden');
+
+                        // Assertiere Entwurf 2:
+                        // behält status = 'VOLLSTAENDIG_BEPREIST' und unresolved_qty_tbd_count = 0
+                        const d2 = dbReopened.prepare('SELECT id, name, status, unresolved_qty_tbd_count, unpriced_count, missing_bireq_count FROM gaeb_tender_drafts WHERE id = 2').get();
+                        assert.strictEqual(d2.unresolved_qty_tbd_count, 0, 'Entwurf 2 darf keine unresolved QtyTBDs haben');
+                        assert.strictEqual(d2.status, 'VOLLSTAENDIG_BEPREIST', 'Entwurf 2 muss VOLLSTAENDIG_BEPREIST bleiben');
+
+                        // Assertiere Entwurf 3:
+                        // behält status = 'VERWORFEN' (niemals reaktivieren!), hat aber unresolved_qty_tbd_count = 1
+                        const d3 = dbReopened.prepare('SELECT id, name, status, unresolved_qty_tbd_count, unpriced_count, missing_bireq_count FROM gaeb_tender_drafts WHERE id = 3').get();
+                        assert.strictEqual(d3.status, 'VERWORFEN', 'Entwurf 3 muss zwingend VERWORFEN bleiben');
+                        assert.strictEqual(d3.unresolved_qty_tbd_count, 1, 'Entwurf 3 hat berechneten unresolved_qty_tbd_count = 1');
+
+                        // Verifiziere Datenunversehrtheit:
+                        // Bestehende Preise, BiReqs und Items blieben 100% unberuehrt
+                        const pricesCount = dbReopened.prepare('SELECT COUNT(*) AS cnt FROM gaeb_tender_item_prices').get().cnt;
+                        assert.strictEqual(pricesCount, 6, 'Preise muessen unberuehrt bleiben');
+
+                        // Zweiter Durchlauf von runGaebMigrations(dbReopened) ist fehlerfrei und idempotent
+                        assert.doesNotThrow(() => {
+                            runGaebMigrations(dbReopened);
+                        });
+
+                        const d1After = dbReopened.prepare('SELECT status, unresolved_qty_tbd_count FROM gaeb_tender_drafts WHERE id = 1').get();
+                        const d2After = dbReopened.prepare('SELECT status, unresolved_qty_tbd_count FROM gaeb_tender_drafts WHERE id = 2').get();
+                        const d3After = dbReopened.prepare('SELECT status, unresolved_qty_tbd_count FROM gaeb_tender_drafts WHERE id = 3').get();
+
+                        assert.deepStrictEqual(d1After, { status: 'IN_BEARBEITUNG', unresolved_qty_tbd_count: 1 });
+                        assert.deepStrictEqual(d2After, { status: 'VOLLSTAENDIG_BEPREIST', unresolved_qty_tbd_count: 0 });
+                        assert.deepStrictEqual(d3After, { status: 'VERWORFEN', unresolved_qty_tbd_count: 1 });
+                    } finally {
+                        dbReopened.close();
+                    }
+                } finally {
+                    try {
+                        if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+                        const wal = `${dbPath}-wal`;
+                        const shm = `${dbPath}-shm`;
+                        if (fs.existsSync(wal)) fs.unlinkSync(wal);
+                        if (fs.existsSync(shm)) fs.unlinkSync(shm);
+                    } catch (_e) {}
+                }
+            });
+        });
+
+        // ---------------------------------------------------------------------
+        // C. Zuverlässige Installation und Verifikation der SQLite-Trigger
+        // ---------------------------------------------------------------------
+        describe('8.C Zuverlässige Installation und Verifikation der SQLite-Trigger', () => {
+
+            test('8.C.1 Alle 5 Trigger und der Unique-Index sind aktiv in sqlite_master registriert', () => {
+                const { db, dbPath } = createTempDb();
+                try {
+                    const triggers = db.prepare("SELECT name FROM sqlite_master WHERE type='trigger'").all().map(r => r.name);
+                    const triggerSet = new Set(triggers);
+
+                    for (const requiredTrg of REQUIRED_GAEB_TRIGGERS) {
+                        assert.ok(
+                            triggerSet.has(requiredTrg),
+                            `Trigger ${requiredTrg} muss in sqlite_master existieren`
+                        );
+                    }
+                    assert.strictEqual(REQUIRED_GAEB_TRIGGERS.length, 5);
+
+                    const indices = db.prepare("SELECT name FROM sqlite_master WHERE type='index'").all().map(r => r.name);
+                    const indexSet = new Set(indices);
+
+                    for (const requiredIdx of REQUIRED_GAEB_INDICES) {
+                        assert.ok(
+                            indexSet.has(requiredIdx),
+                            `Index ${requiredIdx} muss in sqlite_master existieren`
+                        );
+                    }
+                    assert.ok(indexSet.has('idx_gaeb_tender_drafts_import_version'));
+                } finally {
+                    cleanupDb(db, dbPath);
+                }
+            });
+
+            test('8.C.2 Direkte SQL-Integritätstests für alle Trigger (Angebot vs. Rechnung)', () => {
+                const { db, dbPath } = createTempDb();
+                try {
+                    const xml = loadFixture('valid_schema_reference.x83');
+                    const parsed = GAEBEngine.parseGAEBXML(xml);
+                    const imp = saveX83Import(db, parsed, { fileName: 'trigger_test.x83', rawXml: xml });
+                    const importId = imp.importId;
+
+                    // 1. Dokumente anlegen: 1 verknüpftes Angebot, 1 unverknüpftes Angebot, 1 Rechnung
+                    const linkedAngRes = db.prepare(`
+                        INSERT INTO dokumente (type, nr, datum, status, netto, steuer, brutto)
+                        VALUES ('angebot', 'ANG-TRG-LINKED', '2026-09-29', 'OFFEN', 100, 19, 119)
+                    `).run();
+                    const linkedAngebotId = linkedAngRes.lastInsertRowid;
+
+                    const unlinkedAngRes = db.prepare(`
+                        INSERT INTO dokumente (type, nr, datum, status, netto, steuer, brutto)
+                        VALUES ('angebot', 'ANG-TRG-FREE', '2026-09-29', 'OFFEN', 200, 38, 238)
+                    `).run();
+                    const unlinkedAngebotId = unlinkedAngRes.lastInsertRowid;
+
+                    const rechnungRes = db.prepare(`
+                        INSERT INTO dokumente (type, nr, datum, status, netto, steuer, brutto)
+                        VALUES ('rechnung', 'RE-TRG-001', '2026-09-29', 'OFFEN', 300, 57, 357)
+                    `).run();
+                    const rechnungId = rechnungRes.lastInsertRowid;
+
+                    // Verknüpfe linkedAngebotId
+                    createTenderDraft(db, importId, { angebotId: linkedAngebotId, version: 1 });
+
+                    // SQL-Test 1: UPDATE dokumente SET type = 'rechnung' WHERE id = linkedAngebotId -> scheitert durch Trigger
+                    assert.throws(() => {
+                        db.prepare("UPDATE dokumente SET type = 'rechnung' WHERE id = ?").run(linkedAngebotId);
+                    }, /Änderung des Dokumenttyps verweigert: Dieses Angebot ist mit einer GAEB-Ausschreibung verknüpft/);
+
+                    // SQL-Test 2: UPDATE dokumente SET type = 'rechnung' WHERE id = unlinkedAngebotId -> gelingt
+                    assert.doesNotThrow(() => {
+                        db.prepare("UPDATE dokumente SET type = 'rechnung' WHERE id = ?").run(unlinkedAngebotId);
+                    });
+                    const updatedUnlinked = db.prepare("SELECT type FROM dokumente WHERE id = ?").get(unlinkedAngebotId);
+                    assert.strictEqual(updatedUnlinked.type, 'rechnung');
+
+                    // SQL-Test 3: INSERT INTO gaeb_tender_drafts mit rechnungId -> scheitert durch Trigger
+                    assert.throws(() => {
+                        db.prepare(`
+                            INSERT INTO gaeb_tender_drafts (import_id, angebot_id, version, name)
+                            VALUES (?, ?, 99, 'Rechnung als Entwurfsangebot')
+                        `).run(importId, rechnungId);
+                    }, /Ungültige Verknüpfung: Das referenzierte Dokument im Entwurf muss vom Typ angebot sein/);
+
+                    // SQL-Test 4: INSERT INTO gaeb_import_angebote mit rechnungId -> scheitert durch Trigger
+                    assert.throws(() => {
+                        db.prepare(`
+                            INSERT INTO gaeb_import_angebote (import_id, angebot_id)
+                            VALUES (?, ?)
+                        `).run(importId, rechnungId);
+                    }, /Ungültige Verknüpfung: Das referenzierte Dokument muss vom Typ angebot sein/);
+                } finally {
+                    cleanupDb(db, dbPath);
+                }
+            });
+
+            test('8.C.3 Negativtest: initGaebSchema wirft harte Exception wenn dokumente-Tabelle fehlt (kein stilles Verschlucken)', () => {
+                const dbPath = path.join(os.tmpdir(), `no_dok_schema_test_${Date.now()}_${Math.random().toString(36).slice(2)}.sqlite`);
+                const nakedDb = new Database(dbPath);
+
+                try {
+                    // nakedDb hat KEINE dokumente-Tabelle
+                    assert.throws(() => {
+                        initGaebSchema(nakedDb);
+                    }, /Integritätsfehler: Tabelle "dokumente" existiert nicht/);
+                } finally {
+                    cleanupDb(nakedDb, dbPath);
+                }
+            });
         });
     });
 });
