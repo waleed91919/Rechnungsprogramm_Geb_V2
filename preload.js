@@ -228,6 +228,17 @@ contextBridge.exposeInMainWorld('api', {
 
     // --- Modale Komponenten-Lader (views/modals/) ---
     loadModalPartial: (modalName) => ipcRenderer.invoke('modals:loadPartial', modalName),
-    loadAllModalPartials: () => ipcRenderer.invoke('modals:loadAll')
+    loadAllModalPartials: () => ipcRenderer.invoke('modals:loadAll'),
+
+    // --- Universelle IPC-Invoke Methode & GAEB Ausschreibung / Bepreisung ---
+    invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
+    createTenderDraft: (importId, options) => ipcRenderer.invoke('gaeb:create-tender-draft', { importId, options }),
+    saveTenderDraft: (draftId, draftData) => ipcRenderer.invoke('gaeb:save-tender-draft', { draftId, draftData }),
+    loadTenderDraft: (draftId) => ipcRenderer.invoke('gaeb:load-tender-draft', draftId),
+    listTenderDrafts: (importId) => ipcRenderer.invoke('gaeb:list-tender-drafts', importId),
+    cloneTenderDraft: (draftId, options) => ipcRenderer.invoke('gaeb:clone-tender-draft', { draftId, options }),
+    deleteTenderDraft: (draftId) => ipcRenderer.invoke('gaeb:delete-tender-draft', draftId),
+    validateX84Export: (draftId) => ipcRenderer.invoke('gaeb:validate-x84-export', draftId),
+    exportX84: (draftId, options) => ipcRenderer.invoke('gaeb:export-x84', { draftId, options })
 });
 

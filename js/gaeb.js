@@ -1,15 +1,106 @@
 /**
- * gaeb.js - GAEB DA XML Parser & Exporter für GAEB Phasen X83 (Ausschreibung), X84 (Angebotsabgabe) & X89 (Rechnung)
+ * gaeb.js - Modularer Einstiegspunkt für GAEB DA XML (Phasen X83, X84 & X89)
+ * Bindet spezialisierte Module aus js/gaeb/ ein:
+ * - js/gaeb/xml_dom_utils.js: DOM-Parser & XML-Utilities
+ * - js/gaeb/item_reader.js: Kurz-/Langtext, Mengen, Einheiten, Null-sichere Preise
+ * - js/gaeb/item_types.js: Normal, Grund, Wahl, Bedarf, Pauschale, BiReq, UPComponents
+ * - js/gaeb/hierarchy_builder.js: BoQCtgy-Hierarchie & Ordnungszahlen
  */
+
+const XMLDomUtils = (typeof require === 'function') 
+    ? require('./gaeb/xml_dom_utils.js') 
+    : (typeof window !== 'undefined' ? window.GAEB_XMLDomUtils : null);
+const HierarchyBuilder = (typeof require === 'function') 
+    ? require('./gaeb/hierarchy_builder.js') 
+    : (typeof window !== 'undefined' ? window.GAEB_HierarchyBuilder : null);
+const ItemReader = (typeof require === 'function') 
+    ? require('./gaeb/item_reader.js') 
+    : (typeof window !== 'undefined' ? window.GAEB_ItemReader : null);
+const ItemTypes = (typeof require === 'function') 
+    ? require('./gaeb/item_types.js') 
+    : (typeof window !== 'undefined' ? window.GAEB_ItemTypes : null);
+
+const getXMLDomUtils = () => (typeof XMLDomUtils !== 'undefined' && XMLDomUtils) || 
+    (typeof require === 'function' ? require('./gaeb/xml_dom_utils.js') : (typeof window !== 'undefined' ? window.GAEB_XMLDomUtils : null));
+const getHierarchyBuilder = () => (typeof HierarchyBuilder !== 'undefined' && HierarchyBuilder) || 
+    (typeof require === 'function' ? require('./gaeb/hierarchy_builder.js') : (typeof window !== 'undefined' ? window.GAEB_HierarchyBuilder : null));
+const getItemReader = () => (typeof ItemReader !== 'undefined' && ItemReader) || 
+    (typeof require === 'function' ? require('./gaeb/item_reader.js') : (typeof window !== 'undefined' ? window.GAEB_ItemReader : null));
+const getItemTypes = () => (typeof ItemTypes !== 'undefined' && ItemTypes) || 
+    (typeof require === 'function' ? require('./gaeb/item_types.js') : (typeof window !== 'undefined' ? window.GAEB_ItemTypes : null));
+
 class GAEBEngine {
+    // Delegationsmethoden für Abwärtskompatibilität
+    static getDOMParser() {
+        const u = getXMLDomUtils();
+        return u ? u.getDOMParser() : new DOMParser();
+    }
+
+    static getDirectChildElements(parent, tagName = null) {
+        const u = getXMLDomUtils();
+        return u ? u.getDirectChildElements(parent, tagName) : [];
+    }
+
+    static findFirstDescendant(element, tagName) {
+        const u = getXMLDomUtils();
+        return u ? u.findFirstDescendant(element, tagName) : null;
+    }
+
+    static extractTextLines(containerElement) {
+        const u = getXMLDomUtils();
+        return u ? u.extractTextLines(containerElement) : '';
+    }
+
+    static extractKurztext(itemElem, ozCode) {
+        const r = getItemReader();
+        return r ? r.extractKurztext(itemElem, ozCode) : '';
+    }
+
+    static extractLangtext(itemElem) {
+        const r = getItemReader();
+        return r ? r.extractLangtext(itemElem) : '';
+    }
+
+    static escapeXML(str) {
+        const u = getXMLDomUtils();
+        return u ? u.escapeXML(str) : String(str || '');
+    }
+
     /**
      * Parsed ein GAEB XML Dokument (z.B. X83) in eine hierarchische Objektstruktur.
+     * Erhält BoQCtgy-Hierarchien, Pfad-OZs, RNoPart, vollständige Langtexte,
+     * Vorbemerkungen, Positionstypen, Bieterangaben und UPComponents.
+     * Fehlende Preise in X83 bleiben strikt null (keine 0.00 Erfindung).
      * @param {string} xmlString - GAEB XML Datei-Inhalt
-     * @returns {Object} { projectInfo: {}, items: [] }
+     * @returns {Object} { projectInfo, items, categories, hierarchy, sections, warnings }
      */
     static parseGAEBXML(xmlString) {
         if (!xmlString || typeof xmlString !== 'string') {
             throw new Error('Ungültiger GAEB-Inhalt.');
+        }
+
+        // BOM (Byte Order Mark \uFEFF) am Stringanfang für DOMParser entfernen
+        if (xmlString.charCodeAt(0) === 0xFEFF) {
+            xmlString = xmlString.slice(1);
+        }
+
+        const parser = GAEBEngine.getDOMParser();
+        let doc;
+        try {
+            doc = parser.parseFromString(xmlString, 'text/xml');
+        } catch (e) {
+            throw new Error('XML-Parsing-Fehler: ' + e.message);
+        }
+
+        const parserErrors = doc.getElementsByTagName('parsererror');
+        if (parserErrors && parserErrors.length > 0) {
+            const errMsg = parserErrors[0].textContent.trim();
+            throw new Error('XML-Parsing-Fehler: ' + errMsg);
+        }
+
+        const root = doc.documentElement;
+        if (!root || (root.localName !== 'GAEB' && root.nodeName !== 'GAEB')) {
+            throw new Error('Ungültiger GAEB-Inhalt: Wurzelknoten <GAEB> fehlt.');
         }
 
         const projectInfo = {
@@ -18,75 +109,53 @@ class GAEBEngine {
             currency: 'EUR'
         };
 
-        // Extrahiere GAEB-Phase aus Award/DP, GAEBInfo/DP oder DP
-        const phaseMatch = xmlString.match(/<Award>[\s\S]*?<DP>([^<]+)<\/DP>/i) ||
-                           xmlString.match(/<GAEBInfo>[\s\S]*?<DP>([^<]+)<\/DP>/i) ||
-                           xmlString.match(/<DP>([^<]+)<\/DP>/i);
-        if (phaseMatch) {
-            let phase = phaseMatch[1].trim();
-            // Normalisiere z. B. '84' -> 'X84', '83' -> 'X83'
+        // GAEB-Phase aus Award/DP, GAEBInfo/DP oder DP
+        const awardElem = GAEBEngine.findFirstDescendant(doc, 'Award');
+        const gaebInfoElem = GAEBEngine.findFirstDescendant(doc, 'GAEBInfo');
+        const dpElem = (awardElem && GAEBEngine.findFirstDescendant(awardElem, 'DP')) ||
+                       (gaebInfoElem && GAEBEngine.findFirstDescendant(gaebInfoElem, 'DP')) ||
+                       GAEBEngine.findFirstDescendant(doc, 'DP');
+        if (dpElem) {
+            let phase = dpElem.textContent.trim();
             if (/^\d{2}$/.test(phase)) {
                 phase = 'X' + phase;
             }
             projectInfo.gaebPhase = phase;
         }
 
-        const curMatch = xmlString.match(/<Cur>([^<]+)<\/Cur>/i) || xmlString.match(/<Currency>([^<]+)<\/Currency>/i);
-        if (curMatch) {
-            projectInfo.currency = curMatch[1].trim();
+        // Währung
+        const curElem = GAEBEngine.findFirstDescendant(doc, 'Cur') || GAEBEngine.findFirstDescendant(doc, 'Currency');
+        if (curElem) {
+            projectInfo.currency = curElem.textContent.trim();
         }
 
-        const prjNameMatch = xmlString.match(/<BoQInfo>[\s\S]*?<Name>([^<]+)<\/Name>/i) ||
-                             xmlString.match(/<PrjName>([^<]+)<\/PrjName>/i) ||
-                             xmlString.match(/<Name>([^<]+)<\/Name>/i);
-        if (prjNameMatch) {
-            projectInfo.name = prjNameMatch[1].trim();
+        // Projektname
+        const boqInfoElem = GAEBEngine.findFirstDescendant(doc, 'BoQInfo');
+        const nameElem = (boqInfoElem && GAEBEngine.findFirstDescendant(boqInfoElem, 'Name')) ||
+                         GAEBEngine.findFirstDescendant(doc, 'PrjName') ||
+                         (awardElem && GAEBEngine.findFirstDescendant(awardElem, 'Name'));
+        if (nameElem && nameElem.textContent.trim()) {
+            projectInfo.name = nameElem.textContent.trim();
         }
 
-        const items = [];
-        // Regex-basierter Parser für GAEB-Item-Knoten <Item ...> ... </Item>
-        const itemRegex = /<Item\b[^>]*>([\s\S]*?)<\/Item>/gi;
-        let match;
+        // Hierarchie & Positionen aufbauen
+        const hb = getHierarchyBuilder();
+        const buildResult = hb ? hb.build(doc) : { allItems: [], topLevelCategories: [], warnings: [] };
 
-        while ((match = itemRegex.exec(xmlString)) !== null) {
-            const itemContent = match[1];
-
-            const ozMatch = itemContent.match(/<OZ>([^<]+)<\/OZ>/i) || itemContent.match(/<RNoPart>([^<]+)<\/RNoPart>/i);
-            const oz = ozMatch ? ozMatch[1].trim() : '';
-
-            const qtyMatch = itemContent.match(/<Qty>([^<]+)<\/Qty>/i);
-            const menge = qtyMatch ? parseFloat(qtyMatch[1].replace(',', '.')) : 1.0;
-
-            const unitMatch = itemContent.match(/<QU>([^<]+)<\/QU>/i) || itemContent.match(/<Unit>([^<]+)<\/Unit>/i);
-            const einheit = unitMatch ? unitMatch[1].trim() : 'Stk.';
-
-            const textMatch = itemContent.match(/<TextOutl>[\s\S]*?<p>([^<]+)<\/p>/i) ||
-                              itemContent.match(/<TextOutl>[\s\S]*?<span>([^<]+)<\/span>/i) ||
-                              itemContent.match(/<TextOutl>([^<]+)<\/TextOutl>/i) ||
-                              itemContent.match(/<CompleteText>[\s\S]*?<p>(?:<span>)?([^<]+)(?:<\/span>)?<\/p>/i) ||
-                              itemContent.match(/<Description>([^<]+)<\/Description>/i);
-            const kurztext = textMatch ? textMatch[1].replace(/<[^>]+>/g, '').trim() : `Position ${oz}`;
-
-            const epMatch = itemContent.match(/<UP>([^<]+)<\/UP>/i) || itemContent.match(/<UnitPrice>([^<]+)<\/UnitPrice>/i);
-            const einheitspreis = epMatch ? parseFloat(epMatch[1].replace(',', '.')) : 0.0;
-
-            const itMatch = itemContent.match(/<IT>([^<]+)<\/IT>/i) || itemContent.match(/<TotalPrice>([^<]+)<\/TotalPrice>/i);
-            const gesamtpreis = itMatch ? parseFloat(itMatch[1].replace(',', '.')) : (menge * einheitspreis);
-
-            items.push({
-                oz_code: oz,
-                name: kurztext,
-                menge,
-                einheit,
-                preis: einheitspreis,
-                gesamtpreis,
-                cost_type: 'MATERIAL'
-            });
+        const warnings = [...(buildResult.warnings || [])];
+        if (!dpElem) {
+            warnings.push('GAEB-Phase (DP) nicht explizit im Dokument deklariert; Standardphase X83 angenommen.');
+        } else if (projectInfo.gaebPhase !== 'X83' && projectInfo.gaebPhase !== '83') {
+            warnings.push(`Hinweis: Dokument deklariert GAEB-Phase '${projectInfo.gaebPhase}' (erwartet: X83 Angebotsaufforderung).`);
         }
 
         return {
             projectInfo,
-            items
+            items: buildResult.allItems,
+            categories: buildResult.topLevelCategories.length > 0 ? buildResult.topLevelCategories : undefined,
+            hierarchy: buildResult.topLevelCategories.length > 0 ? buildResult.topLevelCategories : undefined,
+            sections: buildResult.topLevelCategories.length > 0 ? buildResult.topLevelCategories : undefined,
+            warnings: warnings
         };
     }
 
@@ -167,20 +236,11 @@ class GAEBEngine {
   </Award>
 </GAEB>`;
     }
-
-    static escapeXML(str) {
-        if (!str) return '';
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&apos;');
-    }
 }
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = GAEBEngine;
-} else {
+}
+if (typeof window !== 'undefined') {
     window.GAEBEngine = GAEBEngine;
 }

@@ -180,6 +180,11 @@
                     class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">request_quote</span>
                 <span class="text-sm font-medium">Angebote</span>
             </a>
+            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
+                id="nav-gaeb-tender" onclick="openGaebTenderModal()">
+                <span class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">gavel</span>
+                <span class="text-sm font-medium">GAEB Ausschreibung</span>
+            </a>
             <a id="nav-kunden" onclick="switchView('kunden')"
                 class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer">
                 <span class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">group</span>
@@ -3015,6 +3020,14 @@
     <script src="js/utils.js"></script>
     <script src="js/da11.js"></script>
     <script src="js/gaeb-x31.js"></script>
+    <script src="js/gaeb/xml_dom_utils.js"></script>
+    <script src="js/gaeb/hierarchy_builder.js"></script>
+    <script src="js/gaeb/item_reader.js"></script>
+    <script src="js/gaeb/item_types.js"></script>
+    <script src="js/gaeb.js"></script>
+    <script src="js/gaeb_tender/tender_state.js"></script>
+    <script src="js/gaeb_tender/tender_view.js"></script>
+    <script src="js/gaeb_tender/tender_controller.js"></script>
     <script src="js/einvoice.js"></script>
     <script src="models/InvoiceModel.js"></script>
     <script src="controllers/InvoiceController.js"></script>

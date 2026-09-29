@@ -16,6 +16,8 @@ const createZeiterfassungRepo = require('./zeiterfassung_repo');
 const createIdsConnectRepo = require('./ids_connect_repo');
 const createSokabauSubcontractorRepo = require('./sokabau_subcontractor_repo');
 const createSystemRepo = require('./system_repo');
+const { createGaebRepo } = require('./gaeb_repository');
+const { createGaebTenderRepo } = require('./gaeb_tender_repo');
 
 function initRepositories(deps) {
     const { db, dbQuery, dbRun, appendAuditLog, auditLogger, backupService, dbPath } = deps;
@@ -85,6 +87,14 @@ function initRepositories(deps) {
         db, appendAuditLog, getEinstellung, dbAPI
     });
 
+    const gaebRepo = createGaebRepo({
+        db, appendAuditLog, dbAPI
+    });
+
+    const gaebTenderRepo = createGaebTenderRepo({
+        db, appendAuditLog, dbAPI
+    });
+
     // Assemble the facade object with all repository methods
     Object.assign(
         dbAPI,
@@ -104,7 +114,9 @@ function initRepositories(deps) {
         kalkulationRepo,
         zeiterfassungRepo,
         idsConnectRepo,
-        sokabauRepo
+        sokabauRepo,
+        gaebRepo,
+        gaebTenderRepo
     );
 
     return {
@@ -123,6 +135,8 @@ function initRepositories(deps) {
             zeiterfassungRepo,
             idsConnectRepo,
             sokabauRepo,
+            gaebRepo,
+            gaebTenderRepo,
             systemRepo
         }
     };
@@ -143,5 +157,6 @@ module.exports = {
     createZeiterfassungRepo,
     createIdsConnectRepo,
     createSokabauSubcontractorRepo,
+    createGaebRepo,
     createSystemRepo
 };
