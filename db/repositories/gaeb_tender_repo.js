@@ -25,7 +25,11 @@ function createTenderDraft(db, importId, options = {}) {
         throw new Error(`GAEB-Import mit ID ${importId} existiert nicht.`);
     }
 
-    const version = Number(options.version) || 1;
+    let version = Number(options.version);
+    if (!version || isNaN(version) || version <= 0) {
+        const nextVerRow = db.prepare('SELECT COALESCE(MAX(version), 0) + 1 AS next_ver FROM gaeb_tender_drafts WHERE import_id = ?').get(importId);
+        version = nextVerRow ? nextVerRow.next_ver : 1;
+    }
     const name = options.name ? String(options.name).trim() : `Hauptangebot v${version}`;
     const angebotId = options.angebotId || null;
 
@@ -55,16 +59,23 @@ function createTenderDraft(db, importId, options = {}) {
     `).get(importId);
     const initialMissingBireq = bireqRow ? bireqRow.cnt : 0;
 
+    const qtyTbdRow = db.prepare(`
+        SELECT COUNT(*) AS cnt 
+        FROM gaeb_items 
+        WHERE import_id = ? AND is_hinweistext = 0 AND in_endsumme_enthalten = 1 AND (is_qty_tbd = 1 OR menge IS NULL)
+    `).get(importId);
+    const initialUnresolvedQtyTbd = qtyTbdRow ? qtyTbdRow.cnt : 0;
+
     const stmt = db.prepare(`
         INSERT INTO gaeb_tender_drafts (
             import_id, angebot_id, version, name, status,
             total_netto, total_tax, total_brutto,
-            unpriced_count, missing_bireq_count,
+            unpriced_count, missing_bireq_count, unresolved_qty_tbd_count,
             created_at, updated_at
-        ) VALUES (?, ?, ?, ?, 'IN_BEARBEITUNG', 0, 0, 0, ?, ?, datetime('now'), datetime('now'))
+        ) VALUES (?, ?, ?, ?, 'IN_BEARBEITUNG', 0, 0, 0, ?, ?, ?, datetime('now'), datetime('now'))
     `);
 
-    const res = stmt.run(importId, angebotId, version, name, initialUnpriced, initialMissingBireq);
+    const res = stmt.run(importId, angebotId, version, name, initialUnpriced, initialMissingBireq, initialUnresolvedQtyTbd);
 
     return {
         id: res.lastInsertRowid,
@@ -77,7 +88,8 @@ function createTenderDraft(db, importId, options = {}) {
         total_tax: 0,
         total_brutto: 0,
         unpriced_count: initialUnpriced,
-        missing_bireq_count: initialMissingBireq
+        missing_bireq_count: initialMissingBireq,
+        unresolved_qty_tbd_count: initialUnresolvedQtyTbd
     };
 }
 
@@ -256,6 +268,18 @@ function saveTenderDraft(db, draftId, draftData = {}) {
         `).get(draftId, importId);
         const missingBireqCount = missingBireqRow ? missingBireqRow.cnt : 0;
 
+        // Unresolved QtyTBD count: Positionen mit in_total = 1, bei denen Menge noch unbestimmt ist
+        const qtyTbdRow = db.prepare(`
+            SELECT COUNT(i.id) AS cnt
+            FROM gaeb_items i
+            LEFT JOIN gaeb_tender_item_prices p ON p.gaeb_item_id = i.id AND p.draft_id = ?
+            WHERE i.import_id = ? 
+              AND i.is_hinweistext = 0 
+              AND COALESCE(p.in_total, i.in_endsumme_enthalten) = 1
+              AND (i.is_qty_tbd = 1 OR i.menge IS NULL)
+        `).get(draftId, importId);
+        const unresolvedQtyTbdCount = qtyTbdRow ? qtyTbdRow.cnt : 0;
+
         // Summen berechnen: Berücksichtigt nur in_total === 1 mit gültigem totalPrice
         const sumsRow = db.prepare(`
             SELECT 
@@ -269,8 +293,8 @@ function saveTenderDraft(db, draftId, draftData = {}) {
         const totalTax = Math.round((sumsRow.total_tax || 0) * 100) / 100;
         const totalBrutto = Math.round((totalNetto + totalTax) * 100) / 100;
 
-        // Status setzen
-        let newStatus = (unpricedCount === 0 && missingBireqCount === 0) ? 'VOLLSTAENDIG_BEPREIST' : 'IN_BEARBEITUNG';
+        // Status setzen: Vollständig bepreist NUR wenn alle unit prices gesetzt, alle BiReqs beantwortet UND keine offenen QtyTBDs in_total verbleiben
+        let newStatus = (unpricedCount === 0 && missingBireqCount === 0 && unresolvedQtyTbdCount === 0) ? 'VOLLSTAENDIG_BEPREIST' : 'IN_BEARBEITUNG';
         if (draftData.status === 'VERWORFEN') {
             newStatus = 'VERWORFEN';
         }
@@ -298,6 +322,7 @@ function saveTenderDraft(db, draftId, draftData = {}) {
                 total_brutto = ?,
                 unpriced_count = ?,
                 missing_bireq_count = ?,
+                unresolved_qty_tbd_count = ?,
                 updated_at = datetime('now')
             WHERE id = ?
         `).run(
@@ -310,6 +335,7 @@ function saveTenderDraft(db, draftId, draftData = {}) {
             totalBrutto,
             unpricedCount,
             missingBireqCount,
+            unresolvedQtyTbdCount,
             draftId
         );
 
@@ -321,7 +347,8 @@ function saveTenderDraft(db, draftId, draftData = {}) {
             total_tax: totalTax,
             total_brutto: totalBrutto,
             unpriced_count: unpricedCount,
-            missing_bireq_count: missingBireqCount
+            missing_bireq_count: missingBireqCount,
+            unresolved_qty_tbd_count: unresolvedQtyTbdCount
         };
     })();
 }
@@ -436,7 +463,8 @@ function loadTenderDraft(db, draftId) {
         priceable_items_count: priceableItems.length,
         priced_items_count: pricedItems.length,
         unpriced_count: draft.unpriced_count,
-        missing_bireq_count: draft.missing_bireq_count
+        missing_bireq_count: draft.missing_bireq_count,
+        unresolved_qty_tbd_count: draft.unresolved_qty_tbd_count || 0
     };
 
     return {
@@ -466,21 +494,25 @@ function cloneTenderDraft(db, draftId, options = {}) {
             throw new Error(`Tender-Draft mit ID ${draftId} nicht gefunden.`);
         }
 
-        const newVersion = options.newVersion !== undefined ? Number(options.newVersion) : (orig.version + 1);
+        const nextVerRow = db.prepare('SELECT COALESCE(MAX(version), 0) + 1 AS next_ver FROM gaeb_tender_drafts WHERE import_id = ?').get(orig.import_id);
+        const newVersion = (options.newVersion !== undefined && !isNaN(Number(options.newVersion)) && Number(options.newVersion) > 0)
+            ? Number(options.newVersion)
+            : (nextVerRow ? nextVerRow.next_ver : orig.version + 1);
         const newName = options.newName ? String(options.newName).trim() : `${orig.name} (v${newVersion})`;
+        const newAngebotId = null; // Zwingend null! Kopiere angebot_id NIEMALS automatisch in die geklonte Version!
 
         const insertDraftStmt = db.prepare(`
             INSERT INTO gaeb_tender_drafts (
                 import_id, angebot_id, version, name, status,
                 total_netto, total_tax, total_brutto,
-                unpriced_count, missing_bireq_count,
+                unpriced_count, missing_bireq_count, unresolved_qty_tbd_count,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
         `);
 
         const res = insertDraftStmt.run(
             orig.import_id,
-            orig.angebot_id,
+            newAngebotId,
             newVersion,
             newName,
             orig.status,
@@ -488,7 +520,8 @@ function cloneTenderDraft(db, draftId, options = {}) {
             orig.total_tax,
             orig.total_brutto,
             orig.unpriced_count,
-            orig.missing_bireq_count
+            orig.missing_bireq_count,
+            orig.unresolved_qty_tbd_count || 0
         );
         const newDraftId = res.lastInsertRowid;
 
@@ -515,7 +548,7 @@ function cloneTenderDraft(db, draftId, options = {}) {
         return {
             id: newDraftId,
             import_id: orig.import_id,
-            angebot_id: orig.angebot_id,
+            angebot_id: null,
             version: newVersion,
             name: newName,
             status: orig.status,
@@ -523,7 +556,8 @@ function cloneTenderDraft(db, draftId, options = {}) {
             total_tax: orig.total_tax,
             total_brutto: orig.total_brutto,
             unpriced_count: orig.unpriced_count,
-            missing_bireq_count: orig.missing_bireq_count
+            missing_bireq_count: orig.missing_bireq_count,
+            unresolved_qty_tbd_count: orig.unresolved_qty_tbd_count || 0
         };
     })();
 }

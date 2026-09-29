@@ -167,14 +167,57 @@ function initGaebSchema(db) {
         total_brutto REAL DEFAULT 0,
         unpriced_count INTEGER DEFAULT 0,
         missing_bireq_count INTEGER DEFAULT 0,
+        unresolved_qty_tbd_count INTEGER DEFAULT 0,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(import_id, version)
     )`);
     try {
         db.exec(`CREATE INDEX IF NOT EXISTS idx_gaeb_tender_drafts_import ON gaeb_tender_drafts(import_id)`);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_gaeb_tender_drafts_angebot ON gaeb_tender_drafts(angebot_id)`);
+        db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_gaeb_tender_drafts_import_version ON gaeb_tender_drafts(import_id, version)`);
     } catch (e) {
         console.error('[GAEB Schema] Indizes gaeb_tender_drafts:', e.message);
+    }
+
+    // Trigger zur datenbankseitigen Validierung von gaeb_tender_drafts.angebot_id
+    try {
+        db.exec(`
+            CREATE TRIGGER IF NOT EXISTS trg_validate_gaeb_tender_draft_angebot_type
+            BEFORE INSERT ON gaeb_tender_drafts
+            FOR EACH ROW
+            WHEN NEW.angebot_id IS NOT NULL AND (SELECT type FROM dokumente WHERE id = NEW.angebot_id) != 'angebot'
+            BEGIN
+                SELECT RAISE(ABORT, 'Ungültige Verknüpfung: Das referenzierte Dokument im Entwurf muss vom Typ angebot sein.');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_validate_gaeb_tender_draft_angebot_type_update
+            BEFORE UPDATE OF angebot_id ON gaeb_tender_drafts
+            FOR EACH ROW
+            WHEN NEW.angebot_id IS NOT NULL AND (SELECT type FROM dokumente WHERE id = NEW.angebot_id) != 'angebot'
+            BEGIN
+                SELECT RAISE(ABORT, 'Ungültige Verknüpfung: Das referenzierte Dokument im Entwurf muss vom Typ angebot sein.');
+            END;
+        `);
+    } catch (e) {
+        // Falls dokumente-Tabelle in isolierten Tests noch nicht existiert
+    }
+
+    // Trigger auf dokumente: Verhindert nachträgliche Typänderung eines verknüpften Angebots zu Rechnung etc.
+    try {
+        db.exec(`
+            CREATE TRIGGER IF NOT EXISTS trg_prevent_type_change_linked_gaeb_angebot
+            BEFORE UPDATE OF type ON dokumente
+            FOR EACH ROW
+            WHEN OLD.type = 'angebot' AND NEW.type != 'angebot'
+            BEGIN
+                SELECT RAISE(ABORT, 'Änderung des Dokumenttyps verweigert: Dieses Angebot ist mit einer GAEB-Ausschreibung verknüpft.')
+                WHERE EXISTS (SELECT 1 FROM gaeb_import_angebote WHERE angebot_id = OLD.id)
+                   OR EXISTS (SELECT 1 FROM gaeb_tender_drafts WHERE angebot_id = OLD.id);
+            END;
+        `);
+    } catch (e) {
+        // Falls dokumente-Tabelle in isolierten Tests noch nicht existiert
     }
 
     // 8. gaeb_tender_item_prices: Positions-Preise des Entwurfs
@@ -239,6 +282,32 @@ function runGaebMigrations(db) {
             BEGIN
                 SELECT RAISE(ABORT, 'Ungültige Verknüpfung: Das referenzierte Dokument muss vom Typ angebot sein.');
             END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_validate_gaeb_tender_draft_angebot_type
+            BEFORE INSERT ON gaeb_tender_drafts
+            FOR EACH ROW
+            WHEN NEW.angebot_id IS NOT NULL AND (SELECT type FROM dokumente WHERE id = NEW.angebot_id) != 'angebot'
+            BEGIN
+                SELECT RAISE(ABORT, 'Ungültige Verknüpfung: Das referenzierte Dokument im Entwurf muss vom Typ angebot sein.');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_validate_gaeb_tender_draft_angebot_type_update
+            BEFORE UPDATE OF angebot_id ON gaeb_tender_drafts
+            FOR EACH ROW
+            WHEN NEW.angebot_id IS NOT NULL AND (SELECT type FROM dokumente WHERE id = NEW.angebot_id) != 'angebot'
+            BEGIN
+                SELECT RAISE(ABORT, 'Ungültige Verknüpfung: Das referenzierte Dokument im Entwurf muss vom Typ angebot sein.');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_prevent_type_change_linked_gaeb_angebot
+            BEFORE UPDATE OF type ON dokumente
+            FOR EACH ROW
+            WHEN OLD.type = 'angebot' AND NEW.type != 'angebot'
+            BEGIN
+                SELECT RAISE(ABORT, 'Änderung des Dokumenttyps verweigert: Dieses Angebot ist mit einer GAEB-Ausschreibung verknüpft.')
+                WHERE EXISTS (SELECT 1 FROM gaeb_import_angebote WHERE angebot_id = OLD.id)
+                   OR EXISTS (SELECT 1 FROM gaeb_tender_drafts WHERE angebot_id = OLD.id);
+            END;
         `);
     } catch (e) {
         // Falls dokumente-Tabelle in isolierten Tests noch nicht existiert
@@ -255,6 +324,57 @@ function runGaebMigrations(db) {
         }
     } catch (e) {
         console.error('[GAEB Migration] Fehler bei raw_bytes Migration:', e.message);
+    }
+
+    // 4. Migration: gaeb_tender_drafts Spalten und Unique Constraint
+    try {
+        const draftsTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='gaeb_tender_drafts'").get();
+        if (draftsTable) {
+            const tableInfo = db.prepare(`PRAGMA table_info(gaeb_tender_drafts)`).all();
+            const colNames = tableInfo.map(c => c.name);
+
+            if (!colNames.includes('unresolved_qty_tbd_count')) {
+                db.exec(`ALTER TABLE gaeb_tender_drafts ADD COLUMN unresolved_qty_tbd_count INTEGER DEFAULT 0;`);
+            }
+
+            // Sichere, nicht-destruktive Bereinigung eventueller Altdaten mit doppeltem (import_id, version)
+            const duplicates = db.prepare(`
+                SELECT import_id, version, COUNT(*) as cnt
+                FROM gaeb_tender_drafts
+                GROUP BY import_id, version
+                HAVING COUNT(*) > 1
+            `).all();
+
+            if (duplicates && duplicates.length > 0) {
+                for (const dup of duplicates) {
+                    const rows = db.prepare(`
+                        SELECT id FROM gaeb_tender_drafts
+                        WHERE import_id = ? AND version = ?
+                        ORDER BY id ASC
+                    `).all(dup.import_id, dup.version);
+
+                    const maxVerRow = db.prepare(`
+                        SELECT COALESCE(MAX(version), 0) AS max_v
+                        FROM gaeb_tender_drafts
+                        WHERE import_id = ?
+                    `).get(dup.import_id);
+                    let currentMax = maxVerRow ? maxVerRow.max_v : 0;
+
+                    for (let i = 1; i < rows.length; i++) {
+                        currentMax++;
+                        db.prepare(`
+                            UPDATE gaeb_tender_drafts
+                            SET version = ?, name = name || ' (v' || ? || ')'
+                            WHERE id = ?
+                        `).run(currentMax, currentMax, rows[i].id);
+                    }
+                }
+            }
+
+            db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_gaeb_tender_drafts_import_version ON gaeb_tender_drafts(import_id, version);`);
+        }
+    } catch (e) {
+        console.error('[GAEB Migration] Fehler bei gaeb_tender_drafts Migration:', e.message);
     }
 }
 

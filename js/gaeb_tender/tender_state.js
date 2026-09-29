@@ -141,6 +141,7 @@
             let sumTax = 0;
             let unpriced = 0;
             let priceableCount = 0;
+            let unresolvedQtyTbd = 0;
 
             for (const item of this.items) {
                 if (item.isHinweistext) continue;
@@ -152,6 +153,11 @@
                     sumNetto += item.total_price;
                     const taxRate = item.tax_rate !== undefined ? item.tax_rate : 19.0;
                     sumTax += (item.total_price * (taxRate / 100.0));
+                }
+
+                // Mengenvorbehalte (QtyTBD) mit in_total = 1 erfassen
+                if (item.in_total && (item.isQtyTBD || item.is_qty_tbd || item.menge === null)) {
+                    unresolvedQtyTbd++;
                 }
             }
 
@@ -167,7 +173,7 @@
             sumTax = Math.round(sumTax * 100) / 100;
             const sumBrutto = Math.round((sumNetto + sumTax) * 100) / 100;
 
-            const isFullyPriced = (unpriced === 0 && missingBiReq === 0);
+            const isFullyPriced = (unpriced === 0 && missingBiReq === 0 && unresolvedQtyTbd === 0);
             const status = this.draft?.status === 'VERWORFEN' ? 'VERWORFEN' : (isFullyPriced ? 'VOLLSTAENDIG_BEPREIST' : 'IN_BEARBEITUNG');
 
             this.stats = {
@@ -179,6 +185,7 @@
                 priceable_items_count: priceableCount,
                 priced_items_count: priceableCount - unpriced,
                 missing_bireq_count: missingBiReq,
+                unresolved_qty_tbd_count: unresolvedQtyTbd,
                 status
             };
 
@@ -188,6 +195,7 @@
                 this.draft.total_brutto = sumBrutto;
                 this.draft.unpriced_count = unpriced;
                 this.draft.missing_bireq_count = missingBiReq;
+                this.draft.unresolved_qty_tbd_count = unresolvedQtyTbd;
                 this.draft.status = status;
             }
         }

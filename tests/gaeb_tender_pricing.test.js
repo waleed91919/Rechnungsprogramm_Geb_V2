@@ -80,7 +80,7 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
 const Database = require('better-sqlite3');
 const GAEBEngine = require('../js/gaeb');
 const { createSchema } = require('../schema');
-const { saveX83Import, loadX83Import, linkImportToAngebot } = require('../db/repositories/gaeb_repository');
+const { saveX83Import, loadX83Import, listX83Imports, linkImportToAngebot } = require('../db/repositories/gaeb_repository');
 const {
     createTenderDraft,
     saveTenderDraft,
@@ -657,6 +657,361 @@ describe('GAEB Tender Bepreisung & Entwurfsverwaltung', () => {
                 // FK-Check
                 const fkErrors = db.pragma('foreign_key_check');
                 assert.strictEqual(fkErrors.length, 0);
+            } finally {
+                cleanupDb(db, dbPath);
+            }
+        });
+    });
+
+    // =========================================================================
+    // 7. Härtungs- & Regressionsprüfungen (liesen.txt)
+    // =========================================================================
+    describe('7. Härtungs- & Regressionsprüfungen', () => {
+
+        test('7.1 Explizite Importauswahl & kein stilles Anlegen von Entwürfen', () => {
+            const { db, dbPath } = createTempDb();
+            try {
+                const xml1 = loadFixture('valid_schema_reference.x83');
+                const xml2 = loadFixture('02_positionstypen_wahl_bedarf.x83');
+
+                const import1 = saveX83Import(db, GAEBEngine.parseGAEBXML(xml1), { fileName: 'import1.x83', rawXml: xml1 });
+                const import2 = saveX83Import(db, GAEBEngine.parseGAEBXML(xml2), { fileName: 'import2.x83', rawXml: xml2 });
+
+                // A: Beide Imports vorhanden, initial KEINE Entwürfe
+                const importsList = listX83Imports(db);
+                assert.strictEqual(importsList.length, 2);
+                const imp1Row = importsList.find(i => i.id === import1.importId);
+                const imp2Row = importsList.find(i => i.id === import2.importId);
+                assert.strictEqual(imp1Row.draft_count, 0, 'Import 1 darf initial keine Entwürfe haben');
+                assert.strictEqual(imp2Row.draft_count, 0, 'Import 2 darf initial keine Entwürfe haben');
+
+                const totalDraftsInitial = db.prepare('SELECT COUNT(*) AS cnt FROM gaeb_tender_drafts').get().cnt;
+                assert.strictEqual(totalDraftsInitial, 0, 'Es dürfen keine Entwürfe im Hintergrund automatisch erzeugt werden');
+
+                // B: Explizite Auswahl von Import 2 und gezieltes Anlegen eines Entwurfs
+                const draftImp2 = createTenderDraft(db, import2.importId, { name: 'Kalkulation Los 2' });
+                assert.strictEqual(draftImp2.import_id, import2.importId);
+                assert.strictEqual(draftImp2.version, 1);
+
+                // Position bepreisen und speichern
+                const loadedImp2 = loadX83Import(db, import2.importId);
+                const itemToPrice = loadedImp2.items.find(i => !i.isHinweistext);
+                saveTenderDraft(db, draftImp2.id, {
+                    prices: [{
+                        gaeb_item_id: itemToPrice._dbId,
+                        unit_price: 150.0,
+                        in_total: 1
+                    }]
+                });
+
+                // C: Verifizieren: Import 1 hat weiterhin 0 Entwürfe, Import 2 genau 1
+                const draftsImp1 = listTenderDrafts(db, import1.importId);
+                const draftsImp2 = listTenderDrafts(db, import2.importId);
+                assert.strictEqual(draftsImp1.length, 0, 'Import 1 muss unberührt 0 Entwürfe behalten');
+                assert.strictEqual(draftsImp2.length, 1, 'Import 2 muss genau den angelegten Entwurf haben');
+                assert.strictEqual(draftsImp2[0].id, draftImp2.id);
+
+                const importsListAfter = listX83Imports(db);
+                const imp1After = importsListAfter.find(i => i.id === import1.importId);
+                const imp2After = importsListAfter.find(i => i.id === import2.importId);
+                assert.strictEqual(imp1After.draft_count, 0);
+                assert.strictEqual(imp2After.draft_count, 1);
+            } finally {
+                cleanupDb(db, dbPath);
+            }
+        });
+
+        test('7.2 QtyTBD & Vollständigkeitsstatus (IN_BEARBEITUNG vs VOLLSTAENDIG_BEPREIST)', () => {
+            const { db, dbPath } = createTempDb();
+            try {
+                // pyGAEB enthält eine Position mit QtyTBD
+                const xml = loadFixture('independent_pygaeb_da32.x83');
+                const parsed = GAEBEngine.parseGAEBXML(xml);
+                const saveImport = saveX83Import(db, parsed, { fileName: 'pygaeb_qtytbd.x83', rawXml: xml });
+                const importId = saveImport.importId;
+                const draft = createTenderDraft(db, importId);
+
+                const loaded = loadX83Import(db, importId);
+                const priceableItems = loaded.items.filter(i => !i.isHinweistext);
+                const qtyTbdItems = priceableItems.filter(i => i.isQtyTBD || i.menge === null);
+                assert.strictEqual(qtyTbdItems.length, 2, 'Zwei QtyTBD-Positionen in Fixture erwartet');
+
+                // Bepreise ALLE Positionen vollständig mit in_total = 1 (inkl. QtyTBD)
+                const pricesAllInTotal = priceableItems.map((item, idx) => ({
+                    gaeb_item_id: item._dbId,
+                    unit_price: 20.0 + idx * 5.0,
+                    in_total: 1
+                }));
+
+                // Falls Bieterangaben existieren, alle beantworten
+                const bireqAnswers = [];
+                priceableItems.forEach(item => {
+                    if (item.bieterangaben && item.bieterangaben.length > 0) {
+                        item.bieterangaben.forEach(b => {
+                            bireqAnswers.push({
+                                gaeb_bireq_id: b.id || b._dbId,
+                                answer_value: 'Pflichtangabe Bieter'
+                            });
+                        });
+                    }
+                });
+
+                const saveRes1 = saveTenderDraft(db, draft.id, {
+                    prices: pricesAllInTotal,
+                    bireq_answers: bireqAnswers
+                });
+
+                // Prüfungen für Zustand mit offener QtyTBD in Endsumme:
+                // 1. unpriced_count ist 0 (alle Positionen haben Einheitspreise)
+                assert.strictEqual(saveRes1.unpriced_count, 0, 'Alle Einheitspreise sind vergeben');
+                // 2. missing_bireq_count ist 0
+                assert.strictEqual(saveRes1.missing_bireq_count, 0, 'Alle BiReqs sind beantwortet');
+                // 3. unresolved_qty_tbd_count ist 2
+                assert.strictEqual(saveRes1.unresolved_qty_tbd_count, 2, 'Zwei QtyTBD-Positionen sind in Endsumme unbestimmt');
+                // 4. Status MUSS strikt IN_BEARBEITUNG bleiben (nicht VOLLSTAENDIG_BEPREIST)
+                assert.strictEqual(saveRes1.status, 'IN_BEARBEITUNG', 'Draft mit offener QtyTBD in Endsumme darf NICHT als vollständig bepreist gelten');
+
+                const loadedDraft1 = loadTenderDraft(db, draft.id);
+                assert.strictEqual(loadedDraft1.stats.status, 'IN_BEARBEITUNG');
+                assert.strictEqual(loadedDraft1.stats.unresolved_qty_tbd_count, 2);
+                for (const qItem of qtyTbdItems) {
+                    const qPos = loadedDraft1.items.find(i => i._dbId === qItem._dbId);
+                    assert.strictEqual(qPos.total_price, null, 'QtyTBD-Gesamtpreis muss null sein');
+                }
+
+                // Nun: Nimm BEIDE QtyTBD aus der Endsumme heraus (in_total = 0, z. B. als Eventualposition)
+                const qtyTbdIds = new Set(qtyTbdItems.map(q => q._dbId));
+                const pricesWithQtyTbdExcluded = pricesAllInTotal.map(p => {
+                    if (qtyTbdIds.has(p.gaeb_item_id)) {
+                        return { ...p, in_total: 0 };
+                    }
+                    return p;
+                });
+
+                const saveRes2 = saveTenderDraft(db, draft.id, {
+                    prices: pricesWithQtyTbdExcluded,
+                    bireq_answers: bireqAnswers
+                });
+
+                // Jetzt sind alle in_total-Positionen mit bestimmten Mengen bepreist
+                assert.strictEqual(saveRes2.unpriced_count, 0);
+                assert.strictEqual(saveRes2.missing_bireq_count, 0);
+                assert.strictEqual(saveRes2.unresolved_qty_tbd_count, 0, 'Keine ungelösten QtyTBDs mehr in Endsumme');
+                assert.strictEqual(saveRes2.status, 'VOLLSTAENDIG_BEPREIST', 'Ohne offene QtyTBD in Endsumme muss Status VOLLSTAENDIG_BEPREIST sein');
+
+                const loadedDraft2 = loadTenderDraft(db, draft.id);
+                assert.strictEqual(loadedDraft2.stats.status, 'VOLLSTAENDIG_BEPREIST');
+                assert.strictEqual(loadedDraft2.stats.unresolved_qty_tbd_count, 0);
+            } finally {
+                cleanupDb(db, dbPath);
+            }
+        });
+
+        test('7.3 Versionsunabhängigkeit: Klonen v1 -> v2 entkoppelt Angebot und verhindert gegenseitige Beeinflussung', () => {
+            const { db, dbPath } = createTempDb();
+            try {
+                const xml = loadFixture('valid_schema_reference.x83');
+                const parsed = GAEBEngine.parseGAEBXML(xml);
+                const saveImport = saveX83Import(db, parsed, { fileName: 'ref.x83', rawXml: xml });
+                const importId = saveImport.importId;
+
+                // Erstelle ein Dokument vom Typ 'angebot'
+                const angebotRes = db.prepare(`
+                    INSERT INTO dokumente (type, nr, datum, status, netto, steuer, brutto)
+                    VALUES ('angebot', 'ANG-2026-V1', '2026-09-28', 'OFFEN', 500, 95, 595)
+                `).run();
+                const angebotId = angebotRes.lastInsertRowid;
+
+                // Erstelle v1 mit Verknüpfung zu angebotId
+                const draft1 = createTenderDraft(db, importId, {
+                    name: 'Offizielles Angebot v1',
+                    version: 1,
+                    angebotId
+                });
+                assert.strictEqual(draft1.angebot_id, angebotId);
+
+                const loaded = loadX83Import(db, importId);
+                const item = loaded.items[0];
+
+                // Bepreise v1 mit 100.00 €
+                saveTenderDraft(db, draft1.id, {
+                    prices: [{ gaeb_item_id: item._dbId, unit_price: 100.0, in_total: 1 }]
+                });
+
+                // Klone v1 nach v2
+                const draft2 = cloneTenderDraft(db, draft1.id, { newName: 'Verhandlung v2' });
+                assert.strictEqual(draft2.version, 2);
+                assert.strictEqual(draft2.angebot_id, null, 'Geklonter Entwurf darf NIEMALS automatisch mit dem Dokument von v1 verknüpft sein');
+
+                // Direkt nach dem Klonen hat v2 den Preis von v1 übernommen
+                const v2Initial = loadTenderDraft(db, draft2.id);
+                assert.strictEqual(v2Initial.items[0].unit_price, 100.0);
+
+                // Ändere Preis in v2 auf 75.00 €
+                saveTenderDraft(db, draft2.id, {
+                    prices: [{ gaeb_item_id: item._dbId, unit_price: 75.0, in_total: 1 }]
+                });
+
+                // Verifiziere strikte Isolation:
+                // v1 bleibt unberührt
+                const v1Final = loadTenderDraft(db, draft1.id);
+                assert.strictEqual(v1Final.draft.angebot_id, angebotId, 'v1 behält seine Dokumentverknüpfung');
+                assert.strictEqual(v1Final.items[0].unit_price, 100.0, 'v1 behält seinen ursprünglichen Preis');
+
+                // v2 hat neuen Preis und angebot_id = null
+                const v2Final = loadTenderDraft(db, draft2.id);
+                assert.strictEqual(v2Final.draft.angebot_id, null, 'v2 hat weiterhin keine Dokumentverknüpfung');
+                assert.strictEqual(v2Final.items[0].unit_price, 75.0, 'v2 hat den geänderten Preis');
+
+                // gaeb_items Originaldaten bleiben unberührt
+                const origRow = db.prepare('SELECT preis FROM gaeb_items WHERE id = ?').get(item._dbId);
+                assert.strictEqual(origRow.preis, null, 'Originalpreis in gaeb_items bleibt unverändert');
+            } finally {
+                cleanupDb(db, dbPath);
+            }
+        });
+
+        test('7.4 Versionierungs-Integrität & Unique Constraint', () => {
+            const { db, dbPath } = createTempDb();
+            try {
+                const xml = loadFixture('valid_schema_reference.x83');
+                const parsed = GAEBEngine.parseGAEBXML(xml);
+                const saveImport = saveX83Import(db, parsed, { fileName: 'ref.x83', rawXml: xml });
+                const importId = saveImport.importId;
+
+                // Automatische Versionserhöhung ohne Angabe von version
+                const d1 = createTenderDraft(db, importId);
+                assert.strictEqual(d1.version, 1);
+
+                const d2 = createTenderDraft(db, importId);
+                assert.strictEqual(d2.version, 2);
+
+                const d3 = createTenderDraft(db, importId);
+                assert.strictEqual(d3.version, 3);
+
+                // Manueller Insert mit doppelter (import_id, version) muss am UNIQUE Constraint scheitern
+                assert.throws(() => {
+                    db.prepare(`
+                        INSERT INTO gaeb_tender_drafts (import_id, version, name)
+                        VALUES (?, ?, 'Duplikat v1')
+                    `).run(importId, 1);
+                }, /UNIQUE constraint failed/);
+
+                assert.throws(() => {
+                    db.prepare(`
+                        INSERT INTO gaeb_tender_drafts (import_id, version, name)
+                        VALUES (?, ?, 'Duplikat v2')
+                    `).run(importId, 2);
+                }, /UNIQUE constraint failed/);
+            } finally {
+                cleanupDb(db, dbPath);
+            }
+        });
+
+        test('7.5 Datenbank-Trigger Typ-Schutz (Angebot vs. Rechnung)', () => {
+            const { db, dbPath } = createTempDb();
+            try {
+                const xml = loadFixture('valid_schema_reference.x83');
+                const parsed = GAEBEngine.parseGAEBXML(xml);
+                const saveImport = saveX83Import(db, parsed, { fileName: 'ref.x83', rawXml: xml });
+                const importId = saveImport.importId;
+
+                // Dokumente erstellen
+                const angebot1 = db.prepare(`
+                    INSERT INTO dokumente (type, nr, datum, status, netto, steuer, brutto)
+                    VALUES ('angebot', 'ANG-LINKED', '2026-09-28', 'OFFEN', 100, 19, 119)
+                `).run();
+                const linkedAngebotId = angebot1.lastInsertRowid;
+
+                const rechnungDoc = db.prepare(`
+                    INSERT INTO dokumente (type, nr, datum, status, netto, steuer, brutto)
+                    VALUES ('rechnung', 'RE-INVALID', '2026-09-28', 'OFFEN', 200, 38, 238)
+                `).run();
+                const rechnungId = rechnungDoc.lastInsertRowid;
+
+                const unlinkedAngebot = db.prepare(`
+                    INSERT INTO dokumente (type, nr, datum, status, netto, steuer, brutto)
+                    VALUES ('angebot', 'ANG-FREE', '2026-09-28', 'OFFEN', 300, 57, 357)
+                `).run();
+                const unlinkedAngebotId = unlinkedAngebot.lastInsertRowid;
+
+                // Verknüpfe linkedAngebotId mit einem Tender-Draft
+                const draft = createTenderDraft(db, importId, { angebotId: linkedAngebotId });
+                assert.strictEqual(draft.angebot_id, linkedAngebotId);
+
+                // A: Verknüpftes Angebot darf per Trigger trg_prevent_type_change_linked_gaeb_angebot NICHT zu 'rechnung' geändert werden!
+                assert.throws(() => {
+                    db.prepare("UPDATE dokumente SET type = 'rechnung' WHERE id = ?").run(linkedAngebotId);
+                }, /Änderung des Dokumenttyps verweigert: Dieses Angebot ist mit einer GAEB-Ausschreibung verknüpft/);
+
+                // B: Nicht-Typ-Felder des verknüpften Angebots dürfen problemlos aktualisiert werden
+                assert.doesNotThrow(() => {
+                    db.prepare("UPDATE dokumente SET netto = 999.0, brutto = 1188.81 WHERE id = ?").run(linkedAngebotId);
+                });
+                const updatedDoc = db.prepare('SELECT netto FROM dokumente WHERE id = ?').get(linkedAngebotId);
+                assert.strictEqual(updatedDoc.netto, 999.0);
+
+                // C: Unverknüpftes Angebot darf regulär zu 'rechnung' geändert werden
+                assert.doesNotThrow(() => {
+                    db.prepare("UPDATE dokumente SET type = 'rechnung' WHERE id = ?").run(unlinkedAngebotId);
+                });
+                const turnedRechnung = db.prepare('SELECT type FROM dokumente WHERE id = ?').get(unlinkedAngebotId);
+                assert.strictEqual(turnedRechnung.type, 'rechnung');
+
+                // D: Tender-Draft darf nicht mit einer Rechnung verknüpft werden (weder JS-Validierung noch DB-Trigger)
+                assert.throws(() => {
+                    createTenderDraft(db, importId, { angebotId: rechnungId });
+                }, /kein Angebot/);
+
+                // Auch direkter SQL-Insert in gaeb_tender_drafts wird vom SQLite-Trigger trg_validate_gaeb_tender_draft_angebot_type abgefangen
+                assert.throws(() => {
+                    db.prepare(`
+                        INSERT INTO gaeb_tender_drafts (import_id, angebot_id, version, name)
+                        VALUES (?, ?, 99, 'Illegale Rechnungsverknüpfung')
+                    `).run(importId, rechnungId);
+                }, /Ungültige Verknüpfung: Das referenzierte Dokument im Entwurf muss vom Typ angebot sein/);
+
+                // Und SQL-Update auf gaeb_tender_drafts wird von trg_validate_gaeb_tender_draft_angebot_type_update abgefangen
+                assert.throws(() => {
+                    db.prepare(`UPDATE gaeb_tender_drafts SET angebot_id = ? WHERE id = ?`).run(rechnungId, draft.id);
+                }, /Ungültige Verknüpfung: Das referenzierte Dokument im Entwurf muss vom Typ angebot sein/);
+            } finally {
+                cleanupDb(db, dbPath);
+            }
+        });
+
+        test('7.6 BOM-Konsistenzprüfung (UTF-8 BOM vs. Decoded XML)', () => {
+            const { db, dbPath } = createTempDb();
+            try {
+                const baseXml = loadFixture('valid_schema_reference.x83');
+                const utf8Bom = Buffer.from([0xEF, 0xBB, 0xBF]);
+                const rawWithBom = Buffer.concat([utf8Bom, Buffer.from(baseXml, 'utf8')]);
+
+                // A: rawBytes mit BOM und rawXml als sauberer String ohne BOM -> Muss erfolgreich sein
+                const parsed = GAEBEngine.parseGAEBXML(baseXml);
+                const saveRes = saveX83Import(db, parsed, {
+                    fileName: 'with_bom.x83',
+                    rawBytes: rawWithBom,
+                    rawXml: baseXml
+                });
+                assert.ok(saveRes.importId > 0);
+                assert.strictEqual(saveRes.hasOriginalBytes, true);
+
+                // Verifiziere: Die gespeicherten raw_bytes haben bit-genau das BOM am Anfang
+                const savedBytes = db.prepare('SELECT raw_bytes FROM gaeb_imports WHERE id = ?').get(saveRes.importId).raw_bytes;
+                assert.strictEqual(savedBytes[0], 0xEF);
+                assert.strictEqual(savedBytes[1], 0xBB);
+                assert.strictEqual(savedBytes[2], 0xBF);
+
+                // B: Mismatch zwischen BOM-Buffer und abweichendem XML-Text muss zuverlässig abgewiesen werden
+                const differentXml = '<GAEB xmlns="http://www.gaeb.de/GAEB_DA_XML/DA83/3.3"><PrjInfo><NamePrj>Verfälschter Inhalt</NamePrj></PrjInfo></GAEB>';
+                assert.throws(() => {
+                    saveX83Import(db, parsed, {
+                        fileName: 'mismatch_bom.x83',
+                        rawBytes: rawWithBom,
+                        rawXml: differentXml
+                    });
+                }, /Konsistenzfehler: rawBytes und rawXml stimmen inhaltlich nicht überein/);
             } finally {
                 cleanupDb(db, dbPath);
             }

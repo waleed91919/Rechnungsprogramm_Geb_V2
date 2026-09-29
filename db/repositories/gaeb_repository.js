@@ -88,9 +88,9 @@ function saveX83Import(db, parsedData, options = {}) {
             : (typeof options.rawContent === 'string' ? options.rawContent : null));
 
     if (providedBuffer && providedXml !== null) {
-        const hashFromBytes = crypto.createHash('sha256').update(providedBuffer).digest('hex');
-        const hashFromXml = crypto.createHash('sha256').update(providedXml, 'utf-8').digest('hex');
-        if (hashFromBytes !== hashFromXml) {
+        const textFromBuf = providedBuffer.toString('utf-8').replace(/^\uFEFF/, '');
+        const textFromXml = providedXml.replace(/^\uFEFF/, '');
+        if (textFromBuf.trim() !== textFromXml.trim()) {
             throw new Error('Konsistenzfehler: rawBytes und rawXml stimmen inhaltlich nicht überein.');
         }
     }
@@ -723,11 +723,13 @@ function listX83Imports(db) {
             COUNT(DISTINCT c.id) AS category_count,
             COUNT(DISTINCT it.id) AS item_count,
             COUNT(DISTINCT CASE WHEN it.linked_position_id IS NOT NULL THEN it.id END) AS linked_item_count,
-            COUNT(DISTINCT gia.angebot_id) AS linked_angebot_count
+            COUNT(DISTINCT gia.angebot_id) AS linked_angebot_count,
+            COUNT(DISTINCT d.id) AS draft_count
         FROM gaeb_imports i
         LEFT JOIN gaeb_categories c ON c.import_id = i.id
         LEFT JOIN gaeb_items it ON it.import_id = i.id
         LEFT JOIN gaeb_import_angebote gia ON gia.import_id = i.id
+        LEFT JOIN gaeb_tender_drafts d ON d.import_id = i.id
         GROUP BY i.id
         ORDER BY i.imported_at DESC, i.id DESC
     `);

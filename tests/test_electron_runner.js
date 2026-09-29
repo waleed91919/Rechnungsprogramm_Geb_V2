@@ -783,6 +783,12 @@ app.whenReady().then(async () => {
                         throw new Error('GAEB Tender Modal ist nach openGaebTenderModal nicht sichtbar');
                     }
 
+                    // Wenn in der Entwurfsübersicht, ersten Entwurf explizit über UI anlegen
+                    const createDraftBtn = document.getElementById('gt-btn-create-first-draft');
+                    if (createDraftBtn) {
+                        await window.GaebTenderController.createNewDraftForSelectedImport();
+                    }
+
                     // 3. Baum-Prüfung
                     const treeContainer = document.getElementById('gt-tree-container');
                     if (!treeContainer || treeContainer.children.length === 0) {

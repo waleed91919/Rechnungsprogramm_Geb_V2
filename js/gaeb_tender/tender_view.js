@@ -28,9 +28,208 @@
 
     class GaebTenderView {
         /**
+         * Schaltet zwischen Ansichtsmodi um ('import-list' | 'draft-list' | 'editor')
+         */
+        setViewMode(mode) {
+            const importListView = document.getElementById('gt-view-import-list');
+            const draftListView = document.getElementById('gt-view-draft-list');
+            const editorView = document.getElementById('gt-view-editor');
+
+            const navImports = document.getElementById('gt-nav-to-imports');
+            const navDrafts = document.getElementById('gt-nav-to-drafts');
+            const navSep1 = document.getElementById('gt-nav-sep-1');
+            const navSep2 = document.getElementById('gt-nav-sep-2');
+            const editorControls = document.getElementById('gt-header-editor-controls');
+            const phaseBadge = document.getElementById('gt-header-phase-badge');
+            const statusBadge = document.getElementById('gt-header-status-badge');
+            const subtitle = document.getElementById('gt-header-subtitle');
+            const projTitle = document.getElementById('gt-header-project-name');
+
+            if (mode === 'import-list') {
+                if (importListView) importListView.classList.remove('hidden');
+                if (draftListView) draftListView.classList.add('hidden');
+                if (editorView) editorView.classList.add('hidden');
+
+                if (navImports) navImports.classList.add('hidden');
+                if (navDrafts) navDrafts.classList.add('hidden');
+                if (navSep1) navSep1.classList.add('hidden');
+                if (navSep2) navSep2.classList.add('hidden');
+                if (editorControls) editorControls.classList.add('hidden');
+                if (phaseBadge) phaseBadge.classList.add('hidden');
+                if (statusBadge) statusBadge.classList.add('hidden');
+                if (subtitle) subtitle.classList.add('hidden');
+
+                if (projTitle) projTitle.textContent = 'GAEB Ausschreibungen - Importauswahl';
+            } else if (mode === 'draft-list') {
+                if (importListView) importListView.classList.add('hidden');
+                if (draftListView) draftListView.classList.remove('hidden');
+                if (editorView) editorView.classList.add('hidden');
+
+                if (navImports) navImports.classList.remove('hidden');
+                if (navDrafts) navDrafts.classList.add('hidden');
+                if (navSep1) navSep1.classList.remove('hidden');
+                if (navSep2) navSep2.classList.add('hidden');
+                if (editorControls) editorControls.classList.add('hidden');
+                if (phaseBadge) phaseBadge.classList.remove('hidden');
+                if (statusBadge) statusBadge.classList.add('hidden');
+                if (subtitle) subtitle.classList.remove('hidden');
+            } else if (mode === 'editor') {
+                if (importListView) importListView.classList.add('hidden');
+                if (draftListView) draftListView.classList.add('hidden');
+                if (editorView) editorView.classList.remove('hidden');
+
+                if (navImports) navImports.classList.remove('hidden');
+                if (navDrafts) navDrafts.classList.remove('hidden');
+                if (navSep1) navSep1.classList.remove('hidden');
+                if (navSep2) navSep2.classList.remove('hidden');
+                if (editorControls) editorControls.classList.remove('hidden');
+                if (phaseBadge) phaseBadge.classList.remove('hidden');
+                if (statusBadge) statusBadge.classList.remove('hidden');
+                if (subtitle) subtitle.classList.remove('hidden');
+            }
+        }
+
+        /**
+         * Rendert die Liste aller verfügbaren GAEB-Importe
+         */
+        renderImportList(imports) {
+            this.setViewMode('import-list');
+            const tbody = document.getElementById('gt-import-list-tbody');
+            const emptyEl = document.getElementById('gt-empty-imports');
+            const tableContainer = document.getElementById('gt-import-table-container');
+            const errorEl = document.getElementById('gt-error-imports');
+
+            if (errorEl) errorEl.classList.add('hidden');
+
+            if (!Array.isArray(imports) || imports.length === 0) {
+                if (tbody) tbody.innerHTML = '';
+                if (tableContainer) tableContainer.classList.add('hidden');
+                if (emptyEl) emptyEl.classList.remove('hidden');
+                return;
+            }
+
+            if (tableContainer) tableContainer.classList.remove('hidden');
+            if (emptyEl) emptyEl.classList.add('hidden');
+
+            if (tbody) {
+                tbody.innerHTML = imports.map(imp => {
+                    const draftsCount = (imp.draft_count !== undefined) ? imp.draft_count : (imp.drafts ? imp.drafts.length : 0);
+                    const importDate = (imp.imported_at || '').slice(0, 10) || '--';
+                    const gaebVer = imp.gaeb_version || '3.3';
+
+                    return `
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="py-3 px-4 font-bold text-slate-800 font-mono">${escapeHtml(imp.file_name)}</td>
+                            <td class="py-3 px-4 text-slate-700">${escapeHtml(imp.project_name || 'Unbenanntes Projekt')}</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-slate-100 text-slate-700 border border-slate-200">GAEB ${escapeHtml(gaebVer)}</span>
+                            </td>
+                            <td class="py-3 px-4 text-slate-500">${escapeHtml(importDate)}</td>
+                            <td class="py-3 px-4 font-mono text-slate-500">#${imp.id}</td>
+                            <td class="py-3 px-4 text-slate-600">${imp.category_count || 0} Kat. / ${imp.item_count || 0} Pos.</td>
+                            <td class="py-3 px-4">
+                                <span class="px-2 py-0.5 text-[11px] font-semibold rounded-full ${draftsCount > 0 ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'bg-slate-100 text-slate-500'}">
+                                    ${draftsCount} ${draftsCount === 1 ? 'Entwurf' : 'Entwürfe'}
+                                </span>
+                            </td>
+                            <td class="py-3 px-4 text-right">
+                                <button type="button" onclick="window.GaebTenderController.selectImport(${imp.id})" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm hover:shadow transition-all inline-flex items-center gap-1">
+                                    <span>Auswählen</span>
+                                    <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+
+        /**
+         * Rendert die Liste der Bepreisungsentwürfe für einen ausgewählten Import
+         */
+        renderDraftList(importInfo, drafts) {
+            this.setViewMode('draft-list');
+
+            const projTitle = document.getElementById('gt-header-project-name');
+            if (projTitle) projTitle.textContent = importInfo?.project_name || 'GAEB Ausschreibung';
+
+            const cardProj = document.getElementById('gt-draftlist-project-name');
+            const cardFile = document.getElementById('gt-draftlist-file-name');
+            const cardDate = document.getElementById('gt-draftlist-import-date');
+            const cardStats = document.getElementById('gt-draftlist-stats');
+
+            if (cardProj) cardProj.textContent = importInfo?.project_name || 'Unbenanntes Projekt';
+            if (cardFile) cardFile.textContent = importInfo?.file_name || 'import.x83';
+            if (cardDate) cardDate.textContent = `Import: ${(importInfo?.imported_at || '').slice(0, 10)}`;
+            if (cardStats) cardStats.textContent = `${importInfo?.item_count || 0} Positionen (${importInfo?.category_count || 0} Kategorien)`;
+
+            const fileEl = document.getElementById('gt-header-file-name');
+            const dateEl = document.getElementById('gt-header-import-date');
+            const versionEl = document.getElementById('gt-header-gaeb-version');
+            if (fileEl) fileEl.textContent = importInfo?.file_name || `Import #${importInfo?.id}`;
+            if (dateEl) dateEl.textContent = `Import: ${(importInfo?.imported_at || '').slice(0, 10)}`;
+            if (versionEl) versionEl.textContent = `GAEB ${importInfo?.gaeb_version || '3.3'}`;
+
+            const tbody = document.getElementById('gt-draft-list-tbody');
+            const emptyEl = document.getElementById('gt-empty-drafts');
+            const tableContainer = document.getElementById('gt-draft-table-container');
+
+            if (!Array.isArray(drafts) || drafts.length === 0) {
+                if (tbody) tbody.innerHTML = '';
+                if (tableContainer) tableContainer.classList.add('hidden');
+                if (emptyEl) emptyEl.classList.remove('hidden');
+                return;
+            }
+
+            if (tableContainer) tableContainer.classList.remove('hidden');
+            if (emptyEl) emptyEl.classList.add('hidden');
+
+            if (tbody) {
+                tbody.innerHTML = drafts.map(d => {
+                    let badgeHtml = '';
+                    const isFullyPriced = (d.status === 'VOLLSTAENDIG_BEPREIST');
+                    const hasUnresolvedQtyTbd = (d.unresolved_qty_tbd_count > 0);
+                    const pricesDone = (d.unpriced_count === 0 && d.missing_bireq_count === 0);
+
+                    if (isFullyPriced) {
+                        badgeHtml = '<span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">Vollständig bepreist</span>';
+                    } else if (d.status === 'VERWORFEN') {
+                        badgeHtml = '<span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-200 text-slate-700">Verworfen</span>';
+                    } else if (pricesDone && hasUnresolvedQtyTbd) {
+                        badgeHtml = '<span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-900 border border-amber-300" title="Mengen noch unbestimmt (QtyTBD) - Nicht bereit zur Abgabe">Mengen unbestimmt (QtyTBD)</span>';
+                    } else {
+                        badgeHtml = '<span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">In Bearbeitung</span>';
+                    }
+
+                    const updatedAt = (d.updated_at || d.created_at || '').slice(0, 16).replace('T', ' ');
+
+                    return `
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="py-3 px-4 font-mono font-bold text-slate-800">v${d.version}</td>
+                            <td class="py-3 px-4 font-semibold text-slate-900">${escapeHtml(d.name)}</td>
+                            <td class="py-3 px-4">${badgeHtml}</td>
+                            <td class="py-3 px-4 text-slate-500 text-[11px]">${d.unpriced_count || 0} unbepreist, ${d.missing_bireq_count || 0} BiReq</td>
+                            <td class="py-3 px-4 font-mono text-slate-700">${formatCurrency(d.total_netto)}</td>
+                            <td class="py-3 px-4 font-mono font-bold text-emerald-700">${formatCurrency(d.total_brutto)}</td>
+                            <td class="py-3 px-4 text-slate-400 text-[11px]">${escapeHtml(updatedAt)}</td>
+                            <td class="py-3 px-4 text-right">
+                                <button type="button" onclick="window.GaebTenderController.openDraft(${d.id}, ${importInfo.id})" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-sm hover:shadow transition-all inline-flex items-center gap-1">
+                                    <span>Öffnen</span>
+                                    <span class="material-symbols-outlined text-[14px]">edit</span>
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+        }
+
+        /**
          * Aktualisiert die Kopfzeile des Modals
          */
         renderHeader(state) {
+            this.setViewMode('editor');
+
             const projectEl = document.getElementById('gt-header-project-name');
             const fileEl = document.getElementById('gt-header-file-name');
             const dateEl = document.getElementById('gt-header-import-date');
@@ -48,12 +247,18 @@
 
             if (statusBadge) {
                 const isFullyPriced = (state.stats.status === 'VOLLSTAENDIG_BEPREIST');
+                const hasUnresolvedQtyTbd = (state.stats.unresolved_qty_tbd_count > 0 || state.draft?.unresolved_qty_tbd_count > 0);
+                const pricesDone = (state.stats.unpriced_count === 0 && state.stats.missing_bireq_count === 0);
+
                 if (isFullyPriced) {
                     statusBadge.className = 'px-2.5 py-0.5 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1';
                     statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Vollständig bepreist';
                 } else if (state.stats.status === 'VERWORFEN') {
                     statusBadge.className = 'px-2.5 py-0.5 text-xs font-bold rounded-full bg-slate-200 text-slate-700 border border-slate-300 flex items-center gap-1';
                     statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span> Verworfen';
+                } else if (pricesDone && hasUnresolvedQtyTbd) {
+                    statusBadge.className = 'px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1';
+                    statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> Preise erfasst, aber Mengen noch unbestimmt (QtyTBD) - Nicht bereit zur Abgabe';
                 } else {
                     statusBadge.className = 'px-2.5 py-0.5 text-xs font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200 flex items-center gap-1';
                     statusBadge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span> In Bearbeitung';
@@ -427,6 +632,18 @@
                 missingBireqEl.className = missing === 0
                     ? 'font-bold text-emerald-600 font-mono'
                     : 'font-bold text-amber-600 font-mono';
+            }
+
+            const qtyTbdContainer = document.getElementById('gt-stat-qty-tbd-container');
+            const qtyTbdEl = document.getElementById('gt-stat-unresolved-qty-tbd');
+            const unresolvedQty = state.stats.unresolved_qty_tbd_count || 0;
+            if (qtyTbdContainer && qtyTbdEl) {
+                if (unresolvedQty > 0) {
+                    qtyTbdContainer.classList.remove('hidden');
+                    qtyTbdEl.textContent = unresolvedQty;
+                } else {
+                    qtyTbdContainer.classList.add('hidden');
+                }
             }
         }
 
