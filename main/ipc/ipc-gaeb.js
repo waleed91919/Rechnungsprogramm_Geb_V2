@@ -234,45 +234,15 @@ function register(ipcMain, context = {}) {
 
         // XSD-Prüfung vor dem Schreiben
         const gaebVersion = exportResult.model.gaebVersion || '3.3';
-        const schemaDir = path.join(__dirname, '..', '..', 'tests', 'schemas', `gaeb_da_xml_${gaebVersion}`);
-        const schemaFile = gaebVersion === '3.2' ? 'GAEB_DA_XML_84_3.2_2013-10.xsd' : 'GAEB_DA_XML_84_3.3_2021-05.xsd';
-        const schemaPath = path.join(schemaDir, schemaFile);
+        const { validateXML } = require('../services/gaeb-x84-schema-validator');
 
-        try {
-            if (fs.existsSync(schemaPath)) {
-                // libxmljs2 handles libxmljs seamlessly for our needs and fixes Node 22 compat
-                const libxmljs = require('libxmljs2');
-                const xsdStr = fs.readFileSync(schemaPath, 'utf8');
+        const validationResult = validateXML(xml, gaebVersion);
 
-                const xsdDoc = libxmljs.parseXml(xsdStr, { baseUrl: 'file://' + schemaPath, nonet: true });
-                const xmlDoc = libxmljs.parseXml(xml);
-                const isValid = xmlDoc.validate(xsdDoc);
-
-                if (!isValid) {
-                    let errs = [];
-                    if (xmlDoc.validationErrors && xmlDoc.validationErrors.length > 0) {
-                        errs = xmlDoc.validationErrors.map(e => `Zeile ${e.line}: ${e.message}`);
-                    } else {
-                        errs = ['Unbekannter XSD-Validierungsfehler (isValid war false, aber keine Details)'];
-                    }
-                    return {
-                        success: false,
-                        validationErrors: errs,
-                        error: 'XSD-Validierung fehlgeschlagen:\n' + errs.join('\n')
-                    };
-                }
-            } else {
-                return {
-                    success: false,
-                    validationErrors: ['Schema nicht gefunden'],
-                    error: 'XSD-Schema nicht gefunden: ' + schemaPath
-                };
-            }
-        } catch (e) {
+        if (!validationResult.valid) {
             return {
                 success: false,
-                validationErrors: [e.message],
-                error: 'Fehler bei der XSD-Prüfung: ' + e.message
+                validationErrors: validationResult.errors,
+                error: 'XSD-Validierung fehlgeschlagen'
             };
         }
 

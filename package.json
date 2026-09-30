@@ -28,11 +28,17 @@
       "createStartMenuShortcut": true,
       "shortcutName": "W-Link ERP"
     },
+    "extraResources": [
+      {
+        "from": "tests/schemas",
+        "to": "schemas",
+        "filter": ["**/*"]
+      }
+    ],
     "files": [
       "**/*",
       "!.git/*",
       "!tests/*",
-      "tests/schemas/**/*",
       "!benchmark_*",
       "!remotion-video/*",
       "!App version/*",
