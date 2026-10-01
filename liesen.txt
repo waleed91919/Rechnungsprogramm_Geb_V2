@@ -1,98 +1,107 @@
-> Du arbeitest am Projekt W-Link im Repository `waleed91919/Rechnungsprogramm_Geb_V2`.
+
+
+> Du arbeitest im Repository `waleed91919/Rechnungsprogramm_Geb_V2` auf dem bestehenden Branch **`review/gaeb-x84-release-verification`**.
 >
-> **Ziel:** Nachweisen, dass der vorhandene GAEB-X84-Export im tatsächlich gebauten Electron-Paket offline funktioniert. Die grundlegenden Korrekturen am produktiven Exportpfad sind bereits vorhanden. Überarbeite sie nicht ohne einen konkret reproduzierten Fehler.
-
-### 1. Ausgangspunkt und Branch
-
-> - Prüfe zunächst, welcher aktuelle Stand die Korrekturen bis `7ee5d0f1045e90c145ae065d07c15b8239c6443f` enthält.
-> - Falls dieser Stand noch auf `review/gaeb-x84-release-verification` bearbeitet wird und der PR offen ist, arbeite dort weiter.
-> - Falls er bereits in `main` übernommen wurde, erstelle davon einen neuen Review-Branch, beispielsweise `review/gaeb-x84-real-package-test`.
-> - Dokumentiere Arbeitsbranch und tatsächlichen Start-SHA.
-> - **Keine direkten Commits, Pushes oder Merges nach `main`. `main.js` nicht ändern.**
-> - Keine veröffentlichten Branch-Historien ungefragt überschreiben und keinen Force-Push ausführen.
-
-### 2. Bisherige Simulation richtig einordnen
-
-> - `verify_packaged.js` verändert derzeit `process.resourcesPath` und kann ein künstliches `electron.app` anlegen.
-> - Dieser Test darf als Simulation bestehen bleiben, muss aber eindeutig so bezeichnet werden. Er ist **kein Beweis für ein funktionierendes Anwendungspaket**.
-> - Für den echten Pakettest sind folgende Eingriffe verboten:
+> Zuletzt geprüfter Stand: `c0110eb15001d43894a17a2f652535a264fd3f31`. Prüfe den aktuellen HEAD und dokumentiere den tatsächlichen Start-SHA.
 >
-> ```text
-> app.isPackaged überschreiben oder mocken
-> process.resourcesPath überschreiben
-> electron.app künstlich erzeugen
-> Schemas aus dem Quellverzeichnis als Fallback verwenden
-> libxmljs2 aus der Entwicklungsinstallation laden
-> ```
+> **Ziel:** Die Lücken in den Paket- und UI-Tests schließen. Die vorhandenen Tests laden bereits die produktive XSD-Service-Datei innerhalb des echten Windows-Electron-Pakets. Dieses funktionierende Vorgehen soll erhalten bleiben.
+
+### 1. Grenzen und Architektur
+
+> - Arbeite nur auf dem genannten Review-Branch. Falls er inzwischen gemergt oder geschlossen wurde, melde das und arbeite nicht ungefragt auf `main`.
+> - **Kein Commit, Push oder Merge nach `main`. `main.js` nicht verändern.**
+> - Keine neue Exportfunktion, kein PDF, EFB, Versand oder formales Angebot in `dokumente`.
+> - Änderungen grundsätzlich auf `tests/verify_real_package_compliance.js`, `scripts/test_renderer_ui.js` und nachvollziehbare Testdokumentation beschränken.
+> - Produktivcode nur ändern, wenn ein neuer Test einen konkreten Fehler nachweist. Dann ausschließlich in der zuständigen kleinen GAEB-Service-, IPC- oder UI-Einheit korrigieren.
+> - Keine Test-Bypässe oder Debug-Zugänge in die produktive Anwendung einbauen.
+
+### 2. Normalen UI-Export tatsächlich prüfen
+
+> Der bisherige UI-Test erstellt und bepreist Daten über API-Aufrufe und untersucht anschließend den Export-Button. Er führt **keinen tatsächlichen Export** aus.
 >
-> - Das Testprotokoll muss zeigen, dass die tatsächlich laufende Anwendung ihre mitgelieferten Ressourcen und Abhängigkeiten verwendet.
-
-### 3. Echtes Paket bauen und starten
-
-> - Prüfe das vorhandene Buildverfahren und baue ein frisches Electron-Paket aus dem endgültigen Arbeitsstand.
-> - Verwende die vorhandenen Projektwerkzeuge. Ändere nicht die komplette Buildstruktur.
-> - Starte den **erzeugten Anwendungs-Binary**, nicht lediglich `electron verify_packaged.js` aus dem Quellverzeichnis.
-> - Dokumentiere Build- und Startbefehl, Betriebssystem, Architektur, Electron-Version und getesteten SHA.
-> - Der Testlauf soll eine isolierte Testdatenbank bzw. ein separates Benutzerprofil verwenden. Keine produktiven Nutzerdaten oder bestehenden Installationen verändern.
-> - Stelle sicher, dass das laufende Paket auch ohne Zugriff auf das Quellverzeichnis funktioniert. Teste ohne Netzwerkzugriff und ohne benötigtes System-Python oder System-Java.
-
-### 4. Testzugang ohne Änderung an main.js
-
-> - Verwende bevorzugt die vorhandene Oberfläche: Test-X83 importieren, gespeicherte Testmaske bepreisen und X84 exportieren.
-> - Falls für automatisierte Negativfälle ein Prüfskript benötigt wird, lade damit dieselbe Backend-Service-Funktion aus dem Paket.
-> - Kein neuer Testschalter im Renderer und keine IPC-Option, die Validierung oder Speicherdialog umgeht.
-> - Falls ein spezielles Testpaket mit einem separaten Test-Einstieg benötigt wird, halte dessen Buildkonfiguration getrennt. **Produktives `main.js` und der produktive Einstieg bleiben unverändert.**
-> - Dokumentiere bei einem solchen Testpaket genau, was vom normalen Release-Paket abweicht. Prüfe zusätzlich mindestens einen erfolgreichen Export über die normale Anwendung.
-
-### 5. Verbindliche Prüffälle
-
-> Führe im Paket folgende Fälle aus:
+> Ergänze:
 >
-> 1. **GAEB 3.2, gültig:** Ein vollständiger gespeicherter Draft erzeugt X84, besteht die produktive XSD-Prüfung und wird erfolgreich gespeichert.
-> 2. **GAEB 3.3, gültig:** Derselbe Ablauf mit der passenden Schemafamilie.
-> 3. **GAEB 3.2 und 3.3, ungültig:** Wohlgeformtes XML mit einer nachweislich unzulässigen Struktur wird von der echten XSD-Engine abgelehnt. Im geprüften Exportpfad darf keine Datei geschrieben werden.
-> 4. **Ungültige Version bzw. falscher Namespace:** Klare Ablehnung statt automatischer Annahme von 3.3.
-> 5. **Dialog-Abbruch:** Keine Datei und keine Veränderung vorhandener Dateien.
-> 6. **Fehlendes Schema oder Include:** Nur in einer isolierten Kopie der Testressourcen manipulieren. Erwartung: verständlicher Fehler, kein Export und kein Rückgriff auf Entwicklerdateien.
+> - Einen gültigen Test-Draft im isolierten Benutzerprofil vorbereiten. Für Testdatenvorbereitung sind die vorhandenen Backend-/IPC-APIs zulässig; bezeichne das nicht als manuell getesteten Importdialog.
+> - Das Tender-Modal öffnen und verbindlich prüfen:
+>   - Modal sichtbar.
+>   - Richtiger Draft ausgewählt.
+>   - Export-Button vorhanden und aktiv.
+> - Fehlt eine Voraussetzung, muss der Test mit Fehlerstatus abbrechen. Nicht nur Werte ausgeben und anschließend Erfolg melden.
+> - Den Export über den **tatsächlichen Button und Controller** auslösen.
+> - Die native Speicherfunktion verwenden, ein Testziel wählen und prüfen, dass die Datei wirklich geschrieben wurde.
+> - Die gespeicherte Datei erneut mit der passenden produktiven XSD-Service-Funktion prüfen und dem ausgewählten Draft zuordnen.
+> - Für beide Versionen 3.2 und 3.3 den produktiven Exportpfad prüfen. Mindestens ein vollständiger Fall muss über den realen UI-Button laufen; kennzeichne den Umfang der übrigen Fälle genau.
 >
-> - Prüfe und protokolliere die tatsächlichen Schema-Pfade sowie die Herkunft der geladenen `libxmljs2`-Bibliothek.
-> - Ein erfolgreich geladener Schema-Hauptpfad reicht nicht: Auch die benötigten Includes müssen funktionieren.
-> - Ein syntaktisch kaputtes XML testet nur den Parser. Der Negativnachweis muss auch **wohlgeformtes, aber XSD-ungültiges XML** enthalten.
+> Verwende für native Dialogbedienung vorhandene Testwerkzeuge. Falls die Umgebung den Dialog nicht automatisiert bedienen kann, führe einen dokumentierten manuellen Pakettest durch. **Nicht heimlich durch einen Mock ersetzen und als echten Dialogtest melden.**
 
-### 6. Nur nachgewiesene Fehler korrigieren
+### 3. Dialog-Abbruch über den echten Ablauf
 
-> - Wenn ein Pakettest scheitert, ermittle die konkrete Ursache: fehlende Ressource, falscher Pfad, URI-Auflösung oder native Electron-Kompatibilität.
-> - Korrigiere nur die betroffene Konfiguration oder kleine Backend-Einheit.
-> - Ressourcenauflösung und XSD-Prüfung bleiben in `main/services/gaeb-x84-schema-validator.js`; IPC bleibt für Ablaufsteuerung und Dialog zuständig.
-> - Keine Exportlogik nach `main.js`, `js/editor.js`, `js/gaeb.js` oder HTML verschieben.
-> - Nach einer Korrektur das Paket **neu bauen** und die betroffenen Prüfungen wiederholen. Ein Test eines älteren Pakets zählt nicht für den korrigierten Stand.
+> - Entferne aus dem bisherigen Paketnachweis die Behauptung, das lokal erzeugte Objekt `{ canceled: true }` sei ein Test des nativen Dialogs.
+> - Öffne den Speicherdialog durch den realen Exportablauf und brich ihn tatsächlich ab.
+> - Prüfe danach:
+>   - Keine neue Ausgabedatei.
+>   - Vorhandene Testdateien bleiben byte-identisch.
+>   - Die Oberfläche meldet keinen erfolgreichen Export.
+> - Falls zusätzlich ein Dialog-Mock als Unit-Test verwendet wird, ist das erlaubt, muss aber ausdrücklich als **simulierter Handler-Test** bezeichnet werden.
 
-### 7. Was ausdrücklich nicht erlaubt ist
+### 4. Ungültiges XML durch den produktiven Handler
 
-> - Kein Merge nach `main` und keine Änderung an `main.js`.
-> - Keine Neuimplementierung von Mapper, Serializer oder Datenbank ohne reproduzierten Fehler.
-> - Keine zusätzlichen PDF-, EFB-, Versand- oder Angebotsfunktionen.
-> - Keine weiteren Validator-Bibliotheken auf Verdacht installieren.
-> - Keine XSD-Fehler unterdrücken oder Validierung abschwächen.
-> - Keine Aussage „Pakettest bestanden“, wenn nur eine Simulation oder der Build selbst erfolgreich war.
-> - Keine generierten Rechnungs-PDFs, DATEV-CSV-Dateien, Datenbanken oder fachfremden Testberichte committen.
-> - Keine endlosen Verbesserungsschleifen: Nach den definierten Prüffällen stoppen.
-
-### 8. Abschlussbericht und Freigabegrenze
-
-> Liefere ein kurzes, nachvollziehbares Prüfprotokoll mit:
+> Der bisherige Negativtest validiert XML und entscheidet in einer selbst geschriebenen `if`-Anweisung, ob eine Datei gespeichert wird. Das prüft die Service-Funktion, nicht die Schreibentscheidung des produktiven IPC-Handlers.
 >
-> - Arbeitsbranch und geprüftem SHA.
-> - Build- und Startbefehlen.
-> - Betriebssystem, Architektur und Electron-Version.
-> - Tatsächlichen Ressourcenpfaden.
-> - Ergebnissen der gültigen und ungültigen Fälle für 3.2 und 3.3.
-> - Ergebnis des normalen UI-Exports.
-> - Etwaigen Paketkorrekturen und geänderten Dateien.
-> - Bestätigung, dass `main.js` unverändert blieb.
+> Ergänze einen isolierten Test des **tatsächlich registrierten `gaeb:export-x84`-Handlers**:
 >
-> Führe bei Codeänderungen die relevanten Regressionstests und `git diff --check` aus. Committe und pushe nur den Review-Branch.
+> - Erzeuge gültige Testdaten.
+> - Manipuliere die Exportausgabe nach der XML-Erzeugung zu wohlgeformtem, aber XSD-ungültigem XML.
+> - Verwende die echte XSD-Engine und die produktive Service-Funktion.
+> - Rufe den produktiven Handler auf und prüfe `success === false`, verständliche Fehlerdetails und das Ausbleiben einer Datei.
+> - Prüfe zusätzlich den Fall `valid: false` mit leerer Fehlerliste als separaten Unit-Test.
+> - Der Test darf Abhängigkeiten kontrolliert injizieren oder temporär ersetzen, aber nur im Testprozess. Keine Renderer-Option wie `isTestEnv`, `filePath` oder `skipValidation` hinzufügen.
+> - Stelle alle ersetzten Funktionen in `finally` wieder her.
 >
-> **Falls deine Umgebung den echten Paketlauf nicht ermöglicht:** Benenne das Hindernis präzise und liefere einen reproduzierbaren Ablauf für die Zielumgebung. Behaupte keinen Erfolg und baue keine Simulation als Ersatz ein.
+> Wenn dieser Test nicht innerhalb des Pakets durchführbar ist, behalte den echten Paket-Service-Test und ergänze den Handler-Integrationstest getrennt. Dokumentiere beide Ebenen ehrlich; vermische ihre Nachweise nicht.
+
+### 5. Fehlendes Schema und Include korrekt testen
+
+> - Beim fehlenden Hauptschema genügt `fs.existsSync(...) === false` nicht als Nachweis der Fehlerbehandlung.
+> - Rufe die **produktive Service-Funktion** mit einer tatsächlich fehlenden Ressource auf.
+> - Verwende dafür eine isolierte Kopie des Pakets bzw. seiner Ressourcen. Keine Ressourcen der normalen Installation oder des ursprünglichen Prüfpakets dauerhaft verändern.
+> - Prüfe bei fehlendem Hauptschema und fehlendem Include:
+>   - Validierung schlägt fehl.
+>   - Verständliche Fehlermeldung.
+>   - Kein Ausweichen auf Entwicklungsressourcen.
+> - Belege die Nicht-Speicherung zusätzlich über den produktiven Handler-Test, nicht durch eine selbst kopierte Schreibbedingung.
+> - `app.isPackaged` und `process.resourcesPath` im echten Paketnachweis weiterhin nicht überschreiben.
+
+### 6. Testzuverlässigkeit und Bericht
+
+> - Verwende eindeutige temporäre Zielpfade pro Testlauf, damit alte Dateien das Ergebnis nicht verfälschen.
+> - Setze Timeouts für Inspector-Verbindungen, Auswertungen und UI-Wartebedingungen. Bei Timeout klar fehlschlagen, nicht unbegrenzt warten.
+> - Schließe Testprozesse, Verbindungen und Datenbanken zuverlässig und bereinige nur die eigenen temporären Dateien.
+> - Debugging-Ports gehören ausschließlich zum Teststart, nicht in produktive Startskripte oder Release-Konfigurationen.
+> - Überprüfe, dass das getestete Paket den finalen Code enthält. Nach notwendigen Produktivkorrekturen neu bauen.
+> - Trenne im Bericht diese Nachweise:
+>   1. Echte Paketlaufzeit und Ressourcen.
+>   2. XSD-Service-Validierung im Paket.
+>   3. Handler-Integrationstest.
+>   4. Tatsächlicher UI-Export und nativer Dialog.
+> - Formuliere Erfolg nur für tatsächlich geprüfte Fälle. „Button vorhanden“ bedeutet nicht „Datei exportiert“.
+
+### 7. Was du nicht machen darfst
+
+> - Nicht `main` oder `main.js` bearbeiten.
+> - Keine funktionierenden Mapper, Serializer oder Datenbankstrukturen ohne nachgewiesenen Fehler neu schreiben.
+> - Keine Validierung umgehen oder Assertions abschwächen.
+> - Keine Simulation als echten Paket-, Dialog- oder UI-End-to-End-Test ausgeben.
+> - Keine Produktionsdaten für Tests verwenden.
+> - Keine generierten PDFs, DATEV-Dateien, Datenbanken oder fachfremden Testartefakte committen.
+> - Keine zusätzlichen Features oder allgemeine „Codeverbesserungen“ beginnen.
+
+### 8. Abschluss und Stop-Bedingung
+
+> Führe die relevanten GAEB-Regressionstests sowie `git diff --check` aus. Kontrolliere den vollständigen Branch-Diff.
 >
-> **Stop-Bedingung:** Der echte Paketnachweis ist erbracht oder die fehlende Testvoraussetzung ist klar dokumentiert. Danach keine weiteren Funktionen beginnen und nicht selbstständig mergen.
+> Liefere Start-/End-SHA, geänderte Dateien, genaue Build- und Testbefehle sowie Ergebnisse der oben getrennten Testebenen. Dokumentiere manuelle Schritte oder technisch nicht durchführbare Prüfungen ausdrücklich.
+>
+> Committe und pushe **nur den Review-Branch**. Kein automatischer Merge.
+>
+> **Stop-Bedingung:** Die genannten Testlücken sind geschlossen oder ihre verbleibenden Grenzen präzise dokumentiert. Danach keine weitere Entwicklungsrunde starten.
