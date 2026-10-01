@@ -112,7 +112,9 @@ function validateDraftForExport(db, draftId, options = {}) {
 
         priceableCount++;
         const ozLabel = item.oz || item.oz_code || item.rno_part || item.id || `Pos_${item._sortIndex || '?'}`;
-        const inTotal = Boolean(item.in_total === 1 || item.in_total === true || item.in_endsumme_enthalten === 1);
+        const inTotal = item.in_total !== undefined && item.in_total !== null
+            ? Boolean(Number(item.in_total))
+            : Boolean(item.in_endsumme_enthalten);
 
         // a) Einheitspreis prüfen
         const hasUnitPrice = (item.unit_price !== null && item.unit_price !== undefined && !isNaN(Number(item.unit_price)));

@@ -209,28 +209,24 @@ function register(ipcMain, context = {}) {
             }
         } catch (_e) {}
 
-        let targetFilePath = null;
-        if (options && options.isTestEnv && options.filePath) { targetFilePath = options.filePath; }
+        const win = (e && e.sender && browserWindowModule && typeof browserWindowModule.fromWebContents === 'function')
+            ? browserWindowModule.fromWebContents(e.sender)
+            : (browserWindowModule && typeof browserWindowModule.getFocusedWindow === 'function' ? browserWindowModule.getFocusedWindow() : null);
 
-        // Wenn kein filePath vorgegeben wurde (Standardfall im Renderer), nativen Save-Dialog öffnen
-        if (!targetFilePath) {
-            const win = (e && e.sender && browserWindowModule && typeof browserWindowModule.fromWebContents === 'function')
-                ? browserWindowModule.fromWebContents(e.sender)
-                : (browserWindowModule && typeof browserWindowModule.getFocusedWindow === 'function' ? browserWindowModule.getFocusedWindow() : null);
-            const { filePath, canceled } = await dialogModule.showSaveDialog(win, {
-                title: 'GAEB DA XML X84 (Angebotsabgabe) speichern',
-                defaultPath,
-                filters: [
-                    { name: 'GAEB DA XML Phase X84 (*.x84)', extensions: ['x84'] },
-                    { name: 'Alle Dateien (*.*)', extensions: ['*'] }
-                ]
-            });
+        const { filePath, canceled } = await dialogModule.showSaveDialog(win, {
+            title: 'GAEB DA XML X84 (Angebotsabgabe) speichern',
+            defaultPath,
+            filters: [
+                { name: 'GAEB DA XML Phase X84 (*.x84)', extensions: ['x84'] },
+                { name: 'Alle Dateien (*.*)', extensions: ['*'] }
+            ]
+        });
 
-            if (canceled || !filePath) {
-                return { canceled: true };
-            }
-            targetFilePath = filePath;
+        if (canceled || !filePath) {
+            return { canceled: true };
         }
+
+        const targetFilePath = filePath;
 
         // Export durchführen (XML erzeugen)
         const exportResult = gaebX84.exportTenderDraftToX84(db, draftId, options);
@@ -238,46 +234,15 @@ function register(ipcMain, context = {}) {
 
         // XSD-Prüfung vor dem Schreiben
         const gaebVersion = exportResult.model.gaebVersion || '3.3';
-        const schemaDir = path.join(__dirname, '..', '..', 'tests', 'schemas', `gaeb_da_xml_${gaebVersion}`);
-        const schemaFile = gaebVersion === '3.2' ? 'GAEB_DA_XML_84_3.2_2013-10.xsd' : 'GAEB_DA_XML_84_3.3_2021-05.xsd';
-        const schemaPath = path.join(schemaDir, schemaFile);
+        const { validateXML } = require('../services/gaeb-x84-schema-validator');
 
-        try {
-            if (fs.existsSync(schemaPath)) {
-                const libxmljs = require('libxmljs');
-                const xsdStr = fs.readFileSync(schemaPath, 'utf8');
-                
-                const cwd = process.cwd();
-                try {
-                    process.chdir(schemaDir);
-                    const xsdDoc = libxmljs.parseXml(xsdStr, { baseUrl: 'file://' + schemaPath, nonet: true });
-                    const xmlDoc = libxmljs.parseXml(xml);
-                    const isValid = xmlDoc.validate(xsdDoc);
-                    if (!isValid) {
-                        const errs = xmlDoc.validationErrors.filter(e => !e.message.includes('No matching global declaration available')).map(e => `Zeile ${e.line}: ${e.message}`);
-                        if (errs.length > 0) {
-                            return {
-                                success: false,
-                                validationErrors: errs,
-                                error: 'XSD-Validierung fehlgeschlagen:\n' + errs.join('\n')
-                            };
-                        }
-                    }
-                } finally {
-                    process.chdir(cwd);
-                }
-            } else {
-                return {
-                    success: false,
-                    validationErrors: ['Schema nicht gefunden'],
-                    error: 'XSD-Schema nicht gefunden: ' + schemaPath
-                };
-            }
-        } catch (e) {
+        const validationResult = validateXML(xml, gaebVersion);
+
+        if (!validationResult.valid) {
             return {
                 success: false,
-                validationErrors: [e.message],
-                error: 'Fehler bei der XSD-Prüfung: ' + e.message
+                validationErrors: validationResult.errors,
+                error: 'XSD-Validierung fehlgeschlagen'
             };
         }
 
