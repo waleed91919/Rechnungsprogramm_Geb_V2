@@ -1,3 +1,4 @@
+const { getElectronPath } = require('./test_electron_helper');
 /**
  * tests/gaeb_x83_persistence.test.js
  * 
@@ -41,7 +42,7 @@ function canLoadBetterSqlite() {
 // ---------------------------------------------------------------------------
 if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
     test('GAEB X83 Persistenz: Alle Tests (inkl. SQLite DB-Ebene via Electron-as-Node)', () => {
-        const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+        const electronBin = getElectronPath();
         assert.ok(fs.existsSync(electronBin), 'Electron-Binary muss als Node-Runtime verfügbar sein');
 
         try {

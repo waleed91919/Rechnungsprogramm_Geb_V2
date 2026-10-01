@@ -1,3 +1,4 @@
+const { getElectronPath } = require('./test_electron_helper');
 /**
  * dauerrechnung_generation.test.js - F2 Kernsuite:
  * Teil 1: Einzelgenerierung, Doppelgenerierungs-Schutz, Entwurfs-/Lock-Fälle,
@@ -26,7 +27,7 @@ function canLoadBetterSqlite() {
 
 if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
     test('Dauerrechnungen Generierung (DB-Ebene, via Electron-as-Node Runtime)', () => {
-        const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+        const electronBin = getElectronPath();
         assert.ok(fs.existsSync(electronBin), 'Electron-Binary muss als Node-Runtime verfügbar sein');
 
         const stdout = execFileSync(

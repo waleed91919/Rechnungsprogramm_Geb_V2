@@ -1,3 +1,4 @@
+const { getElectronPath } = require('./test_electron_helper');
 /**
  * tests/angebot_lifecycle.test.js - Vollständiger Lebenszyklus-Test für den neuen Angebots-Kern
  *
@@ -43,7 +44,7 @@ function canLoadBetterSqlite() {
 // ---------------------------------------------------------------------------
 if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
     test('Angebots-Lebenszyklus: Alle Tests (inkl. SQLite DB-Ebene via Electron-as-Node)', () => {
-        const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+        const electronBin = getElectronPath();
         assert.ok(fs.existsSync(electronBin), 'Electron-Binary muss als Node-Runtime verfügbar sein');
 
         const stdout = execFileSync(

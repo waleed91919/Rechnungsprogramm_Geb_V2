@@ -1,3 +1,4 @@
+const { getElectronPath } = require('./test_electron_helper');
 /**
  * reinigungslv_schema.test.js - F3: Schema-Tabellen/Indizes + Migration lv_position_id
  * (Electron-as-Node-Wrapper-Muster, Vorbild dauerrechnung_crud.test.js)
@@ -25,7 +26,7 @@ function canLoadBetterSqlite() {
 
 if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
     test('Reinigungs-LV Schema (DB-Ebene, via Electron-as-Node Runtime)', () => {
-        const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+        const electronBin = getElectronPath();
         assert.ok(fs.existsSync(electronBin), 'Electron-Binary muss als Node-Runtime verfügbar sein');
 
         const stdout = execFileSync(
