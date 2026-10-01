@@ -105,9 +105,13 @@ function validateX84WithLxml(xmlFilePath, targetVersion) {
     if (targetVersion) {
         args.push('--version', targetVersion);
     }
-    // we use python3 directly
-    const output = execFileSync('python3', args, { encoding: 'utf-8' });
-    return output;
+    const pyBin = process.platform === 'win32' ? 'python' : 'python3';
+    try {
+        return execFileSync(pyBin, args, { encoding: 'utf-8' });
+    } catch (e) {
+        const fallbackPy = pyBin === 'python' ? 'python3' : 'python';
+        return execFileSync(fallbackPy, args, { encoding: 'utf-8' });
+    }
 }
 
 /**
