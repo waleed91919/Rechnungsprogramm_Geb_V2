@@ -417,8 +417,10 @@ function loadTenderDraft(db, draftId) {
         }
     }
 
-    const tree = loadedOriginal.categories;
-    tree.forEach(topCat => syncCategoryTree(topCat));
+    const tree = loadedOriginal.categories || [];
+    if (Array.isArray(tree)) {
+        tree.forEach(topCat => syncCategoryTree(topCat));
+    }
 
     const priceableItems = items.filter(i => !i.isHinweistext);
     const pricedItems = priceableItems.filter(i => i.is_priced);

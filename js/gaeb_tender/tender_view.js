@@ -201,7 +201,13 @@
                         badgeHtml = '<span class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-200">In Bearbeitung</span>';
                     }
 
-                    const updatedAt = (d.updated_at || d.created_at || '').slice(0, 16).replace('T', ' ');
+                    const canExportDraft = (d.status === 'VOLLSTAENDIG_BEPREIST') && (!d.unresolved_qty_tbd_count || d.unresolved_qty_tbd_count === 0);
+                    const exportBtnCls = canExportDraft 
+                        ? 'px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm hover:shadow transition-all inline-flex items-center gap-1'
+                        : 'px-2.5 py-1.5 bg-slate-200 text-slate-400 font-bold rounded-lg shadow-sm cursor-not-allowed inline-flex items-center gap-1';
+                    const exportTitle = canExportDraft
+                        ? 'Als GAEB DA XML X84 exportieren'
+                        : 'Export erst nach vollständiger Bepreisung und Beantwortung aller Pflichtangaben verfügbar';
 
                     return `
                         <tr class="hover:bg-slate-50 transition-colors">
@@ -218,7 +224,7 @@
                                         <span>Öffnen</span>
                                         <span class="material-symbols-outlined text-[14px]">edit</span>
                                     </button>
-                                    <button type="button" onclick="window.GaebTenderController.exportX84(${d.id})" title="Als GAEB DA XML X84 exportieren" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-sm hover:shadow transition-all inline-flex items-center gap-1">
+                                    <button type="button" onclick="window.GaebTenderController.exportX84(${d.id})" ${canExportDraft ? '' : 'disabled'} title="${exportTitle}" class="${exportBtnCls}">
                                         <span class="material-symbols-outlined text-[14px]">file_download</span>
                                         <span>X84</span>
                                     </button>
@@ -279,10 +285,25 @@
                 `).join('');
             }
 
+            const exportBtn = document.getElementById('gt-btn-export-x84');
             const exportBtnLabel = document.getElementById('gt-export-btn-label');
             if (exportBtnLabel) {
-                const v = state.draft?.version || state.stats?.version || 1;
-                exportBtnLabel.textContent = `Als GAEB X84 exportieren (v${v})`;
+                const draftName = state.draft?.name || `Entwurf #${state.currentDraftId}`;
+                const gaebVer = state.projectInfo?.gaebVersion || '3.3';
+                exportBtnLabel.textContent = `X84 exportieren: ${draftName} (GAEB ${gaebVer})`;
+            }
+            if (exportBtn) {
+                const canExport = (state.stats.status === 'VOLLSTAENDIG_BEPREIST') && (!state.stats.unresolved_qty_tbd_count || state.stats.unresolved_qty_tbd_count === 0);
+                exportBtn.disabled = !canExport;
+                if (!canExport) {
+                    exportBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                    exportBtn.classList.remove('hover:bg-indigo-700', 'hover:shadow-md');
+                    exportBtn.title = 'Export erst nach vollständiger Bepreisung und Beantwortung aller Pflichtangaben verfügbar.';
+                } else {
+                    exportBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    exportBtn.classList.add('hover:bg-indigo-700', 'hover:shadow-md');
+                    exportBtn.title = 'Als GAEB DA XML X84 Angebotsdatei exportieren';
+                }
             }
         }
 

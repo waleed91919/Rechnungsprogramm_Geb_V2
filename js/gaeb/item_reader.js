@@ -2,8 +2,8 @@
  * js/gaeb/item_reader.js - Extraktion von Texten, Mengen, Einheiten und Preisen für GAEB-Positionen
  */
 
-const XMLUtils = (typeof require === 'function') 
-    ? require('./xml_dom_utils.js') 
+var XMLUtils = (typeof require === 'function')
+    ? require('./xml_dom_utils.js')
     : (typeof window !== 'undefined' ? window.GAEB_XMLDomUtils : null);
 
 class GAEB_ItemReader {

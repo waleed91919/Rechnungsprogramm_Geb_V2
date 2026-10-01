@@ -33,6 +33,14 @@
                 if (!document.getElementById(this.modalId)) {
                     if (window.ModalLoader && typeof window.ModalLoader.mountModal === 'function') {
                         window.ModalLoader.mountModal(this.modalId);
+                    } else if (window.api && typeof window.api.loadModalPartial === 'function') {
+                        const html = await window.api.loadModalPartial(this.modalId);
+                        if (html) {
+                            const temp = document.createElement('div');
+                            temp.innerHTML = html;
+                            const el = temp.firstElementChild || temp;
+                            document.body.appendChild(el);
+                        }
                     }
                 }
 
