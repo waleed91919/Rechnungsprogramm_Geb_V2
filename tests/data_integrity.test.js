@@ -1,3 +1,4 @@
+const { getElectronPath } = require('./test_electron_helper');
 /**
  * data_integrity.test.js - Datenintegrität: UNIQUE-Constraints, atomares Storno,
  * Cent-Rounding, Doppelverrechnungs-Schutz, §48b-Felder (Bug A/B), FK-Erzwingung
@@ -42,7 +43,7 @@ function getDbModule() {
 // ---------------------------------------------------------------------------
 if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
     test('Datenintegrität (DB-Ebene, via Electron-as-Node Runtime)', () => {
-        const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+        const electronBin = getElectronPath();
         assert.ok(fs.existsSync(electronBin), 'Electron-Binary muss als Node-Runtime verfügbar sein');
 
         const stdout = execFileSync(

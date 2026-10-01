@@ -1,3 +1,4 @@
+const { getElectronPath } = require('./test_electron_helper');
 /**
  * objekt_historie.test.js - F1: Objekt-Historie (DIREKT-Treffer, Roll-up,
  * Sortierung, Deduplikation, leerer Zustand)
@@ -25,7 +26,7 @@ function canLoadBetterSqlite() {
 
 if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
     test('Objekt-Historie (DB-Ebene, via Electron-as-Node Runtime)', () => {
-        const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+        const electronBin = getElectronPath();
         assert.ok(fs.existsSync(electronBin), 'Electron-Binary muss als Node-Runtime verfügbar sein');
 
         const stdout = execFileSync(

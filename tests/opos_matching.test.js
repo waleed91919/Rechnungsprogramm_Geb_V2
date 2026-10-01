@@ -1,3 +1,4 @@
+const { getElectronPath } = require('./test_electron_helper');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -235,7 +236,7 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             if (!extraStdoutPromise) {
                 extraStdoutPromise = new Promise((resolve, reject) => {
                     try {
-                        const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+                        const electronBin = getElectronPath();
                         if (!fs.existsSync(electronBin)) {
                             return reject(new Error('Electron-Binary muss vorhanden sein'));
                         }
@@ -258,7 +259,7 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
             return extraStdoutPromise;
         }
 
-        const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+        const electronBin = getElectronPath();
         assert.ok(fs.existsSync(electronBin), 'Electron-Binary muss vorhanden sein');
         return execFileSync(
             electronBin,

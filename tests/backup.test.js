@@ -1,3 +1,4 @@
+const { getElectronPath } = require('./test_electron_helper');
 /**
  * tests/backup.test.js - Unit- und Integrationstests für die Revisionssichere Auto-Backup Engine (GoBD & GFS)
  *
@@ -27,7 +28,7 @@ function canLoadBetterSqlite() {
 
 if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
     test('Revisionssichere Auto-Backup Engine (GoBD & GFS, via Electron-as-Node Runtime)', () => {
-        const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+        const electronBin = getElectronPath();
         assert.ok(fs.existsSync(electronBin), 'Electron-Binary muss als Runtime verfügbar sein');
 
         const stdout = execFileSync(

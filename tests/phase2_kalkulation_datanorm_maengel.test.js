@@ -1,3 +1,4 @@
+const { getElectronPath } = require('./test_electron_helper');
 /**
  * tests/phase2_kalkulation_datanorm_maengel.test.js
  * Vollständige, automatisierte Testsuite für Phase 2 (Release 1.1)
@@ -36,7 +37,7 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
         if (!innerStdoutPromise) {
             innerStdoutPromise = new Promise((resolve, reject) => {
                 try {
-                    const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+                    const electronBin = getElectronPath();
                     if (!fs.existsSync(electronBin)) {
                         return reject(new Error('Electron-Binary muss vorhanden sein'));
                     }

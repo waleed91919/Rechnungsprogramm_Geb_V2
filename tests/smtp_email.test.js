@@ -1,3 +1,4 @@
+const { getElectronPath } = require('./test_electron_helper');
 /**
  * smtp_email.test.js - F10: SMTP-E-Mail-Versand
  * Pure Teile (Transport-Optionen, Templates, Fehlerübersetzung, Crypto-Fallback) in Plain Node;
@@ -93,7 +94,7 @@ test('normalisierePdfBuffer: Buffer/ArrayBuffer/TypedArray akzeptiert, Müll ver
 
 if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
     test('SMTP DB/Service-Tests (via Electron-as-Node Runtime)', () => {
-        const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+        const electronBin = getElectronPath();
         assert.ok(fs.existsSync(electronBin), 'Electron-Binary muss als Node-Runtime verfügbar sein');
 
         const stdout = execFileSync(
