@@ -2,8 +2,8 @@
  * js/gaeb/item_types.js - Erkennung von Positionstypen, Bieterangaben und Preisaufgliederungen
  */
 
-const XMLUtils = (typeof require === 'function') 
-    ? require('./xml_dom_utils.js') 
+var XMLUtils = (typeof require === 'function')
+    ? require('./xml_dom_utils.js')
     : (typeof window !== 'undefined' ? window.GAEB_XMLDomUtils : null);
 
 class GAEB_ItemTypes {

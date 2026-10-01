@@ -7,17 +7,17 @@
  * - js/gaeb/hierarchy_builder.js: BoQCtgy-Hierarchie & Ordnungszahlen
  */
 
-const XMLDomUtils = (typeof require === 'function') 
-    ? require('./gaeb/xml_dom_utils.js') 
+var XMLDomUtils = (typeof require === 'function')
+    ? require('./gaeb/xml_dom_utils.js')
     : (typeof window !== 'undefined' ? window.GAEB_XMLDomUtils : null);
-const HierarchyBuilder = (typeof require === 'function') 
-    ? require('./gaeb/hierarchy_builder.js') 
+var HierarchyBuilder = (typeof require === 'function')
+    ? require('./gaeb/hierarchy_builder.js')
     : (typeof window !== 'undefined' ? window.GAEB_HierarchyBuilder : null);
-const ItemReader = (typeof require === 'function') 
-    ? require('./gaeb/item_reader.js') 
+var ItemReader = (typeof require === 'function')
+    ? require('./gaeb/item_reader.js')
     : (typeof window !== 'undefined' ? window.GAEB_ItemReader : null);
-const ItemTypes = (typeof require === 'function') 
-    ? require('./gaeb/item_types.js') 
+var ItemTypes = (typeof require === 'function')
+    ? require('./gaeb/item_types.js')
     : (typeof window !== 'undefined' ? window.GAEB_ItemTypes : null);
 
 const getXMLDomUtils = () => (typeof XMLDomUtils !== 'undefined' && XMLDomUtils) || 
