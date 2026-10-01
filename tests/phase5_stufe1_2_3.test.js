@@ -1,3 +1,4 @@
+const { getElectronPath } = require('./test_electron_helper');
 /**
  * tests/phase5_stufe1_2_3.test.js
  * Vollständige automatisierte Testsuite für Phase 5 (Stufe 1, 2 und 3)
@@ -43,7 +44,7 @@ if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
         if (!innerStdoutPromise) {
             innerStdoutPromise = new Promise((resolve, reject) => {
                 try {
-                    const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+                    const electronBin = getElectronPath();
                     if (!fs.existsSync(electronBin)) {
                         return reject(new Error('Electron-Binary muss vorhanden sein: ' + electronBin));
                     }

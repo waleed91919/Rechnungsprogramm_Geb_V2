@@ -1,3 +1,4 @@
+const { getElectronPath } = require('./test_electron_helper');
 /**
  * tests/gaeb_x84_export.test.js
  * 
@@ -41,7 +42,7 @@ function canLoadBetterSqlite() {
 // ---------------------------------------------------------------------------
 if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
     test('GAEB X84 Export: Alle Tests (inkl. SQLite DB-Ebene via Electron-as-Node)', () => {
-        const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+        const electronBin = getElectronPath();
         assert.ok(fs.existsSync(electronBin), 'Electron-Binary muss als Node-Runtime verfügbar sein');
 
         try {
@@ -689,48 +690,49 @@ describe('GAEB DA XML X84 Export Suite', () => {
             ]
         });
 
-        // Wir rufen den echten ipc-gaeb.js Handler auf, mocken aber die Umgebung
         const handlers = new Map();
         const mockIpcMain = { handle: (channel, fn) => handlers.set(channel, fn) };
         const mockDialog = { showSaveDialog: async () => ({ canceled: false, filePath: path.join(os.tmpdir(), 'test_fail.x84') }) };
         const ipcGaeb = require('../main/ipc/ipc-gaeb');
         ipcGaeb.register(mockIpcMain, { db, dialog: mockDialog, BrowserWindow: { getFocusedWindow: () => ({}) } });
-
         const exportHandler = handlers.get('gaeb:export-x84');
 
-        const gaebX84 = require('../js/gaeb_x84');
-        const originalMap = gaebX84.mapDraftToX84Model;
-
-        // 1. Test the "No matching global declaration available" by breaking the root element.
-        // Das manipulierte XML erzeugen, ohne mapDraftToX84Model zu zerstören.
-        const originalExport = gaebX84.exportTenderDraftToX84;
-        gaebX84.exportTenderDraftToX84 = (db, id, opt) => {
-            const result = originalExport(db, id, opt);
-            // Breche die XML Struktur vor der Validierung, e.g. `<GAEBInfo>`
-            result.xml = result.xml.replace('<GAEBInfo>', '<GAEBInfo><InvalidElement>1</InvalidElement>');
-            return result;
+        // Fall 1: Missing schema
+        // Wir patchen fs.existsSync, da es in der Node Test Umgebung einfacher und sicherer ist, 
+        // als das Electron-App Objekt global zu stören, da es oft readonly oder unvollständig gemockt ist.
+        const fsMod = require('fs');
+        const origExistsSync = fsMod.existsSync;
+        fsMod.existsSync = (p) => {
+            if (typeof p === 'string' && (p.includes('GAEB_DA_XML_84_3.3') || p.includes('GAEB_DA_XML_84_3.2'))) {
+                return false;
+            }
+            return origExistsSync(p);
         };
 
-        const res = await exportHandler({}, { draftId: draft.id });
+        const resMissingSchema = await exportHandler({}, { draftId: draft.id });
+        
+        fsMod.existsSync = origExistsSync;
 
-        gaebX84.exportTenderDraftToX84 = originalExport;
+        assert.strictEqual(resMissingSchema.success, false);
+        // assert rejection and useful fallback message
+        assert.ok(
+            resMissingSchema.error.includes('XSD-Validierung fehlgeschlagen'),
+            "Expected missing schema error message"
+        );
+        assert.ok(resMissingSchema.validationErrors.some(e => e.includes('XSD-Schema nicht gefunden')), "Expected missing schema error message in validationErrors");
+        assert.ok(!fs.existsSync(path.join(os.tmpdir(), 'test_fail.x84')), "Keine Datei darf geschrieben werden");
 
-        assert.strictEqual(res.success, false);
-        assert.ok(res.error.includes('XSD-Validierung fehlgeschlagen'));
-        assert.ok(!fs.existsSync(path.join(os.tmpdir(), 'test_fail.x84')), "Die Fehlerhafte Datei durfte nicht geschrieben werden");
-
-        // 2. Testen des leeren Error-Arrays (sollte gefangen werden im Validator wenn validationErrors empty ist)
+        // Fall 2: Validation returns false with an empty error list
         const libxmljs = require('libxmljs2');
         const originalParse = libxmljs.parseXml;
         libxmljs.parseXml = (xmlStr, opts) => {
             const doc = originalParse(xmlStr, opts);
-            if (!opts) {
-                // das ist das Target Doc
-                const origValidate = doc.validate.bind(doc);
+            if (!opts) { 
+                const origDocValidate = doc.validate.bind(doc);
                 doc.validate = (xsd) => {
-                    const valid = origValidate(xsd);
-                    doc.validationErrors = []; // zwinge leeres error array
-                    return false; // zwinge false
+                    origDocValidate(xsd);
+                    doc.validationErrors = []; // Force empty error list
+                    return false; // Force validation failure
                 }
             }
             return doc;
@@ -740,8 +742,29 @@ describe('GAEB DA XML X84 Export Suite', () => {
         libxmljs.parseXml = originalParse;
 
         assert.strictEqual(resEmptyErr.success, false);
-        assert.ok(resEmptyErr.error.includes('Unbekannter XSD-Validierungsfehler'));
-        assert.ok(!fs.existsSync(path.join(os.tmpdir(), 'test_fail.x84')), "Die Fehlerhafte Datei durfte nicht geschrieben werden");
+        assert.ok(
+            resEmptyErr.error.includes('XSD-Validierung fehlgeschlagen'),
+            "Expected validation failure fallback message"
+        );
+        assert.ok(resEmptyErr.validationErrors.some(e => e.includes('Unbekannter XSD-Validierungsfehler')), "Expected fallback validation error");
+        assert.ok(!fs.existsSync(path.join(os.tmpdir(), 'test_fail.x84')), "Keine Datei darf geschrieben werden");
+
+        // Fall 3: Real invalid XML
+        const gaebX84 = require('../js/gaeb_x84');
+        const originalExport = gaebX84.exportTenderDraftToX84;
+        
+        gaebX84.exportTenderDraftToX84 = (db, id, opt) => {
+            const result = originalExport(db, id, opt);
+            result.xml = result.xml.replace('<GAEBInfo>', '<GAEBInfo><InvalidElement>1</InvalidElement>');
+            return result;
+        };
+
+        const resInvalidStruct = await exportHandler({}, { draftId: draft.id });
+        gaebX84.exportTenderDraftToX84 = originalExport;
+
+        assert.strictEqual(resInvalidStruct.success, false);
+        assert.ok(resInvalidStruct.error.includes('XSD-Validierung fehlgeschlagen'));
+        assert.ok(!fs.existsSync(path.join(os.tmpdir(), 'test_fail.x84')), "Keine Datei darf geschrieben werden");
 
         db.close();
     });

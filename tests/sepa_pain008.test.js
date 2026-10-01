@@ -1,3 +1,4 @@
+const { getElectronPath } = require('./test_electron_helper');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -374,7 +375,7 @@ test('T-SEP-2: TARGET2-Ausführungsdatum Prüfung & Auto-Adjust (SEP-2)', () => 
 if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
 
     function starteElectronInner(markerArg) {
-        const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+        const electronBin = getElectronPath();
         assert.ok(fs.existsSync(electronBin), 'Electron-Binary muss vorhanden sein');
         return execFileSync(
             electronBin,

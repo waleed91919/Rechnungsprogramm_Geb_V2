@@ -10,7 +10,10 @@ const { pathToFileURL } = require('url');
 
 function validateXML(xml, gaebVersion) {
     if (!['3.2', '3.3'].includes(gaebVersion)) {
-        gaebVersion = '3.3'; // Default fallback if missing
+        return {
+            valid: false,
+            errors: [`Nicht unterstützte oder fehlende GAEB-Version: ${gaebVersion}`]
+        };
     }
 
     const { app } = require('electron');
@@ -50,12 +53,23 @@ function validateXML(xml, gaebVersion) {
         const xsdDoc = libxmljs.parseXml(xsdStr, { baseUrl, nonet: true });
         const xmlDoc = libxmljs.parseXml(xml);
 
+        const root = xmlDoc.root();
+        if (!root || root.name() !== 'GAEB') {
+            return { valid: false, errors: ['Wurzelelement muss <GAEB> sein.'] };
+        }
+
+        const ns = root.namespace();
+        const expectedNs = `http://www.gaeb.de/GAEB_DA_XML/DA84/${gaebVersion}`;
+        if (!ns || ns.href() !== expectedNs) {
+            return { valid: false, errors: [`Falscher Namespace. Erwartet: ${expectedNs}, Gefunden: ${ns ? ns.href() : 'keiner'}`] };
+        }
+
         const isValid = xmlDoc.validate(xsdDoc);
 
         if (!isValid) {
             return {
                 valid: false,
-                errors: xmlDoc.validationErrors.map(e => e.toString().trim())
+                errors: (xmlDoc.validationErrors && xmlDoc.validationErrors.length > 0) ? xmlDoc.validationErrors.map(e => e.toString().trim()) : ['Unbekannter XSD-Validierungsfehler']
             };
         }
 

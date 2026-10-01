@@ -1,3 +1,4 @@
+const { getElectronPath } = require('./test_electron_helper');
 /**
  * tests/zeiterfassung_milog.test.js
  * Testsuite für Phase 5 (Masterplan 2026-09-24):
@@ -106,7 +107,7 @@ test('BEG IV Aufbewahrungsfristen (Stand 2025/2026) Konstanten-Validierung', () 
 
 if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
     test('MiLoG DB & Trigger Tests (Delegation an Electron-as-Node Runtime)', async () => {
-        const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+        const electronBin = getElectronPath();
         assert.ok(fs.existsSync(electronBin), 'Electron Binary muss vorhanden sein');
 
         const stdout = execFileSync(

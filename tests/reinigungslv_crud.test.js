@@ -1,3 +1,4 @@
+const { getElectronPath } = require('./test_electron_helper');
 /**
  * reinigungslv_crud.test.js - F3: LV-Bereiche/Positionen/Putzplan-Einträge CRUD,
  * Löschschutz, Audit + Integration Übernahme in Abrechnungsplan mit Live-Preisen.
@@ -26,7 +27,7 @@ function canLoadBetterSqlite() {
 
 if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
     test('Reinigungs-LV CRUD + Integration (DB-Ebene, via Electron-as-Node Runtime)', () => {
-        const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+        const electronBin = getElectronPath();
         assert.ok(fs.existsSync(electronBin), 'Electron-Binary muss als Node-Runtime verfügbar sein');
 
         const stdout = execFileSync(

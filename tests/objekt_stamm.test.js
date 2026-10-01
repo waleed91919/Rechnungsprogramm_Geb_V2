@@ -1,3 +1,4 @@
+const { getElectronPath } = require('./test_electron_helper');
 /**
  * objekt_stamm.test.js - F1 Objektverwaltung: Schema/Migration, CRUD, FK,
  * CASCADE, Löschschutz (GoBD), CHECK-Constraints, getFullState, Audit-Kette
@@ -26,7 +27,7 @@ function canLoadBetterSqlite() {
 // ---------------------------------------------------------------------------
 if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
     test('Objektstamm (DB-Ebene, via Electron-as-Node Runtime)', () => {
-        const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+        const electronBin = getElectronPath();
         assert.ok(fs.existsSync(electronBin), 'Electron-Binary muss als Node-Runtime verfügbar sein');
 
         const stdout = execFileSync(

@@ -1,3 +1,4 @@
+const { getElectronPath } = require('./test_electron_helper');
 /**
  * dauerrechnung_preise_live.test.js - PO-Entscheid "Hybrid" (Plan §8.3):
  * preise_live=0 (Standard): Preis-Snapshot aus Plan-Position wird eingefroren.
@@ -27,7 +28,7 @@ function canLoadBetterSqlite() {
 
 if (!IS_ELECTRON_AS_NODE && !canLoadBetterSqlite()) {
     test('Dauerrechnungen Preise Live/Snapshot (DB-Ebene, via Electron-as-Node Runtime)', () => {
-        const electronBin = path.join(__dirname, '..', 'node_modules', 'electron', 'dist', 'electron.exe');
+        const electronBin = getElectronPath();
         assert.ok(fs.existsSync(electronBin), 'Electron-Binary muss als Node-Runtime verfügbar sein');
 
         const stdout = execFileSync(
