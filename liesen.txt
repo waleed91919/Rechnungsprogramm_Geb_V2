@@ -1,98 +1,90 @@
-> Du arbeitest am Projekt W-Link im Repository `waleed91919/Rechnungsprogramm_Geb_V2`.
+
+
+> Du arbeitest im Repository `waleed91919/Rechnungsprogramm_Geb_V2`.
 >
-> **Ziel:** Nachweisen, dass der vorhandene GAEB-X84-Export im tatsächlich gebauten Electron-Paket offline funktioniert. Die grundlegenden Korrekturen am produktiven Exportpfad sind bereits vorhanden. Überarbeite sie nicht ohne einen konkret reproduzierten Fehler.
-
-### 1. Ausgangspunkt und Branch
-
-> - Prüfe zunächst, welcher aktuelle Stand die Korrekturen bis `7ee5d0f1045e90c145ae065d07c15b8239c6443f` enthält.
-> - Falls dieser Stand noch auf `review/gaeb-x84-release-verification` bearbeitet wird und der PR offen ist, arbeite dort weiter.
-> - Falls er bereits in `main` übernommen wurde, erstelle davon einen neuen Review-Branch, beispielsweise `review/gaeb-x84-real-package-test`.
-> - Dokumentiere Arbeitsbranch und tatsächlichen Start-SHA.
-> - **Keine direkten Commits, Pushes oder Merges nach `main`. `main.js` nicht ändern.**
-> - Keine veröffentlichten Branch-Historien ungefragt überschreiben und keinen Force-Push ausführen.
-
-### 2. Bisherige Simulation richtig einordnen
-
-> - `verify_packaged.js` verändert derzeit `process.resourcesPath` und kann ein künstliches `electron.app` anlegen.
-> - Dieser Test darf als Simulation bestehen bleiben, muss aber eindeutig so bezeichnet werden. Er ist **kein Beweis für ein funktionierendes Anwendungspaket**.
-> - Für den echten Pakettest sind folgende Eingriffe verboten:
+> **Aufgabe:** Behebe den reproduzierbaren Fehler beim Öffnen der GAEB-Entwurfsübersicht:
 >
 > ```text
-> app.isPackaged überschreiben oder mocken
-> process.resourcesPath überschreiben
-> electron.app künstlich erzeugen
-> Schemas aus dem Quellverzeichnis als Fallback verwenden
-> libxmljs2 aus der Entwicklungsinstallation laden
+> GAEB Ausschreibungen → Import auswählen → „Auswählen“
+> Fehler beim Laden der Entwürfe: updatedAt is not defined
 > ```
 >
-> - Das Testprotokoll muss zeigen, dass die tatsächlich laufende Anwendung ihre mitgelieferten Ressourcen und Abhängigkeiten verwendet.
+> Danach erscheinen nur die Tabellenüberschriften, obwohl für den Import bereits Entwürfe vorhanden sind. Behebe die Ursache, ohne Entwürfe zu löschen, neue Ersatzentwürfe anzulegen oder den GAEB-Export umzubauen.
 
-### 3. Echtes Paket bauen und starten
+### 1. Branch und Grenzen
 
-> - Prüfe das vorhandene Buildverfahren und baue ein frisches Electron-Paket aus dem endgültigen Arbeitsstand.
-> - Verwende die vorhandenen Projektwerkzeuge. Ändere nicht die komplette Buildstruktur.
-> - Starte den **erzeugten Anwendungs-Binary**, nicht lediglich `electron verify_packaged.js` aus dem Quellverzeichnis.
-> - Dokumentiere Build- und Startbefehl, Betriebssystem, Architektur, Electron-Version und getesteten SHA.
-> - Der Testlauf soll eine isolierte Testdatenbank bzw. ein separates Benutzerprofil verwenden. Keine produktiven Nutzerdaten oder bestehenden Installationen verändern.
-> - Stelle sicher, dass das laufende Paket auch ohne Zugriff auf das Quellverzeichnis funktioniert. Teste ohne Netzwerkzugriff und ohne benötigtes System-Python oder System-Java.
+> - Prüfe den aktuellen Code- und Branchstand.
+> - Erstelle einen eigenen Fix-Branch vom aktuellen Stand, der den Fehler enthält, beispielsweise `fix/gaeb-draft-list-updated-at`.
+> - Dokumentiere Arbeitsbranch und Start-SHA.
+> - **Keine direkten Commits, Pushes oder Merges nach `main`. `main.js` nicht ändern.**
+> - Arbeite im bestehenden GAEB-UI-Modul. Keine Logik nach `js/editor.js`, `js/gaeb.js` oder in eine große HTML-Datei verschieben.
+> - Kein Force-Push und keine Änderungen an produktiven Nutzerdaten.
 
-### 4. Testzugang ohne Änderung an main.js
+### 2. Ursache prüfen und minimal korrigieren
 
-> - Verwende bevorzugt die vorhandene Oberfläche: Test-X83 importieren, gespeicherte Testmaske bepreisen und X84 exportieren.
-> - Falls für automatisierte Negativfälle ein Prüfskript benötigt wird, lade damit dieselbe Backend-Service-Funktion aus dem Paket.
-> - Kein neuer Testschalter im Renderer und keine IPC-Option, die Validierung oder Speicherdialog umgeht.
-> - Falls ein spezielles Testpaket mit einem separaten Test-Einstieg benötigt wird, halte dessen Buildkonfiguration getrennt. **Produktives `main.js` und der produktive Einstieg bleiben unverändert.**
-> - Dokumentiere bei einem solchen Testpaket genau, was vom normalen Release-Paket abweicht. Prüfe zusätzlich mindestens einen erfolgreichen Export über die normale Anwendung.
+> - Prüfe `js/gaeb_tender/tender_view.js`, insbesondere `renderDraftList()` und den Callback, der aus jedem Entwurf eine Tabellenzeile erstellt.
+> - Im zuvor geprüften Änderungsstand wurde die Definition von `updatedAt` entfernt, während das Tabellen-Template die Variable weiterhin verwendet. Verifiziere das im aktuellen Stand.
+> - Definiere den formatierten Datumswert **innerhalb des Callbacks für den jeweiligen Entwurf**, bevor er im Template verwendet wird.
+> - Verwende den vorhandenen Aktualisierungszeitpunkt `d.updated_at`; falls dieser fehlt oder leer ist, den Erstellungszeitpunkt `d.created_at`.
+> - Fehlen beide Werte, zeige einen eindeutigen Platzhalter wie `—`. Erfinde kein aktuelles Datum.
+> - Behalte das bestehende Datumsformat bei. Führe für diesen Fix keine neue Datumsbibliothek oder Zeitzonenlogik ein.
+> - Stelle sicher, dass der Wert vor Einsetzen in HTML weiterhin über die vorhandene Escaping-Funktion ausgegeben wird.
+> - Verwende keine globale `updatedAt`-Variable und keinen gemeinsamen Wert für alle Entwürfe.
+> - Entferne nicht die Spalte „Aktualisiert“, um den Fehler zu verstecken.
+> - Unterdrücke den Fehler nicht mit einem leeren `catch`. Die Tabellenzeilen müssen tatsächlich korrekt gerendert werden.
 
-### 5. Verbindliche Prüffälle
+### 3. Daten und Navigation erhalten
 
-> Führe im Paket folgende Fälle aus:
+> - Das Öffnen der Entwurfsübersicht ist eine Leseoperation. Es darf keine neuen Entwürfe erzeugen oder bestehende Daten verändern.
+> - Alle Entwürfe des gewählten Imports müssen mit ihrer korrekten ID, Version, Bezeichnung und ihrem Status erscheinen.
+> - Der Button „Öffnen“ muss den tatsächlich gewählten Entwurf öffnen, nicht automatisch den ersten oder neuesten.
+> - Die Rücknavigation zwischen Importliste, Entwurfsübersicht und Editor muss weiterhin funktionieren.
+> - Bestehende Regeln für ungespeicherte Änderungen und die Freigabe des X84-Buttons nicht verändern.
+
+### 4. Gezielte Regressionstests
+
+> Ergänze Tests für:
 >
-> 1. **GAEB 3.2, gültig:** Ein vollständiger gespeicherter Draft erzeugt X84, besteht die produktive XSD-Prüfung und wird erfolgreich gespeichert.
-> 2. **GAEB 3.3, gültig:** Derselbe Ablauf mit der passenden Schemafamilie.
-> 3. **GAEB 3.2 und 3.3, ungültig:** Wohlgeformtes XML mit einer nachweislich unzulässigen Struktur wird von der echten XSD-Engine abgelehnt. Im geprüften Exportpfad darf keine Datei geschrieben werden.
-> 4. **Ungültige Version bzw. falscher Namespace:** Klare Ablehnung statt automatischer Annahme von 3.3.
-> 5. **Dialog-Abbruch:** Keine Datei und keine Veränderung vorhandener Dateien.
-> 6. **Fehlendes Schema oder Include:** Nur in einer isolierten Kopie der Testressourcen manipulieren. Erwartung: verständlicher Fehler, kein Export und kein Rückgriff auf Entwicklerdateien.
+> 1. Zwei vorhandene Entwürfe mit unterschiedlichen `updated_at`-Werten: Beide Zeilen erscheinen und zeigen jeweils ihr eigenes Datum.
+> 2. Fehlendes oder leeres `updated_at`: `created_at` wird verwendet.
+> 3. Beide Datumswerte fehlen: Platzhalter erscheint, keine Exception.
+> 4. Import ohne Entwürfe: Der vorhandene Empty State erscheint korrekt.
+> 5. Import mit Entwürfen: Reines Öffnen der Übersicht verändert weder Anzahl noch Inhalt der Entwürfe.
 >
-> - Prüfe und protokolliere die tatsächlichen Schema-Pfade sowie die Herkunft der geladenen `libxmljs2`-Bibliothek.
-> - Ein erfolgreich geladener Schema-Hauptpfad reicht nicht: Auch die benötigten Includes müssen funktionieren.
-> - Ein syntaktisch kaputtes XML testet nur den Parser. Der Negativnachweis muss auch **wohlgeformtes, aber XSD-ungültiges XML** enthalten.
-
-### 6. Nur nachgewiesene Fehler korrigieren
-
-> - Wenn ein Pakettest scheitert, ermittle die konkrete Ursache: fehlende Ressource, falscher Pfad, URI-Auflösung oder native Electron-Kompatibilität.
-> - Korrigiere nur die betroffene Konfiguration oder kleine Backend-Einheit.
-> - Ressourcenauflösung und XSD-Prüfung bleiben in `main/services/gaeb-x84-schema-validator.js`; IPC bleibt für Ablaufsteuerung und Dialog zuständig.
-> - Keine Exportlogik nach `main.js`, `js/editor.js`, `js/gaeb.js` oder HTML verschieben.
-> - Nach einer Korrektur das Paket **neu bauen** und die betroffenen Prüfungen wiederholen. Ein Test eines älteren Pakets zählt nicht für den korrigierten Stand.
-
-### 7. Was ausdrücklich nicht erlaubt ist
-
-> - Kein Merge nach `main` und keine Änderung an `main.js`.
-> - Keine Neuimplementierung von Mapper, Serializer oder Datenbank ohne reproduzierten Fehler.
-> - Keine zusätzlichen PDF-, EFB-, Versand- oder Angebotsfunktionen.
-> - Keine weiteren Validator-Bibliotheken auf Verdacht installieren.
-> - Keine XSD-Fehler unterdrücken oder Validierung abschwächen.
-> - Keine Aussage „Pakettest bestanden“, wenn nur eine Simulation oder der Build selbst erfolgreich war.
-> - Keine generierten Rechnungs-PDFs, DATEV-CSV-Dateien, Datenbanken oder fachfremden Testberichte committen.
-> - Keine endlosen Verbesserungsschleifen: Nach den definierten Prüffällen stoppen.
-
-### 8. Abschlussbericht und Freigabegrenze
-
-> Liefere ein kurzes, nachvollziehbares Prüfprotokoll mit:
+> Prüfe außerdem den **vollständigen UI-Navigationsweg**:
 >
-> - Arbeitsbranch und geprüftem SHA.
-> - Build- und Startbefehlen.
-> - Betriebssystem, Architektur und Electron-Version.
-> - Tatsächlichen Ressourcenpfaden.
-> - Ergebnissen der gültigen und ungültigen Fälle für 3.2 und 3.3.
-> - Ergebnis des normalen UI-Exports.
-> - Etwaigen Paketkorrekturen und geänderten Dateien.
-> - Bestätigung, dass `main.js` unverändert blieb.
+> ```text
+> GAEB-Menü öffnen
+> → Importliste anzeigen
+> → „Auswählen“ beim vorbereiteten Import anklicken
+> → vorhandene Entwurfszeilen prüfen
+> → „Öffnen“ bei einem bestimmten Entwurf anklicken
+> → richtige Entwurfs-ID im Editor prüfen
+> → zurück zur Entwurfsübersicht
+> ```
 >
-> Führe bei Codeänderungen die relevanten Regressionstests und `git diff --check` aus. Committe und pushe nur den Review-Branch.
+> - Bereite Daten über Test-APIs vor, aber umgehe beim Navigationstest **nicht** die Entwurfsübersicht durch direktes Öffnen des Editors.
+> - Der Test muss bei einem Renderer-Fehler oder einem Fehler-Dialog wie `updatedAt is not defined` scheitern.
+> - Prüfe Tabellenzeilen und ausgewählte Entwurfs-ID mit Assertions; bloßes Ausgeben von Werten ist kein Erfolgsnachweis.
+> - Verwende eine isolierte Testdatenbank bzw. ein isoliertes Benutzerprofil.
+> - Prüfe den Ablauf auch im neu gebauten Electron-Paket, wenn du einen Paketnachweis meldest. Ein altes Paket enthält den Fix nicht automatisch.
+
+### 5. Was nicht geändert werden darf
+
+> - Kein Datenbank-Reset, keine Migration und kein Löschen oder Neuanlegen von Nutzerentwürfen.
+> - Keine Änderungen an XSD, X84-Mapper, Serializer oder Export-Sicherheitsregeln für diesen UI-Fehler.
+> - Keine weitere allgemeine UI-Neugestaltung.
+> - Keine PDF-, EFB-, DATEV- oder Rechnungsänderungen.
+> - Keine Abschwächung bestehender Tests.
+> - Keine generierten PDFs, CSV-Dateien oder fachfremden Testberichte committen.
+> - Nicht pauschal „alle Funktionen geprüft“ melden, wenn nur die Entwurfsübersicht getestet wurde.
+
+### 6. Abschluss
+
+> - Führe die neuen Tests und die relevanten bestehenden GAEB-UI-/Entwurfstests aus.
+> - Führe `git diff --check` aus und kontrolliere die geänderten Dateien.
+> - Committe und pushe nur den Fix-Branch. **Nicht nach `main` mergen.**
+> - Liefere End-SHA, geänderte Dateien, die konkrete Ursache und tatsächlich ausgeführte Testbefehle samt Ergebnissen.
+> - Bestätige, dass `main.js` unverändert blieb und vorhandene Entwürfe erhalten wurden.
 >
-> **Falls deine Umgebung den echten Paketlauf nicht ermöglicht:** Benenne das Hindernis präzise und liefere einen reproduzierbaren Ablauf für die Zielumgebung. Behaupte keinen Erfolg und baue keine Simulation als Ersatz ein.
->
-> **Stop-Bedingung:** Der echte Paketnachweis ist erbracht oder die fehlende Testvoraussetzung ist klar dokumentiert. Danach keine weiteren Funktionen beginnen und nicht selbstständig mergen.
+> **Stop-Bedingung:** „Auswählen“ zeigt zuverlässig die vorhandenen Entwürfe ohne Fehler; der gewählte Entwurf lässt sich öffnen und die Datums-Fallbacks sind getestet. Danach keine zusätzlichen Verbesserungen beginnen.
