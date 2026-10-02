@@ -1,107 +1,90 @@
 
 
-> Du arbeitest im Repository `waleed91919/Rechnungsprogramm_Geb_V2` auf dem bestehenden Branch **`review/gaeb-x84-release-verification`**.
+> Du arbeitest im Repository `waleed91919/Rechnungsprogramm_Geb_V2`.
 >
-> Zuletzt geprüfter Stand: `c0110eb15001d43894a17a2f652535a264fd3f31`. Prüfe den aktuellen HEAD und dokumentiere den tatsächlichen Start-SHA.
+> **Aufgabe:** Behebe den reproduzierbaren Fehler beim Öffnen der GAEB-Entwurfsübersicht:
 >
-> **Ziel:** Die Lücken in den Paket- und UI-Tests schließen. Die vorhandenen Tests laden bereits die produktive XSD-Service-Datei innerhalb des echten Windows-Electron-Pakets. Dieses funktionierende Vorgehen soll erhalten bleiben.
-
-### 1. Grenzen und Architektur
-
-> - Arbeite nur auf dem genannten Review-Branch. Falls er inzwischen gemergt oder geschlossen wurde, melde das und arbeite nicht ungefragt auf `main`.
-> - **Kein Commit, Push oder Merge nach `main`. `main.js` nicht verändern.**
-> - Keine neue Exportfunktion, kein PDF, EFB, Versand oder formales Angebot in `dokumente`.
-> - Änderungen grundsätzlich auf `tests/verify_real_package_compliance.js`, `scripts/test_renderer_ui.js` und nachvollziehbare Testdokumentation beschränken.
-> - Produktivcode nur ändern, wenn ein neuer Test einen konkreten Fehler nachweist. Dann ausschließlich in der zuständigen kleinen GAEB-Service-, IPC- oder UI-Einheit korrigieren.
-> - Keine Test-Bypässe oder Debug-Zugänge in die produktive Anwendung einbauen.
-
-### 2. Normalen UI-Export tatsächlich prüfen
-
-> Der bisherige UI-Test erstellt und bepreist Daten über API-Aufrufe und untersucht anschließend den Export-Button. Er führt **keinen tatsächlichen Export** aus.
+> ```text
+> GAEB Ausschreibungen → Import auswählen → „Auswählen“
+> Fehler beim Laden der Entwürfe: updatedAt is not defined
+> ```
 >
-> Ergänze:
+> Danach erscheinen nur die Tabellenüberschriften, obwohl für den Import bereits Entwürfe vorhanden sind. Behebe die Ursache, ohne Entwürfe zu löschen, neue Ersatzentwürfe anzulegen oder den GAEB-Export umzubauen.
+
+### 1. Branch und Grenzen
+
+> - Prüfe den aktuellen Code- und Branchstand.
+> - Erstelle einen eigenen Fix-Branch vom aktuellen Stand, der den Fehler enthält, beispielsweise `fix/gaeb-draft-list-updated-at`.
+> - Dokumentiere Arbeitsbranch und Start-SHA.
+> - **Keine direkten Commits, Pushes oder Merges nach `main`. `main.js` nicht ändern.**
+> - Arbeite im bestehenden GAEB-UI-Modul. Keine Logik nach `js/editor.js`, `js/gaeb.js` oder in eine große HTML-Datei verschieben.
+> - Kein Force-Push und keine Änderungen an produktiven Nutzerdaten.
+
+### 2. Ursache prüfen und minimal korrigieren
+
+> - Prüfe `js/gaeb_tender/tender_view.js`, insbesondere `renderDraftList()` und den Callback, der aus jedem Entwurf eine Tabellenzeile erstellt.
+> - Im zuvor geprüften Änderungsstand wurde die Definition von `updatedAt` entfernt, während das Tabellen-Template die Variable weiterhin verwendet. Verifiziere das im aktuellen Stand.
+> - Definiere den formatierten Datumswert **innerhalb des Callbacks für den jeweiligen Entwurf**, bevor er im Template verwendet wird.
+> - Verwende den vorhandenen Aktualisierungszeitpunkt `d.updated_at`; falls dieser fehlt oder leer ist, den Erstellungszeitpunkt `d.created_at`.
+> - Fehlen beide Werte, zeige einen eindeutigen Platzhalter wie `—`. Erfinde kein aktuelles Datum.
+> - Behalte das bestehende Datumsformat bei. Führe für diesen Fix keine neue Datumsbibliothek oder Zeitzonenlogik ein.
+> - Stelle sicher, dass der Wert vor Einsetzen in HTML weiterhin über die vorhandene Escaping-Funktion ausgegeben wird.
+> - Verwende keine globale `updatedAt`-Variable und keinen gemeinsamen Wert für alle Entwürfe.
+> - Entferne nicht die Spalte „Aktualisiert“, um den Fehler zu verstecken.
+> - Unterdrücke den Fehler nicht mit einem leeren `catch`. Die Tabellenzeilen müssen tatsächlich korrekt gerendert werden.
+
+### 3. Daten und Navigation erhalten
+
+> - Das Öffnen der Entwurfsübersicht ist eine Leseoperation. Es darf keine neuen Entwürfe erzeugen oder bestehende Daten verändern.
+> - Alle Entwürfe des gewählten Imports müssen mit ihrer korrekten ID, Version, Bezeichnung und ihrem Status erscheinen.
+> - Der Button „Öffnen“ muss den tatsächlich gewählten Entwurf öffnen, nicht automatisch den ersten oder neuesten.
+> - Die Rücknavigation zwischen Importliste, Entwurfsübersicht und Editor muss weiterhin funktionieren.
+> - Bestehende Regeln für ungespeicherte Änderungen und die Freigabe des X84-Buttons nicht verändern.
+
+### 4. Gezielte Regressionstests
+
+> Ergänze Tests für:
 >
-> - Einen gültigen Test-Draft im isolierten Benutzerprofil vorbereiten. Für Testdatenvorbereitung sind die vorhandenen Backend-/IPC-APIs zulässig; bezeichne das nicht als manuell getesteten Importdialog.
-> - Das Tender-Modal öffnen und verbindlich prüfen:
->   - Modal sichtbar.
->   - Richtiger Draft ausgewählt.
->   - Export-Button vorhanden und aktiv.
-> - Fehlt eine Voraussetzung, muss der Test mit Fehlerstatus abbrechen. Nicht nur Werte ausgeben und anschließend Erfolg melden.
-> - Den Export über den **tatsächlichen Button und Controller** auslösen.
-> - Die native Speicherfunktion verwenden, ein Testziel wählen und prüfen, dass die Datei wirklich geschrieben wurde.
-> - Die gespeicherte Datei erneut mit der passenden produktiven XSD-Service-Funktion prüfen und dem ausgewählten Draft zuordnen.
-> - Für beide Versionen 3.2 und 3.3 den produktiven Exportpfad prüfen. Mindestens ein vollständiger Fall muss über den realen UI-Button laufen; kennzeichne den Umfang der übrigen Fälle genau.
+> 1. Zwei vorhandene Entwürfe mit unterschiedlichen `updated_at`-Werten: Beide Zeilen erscheinen und zeigen jeweils ihr eigenes Datum.
+> 2. Fehlendes oder leeres `updated_at`: `created_at` wird verwendet.
+> 3. Beide Datumswerte fehlen: Platzhalter erscheint, keine Exception.
+> 4. Import ohne Entwürfe: Der vorhandene Empty State erscheint korrekt.
+> 5. Import mit Entwürfen: Reines Öffnen der Übersicht verändert weder Anzahl noch Inhalt der Entwürfe.
 >
-> Verwende für native Dialogbedienung vorhandene Testwerkzeuge. Falls die Umgebung den Dialog nicht automatisiert bedienen kann, führe einen dokumentierten manuellen Pakettest durch. **Nicht heimlich durch einen Mock ersetzen und als echten Dialogtest melden.**
-
-### 3. Dialog-Abbruch über den echten Ablauf
-
-> - Entferne aus dem bisherigen Paketnachweis die Behauptung, das lokal erzeugte Objekt `{ canceled: true }` sei ein Test des nativen Dialogs.
-> - Öffne den Speicherdialog durch den realen Exportablauf und brich ihn tatsächlich ab.
-> - Prüfe danach:
->   - Keine neue Ausgabedatei.
->   - Vorhandene Testdateien bleiben byte-identisch.
->   - Die Oberfläche meldet keinen erfolgreichen Export.
-> - Falls zusätzlich ein Dialog-Mock als Unit-Test verwendet wird, ist das erlaubt, muss aber ausdrücklich als **simulierter Handler-Test** bezeichnet werden.
-
-### 4. Ungültiges XML durch den produktiven Handler
-
-> Der bisherige Negativtest validiert XML und entscheidet in einer selbst geschriebenen `if`-Anweisung, ob eine Datei gespeichert wird. Das prüft die Service-Funktion, nicht die Schreibentscheidung des produktiven IPC-Handlers.
+> Prüfe außerdem den **vollständigen UI-Navigationsweg**:
 >
-> Ergänze einen isolierten Test des **tatsächlich registrierten `gaeb:export-x84`-Handlers**:
+> ```text
+> GAEB-Menü öffnen
+> → Importliste anzeigen
+> → „Auswählen“ beim vorbereiteten Import anklicken
+> → vorhandene Entwurfszeilen prüfen
+> → „Öffnen“ bei einem bestimmten Entwurf anklicken
+> → richtige Entwurfs-ID im Editor prüfen
+> → zurück zur Entwurfsübersicht
+> ```
 >
-> - Erzeuge gültige Testdaten.
-> - Manipuliere die Exportausgabe nach der XML-Erzeugung zu wohlgeformtem, aber XSD-ungültigem XML.
-> - Verwende die echte XSD-Engine und die produktive Service-Funktion.
-> - Rufe den produktiven Handler auf und prüfe `success === false`, verständliche Fehlerdetails und das Ausbleiben einer Datei.
-> - Prüfe zusätzlich den Fall `valid: false` mit leerer Fehlerliste als separaten Unit-Test.
-> - Der Test darf Abhängigkeiten kontrolliert injizieren oder temporär ersetzen, aber nur im Testprozess. Keine Renderer-Option wie `isTestEnv`, `filePath` oder `skipValidation` hinzufügen.
-> - Stelle alle ersetzten Funktionen in `finally` wieder her.
+> - Bereite Daten über Test-APIs vor, aber umgehe beim Navigationstest **nicht** die Entwurfsübersicht durch direktes Öffnen des Editors.
+> - Der Test muss bei einem Renderer-Fehler oder einem Fehler-Dialog wie `updatedAt is not defined` scheitern.
+> - Prüfe Tabellenzeilen und ausgewählte Entwurfs-ID mit Assertions; bloßes Ausgeben von Werten ist kein Erfolgsnachweis.
+> - Verwende eine isolierte Testdatenbank bzw. ein isoliertes Benutzerprofil.
+> - Prüfe den Ablauf auch im neu gebauten Electron-Paket, wenn du einen Paketnachweis meldest. Ein altes Paket enthält den Fix nicht automatisch.
+
+### 5. Was nicht geändert werden darf
+
+> - Kein Datenbank-Reset, keine Migration und kein Löschen oder Neuanlegen von Nutzerentwürfen.
+> - Keine Änderungen an XSD, X84-Mapper, Serializer oder Export-Sicherheitsregeln für diesen UI-Fehler.
+> - Keine weitere allgemeine UI-Neugestaltung.
+> - Keine PDF-, EFB-, DATEV- oder Rechnungsänderungen.
+> - Keine Abschwächung bestehender Tests.
+> - Keine generierten PDFs, CSV-Dateien oder fachfremden Testberichte committen.
+> - Nicht pauschal „alle Funktionen geprüft“ melden, wenn nur die Entwurfsübersicht getestet wurde.
+
+### 6. Abschluss
+
+> - Führe die neuen Tests und die relevanten bestehenden GAEB-UI-/Entwurfstests aus.
+> - Führe `git diff --check` aus und kontrolliere die geänderten Dateien.
+> - Committe und pushe nur den Fix-Branch. **Nicht nach `main` mergen.**
+> - Liefere End-SHA, geänderte Dateien, die konkrete Ursache und tatsächlich ausgeführte Testbefehle samt Ergebnissen.
+> - Bestätige, dass `main.js` unverändert blieb und vorhandene Entwürfe erhalten wurden.
 >
-> Wenn dieser Test nicht innerhalb des Pakets durchführbar ist, behalte den echten Paket-Service-Test und ergänze den Handler-Integrationstest getrennt. Dokumentiere beide Ebenen ehrlich; vermische ihre Nachweise nicht.
-
-### 5. Fehlendes Schema und Include korrekt testen
-
-> - Beim fehlenden Hauptschema genügt `fs.existsSync(...) === false` nicht als Nachweis der Fehlerbehandlung.
-> - Rufe die **produktive Service-Funktion** mit einer tatsächlich fehlenden Ressource auf.
-> - Verwende dafür eine isolierte Kopie des Pakets bzw. seiner Ressourcen. Keine Ressourcen der normalen Installation oder des ursprünglichen Prüfpakets dauerhaft verändern.
-> - Prüfe bei fehlendem Hauptschema und fehlendem Include:
->   - Validierung schlägt fehl.
->   - Verständliche Fehlermeldung.
->   - Kein Ausweichen auf Entwicklungsressourcen.
-> - Belege die Nicht-Speicherung zusätzlich über den produktiven Handler-Test, nicht durch eine selbst kopierte Schreibbedingung.
-> - `app.isPackaged` und `process.resourcesPath` im echten Paketnachweis weiterhin nicht überschreiben.
-
-### 6. Testzuverlässigkeit und Bericht
-
-> - Verwende eindeutige temporäre Zielpfade pro Testlauf, damit alte Dateien das Ergebnis nicht verfälschen.
-> - Setze Timeouts für Inspector-Verbindungen, Auswertungen und UI-Wartebedingungen. Bei Timeout klar fehlschlagen, nicht unbegrenzt warten.
-> - Schließe Testprozesse, Verbindungen und Datenbanken zuverlässig und bereinige nur die eigenen temporären Dateien.
-> - Debugging-Ports gehören ausschließlich zum Teststart, nicht in produktive Startskripte oder Release-Konfigurationen.
-> - Überprüfe, dass das getestete Paket den finalen Code enthält. Nach notwendigen Produktivkorrekturen neu bauen.
-> - Trenne im Bericht diese Nachweise:
->   1. Echte Paketlaufzeit und Ressourcen.
->   2. XSD-Service-Validierung im Paket.
->   3. Handler-Integrationstest.
->   4. Tatsächlicher UI-Export und nativer Dialog.
-> - Formuliere Erfolg nur für tatsächlich geprüfte Fälle. „Button vorhanden“ bedeutet nicht „Datei exportiert“.
-
-### 7. Was du nicht machen darfst
-
-> - Nicht `main` oder `main.js` bearbeiten.
-> - Keine funktionierenden Mapper, Serializer oder Datenbankstrukturen ohne nachgewiesenen Fehler neu schreiben.
-> - Keine Validierung umgehen oder Assertions abschwächen.
-> - Keine Simulation als echten Paket-, Dialog- oder UI-End-to-End-Test ausgeben.
-> - Keine Produktionsdaten für Tests verwenden.
-> - Keine generierten PDFs, DATEV-Dateien, Datenbanken oder fachfremden Testartefakte committen.
-> - Keine zusätzlichen Features oder allgemeine „Codeverbesserungen“ beginnen.
-
-### 8. Abschluss und Stop-Bedingung
-
-> Führe die relevanten GAEB-Regressionstests sowie `git diff --check` aus. Kontrolliere den vollständigen Branch-Diff.
->
-> Liefere Start-/End-SHA, geänderte Dateien, genaue Build- und Testbefehle sowie Ergebnisse der oben getrennten Testebenen. Dokumentiere manuelle Schritte oder technisch nicht durchführbare Prüfungen ausdrücklich.
->
-> Committe und pushe **nur den Review-Branch**. Kein automatischer Merge.
->
-> **Stop-Bedingung:** Die genannten Testlücken sind geschlossen oder ihre verbleibenden Grenzen präzise dokumentiert. Danach keine weitere Entwicklungsrunde starten.
+> **Stop-Bedingung:** „Auswählen“ zeigt zuverlässig die vorhandenen Entwürfe ohne Fehler; der gewählte Entwurf lässt sich öffnen und die Datums-Fallbacks sind getestet. Danach keine zusätzlichen Verbesserungen beginnen.

@@ -855,6 +855,79 @@ app.whenReady().then(async () => {
             console.log('✓ Testfall 4c (GAEB Ausschreibung & Bepreisung UI) erfolgreich bestanden!');
 
             // =================================================================
+            // TESTFALL 4d: GAEB Entwurfsübersicht & Navigation (liesen.txt)
+            // =================================================================
+            console.log('Testfall 4d: GAEB Entwurfsübersicht Navigation & Datumsanzeige...');
+            await win.webContents.executeJavaScript(`
+                (async () => {
+                    // Reset alert spy für diesen Testfall
+                    window.__test.alerts = [];
+
+                    // 1. GAEB-Menü ohne Parameter öffnen -> zeigt Importliste
+                    await window.openGaebTenderModal();
+
+                    const modal = document.getElementById('gaeb-tender-modal');
+                    if (!modal || modal.classList.contains('hidden')) {
+                        throw new Error('GAEB Tender Modal ist nicht sichtbar');
+                    }
+
+                    const importList = document.getElementById('gt-view-import-list');
+                    if (!importList || importList.classList.contains('hidden')) {
+                        throw new Error('Importauswahl (#gt-view-import-list) muss nach openGaebTenderModal sichtbar sein');
+                    }
+
+                    // 2. Klick auf "Auswählen" beim vorbereiteten Import
+                    await window.GaebTenderController.selectImport(${tenderImportId});
+
+                    // Prüfe, ob Fehler aufgetreten sind
+                    if (window.__test.alerts.length > 0) {
+                        throw new Error('Fehler beim Laden der Entwürfe: ' + window.__test.alerts.join('; '));
+                    }
+
+                    const draftList = document.getElementById('gt-view-draft-list');
+                    if (!draftList || draftList.classList.contains('hidden')) {
+                        throw new Error('Entwurfsübersicht (#gt-view-draft-list) ist nicht sichtbar');
+                    }
+
+                    // 3. Zeilen in der Entwurfsübersicht prüfen
+                    const tbody = document.getElementById('gt-draft-list-tbody');
+                    const rows = tbody.querySelectorAll('tr');
+                    if (!rows || rows.length === 0) {
+                        throw new Error('Keine Entwurfszeilen gerendert trotz vorhandenem Entwurf');
+                    }
+
+                    const dateCell = rows[0].querySelectorAll('td')[6];
+                    if (!dateCell || !dateCell.textContent.trim() || dateCell.textContent.includes('undefined')) {
+                        throw new Error('Ungültige oder undefinierte Datumsanzeige in Entwurfszeile: ' + (dateCell?.textContent));
+                    }
+
+                    // 4. "Öffnen" beim Entwurf anklicken
+                    await window.GaebTenderController.openDraft(${tenderDraftInDb.id}, ${tenderImportId});
+
+                    const editor = document.getElementById('gt-view-editor');
+                    if (!editor || editor.classList.contains('hidden')) {
+                        throw new Error('Editor-Ansicht ist nach openDraft nicht sichtbar');
+                    }
+                    if (window.GaebTenderState.currentDraftId !== ${tenderDraftInDb.id}) {
+                        throw new Error('Falscher Entwurf im Editor geladen');
+                    }
+
+                    // 5. Zurück zur Entwurfsübersicht
+                    await window.GaebTenderController.backToDraftList();
+
+                    if (!draftList || draftList.classList.contains('hidden')) {
+                        throw new Error('Entwurfsübersicht nach backToDraftList() nicht sichtbar');
+                    }
+
+                    // Modal schließen
+                    window.GaebTenderController.closeModal();
+
+                    return { success: true };
+                })()
+            `);
+            console.log('✓ Testfall 4d (GAEB Entwurfsübersicht Navigation & Datumsanzeige) erfolgreich bestanden!');
+
+            // =================================================================
             // TESTFALL 5: DB-Reload & Integrität
             // =================================================================
             console.log('Testfall 5: DB-Reload & Integrität...');

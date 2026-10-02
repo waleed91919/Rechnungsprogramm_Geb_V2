@@ -814,6 +814,40 @@ describe('GAEB Tender Bepreisung & Entwurfsverwaltung', () => {
             }
         });
 
+        test('7.4 Leseoperation: Reines Abrufen/Listen von Entwürfen verändert weder Anzahl noch Inhalt der Entwürfe', () => {
+            const { db, dbPath } = createTempDb();
+            try {
+                const xml = loadFixture('valid_schema_reference.x83');
+                const parsed = GAEBEngine.parseGAEBXML(xml);
+                const saveImport = saveX83Import(db, parsed, { fileName: 'ref_read_only.x83', rawXml: xml });
+                const importId = saveImport.importId;
+
+                const d1 = createTenderDraft(db, importId, { name: 'Entwurf Alpha' });
+                const d2 = createTenderDraft(db, importId, { name: 'Entwurf Beta' });
+
+                const countBefore = db.prepare('SELECT COUNT(*) AS cnt FROM gaeb_tender_drafts WHERE import_id = ?').get(importId).cnt;
+                const rowsBefore = db.prepare('SELECT * FROM gaeb_tender_drafts WHERE import_id = ? ORDER BY id ASC').all(importId);
+                const itemsCountBefore = db.prepare('SELECT COUNT(*) AS cnt FROM gaeb_items').get().cnt;
+
+                // Mehrfaches Listen aufrufen
+                const list1 = listTenderDrafts(db, importId);
+                const list2 = listTenderDrafts(db, importId);
+
+                assert.strictEqual(list1.length, 2);
+                assert.strictEqual(list2.length, 2);
+
+                const countAfter = db.prepare('SELECT COUNT(*) AS cnt FROM gaeb_tender_drafts WHERE import_id = ?').get(importId).cnt;
+                const rowsAfter = db.prepare('SELECT * FROM gaeb_tender_drafts WHERE import_id = ? ORDER BY id ASC').all(importId);
+                const itemsCountAfter = db.prepare('SELECT COUNT(*) AS cnt FROM gaeb_items').get().cnt;
+
+                assert.strictEqual(countAfter, countBefore, 'Entwurfsanzahl darf sich bei Leseoperation nicht ändern');
+                assert.strictEqual(itemsCountAfter, itemsCountBefore, 'Positionen dürfen sich nicht ändern');
+                assert.deepStrictEqual(rowsAfter, rowsBefore, 'Alle Entwurfsdaten müssen unverändert sein');
+            } finally {
+                cleanupDb(db, dbPath);
+            }
+        });
+
         test('7.3 Versionsunabhängigkeit: Klonen v1 -> v2 entkoppelt Angebot und verhindert gegenseitige Beeinflussung', () => {
             const { db, dbPath } = createTempDb();
             try {

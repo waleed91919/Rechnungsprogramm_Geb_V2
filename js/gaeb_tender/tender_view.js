@@ -209,6 +209,11 @@
                         ? 'Als GAEB DA XML X84 exportieren'
                         : 'Export erst nach vollständiger Bepreisung und Beantwortung aller Pflichtangaben verfügbar';
 
+                    const rawDate = (d.updated_at && String(d.updated_at).trim())
+                        || (d.created_at && String(d.created_at).trim())
+                        || null;
+                    const updatedAt = rawDate ? (String(rawDate).slice(0, 16).replace('T', ' ') || '—') : '—';
+
                     return `
                         <tr class="hover:bg-slate-50 transition-colors">
                             <td class="py-3 px-4 font-mono font-bold text-slate-800">v${d.version}</td>
