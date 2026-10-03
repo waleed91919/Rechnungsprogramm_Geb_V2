@@ -1,0 +1,1334 @@
+Session 1:
+Analyse- und Refactoring-Plan: Modularisierung von js/editor.js
+A. Aktuelle Verantwortlichkeiten von js/editor.js
+Die Datei js/editor.js (ca. 1.830 Zeilen) fungiert derzeit als zentraler "Monolith" für den Rechnungs- und Angebots-Editor der Electron-App. Sie vereint folgende Verantwortlichkeiten:
+State-Verwaltung:
+Lesen und Beschreiben von globalen Zuständen in window.state (state.currentRechnungPositionen, state.currentRechnungVerrechnungen, state.currentRechnungTotals, state.isAngebotMode, state.isEditorReadOnly, state.belegEmailKontext).
+DOM-Manipulation & UI-Lifecycle:
+Erzeugen und Rendern von HTML-Tabellenzeilen (createRechnungPositionRow, renderRechnungPositionen, renderVerrechnungen).
+Steuerung des Modal-Lebenszyklus (openRechnungModal, openAngebotModal, closeRechnungModal, setupRechnungModalUI, setupAngebotModalUI).
+Dynamisches Umschalten von Sichtbarkeiten (B2G/B2C/B2B, Handwerk-Sektion, Bauvorhaben-Sektion, VOB/B, GoBD-Schreibschutz-Badge, PDF-Vorschau-Aktionen, Modal-Footer-Buttons).
+Event Listener & Formular-Handling:
+Reaktionen auf Eingabefelder (handlePositionChange, handleArtikelAutocomplete, handleKundeSelect, handleAngebotMetaChange, handleAngebot13bChange, handleRechtlicheCheckboxes, Datums- und Werktage-Handler).
+Event-Registrierung beim DOMContentLoaded.
+Hinzufügen, Bearbeiten, Löschen und Sortieren von Positionen:
+Erstellen und Entfernen von Positionen (addRechnungPosition, removeRechnungPosition).
+Artikel-Autocomplete aus state.artikel.
+Zuweisung und Steuerung von Positionstypen (NORMAL, PAUSCHALE, ALTERNATIV, BEDARF) und Schaltern (in_endsumme_enthalten, is13b).
+Preis-, Mengen-, Rabatt-, MwSt.- und Summenberechnungen:
+Berechnen von Positions- und Gesamtsummen, Rabatten, Steuersätzen (19%, 7%, 0% / § 13b UStG), Sicherheitseinbehalt (Prozent/Betrag), Skonto und Lohnkostenanteilen (§ 35a EStG).
+Ausführen von Abzugs- und Verrechnungslogiken bei Abschlags- und Schlussrechnungen (toggleAbschlagsKumulationUI, addVerrechnung, removeVerrechnung).
+Delegieren von Berechnungen an window.AngebotController und window.InvoiceView / window.InvoiceController.
+Validierung & Rechtliche Regeln:
+Prüfen von Pflichtfeldern (Kunde, Belegnummer, Beleg-ID).
+Einhaltung von GoBD-Sperre/Schreibschutz, E-Rechnungs-Regeln (EN 16931 für B2G, PAngV für B2C), § 48b EStG (Freistellungsbescheinigung), § 650m BGB.
+Validierung vor E-Mail-Versand und Export.
+Speichern und Laden:
+Auslesen und Aufbereiten der Formulareingaben (collectAngebotFormData).
+Speichern von Rechnungen und Angeboten (saveRechnung, saveAngebotEntwurf, registerAngebotVersand).
+Löschen, Stornieren und Bezahlt-Markieren (deleteRechnung, deleteAngebot, storniereRechnung, markAsPaid).
+Kommunikation über Preload / IPC (window.api):
+Aufrufe von window.api.saveDocument, window.api.unlockDocument, window.api.deleteDocument, window.api.exportZugferdPdf, window.api.exportXRechnungXml, window.api.sendBelegEmail, window.api.getSmtpKonten, window.api.getVersandhistorie.
+GAEB- & Drittmodul-Koppelung:
+Berücksichtigung von GAEB-Feldern (oz_code, bieterangabe_wert, Positionstypen).
+Anbindung an AufmassView / openAufmassModalForPosition.
+Umwandlung von Angeboten in Projekte via createProjektFromAngebotModal.
+Fehlerbehandlung und Benachrichtigungen:
+Verwendung von showToast, safeConfirm, safeAlert und Fehler-Panels.
+
+B. Abhängigkeitskarte
+1. Globale Variablen & Funktionen (Exports an window)
+window.syncAngebotFieldToRechnung
+window.handleAngebot13bChange
+window.handleAngebotMetaChange
+window.saveAngebotEntwurf
+window.previewAngebotPdf
+window.registerAngebotVersand
+window.createNextAngebotVersion
+window.acceptAngebotFromModal
+window.rejectAngebotFromModal
+window.createProjektFromAngebotModal
+window.navigateToAngebotProjekt
+window.syncSicherheitseinbehalt
+window.openBelegEmailModal
+2. Hilfsfunktionen aus js/utils.js
+formatCurrency, sanitize, formatDateISO, formatDateDEWithWeekday, isGermanPublicHoliday, isArbeitstag, calculateDueDateWorkingDays, countWorkingDaysBetween, showToast, safeConfirm, safeAlert.
+3. Externe Controller, Models & Klassen
+window.api (Preload IPC API)
+window.InvoiceController, window.InvoiceModel, window.InvoiceView
+window.AngebotController
+window.ObjektController
+window.SubcontractorController
+window.EInvoiceEngine
+window.AufmassView / window.aufmassViewInstance
+window.generatePdf, window.renderInvoiceForZugferdExport, window.restorePrintTemplateContent
+4. Globale Variable state (js/state.js)
+state.angebote, state.rechnungen, state.artikel, state.kunden, state.projekte, state.objekte, state.einstellungen
+state.currentRechnungPositionen, state.currentRechnungVerrechnungen, state.currentRechnungTotals, state.isAngebotMode, state.isEditorReadOnly, state.belegEmailKontext.
+5. DOM-Kopplung (code.html)
+Modals: #rechnung-modal, #email-modal, #custom-confirm-modal, #aufmass-modal.
+Formularelemente: #rechnung-form, #rechnung-id, #rechnung-kunde, #rechnung-projekt, #rechnung-objekt, #rechnung-nr, #rechnung-datum, #rechnung-faellig, #rechnung-werktage, #rechnung-status, #rechnung-art, #rechnung-eingabemodus, #rechnung-customer-type, #rechnung-global-rabatt, #rechnung-anzahlung, #rechnung-vortext, #rechnung-fusstext etc.
+Tabellen/Container: #rechnung-positionen, #rechnung-verrechnungen-list, #email-historie-body.
+
+C. Vorgeschlagene Modulstruktur
+Da die Anwendung im Renderer ohne Transpiler/Bundler ausgeführt wird, erfolgt die Trennung in ein modulares Unterverzeichnis js/editor/:
+js/editor/
+├── index.js                  # Einstiegspunkt & Fassade für window-Exports
+├── editor-state.js          # Editor-Zustandsverwaltung
+├── editor-calculation.js    # Reine Fachlogik: Summen, Rabatte, MwSt, Skonto, § 35a
+├── editor-validation.js     # Reine Fachlogik: Formular-, GoBD- & E-Rechnungs-Prüfung
+├── editor-positions.js      # CRUD-Verwaltung von Positionen im State
+├── editor-render.js         # DOM-Generierung & Rendering (Tabellen, Previews)
+├── editor-events.js         # Event-Listener & Formular-Interaktionen
+├── editor-save.js           # Speichern, Stornieren, Löschen & IPC-Kopplung
+└── editor-import.js         # E-Mail-, Export- (ZUGFeRD/XRechnung) & Aufmaß-Anbindung
+
+
+D. Zuordnung der vorhandenen Funktionen zu den Zielmodulen
+1. js/editor/editor-calculation.js (Reine, testbare Fachlogik)
+Zweck: Mathematische und steuerliche Belegberechnungen ohne DOM oder Electron.
+Funktionen:
+extractLaufendeNummer(nr)
+calculatePositionNetto(pos)
+calculatePositionBrutto(pos)
+calculateLohnkostenBrutto(positionen, artikelListe, unterliegt13b)
+calculateDocumentTotals(positionen, verrechnungen, optionen)
+Abhängigkeiten: Keine (reine Funktionen).
+2. js/editor/editor-validation.js (Reine Fachlogik & Regeln)
+Zweck: Prüfungsregeln für Belege, GoBD und E-Rechnungs-Normen.
+Funktionen:
+validateDocumentData(doc, isAngebotMode)
+validateERechnungExport(doc, kunde, einstellungen)
+checkGoBDLockStatus(existingDoc)
+Abhängigkeiten: editor-calculation.js.
+3. js/editor/editor-state.js (State Management)
+Zweck: Verwaltung des flüchtigen Editor-Zustands.
+Funktionen:
+resetEditorState()
+getEditorPositions(), setEditorPositions(list)
+getEditorVerrechnungen(), setEditorVerrechnungen(list)
+setEditorMode(isAngebot, isReadOnly)
+Abhängigkeiten: js/state.js.
+4. js/editor/editor-positions.js (Positions-Manipulation)
+Zweck: Hinzufügen, Entfernen, Bearbeiten und Autocomplete von Positionen.
+Funktionen:
+addRechnungPosition(), removeRechnungPosition(id)
+handlePositionChange(id, field, value)
+handleArtikelAutocomplete(posId, query)
+Abhängigkeiten: editor-state.js, editor-calculation.js.
+5. js/editor/editor-render.js (DOM-Rendering & UI-Updates)
+Zweck: Erzeugen von HTML-Elementen und Aktualisierung der Ansichten.
+Funktionen:
+createRechnungPositionRow(pos, index)
+renderRechnungPositionen()
+renderVerrechnungen()
+populateSelects(), populateVerrechnungSelect()
+updateRechnungDatePreviews(), applyUnternehmensartVisibility()
+Abhängigkeiten: editor-state.js, editor-positions.js, js/utils.js.
+6. js/editor/editor-events.js (UI-Aktionen & Dialogsteuerung)
+Zweck: Event-Handling von Formularen, Modals und Checkboxen.
+Funktionen:
+setupRechnungModalUI(), setupAngebotModalUI()
+openRechnungModal(), openAngebotModal(), closeRechnungModal()
+handleKundeSelect(event)
+handleRechtlicheCheckboxes(), handleAngebotMetaChange()
+setRechnungCustomerType(type), setEingabeModus(mode)
+initRechnungDateHandlers()
+Abhängigkeiten: editor-render.js, editor-positions.js, editor-state.js.
+7. js/editor/editor-save.js (Speicher-, Lösch- & Statuslogik)
+Zweck: Interaktion mit dem Backend / Model via IPC.
+Funktionen:
+collectAngebotFormData(), saveRechnung(), saveAngebotEntwurf()
+registerAngebotVersand(), createNextAngebotVersion(), acceptAngebotFromModal(), rejectAngebotFromModal()
+storniereRechnung(), markAsPaid(), deleteRechnung(), deleteAngebot()
+Abhängigkeiten: editor-state.js, editor-validation.js, window.api.
+8. js/editor/editor-import.js (Export & Schnittstellen)
+Zweck: PDF-, ZUGFeRD-, XRechnung-Export und E-Mail-Modal.
+Funktionen:
+collectERechnungExportData(), exportZugferdPdfFromModal(), exportXRechnungXMLFromModal()
+openBelegEmailModal(), sendeBelegEmailFromModal(), ladeEmailHistorie()
+openAufmassModalForPosition()
+Abhängigkeiten: editor-save.js, window.api.
+9. js/editor/index.js (Fassade / Abwärtskompatibilität)
+Zweck: Re-Export aller Funktionen an window.*, sodass bestehende Onclick-Handler in code.html ohne Unterbrechung weiterfunktionieren.
+
+E. Sichere Migrationsreihenfolge
+Schritt 1: Reine Hilfsfunktionen & Berechnungen (editor-calculation.js)
+Auslagern von extractLaufendeNummer und reinen Rechenfunktionen. Unit-Tests erstellen.
+Schritt 2: Validierungslogik (editor-validation.js)
+Auslagern von Beleg-, GoBD- und E-Rechnungsprüfungen.
+Schritt 3: State-Kapselung (editor-state.js)
+Getter/Setter für flüchtigen Editor-Zustand definieren.
+Schritt 4: Positionsverwaltung (editor-positions.js)
+Trennung von Positionen-State-Änderungen und Autocomplete.
+Schritt 5: DOM-Rendering (editor-render.js)
+Übernahme der Tabellen- und HTML-Zeilenerzeugung.
+Schritt 6: Event- & Modal-Steuerung (editor-events.js)
+Verschieben der Formular- und Modal-Handler.
+Schritt 7: Speichern, Löschen & IPC (editor-save.js)
+Auslagern aller IPC-Aktionen zur Dokumentenspeicherung.
+Schritt 8: Schnittstellen & Exporte (editor-import.js)
+Übertragung der E-Mail-, PDF- und XRechnung-Export-Funktionen.
+Schritt 9: Fassade (js/editor.js bzw. js/editor/index.js)
+Binden aller exportierten Funktionen an window, um volle Rückwärtskompatibilität zu sichern.
+
+F. Risiken und Konfliktstellen
+Inline-onclick-Aufrufe in code.html:
+Buttons im HTML greifen direkt auf globale Funktionen wie saveRechnung() zu.
+Mitigation: Alle Funktionen müssen weiterhin auf window registriert sein.
+Wechselseitige Aufrufe zwischen Rendering und Berechnung:
+renderRechnungPositionen() ruft calculateRechnungTotals() auf.
+Mitigation: Strikte Trennung von Datenberechnung (Pure Function) und UI-Aktualisierung.
+GoBD-Schreibschutz:
+Beim Umschalten von Ansichten darf die Read-Only-Sperre nicht aufgehoben werden.
+Mitigation: Zentraler Lock-Check im State/Validation-Modul.
+B2G/B2C-Logik (EN 16931 / PAngV):
+Automatische Umschaltung von Netto-/Bruttopreisen.
+Mitigation: Absicherung durch automatisierte Tests.
+
+G. Test- und Abnahmecheckliste
+Position anlegen: Neue Position hinzufügen (Standardwerte, Menge, Einheit, MwSt. prüfen).
+Position bearbeiten: Menge, Einzelpreis, Rabatt (%) und Steuersatz ändern.
+Position löschen: Position entfernen und Summenberechnung verifizieren.
+Mengen und Preise ändern: Brutto-/Netto-Eingabemodus prüfen.
+Rabatte und MwSt. prüfen: Positionsrabatt, Globalrabatt und § 13b UStG testen.
+Gesamtsummen prüfen: Zwischensumme, Steueraufschlüsselung, Sicherheitseinbehalt und Zahlbetrag prüfen.
+Entwurf speichern: Neue Rechnung / neues Angebot als Entwurf speichern.
+Entwurf erneut laden: Gespeichertes Dokument öffnen und Vollständigkeit aller Felder prüfen.
+GAEB-Übernahme prüfen: Positionen mit oz_code und Positionstypen prüfen.
+Fehlerfälle & Validierung: Speichern ohne Kunde oder Belegnummer testen (Muss Toast-Fehler auslösen).
+
+Hinweis: Dies ist ein reines Analyse- und Planungsergebnis. Es wurden keine Codeänderungen vorgenommen.
+___
+Session 2:
+Hier ist der vollständige Analyse- und Refactoring-Bericht für js/projekte.js:
+Architektur-Analyse & Refactoring-Plan: js/projekte.js
+A. Aktuelle Verantwortlichkeiten
+Die Datei js/projekte.js umfasst derzeit 1.455 Zeilen und vereinigt eine Vielzahl unzusammenhängender fachlicher sowie technischer Domain-Verantwortlichkeiten im Renderer-Prozess. Folgende Hauptverantwortlichkeiten sind aktuell in dieser Monolith-Datei verflochten:
+Projekt-CRUD & Formulardialoge:
+Öffnen/Schließen der Projekt-Modals (openProjektModal, closeProjektModal)
+Formulardaten einlesen, Fokus-Management (focusWindow), Grundvalidierungen
+Speichern von Projekten via IPC (saveProjekt)
+Projektliste & Filterung / Karten-Rendering:
+Rendering des Projekt-Grids (renderProjekte)
+Dynamisches DOM-Building von Projektkarten mit Status-Badges, Fortschrittsbalken und Rentabilität (createProjektCardElement)
+Volltextsuche über Projektname und Kundenname
+Projekt-Detailansicht (Projektübersicht & Tab-Management):
+Befüllen und Umschalten der Projekt-Detailansicht (showProjektDetails, updateProjektHeaderUI, updateProjektStatusUI, updateProjektNotizenUI, updateProjektProgressUI, closeProjektDetails)
+Verknüpfung zu Schnellaktionen wie Beleg-Erstellung (createRechnungForProjekt, createAngebotForProjekt)
+Haupt-Tab-Steuerung (switchProjektTab) für Finanzen, Aufmaß, Nachträge, Bautagebuch, Controlling, EFB, Kalkulation, Mängel
+Umsatz- & Rentabilitätsberechnung:
+Komplexer Algorithmus zur Ermittlung des Ist-Umsatzes (calculateProjektUmsatz) inkl. Filterung von Entwürfen, Stornos, Teilschluss- und Schlussrechnungen sowie kumulierten Abschlagsrechnungen
+GAEB Import & Positionstabelle:
+FileReader und GAEB-Parsing (handleGAEBFileUpload)
+Rendern der importierten GAEB-Positionen (renderGAEBPositionsTable)
+Übernahme in die Split-View-Struktur
+Sub-Views Instanziierung / Delegation:
+Dynamische Instanziierung und Aufruf externer Modul-Views (loadProjektEFB, loadProjektKalkulation, loadProjektMaengel)
+Aufmaß-Center & Split-View (TopKontor-Anlehnung):
+Sub-Tab Umschaltung (switchAufmassSubTab)
+Laden und Rendern von Soll-/Ist-Positionen in Split-Table (loadSplitViewPositions, renderSplitPositionsTable, selectSplitPosition)
+Dynamische Bearbeitung von Aufmaßzeilen mit Formelauswertung (addSplitAufmassZeile, removeSplitAufmassZeile, toggleSplitZeileVorzeichen, renderSplitDetailZeilenTable, calcSplitZeileFormula, recalcSplitDetailTotal)
+Speichern von Detailaufmaßen (saveSplitDetailAufmass)
+Aufmaß-Wizard (2-Schritte-Assistent):
+Modal-Steuerung & Schritt-Navigation (openAufmassWizardModal, closeAufmassWizardModal, wizardNextStep, wizardPrevStep, updateWizardBadges)
+Typen- & Variantenwahl (selectAufmassWizardTyp, selectAufmassWizardVariante)
+Fertigstellung und Generierung von Standard-Zeilen (finishAufmassWizard)
+Formelassistent & Parameter-Berechnung:
+Modal-Verwaltung (openFormelassistentModal, closeFormelassistentModal)
+Vorlagen-Einbindung, Parsen von Variablen [L], [B], [H] und Live-Evaluierung (onFormelVorlageChange, onCustomFormulaInput, parseAndBuildParameterInputs, recalcFormelassistentLive, applyFormelassistentResult)
+Dokumentenfluss & Übergaben (Aufmaß / Nachtrag -> Rechnung/Angebot):
+Modal-Verwaltung (openAufmassUebergabeModal, closeAufmassUebergabeModal, onUebergabeTypChange)
+Konsolidierung und Übertragung von Aufmaßmengen in Belege (executeAufmassUebergabe) inkl. GoBD-Sperrprüfungen, Kundenvalidierung und Persistierung
+Idempotente Übernahme genehmigter Nachträge in Rechnungen (applyApprovedNachtraegeToCurrentInvoice)
+Aufmaßblatt-Verwaltung & DA11/GAEB-X31 Schnittstellen:
+Laden, Erstellen, Bearbeiten, Löschen von Aufmaßblättern (loadProjektAufmassBlaetter, openAufmassBlattModal, closeAufmassBlattModal, addAufmassBlattZeile, removeAufmassBlattZeile, toggleAufmassZeileVorzeichen, renderAufmassBlattZeilenTable, updateAufmassZeile, calcAufmassZeileFormula, saveAufmassBlattData, deleteAufmassBlattAction)
+DA11 (REB 23.003) & GAEB X31 Import/Export (exportProjektDA11, exportProjektGAEBX31, importProjektGAEBX31)
+Aufmaß-Druck & PDF-Vorschau:
+Dynamische HTML-Generierung von prüffähigen Aufmaßblättern nach VOB/C (generateAufmassDocumentHtml)
+Einzel-, Blatt- und Schlussaufmaß-Druckfunktionen (printAufmassBlattAction, printActiveSplitPositionAufmass, printCurrentAufmassBlattModal, calculateSchlussaufmassForProjekt)
+VOB/B Nachtragsverwaltung:
+Laden, Erstellen, Bearbeiten, Status-Update, Löschen von Nachträgen (loadProjektNachtraege, updateNachtragSums, openNachtragModal, closeNachtragModal, addNachtragPositionRow, removeNachtragPositionRow, renderNachtragPositionsTable, updateNachtragPos, saveNachtragData, updateNachtragStatusAction, deleteNachtragAction)
+Bautagebuch & Bauabnahme (VOB/B § 12 & BGB):
+Schnellwahl Wetter (selectWeatherQuick)
+Laden und Erfassen von Bautagebuch-Tagesberichten (loadProjektBautagebuch, saveBautagebuchEntry)
+Laden und Erstellen von Abnahmeprotokollen mit HTML5-Canvas Signaturen für AG/AN (loadProjektAbnahmen, openAbnahmeModal, closeAbnahmeModal, addMangelRow, removeMangelRow, renderMaengelList, initSignCanvas, clearCanvas, saveAbnahmeprotokollData)
+Controlling & Eingangsrechnungen (§ 48b EStG Bauabzugsteuer):
+Laden und Anzeigen von Controlling-Statistiken, Margen & Deckungsbeiträgen (loadProjektControlling)
+Verwaltung von Lieferanten-Eingangsrechnungen (openEingangsrechnungModal, closeEingangsrechnungModal, calculateERBrutto, checkSubcontractorWarningInModal, saveEingangsrechnungData, deleteEingangsrechnungAction)
+
+B. Abhängigkeitskarte
+1. Exports und Imports (CommonJS & Globaler Scope)
+CJS Exports (module.exports):
+calculateProjektUmsatz
+saveBautagebuchEntry
+switchProjektTab
+Globaler Scope (Window): Nahezu alle Funktionen werden direkt im globalen window-Scope definiert, da sie von HTML Inline-Event-Handlern (onclick="...") in code.html aufgerufen werden.
+2. Globale Zustandskontrolle (state & globale Skript-Variablen)
+Globales state-Objekt:
+state.projekte, state.kunden, state.rechnungen, state.angebote, state.dokumente, state.einstellungen, state.currentRechnungPositionen, state.currentRechnung
+Globale Variablen in js/projekte.js:
+window.currentViewProjektId
+currentAufmassSubTab, activeSplitOz, activeSplitPosition, currentSplitZeilen, splitPositionsData
+currentWizardStep, currentAufmassTyp, currentAufmassVariante
+activeTargetFormulaInputId
+currentAufmassZeilen, currentNachtragPositionen, currentMaengelList
+window.efbViewInstance, window.kalkulationViewInstance, window.maengelViewInstance
+3. DOM-Kopplungen (DOM-IDs, Klassen & Attributes)
+Hauptansichten & Container:
+view-projekte, projekte-grid, view-projekt-details, pd-rechnungen-body, pd-rechnungen-empty, pd-angebote-body, pd-angebote-empty
+Projekt-Modal:
+projekt-modal, projekt-modal-title, projekt-form, projekt-id, projekt-name, projekt-kunde, projekt-start, projekt-ende, projekt-budget, projekt-sicherheitseinbehalt, projekt-status, projekt-notizen
+Detail-Tabs & Panels:
+Tab-Buttons (pd-tab-btn-*), Tab-Panels (pd-panel-*), Header-Elemente (pd-name, pd-kunde, pd-status, pd-notizen, pd-umsatz, pd-budget, pd-progress-bar, pd-progress-text, pd-verbraucht, pd-rest)
+Aufmaß, Split-View, Wizard, Formelassistent, Übergabe:
+split-positions-body, split-detail-zeilen-body, aufmass-wizard-modal, formelassistent-modal, aufmass-uebergabe-modal, aufmassblatt-modal
+Nachtrag, Bautagebuch, Abnahme, Controlling, Eingangsrechnung:
+nachtrag-modal, bautagebuch-*, abnahme-modal, signature-ag, signature-an, eingangsrechnung-modal, er-sec48b-warnbox
+4. Kopplungen mit anderen JS-Dateien & Controller
+editor.js: Gemeinsame Nutzung von state.rechnungen, state.angebote, openRechnungModal(), openAngebotModal(), handleKundeSelect(), saveRechnung(), recalculateRechnungTotals(), calculateRechnungTotals(), openPdfPreview()
+kunden.js & objekte.js: Lesen und Zuordnen von Kundendaten via state.kunden
+utils.js: Nutzung von formatCurrency(), showToast(), sanitize()
+navigation.js: Aufrufe von switchView()
+Spezifische Controller: GAEBEngine, window.EFBView, window.KalkulationView, window.MaengelView, window.AufmassController, window.NachtragController, window.BautagebuchController
+5. IPC Schnittstellen (window.api)
+focusWindow, saveProjekt, getFullState
+getAufmassBlaetter, saveAufmassBlatt, deleteAufmassBlatt, exportDA11, exportGAEBX31, importGAEBX31
+getNachtraege, saveNachtrag, updateNachtragStatus, deleteNachtrag
+getBautagebuch, saveBautagebuch
+getAbnahmeprotokolle, saveAbnahmeprotokoll
+getControllingStats, getEingangsrechnungen, saveEingangsrechnung, deleteEingangsrechnung
+getProjekt, mergeSchlussaufmass, getDocumentById, saveDocument, confirm
+
+C. Zielstruktur der Module
+Es wird ein modularer Ordner js/projects/ vorgeschlagen, der die Aufgaben klar trennt, ohne unnötigen Overhead zu erzeugen:
+js/projects/
+├── index.js                  # Haupt-Einstiegspunkt, Re-Exports & Global-Bridge zur Abwärtskompatibilität
+├── project-state.js          # Kapselung des lokalen Projekt-Modul-States & Getter/Setter
+├── project-list.js           # Projektliste, Filter, Suche & Karten-Rendering
+├── project-detail.js         # Projekt-Detailansicht, Header UI, Tab-Steuerung & Sub-View Delegation
+├── project-form.js           # Modal-Dialoge zum Anlegen und Bearbeiten von Projekten
+├── project-calculations.js   # Reine Umsatz-, Fortschritts- & Rentabilitätsberechnung (testbar ohne DOM)
+├── project-aufmass.js        # Aufmaß-Center, Split-View, Aufmaßblätter, Wizard, Formelassistent & GAEB/DA11
+├── project-aufmass-print.js  # HTML-Generierung & Druck/PDF-Erstellung für Aufmaßdokumente
+├── project-nachtrag.js       # VOB/B Nachtragsverwaltung (Anlegen, Bearbeiten, Status-Workflow)
+├── project-bautagebuch.js    # Bautagebuch, Tagesberichte, Abnahmeprotokolle & Canvas-Signaturen
+├── project-controlling.js    # Controlling, Deckungsbeiträge & Lieferanten-Eingangsrechnungen (§ 48b)
+└── project-document-flow.js # Dokumentenübergaben (Aufmaß/Nachtrag -> Rechnung/Angebot)
+
+
+D. Zuordnung der bestehenden Funktionen
+Bestehende Funktion in js/projekte.jsZukünftiges Modul
+openProjektModal, closeProjektModal, saveProjekt
+js/projects/project-form.js
+renderProjekte, createProjektCardElement
+js/projects/project-list.js
+showProjektDetails, updateProjektHeaderUI, updateProjektStatusUI, updateProjektNotizenUI, updateProjektProgressUI, populateProjektRechnungenTable, populateProjektAngeboteTable, closeProjektDetails, createRechnungForProjekt, createAngebotForProjekt, switchProjektTab, loadProjektEFB, loadProjektKalkulation, loadProjektMaengel
+js/projects/project-detail.js
+calculateProjektUmsatz
+js/projects/project-calculations.js
+handleGAEBFileUpload, renderGAEBPositionsTable, switchAufmassSubTab, loadSplitViewPositions, renderSplitPositionsTable, selectSplitPosition, addSplitAufmassZeile, removeSplitAufmassZeile, toggleSplitZeileVorzeichen, renderSplitDetailZeilenTable, calcSplitZeileFormula, recalcSplitDetailTotal, saveSplitDetailAufmass, selectAufmassWizardTyp, selectAufmassWizardVariante, openAufmassWizardModal, closeAufmassWizardModal, wizardNextStep, wizardPrevStep, updateWizardBadges, finishAufmassWizard, openFormelassistentModal, closeFormelassistentModal, onFormelVorlageChange, onCustomFormulaInput, parseAndBuildParameterInputs, recalcFormelassistentLive, applyFormelassistentResult, loadProjektAufmassBlaetter, openAufmassBlattModal, closeAufmassBlattModal, addAufmassBlattZeile, removeAufmassBlattZeile, toggleAufmassZeileVorzeichen, renderAufmassBlattZeilenTable, updateAufmassZeile, calcAufmassZeileFormula, saveAufmassBlattData, deleteAufmassBlattAction, exportProjektDA11, exportProjektGAEBX31, importProjektGAEBX31
+js/projects/project-aufmass.js
+generateAufmassDocumentHtml, printAufmassBlattAction, printActiveSplitPositionAufmass, printCurrentAufmassBlattModal, calculateSchlussaufmassForProjekt
+js/projects/project-aufmass-print.js
+loadProjektNachtraege, updateNachtragSums, openNachtragModal, closeNachtragModal, addNachtragPositionRow, removeNachtragPositionRow, renderNachtragPositionsTable, updateNachtragPos, saveNachtragData, updateNachtragStatusAction, deleteNachtragAction
+js/projects/project-nachtrag.js
+selectWeatherQuick, loadProjektBautagebuch, saveBautagebuchEntry, loadProjektAbnahmen, openAbnahmeModal, closeAbnahmeModal, addMangelRow, removeMangelRow, renderMaengelList, initSignCanvas, clearCanvas, saveAbnahmeprotokollData
+js/projects/project-bautagebuch.js
+loadProjektControlling, openEingangsrechnungModal, closeEingangsrechnungModal, calculateERBrutto, checkSubcontractorWarningInModal, saveEingangsrechnungData, deleteEingangsrechnungAction
+js/projects/project-controlling.js
+openAufmassUebergabeModal, closeAufmassUebergabeModal, onUebergabeTypChange, executeAufmassUebergabe, applyApprovedNachtraegeToCurrentInvoice
+js/projects/project-document-flow.js
+
+E. Sichere Migrationsreihenfolge
+Um Regressionsrisiken zu minimieren, muss die Migration schrittweise, klein und reversibel erfolgen:
+Schritt 1: Reines Kapseln der Hilfsfunktionen & Berechnungslogik
+Extraktion von calculateProjektUmsatz nach project-calculations.js.
+Aufsetzen von isolierten Unit-Tests für calculateProjektUmsatz (Kumulative Abschlagsrechnungen, Stornos, Entwürfe).
+Schritt 2: Modul-State einführen
+Erstellung von project-state.js zur Kapselung von Variablen wie window.currentViewProjektId, activeSplitOz, currentSplitZeilen mit klaren Getter-/Setter-Methoden.
+Schritt 3: Projektliste & Projekt-Formular auslagern
+Verschieben von project-list.js (renderProjekte) und project-form.js (openProjektModal, saveProjekt).
+Überprüfung aller Event-Handler und DOM-Elemente bezüglich Modals.
+Schritt 4: Projekt-Detailansicht & Tab-Routing isolieren
+Auslagerung von project-detail.js inkl. Sub-View Delegationen (EFBView, KalkulationView, MaengelView).
+Schritt 5: Domänenunabhängige Sub-Funktionen auslagern
+Auslagerung von project-nachtrag.js, project-bautagebuch.js, project-controlling.js.
+Schritt 6: Aufmaß-Complex & Druck-Engine auslagern
+Auslagerung von project-aufmass.js und project-aufmass-print.js.
+Schritt 7: Übergaben & Dokumentenfluss entkoppeln
+Auslagerung von project-document-flow.js (executeAufmassUebergabe, applyApprovedNachtraegeToCurrentInvoice).
+Schritt 8: Fassade / Global-Bridge (js/projects/index.js) etablieren
+Einbinden aller Teilmodule in index.js und Zuweisung aller öffentlichen Funktionsnamen an den window-Scope zur Vermeidung von Brechungen mit HTML-Inline-Events in code.html.
+Weiterhin js/projekte.js als Fassade belassen, die auf js/projects/index.js verweist.
+
+F. Risiken und mögliche Merge-Konflikte
+HTML/DOM Inline-Event Kopplung:
+In code.html existieren zahlreiche direkte Aufrufe via onclick="..." (z.B. onclick="openProjektModal()"). Wenn ein Funktionsname im window-Scope fehlt, bricht die Benutzeroberfläche ohne Fehlermeldung beim Laden ab.
+Lösung: index.js muss als globale Bridge dienen und alle öffentlich benötigten Funktionen explizit an window hängen.
+Kopplung an editor.js & state:
+Funktionen wie applyApprovedNachtraegeToCurrentInvoice() oder createRechnungForProjekt() greifen direkt auf state.currentRechnungPositionen, openRechnungModal() und saveRechnung() aus editor.js zu.
+Lösung: Klare Schnittstellenprüfungen (typeof openRechnungModal === 'function') vor dem Aufruf durchführen.
+IPC & Persistenz-Sicherheit (GoBD-Sperren):
+executeAufmassUebergabe und applyApprovedNachtraegeToCurrentInvoice enthalten kritische GoBD-Sperrprüfungen (DOC_LOCKED, Festgeschrieben, Storniert) und Reload-Read-Garantien (getFullState).
+Lösung: Beim Refactoring darf an diesen Prüfungen und Persistenzabläufen keine Änderung vorgenommen werden.
+Mögliche Konflikte bei parallelen Refactorings:
+Parallele Arbeiten an code.html, editor.js oder main.js können zu Merge-Konflikten führen.
+Lösung: Aufteilung in kleine PRs; öffentliche Funktionssignaturen und IPC-Kanalnamen unverändert lassen.
+
+G. Test- und Abnahmecheckliste
+1. Projektliste & Suche
+Projektliste öffnen: Navigieren zur Projektübersicht; alle Karten werden korrekt dargestellt.
+Suche & Filter: Eingabe im Suchfeld filtert die Projekte nach Name und Kundenname in Echtzeit.
+2. Projekt-CRUD Operations
+Neues Projekt anlegen: Modal "Neues Projekt" öffnen, Pflichtfelder (Name, Kunde) befüllen und speichern.
+Validierung Pflichtfelder: Speichern ohne Name oder Kunde zeigt Fehlermeldung ("Bitte füllen Sie alle Pflichtfelder aus.").
+Datum-Validierung: Ende-Datum vor Start-Datum zeigt Fehlermeldung.
+Projekt bearbeiten: Bestehendes Projekt öffnen, Werte ändern, speichern und prüfen, ob die Änderungen nach Reload erhalten bleiben.
+3. Projekt-Details & Tab-Navigation
+Detailansicht öffnen: Klick auf eine Projektkarte öffnet die Detailansicht mit korrekten Stammdaten.
+Tab-Wechsel: Durchklicken aller Tabs (Finanzen, Aufmaß, Nachträge, Bautagebuch, Controlling, EFB, Kalkulation, Mängel).
+Schnellaktionen: "Rechnung erstellen" / "Angebot erstellen" öffnet das jeweilige Modal mit vorausgewähltem Projekt und Kunde.
+4. Aufmaß-Center & Übergaben
+Split-View Aufmaß: Position auswählen, Rechenansatz eingeben (z.B. 5.50 * 4.20) und Live-Ergebnis prüfen.
+Aufmaß-Wizard: Assistent durchlaufen und neues Aufmaßblatt erzeugen.
+Formelassistent: Vorlage auswählen, Parameter eingeben und Wert in die Formelzeile übernehmen.
+Aufmaß-Übergabe: Aufmaßmengen in eine bestehende/neue Rechnung übergeben und Persistenz via Reload prüfen.
+GoBD-Sperrprüfung: Übergabe an eine festgeschriebene/gesperrte Rechnung wird blockiert.
+5. Nachträge, Bautagebuch, Abnahme & Controlling
+Nachtrag anlegen & genehmigen: Nachtrag erfassen, Status auf "GENEHMIGT" setzen und in Rechnung übernehmen.
+Bautagebuch-Eintrag: Tagesbericht mit Wetter und Arbeiterstunden erfassen und speichern.
+Abnahmeprotokoll: Abnahme erstellen, Mängel erfassen, Signaturen auf Canvas zeichnen und speichern.
+Controlling & Eingangsrechnung: Controlling-Kennzahlen prüfen; Eingangsrechnung erfassen; § 48b Bauabzugsteuer-Warnung bei fehlender Freistellungsbescheinigung prüfen.
+___
+Session 3:
+ARCHITEKTUR- UND REFACTORING-BERICHT
+Sichere Entkopplung & Modularisierung von schema.js in Domänenmodule
+Repository: waleed91919/Rechnungsprogramm_Geb_V2
+Status: Analyse- und Planungsbericht (Keine Code-Änderungen durchgeführt)
+
+A. Vollständiges Schema-Inventar
+Die Datenbank von W-Link ERP basiert auf SQLite (better-sqlite3) und umfasst aktuell 76 Tabellen, 115 Indizes sowie 12 Engine-Level Triggers. Die Initialisierung wird zentral von schema.js in Verbindung mit db/schema/gaeb_schema.js gesteuert.
+1. PRAGMA-Anweisungen (db.js)
+PRAGMA journal_mode = WAL; (Write-Ahead Logging für Performance und Nebenläufigkeit)
+PRAGMA foreign_keys = ON; (Erzwingung aller deklarierten Fremdschlüssel)
+PRAGMA busy_timeout = 5000; (Sperr-Timeout 5 Sekunden)
+2. Tabellenübersicht (76 Tabellen)
+#TabellePrimärschlüsselWichtigste Fremdschlüssel (FK)Unique / CHECK Constraints
+1
+artikel
+id INTEGER PK AUTO
+-
+-
+2
+kunden
+id INTEGER PK AUTO
+-
+-
+3
+dokumente
+id INTEGER PK AUTO
+kundeId->kunden(id), projektId->projekte(id), parent_angebot_id->dokumente(id), sepa_mandat_id->kunden_sepa_mandate(id)
+CHECK(objekt_typ IN ('LIEGENSCHAFT','GEBAEUDE','ETAGE','RAUM'))
+4
+positionen
+id INTEGER PK AUTO
+dokumentId->dokumente(id), artikelId->artikel(id)
+-
+5
+aufmass
+id INTEGER PK AUTO
+projekt_position_id->projekt_positionen(id), rechnung_id->dokumente(id), projekt_id->projekte(id)
+ON DELETE RESTRICT / SET NULL
+6
+aufmass_positionen
+id INTEGER PK AUTO
+aufmass_id->aufmass(id) ON DELETE CASCADE
+-
+7
+rechnung_verrechnungen
+id INTEGER PK AUTO
+aktuelle_rechnung_id->dokumente(id), vorherige_rechnung_id->dokumente(id)
+Unique Index auf (aktuelle_rechnung_id, vorherige_rechnung_id)
+8
+invoice_cumulative_states
+id INTEGER PK AUTO
+project_id->projekte(id), invoice_id->dokumente(id)
+invoice_id UNIQUE, CHECK(billing_type IN ('ADVANCE','PARTIAL_FINAL','FINAL'))
+9
+security_retentions
+id INTEGER PK AUTO
+project_id->projekte(id), invoice_id->dokumente(id), mangel_id->maengelkataster(id)
+Unique Index invoice_id, CHECK(retention_type IN ('EXECUTION','WARRANTY')), CHECK(status IN ('HELD','RELEASED','GUARANTEE_SUBSTITUTED'))
+10
+audit_logs
+id INTEGER PK AUTO
+-
+Unveränderbar via Trigger
+11
+projekte
+id INTEGER PK AUTO
+source_angebot_id->dokumente(id)
+Unique Partial Index (source_angebot_id, COALESCE(source_angebot_version, 1))
+12
+projekt_source_migrations
+id INTEGER PK AUTO
+projekt_id->projekte(id) ON DELETE CASCADE
+-
+13
+projekt_positionen
+id INTEGER PK AUTO
+projekt_id->projekte(id) ON DELETE CASCADE, source_angebot_id->dokumente(id), source_angebot_pos_id->positionen(id)
+-
+14
+aufmass_blaetter
+id INTEGER PK AUTO
+project_id->projekte(id), invoice_id->dokumente(id)
+CHECK(status IN ('DRAFT','SUBMITTED','VERIFIED','FINALIZED'))
+15
+aufmass_zeilen
+id INTEGER PK AUTO
+blatt_id->aufmass_blaetter(id) ON DELETE CASCADE
+uuid UNIQUE
+16
+nachtraege
+id INTEGER PK AUTO
+project_id->projekte(id)
+CHECK(rechtsgrundlage ...), CHECK(status ...)
+17
+nachtrag_positionen
+id INTEGER PK AUTO
+nachtrag_id->nachtraege(id) ON DELETE CASCADE
+CHECK(cost_type IN ('LOHN','MATERIAL','GERÄT','FAHRT'))
+18
+bautagebuch
+id INTEGER PK AUTO
+project_id->projekte(id)
+uuid UNIQUE
+19
+abnahmeprotokolle
+id INTEGER PK AUTO
+project_id->projekte(id)
+CHECK(abnahme_status IN ('OHNE_VORBEHALT','MIT_VORBEHALT','VERWEIGERT'))
+20
+eingangsrechnungen
+id INTEGER PK AUTO
+project_id->projekte(id), lieferant_id->kunden(id)
+CHECK(kostenart ...), CHECK(zahlungs_status ...)
+21
+einstellungen
+key TEXT PRIMARY KEY
+-
+-
+22
+liegenschaften
+id INTEGER PK AUTO
+empfaenger_kunde_id->kunden(id)
+CHECK(empfaenger_art ...), CHECK(aktiv IN (0,1))
+23
+gebaeude
+id INTEGER PK AUTO
+liegenschaft_id->liegenschaften(id) ON DELETE CASCADE, empfaenger_kunde_id->kunden(id)
+CHECK(empfaenger_art ...), CHECK(aktiv IN (0,1))
+24
+etagen
+id INTEGER PK AUTO
+gebaeude_id->gebaeude(id) ON DELETE CASCADE, empfaenger_kunde_id->kunden(id)
+CHECK(empfaenger_art ...), CHECK(aktiv IN (0,1))
+25
+raeume
+id INTEGER PK AUTO
+etage_id->etagen(id) ON DELETE CASCADE, empfaenger_kunde_id->kunden(id)
+CHECK(empfaenger_art ...), CHECK(aktiv IN (0,1))
+26
+abrechnungsplaene
+id INTEGER PK AUTO
+empfaenger_kunde_id->kunden(id)
+CHECK(objekt_typ ...), CHECK(rhythmus ...), CHECK(abrechnungs_modus ...)
+27
+abrechnungsplan_positionen
+id INTEGER PK AUTO
+plan_id->abrechnungsplaene(id) ON DELETE CASCADE, artikelId->artikel(id)
+CHECK(artikelId IS NOT NULL OR (name IS NOT NULL AND TRIM(name) <> ''))
+28
+dauerrechnung_laeufe
+id INTEGER PK AUTO
+plan_id->abrechnungsplaene(id), dokument_id->dokumente(id)
+CHECK(status IN ('ERSTELLT','STORNIERT'))
+29
+lv_bereiche
+id INTEGER PK AUTO
+-
+CHECK(objekt_typ ...), CHECK(aktiv IN (0,1))
+30
+lv_positionen
+id INTEGER PK AUTO
+bereich_id->lv_bereiche(id) ON DELETE CASCADE
+CHECK(turnus_typ ...), CHECK(turnus_wert > 0)
+31
+putzplan_eintraege
+id INTEGER PK AUTO
+position_id->lv_positionen(id) ON DELETE CASCADE
+CHECK(objekt_typ ...)
+32
+email_versandhistorie
+id INTEGER PK AUTO
+-
+CHECK(beleg_typ ...), CHECK(status ...)
+33
+bank_konten
+id INTEGER PK AUTO
+-
+iban UNIQUE, CHECK(ist_standard ...), CHECK(aktiv ...)
+34
+bank_transaktionen
+id INTEGER PK AUTO
+bank_konto_id->bank_konten(id) ON DELETE CASCADE
+dedup_hash UNIQUE, CHECK(status ...), CHECK(import_format ...)
+35
+zahlung_zuordnungen
+id INTEGER PK AUTO
+transaktion_id->bank_transaktionen(id) ON DELETE CASCADE, dokument_id->dokumente(id) ON DELETE SET NULL, eingangsrechnung_id->eingangsrechnungen(id) ON DELETE SET NULL
+CHECK(betrag > 0), CHECK(differenz_grund ...)
+36
+kunden_sepa_mandate
+id INTEGER PK AUTO
+kunde_id->kunden(id) ON DELETE CASCADE
+mandatsreferenz UNIQUE, CHECK(mandats_typ ...), CHECK(status ...)
+37
+sepa_lastschrift_laeufe
+id INTEGER PK AUTO
+bank_konto_id->bank_konten(id)
+lauf_nr UNIQUE, CHECK(sammel_typ ...), CHECK(xml_format ...)
+38
+sepa_lastschrift_positionen
+id INTEGER PK AUTO
+lauf_id->sepa_lastschrift_laeufe(id) ON DELETE CASCADE, dokument_id->dokumente(id) ON DELETE SET NULL, dauerrechnung_lauf_id->dauerrechnung_laeufe(id) ON DELETE SET NULL, mandat_id->kunden_sepa_mandate(id)
+CHECK(betrag > 0), CHECK(status ...)
+39
+efb_profile
+id INTEGER PK AUTO
+projekt_id->projekte(id) ON DELETE CASCADE
+-
+40
+backup_history
+id INTEGER PK AUTO
+-
+CHECK(trigger_type ...), CHECK(retention_category ...), CHECK(integrity_status ...)
+41
+zuschlagskalkulation_stamm
+id INTEGER PK AUTO
+-
+name UNIQUE, CHECK(ist_standard ...), CHECK(kalkulationsverfahren ...)
+42
+zuschlagskalkulation_projekte
+id INTEGER PK AUTO
+projekt_id->projekte(id) ON DELETE CASCADE, stamm_profil_id->zuschlagskalkulation_stamm(id) ON DELETE SET NULL
+projekt_id UNIQUE
+43
+datanorm_kataloge
+id INTEGER PK AUTO
+-
+CHECK(status IN ('AKTIV','ARCHIVIERT'))
+44
+datanorm_warengruppen
+id INTEGER PK AUTO
+katalog_id->datanorm_kataloge(id) ON DELETE CASCADE
+UNIQUE(katalog_id, hauptwarengruppe, warengruppe)
+45
+datanorm_rabattgruppen
+id INTEGER PK AUTO
+katalog_id->datanorm_kataloge(id) ON DELETE CASCADE
+UNIQUE(katalog_id, rabattgruppe)
+46
+maengelkataster
+id INTEGER PK AUTO
+projekt_id->projekte(id) ON DELETE CASCADE, subunternehmer_kunde_id->kunden(id) ON DELETE SET NULL, verknuepfte_eingangsrechnung_id->eingangsrechnungen(id) ON DELETE SET NULL, verknuepfter_einbehalt_id->security_retentions(id) ON DELETE SET NULL, plan_id->bauplaene(id) ON DELETE SET NULL
+CHECK(schweregrad ...), CHECK(status ...), CHECK(verursacher_typ ...)
+47
+maengel_fotos
+id INTEGER PK AUTO
+mangel_id->maengelkataster(id) ON DELETE CASCADE
+CHECK(typ IN ('VOR_NACHBESSERUNG','NACH_NACHBESSERUNG','BELEG'))
+48
+maengel_historie
+id INTEGER PK AUTO
+mangel_id->maengelkataster(id) ON DELETE CASCADE
+-
+49
+mitarbeiter
+id INTEGER PK AUTO
+-
+personalnummer UNIQUE, nfc_tag_uid UNIQUE, CHECK(ist_kolonnenfuehrer ...), CHECK(aktiv ...)
+50
+zeiterfassung
+id INTEGER PK AUTO
+mitarbeiter_id->mitarbeiter(id) ON DELETE RESTRICT, projekt_id->projekte(id) ON DELETE SET NULL, liegenschaft_id->liegenschaften(id) ON DELETE SET NULL, gebaeude_id->gebaeude(id) ON DELETE SET NULL, raum_id->raeume(id) ON DELETE SET NULL
+uuid UNIQUE, CHECK(taetigkeit_typ ...), CHECK(status ...)
+51
+sync_processed_mutations
+id INTEGER PK AUTO
+-
+mutation_uuid UNIQUE
+52
+bedenken_behinderungen
+id INTEGER PK AUTO
+projekt_id->projekte(id) ON DELETE CASCADE
+uuid UNIQUE, CHECK(typ ...), CHECK(status ...)
+53
+sync_conflicts
+id INTEGER PK AUTO
+-
+CHECK(status IN ('OPEN','RESOLVED_CLIENT','RESOLVED_SERVER','RESOLVED_MERGE'))
+54
+ids_connect_konten
+id INTEGER PK AUTO
+-
+-
+55
+ids_warenkoerbe
+id INTEGER PK AUTO
+konto_id->ids_connect_konten(id) ON DELETE SET NULL, projekt_id->projekte(id) ON DELETE SET NULL, angebot_id->dokumente(id) ON DELETE SET NULL
+CHECK(status IN ('RECEIVED','IMPORTED','REJECTED'))
+56
+ids_artikel_dokumente
+id INTEGER PK AUTO
+artikel_id->artikel(id) ON DELETE CASCADE, warenkorb_id->ids_warenkoerbe(id) ON DELETE SET NULL
+CHECK(dokument_typ ...)
+57
+soka_beitragssaetze
+id INTEGER PK AUTO
+-
+CHECK(tarifgebiet IN ('WEST','OST','BERLIN_WEST','BERLIN_OST'))
+58
+soka_bau_meldungen
+id INTEGER PK AUTO
+-
+CHECK(tarifgebiet ...), CHECK(status IN ('ENTWURF','VALIDIERT','EXPORTIERT','QUITTIERT'))
+59
+soka_bau_arbeitnehmer_monat
+id INTEGER PK AUTO
+meldung_id->soka_bau_meldungen(id) ON DELETE CASCADE, mitarbeiter_id->mitarbeiter(id) ON DELETE RESTRICT
+CHECK(compliance_status IN ('VALID','WARNING','INVALID'))
+60
+soka_bau_ausfallzeiten
+id INTEGER PK AUTO
+arbeitnehmer_monat_id->soka_bau_arbeitnehmer_monat(id) ON DELETE CASCADE
+-
+61
+subcontractor_compliance_nachweise
+id INTEGER PK AUTO
+kunde_id->kunden(id) ON DELETE CASCADE
+CHECK(nachweis_typ ...), CHECK(status IN ('ACTIVE','EXPIRED','REVOKED'))
+62
+kolonnen
+id INTEGER PK AUTO
+polier_id->mitarbeiter(id) ON DELETE SET NULL
+-
+63
+kolonnen_mitarbeiter
+(kolonne_id, mitarbeiter_id) PK
+kolonne_id->kolonnen(id) ON DELETE CASCADE, mitarbeiter_id->mitarbeiter(id) ON DELETE CASCADE
+Composite Primary Key
+64
+bauplaene
+id INTEGER PK AUTO
+projekt_id->projekte(id) ON DELETE CASCADE
+-
+65
+geraete_buchungen
+id INTEGER PK AUTO
+projekt_id->projekte(id) ON DELETE CASCADE
+uuid UNIQUE
+66
+lieferscheine_digital
+id INTEGER PK AUTO
+projekt_id->projekte(id) ON DELETE CASCADE
+uuid UNIQUE
+67
+maengel
+id INTEGER PK AUTO
+projekt_id->projekte(id) ON DELETE CASCADE, plan_id->bauplaene(id) ON DELETE SET NULL
+uuid UNIQUE
+68
+gaeb_imports
+id INTEGER PK AUTO
+-
+-
+69
+gaeb_categories
+id INTEGER PK AUTO
+import_id->gaeb_imports(id) ON DELETE CASCADE, parent_id->gaeb_categories(id) ON DELETE CASCADE
+-
+70
+gaeb_items
+id INTEGER PK AUTO
+import_id->gaeb_imports(id) ON DELETE CASCADE, category_id->gaeb_categories(id) ON DELETE CASCADE
+-
+71
+gaeb_item_bireq
+id INTEGER PK AUTO
+item_id->gaeb_items(id) ON DELETE CASCADE
+-
+72
+gaeb_item_up_components
+id INTEGER PK AUTO
+item_id->gaeb_items(id) ON DELETE CASCADE
+-
+73
+gaeb_import_angebote
+id INTEGER PK AUTO
+import_id->gaeb_imports(id) ON DELETE RESTRICT, angebot_id->dokumente(id) ON DELETE RESTRICT
+UNIQUE(import_id, angebot_id)
+74
+gaeb_tender_drafts
+id INTEGER PK AUTO
+import_id->gaeb_imports(id) ON DELETE RESTRICT, angebot_id->dokumente(id) ON DELETE SET NULL
+UNIQUE(import_id, version) via Partial/Unique Index
+75
+gaeb_tender_item_prices
+id INTEGER PK AUTO
+draft_id->gaeb_tender_drafts(id) ON DELETE CASCADE, gaeb_item_id->gaeb_items(id) ON DELETE RESTRICT
+UNIQUE(draft_id, gaeb_item_id)
+76
+gaeb_tender_bireq_answers
+id INTEGER PK AUTO
+draft_id->gaeb_tender_drafts(id) ON DELETE CASCADE, gaeb_bireq_id->gaeb_item_bireq(id) ON DELETE RESTRICT
+UNIQUE(draft_id, gaeb_bireq_id)
+3. Indizes (115 Indizes)
+Sämtliche Indizes nutzen CREATE INDEX IF NOT EXISTS bzw. CREATE UNIQUE INDEX IF NOT EXISTS. Wichtige Indizes umfassen:
+Unique Partial Index: idx_projekte_unique_source_angebot ON projekte(source_angebot_id, COALESCE(source_angebot_version, 1)) WHERE source_angebot_id IS NOT NULL
+Unique Partial Index: idx_laeufe_plan_periode_unique ON dauerrechnung_laeufe(plan_id, periode_von, periode_bis) WHERE status = 'ERSTELLT'
+Unique Document Numbers: idx_dokumente_nr_unique ON dokumente(nr) und idx_dokumente_type_nr ON dokumente(type, nr)
+GoBD Performance Indizes: idx_positionen_dokumentId, idx_positionen_artikelId, idx_dokumente_kundeId, idx_dokumente_projektId, idx_eingangsrechnungen_deleted, idx_kunden_deleted, idx_artikel_deleted
+4. Trigger (12 Triggers)
+trg_prevent_delete_pos_with_aufmass (auf projekt_positionen, verhindert Löschen, wenn verknüpfte Aufmaße existieren)
+trg_prevent_delete_projekt_with_aufmass (auf projekte, verhindert Löschen, wenn Aufmaße existieren)
+trg_prevent_audit_logs_delete (auf audit_logs, GoBD-Unveränderbarkeit)
+trg_prevent_audit_logs_update (auf audit_logs, GoBD-Unveränderbarkeit)
+trg_prevent_locked_dokumente_delete (auf dokumente, verhindert Löschen gesperrter/festgeschriebener Belege)
+trg_prevent_locked_positionen_delete (auf positionen, verhindert Löschen von Positionen gesperrter Belege)
+trg_prevent_zeiterfassung_early_delete (auf zeiterfassung, MiLoG § 17 Abs. 2 2-Jahre Mindestaufbewahrung)
+trg_validate_gaeb_import_angebot_type (auf gaeb_import_angebote, validiert type = 'angebot')
+trg_validate_gaeb_import_angebot_type_update (auf gaeb_import_angebote, validiert Update)
+trg_validate_gaeb_tender_draft_angebot_type (auf gaeb_tender_drafts, validiert type = 'angebot')
+trg_validate_gaeb_tender_draft_angebot_type_update (auf gaeb_tender_drafts, validiert Update)
+trg_prevent_type_change_linked_gaeb_angebot (auf dokumente, verhindert Typänderung verknüpfter Angebote)
+5. Views
+Aktuell befinden sich keine SQL Views (sqlite_master WHERE type='view') in der Datenbank (0 Views).
+6. Seed- & Standarddaten (seedDefaultData)
+System-Einstellungen in einstellungen (Firmenname, Bankverbindung, GoBD, Backup, Sync & SOKA Parameter).
+Standard-Kalkulationsprofil in zuschlagskalkulation_stamm ("Standard Bau-Kalkulation VHB 2024/2026").
+Initialer Mitarbeiterstamm in mitarbeiter (Max Mustermann, Stefan Schmidt, Jan Kowalski).
+Großhändler-Konten in ids_connect_konten (GC Gruppe, Richter + Frenzel, Sonepar, Rexel, Würth).
+Gesetzliche SOKA-BAU Beitragssätze (Stand 01.07.2026/2027 & Historie) in soka_beitragssaetze.
+7. Migrationen & Upgrade-Logik (runMigrations)
+runMigrations führt imperative SQLite ALTER TABLE Anweisungen (gefangene Duplikat-Exceptions) sowie Datenbereinigungen durch:
+Deduplizierung doppelter Belegnummern (dedupeDuplicateDocumentNumbers)
+Deduplizierung doppelter Verrechnungen (dedupeDuplicateVerrechnungen)
+Deduplizierung doppelter Einbehalte (dedupeDuplicateRetentions)
+Entkopplung duplizierter Projektsystembezüge in projekt_source_migrations
+Schema-Migration für backup_history
+Reconcile von GAEB Tender Drafts (reconcileLegacyDrafts)
+
+B. Fachliche Gruppierung und Zielmodule
+Anstatt den monolithischen Code in schema.js zu belassen, wird der SQL-Code in hochspezifische, modulare Dateien im Verzeichnis db/schema/ unterteilt.
+db/schema/
+├── index.js                  # Haupt-Orchestrierungsmodul (Exportiert createSchema, runMigrations, seedDefaultData)
+├── core_schema.js            # Einstellungen, Audit-Trail, Backup-Historie, Sync & Konfiguration
+├── articles_schema.js        # Artikelstamm, DATANORM Kataloge, Warengruppen & Rabattgruppen
+├── customers_schema.js       # Kundenstamm, SEPA-Informationen, Subunternehmer-Compliance
+├── projects_schema.js        # Projekte, Entkopplungshistorie, EFB-Profile, Zuschlagskalkulation
+├── documents_schema.js       # Dokumente (Angebote/Rechnungen), Positionen, Verrechnungen, Einbehalte
+├── objects_schema.js         # Objektverwaltung F1 (Liegenschaften, Gebäude, Etagen, Räume)
+├── recurring_schema.js       # Dauerrechnungen F2 & Putzplan/Reinigungs-LV F3
+├── banking_schema.js         # Bankkonten, Transaktionen, OPOS-Zuordnungen, SEPA-Mandate & Läufe
+├── measurement_schema.js     # Aufmaßverwaltung (Positionen, REB 23.003 & DA11 Aufmaßblätter/Zeilen)
+├── construction_schema.js    # Bautagebuch, Nachträge, Abnahme, Mängelkataster, VOB-Schriftverkehr, Baupläne
+├── workforce_schema.js       # Mitarbeiter, Zeiterfassung (MiLoG), Kolonnen, SOKA-BAU Meldewesen
+├── integrations_schema.js   # IDS Connect 2.5, Open Masterdata & Warenkörbe
+└── gaeb_schema.js           # GAEB DA XML X83/X84/X31 (Bestehendes Modul)
+
+
+C. Abhängigkeiten und notwendige Initialisierungsreihenfolge
+Um Verletzungen von Fremdschlüssel-Constraints (PRAGMA foreign_keys = ON), fehlerhaften Triggern oder fehlenden Tabellen während der Erstellung vorzubeugen, ist die nachfolgende 4-Stufen-Reihenfolge (Tiered Execution Order) zwingend einzuhalten:
+[STUFE 1: Stammdaten & Basis-Entitäten (Keine eingehenden FKs)]
+  ├── 1. core_schema.js          (einstellungen, audit_logs, backup_history, sync_processed_mutations, sync_conflicts)
+  ├── 2. articles_schema.js      (artikel, datanorm_kataloge, datanorm_warengruppen, datanorm_rabattgruppen)
+  ├── 3. customers_schema.js     (kunden, subcontractor_compliance_nachweise)
+  ├── 4. objects_schema.js       (liegenschaften, gebaeude, etagen, raeume)
+  ├── 5. banking_base            (bank_konten)
+  ├── 6. workforce_base          (mitarbeiter, soka_beitragssaetze)
+  └── 7. integrations_base       (ids_connect_konten)
+
+[STUFE 2: Kerngeschäft & Belege (Referenziert Stufe 1)]
+  ├── 8. documents_schema.js     (dokumente -> kunden, projekte; positionen -> dokumente, artikel)
+  ├── 9. projects_schema.js      (projekte -> kunden, dokumente; projekt_positionen; efb_profile, zuschlagskalkulation)
+  ├── 10. banking_schema.js      (bank_transaktionen; kunden_sepa_mandate; sepa_laeufe/positionen; zahlung_zuordnungen)
+  └── 11. recurring_schema.js    (abrechnungsplaene -> kunden; abrechnungsplan_positionen -> artikel; dauerrechnung_laeufe; lv_bereiche/positionen)
+
+[STUFE 3: Baustelle, Aufmaß & Erweiterungen (Referenziert Stufe 1 & 2)]
+  ├── 12. measurement_schema.js  (aufmass -> projekt_positionen, dokumente; aufmass_blaetter/zeilen)
+  ├── 13. construction_schema.js (nachtraege; bautagebuch; abnahmeprotokolle; eingangsrechnungen; maengelkataster; maengel; bauplaene)
+  ├── 14. workforce_tracking.js  (zeiterfassung -> mitarbeiter, projekte, raeume; soka_bau_meldungen; kolonnen)
+  ├── 15. integrations_data.js   (ids_warenkoerbe -> ids_connect, projekte, dokumente; ids_artikel_dokumente)
+  └── 16. gaeb_schema.js         (gaeb_imports, gaeb_categories, gaeb_items, gaeb_import_angebote, gaeb_tender_drafts)
+
+[STUFE 4: Indizes, Triggers, Migrationen & Seeding]
+  ├── 17. Indizes Erstellung    (Performance & UNIQUE Indizes)
+  ├── 18. Trigger Installation  (12 GoBD-, MiLoG-, GAEB- & Löschschutz-Trigger)
+  ├── 19. Migrationen & Cleanup (runMigrations: ALTER TABLE, Deduplizierungen)
+  └── 20. Seeding                (seedDefaultData)
+
+
+D. Null-Verhaltensänderungs-Refactoring-Plan
+Das Refactoring ist eine rein strukturelle Code-Reorganisation. Es verändert weder SQL-Anweisungen, Tabellennamen, Spalten, Datentypen, Constraints noch Dateipfade der Datenbank.
+Abwärtskompatibilitäts-Fassade (schema.js): schema.js im Root-Verzeichnis bleibt als Fassade erhalten und reexportiert die Schnittstellen aus db/schema/index.js.
+// schema.js (Fassade)
+const {
+    createSchema,
+    runMigrations,
+    seedDefaultData,
+    ensureUniqueConstraints,
+    ensureGoBDSchemaAndTriggers,
+    dedupeDuplicateDocumentNumbers,
+    dedupeDuplicateVerrechnungen,
+    dedupeDuplicateRetentions,
+    initGaebSchema,
+    runGaebMigrations
+} = require('./db/schema/index.js');
+
+module.exports = {
+    createSchema,
+    runMigrations,
+    seedDefaultData,
+    ensureUniqueConstraints,
+    ensureGoBDSchemaAndTriggers,
+    dedupeDuplicateDocumentNumbers,
+    dedupeDuplicateVerrechnungen,
+    dedupeDuplicateRetentions,
+    initGaebSchema,
+    runGaebMigrations
+};
+
+Standardisierte Modul-Schnittstelle: Jedes neue Submodul in db/schema/ exportiert standardisierte Funktionen:
+initSchema(db): Erstellt Tabellen (CREATE TABLE IF NOT EXISTS).
+initTriggersAndIndexes(db): Erstellt Indizes und Trigger.
+runMigrations(db): Führt spezifische ALTER TABLE Migrationen aus.
+seedData(db): Fügt Defaults ein.
+In-Memory-Entkopplung: Keine direkten Abhängigkeiten zwischen Renderer, Controllern oder Repositories. Alle Datenbankerstellungen bleiben gekapselt in db/schema/.
+
+E. Vergleichs- und Verifikationsstrategie
+Um mathematisch und unumstößlich zu beweisen, dass die Datenbank vor und nach dem Refactoring 100% identisch ist, wird vor Durchführung der Code-Änderung ein automatisches Verifikationsskript tests/verify_schema_identity.js vorgeschlagen:
+1. Verifikationsskript (tests/verify_schema_identity.js)
+Das Skript führt folgende Schritte aus:
+Erstellt eine In-Memory-Datenbank db_old unter Nutzung des monolithischen schema.js.
+Erstellt eine zweite In-Memory-Datenbank db_new unter Nutzung des neuen modularisierten db/schema/index.js.
+Vergleicht beide Datenbanken über SQLite PRAGMAs und Systemtabellen:
+Tabellenvergleich: SELECT name, sql FROM sqlite_master WHERE type='table' ORDER BY name;
+Spalten- & Typenvergleich: PRAGMA table_info(<table_name>); (Prüft Spaltenname, Typ, NOTNULL, Defaultvalue, Primary Key)
+Fremdschlüsselvergleich: PRAGMA foreign_key_list(<table_name>); (Prüft Referenztabelle, Quell- und Zielspalten, ON DELETE/UPDATE Aktionen)
+Indexvergleich: PRAGMA index_list(<table_name>); und PRAGMA index_info(<index_name>);
+Triggervergleich: SELECT name, tbl_name, sql FROM sqlite_master WHERE type='trigger' ORDER BY name;
+Data-Dump Vergleich: Hash-Vergleich der ge-seedeten Tabellen einstellungen, zuschlagskalkulation_stamm, mitarbeiter, ids_connect_konten, soka_beitragssaetze.
+2. Akzeptanzkriterium
+Das Skript muss mit Exit-Code 0 beenden und die Meldung ausgeben: SUCCESS: Database schema and seed data are 100% byte-identical pre- and post-refactoring.
+
+F. Bestehende und fehlende Tests
+1. Bestehende Abdeckung im Testsuite
+Die vorhandene Testsuite umfasst 40 Suite-Dateien mit 347 Einzeltests (600 passing Tests im Gesamtlauf):
+tests/data_integrity.test.js: Testet Foreign Keys, Kaskadierungsverhalten, Constraints und Schema-Integrität.
+tests/gobd_protection.test.js: Testet GoBD-Löschschutz-Trigger auf audit_logs, dokumente und positionen.
+tests/reinigungslv_schema.test.js: Testet Schemastrukturen der Objekt- und Putzplanverwaltung.
+tests/gaeb_x83_persistence.test.js: Testet GAEB Schema-Persistenz und Trigger-Installationen.
+tests/full_system.test.js & tests/bau_erp.test.js: End-to-End Test aller Tabellen und Repositories.
+2. Empfohlene/Fehlende Tests vor Refactoring-Durchführung
+tests/verify_schema_identity.test.js: Der obige direkte In-Memory-Diff-Test zwischen altem Monolith und neuem Modulverbund.
+Migration-Replay-Test auf Alt-Datenbanken (tests/legacy_migration_replay.test.js): Simulation einer SQLite-Datenbank aus Release 1.0 (ohne Phase 2–5 Tabellen), worauf runMigrations() ausgeführt wird, um sicherzustellen, dass bestehende Benutzerdaten verlustfrei migriert werden.
+
+G. Risiken und Stop-Kriterien
+1. Identifizierte Risiken
+RisikoSchweregradUrsachePräventionsmaßnahme
+Syntax-/SQL-Abweichung
+Hoch
+Versehentliche Tippfehler oder geänderte Leerzeichen/Keywords in SQL-Strings beim Verschieben.
+Copy-Paste-Transfer der exakten SQL-Strings ohne manuelle Überarbeitung.
+Falsche Initialisierungsreihenfolge
+Kritisch
+Erstellung von FK-Tabellen vor deren Elterntabellen bei aktiviertem foreign_keys = ON.
+Einhalten der 4-Stufen Initialisierungsreihenfolge (Tiered Order).
+Zyklische Modul-Importe
+Mittel
+Submodule importieren sich gegenseitig via require().
+Strikte Einweg-Hierarchie: index.js importiert Submodule, Submodule importieren sich nicht untereinander.
+Fehlende Trigger-Reinstallation
+Hoch
+Vergessene DROP TRIGGER IF EXISTS Aufrufe vor CREATE TRIGGER.
+Standardisiertes Trigger-Setups mit Existenzprüfungen in sqlite_master.
+Bruch bei Bestandskunden-DBs
+Kritisch
+runMigrations() überspringt zwingende ALTER TABLE Aufrufe oder Deduplizierungen.
+Exakte Übernahme aller try/catch gekapselten Migrationen in migrations.js.
+2. Stop-Kriterien (Sofortiger Abbruch)
+Das Refactoring muss sofort gestoppt und zurückgerollt werden, wenn:
+tests/verify_schema_identity.js auch nur eine einzige Abweichung in Tabellen, Spalten, Datentypen, Indizes, Triggern oder Constraints feststellt.
+Ein bestehender Integrationstest in npm test mit einem SQLite-Schemafehler fehlschlägt.
+PRAGMA foreign_key_check nach der Schema-Initialisierung oder Migration Fehler zurückgibt.
+Ein Trigger in sqlite_master fehlt oder nicht feuert.
+
+ZUSAMMENFASSUNG UND FAZIT
+Die vorstehende Analyse belegt, dass schema.js ohne jegliches Risiko für Datenstruktur, Bestandskundendaten oder Funktionalität in 13 saubere Domänenmodule unter db/schema/ aufgeteilt werden kann. Durch die Beibehaltung von schema.js als Fassade und den Einsatz des automatisierten Schema-Identitäts-Vergleichstests wird eine 100% verhaltensneutrale Restrukturierung gewährleistet.
+___
+Session 4:
+Architektur-Analyse & Refactoring-Plan: Auslagerung von code.html und Modal-Markup in W-Link ERP
+Dieser Bericht bietet eine vollständige, gründliche Analyse von code.html, allen View-Modulen (views/), Modal-Dateien (views/modals/, views/modals/system-modals.html) sowie der Lade-Infrastruktur (js/modal-loader.js) und den zugehörigen JavaScript-Dateien im Repository waleed91919/Rechnungsprogramm_Geb_V2.
+
+A. Karte der bestehenden UI-Bereiche in code.html
+code.html ist als Single-Page Application (SPA) mit einem fixen Sidebar-Layout aufgebaut. Der Hauptinhaltsbereich (<main>) schaltet zwischen verschiedenen Ansichtselementen (<div id="view-...">) um.
+UI-BereichHTML Container IDBeschreibung & AufgabenRelevante JS-Module
+Navigation
+<aside> (Zeilen 131–227)
+Globale Hauptnavigation (Sidebar), Marken-Logo, Modul-Links mit onclick="switchView('...')"
+js/navigation.js
+Header / Top Bar
+<header> (Zeilen 231–266)
+Anzeige von Seitentitel (#header-title), Breadcrumbs (#header-subtitle), globale Suche (#global-search), Benachrichtigungen (#btn-notifications), Hilfe-Button
+js/navigation.js, js/notifications.js
+Dashboard
+view-dashboard (Zeilen 268–377)
+KPI-Karten (Umsatz, Ausstehend, Überfällig), Schnellaktionen (Buttons für neue Rechnung, Kunde, Artikel), Tabelle der letzten Rechnungen (#dashboard-recent-table-body)
+js/dashboard.js
+Rechnungen / Editor
+view-rechnungen (Zeilen 380–467)
+Rechnungsliste, Statusfilter (Alle, Bezahlt, Ausstehend, Überfällig), Bulk-Aktionen, DATEV-Export, Tabelle (#rechnungen-table-body), Paginierung
+js/editor.js, views/InvoiceView.js, controllers/InvoiceController.js
+Artikel
+view-artikel (Zeilen 470–560)
+KPI-Karten (Sortiment, Lagerwert, Geringer Bestand), Suche, CSV/DATANORM Import/Export, Artikel-Tabelle (#artikel-table-body)
+js/artikel.js, views/DatanormView.js
+Kunden
+view-kunden (Zeilen 565–648)
+KPI-Karten (Gesamtkunden, Neu im Monat), Suche, CSV Import/Export, Kunden-Tabelle (#kunden-table-body)
+js/kunden.js
+Angebote
+view-angebote (Zeilen 651–697)
+KPI-Karten (Offene Angebote), Neues Angebot erstellen, Angebote-Tabelle (#angebote-table-body)
+js/editor.js, controllers/AngebotController.js
+Berichte / Steuerbericht
+view-berichte (Zeilen 700–896)
+Steuerbericht für StB, Zeitfilter (Monat/Quartal/Jahr/Benutzerdefiniert), KPI-Karten (Marge, Bruttoumsatz, USt.-Zahllast), Umsatztrend-Chart (#report-trend-chart), Bestseller-Produkte & Top-Kunden Tabellen
+js/berichte.js, js/datev.js
+Projekte
+view-projekte & view-projekt-details (Zeilen 899–1474)
+Projektübersichts-Grid (#projekte-grid), Detailansicht mit Tabs (Finanzen, Aufmaß & DA11, Nachträge VOB/B, Bautagebuch & Abnahme, Controlling/Eingangsrechnungen, EFB 221/223, Kalkulation, Mängel)
+js/projekte.js, controllers/NachtragController.js, controllers/BautagebuchController.js, controllers/ControllingController.js
+Objekte
+view-objekte & view-objekt-details (Zeilen 923–1132)
+Objektverwaltung (Liegenschaften, Gebäude, Räume), Suche, Statusfilter, CSV Export, Detailansicht mit Tabs (Stammdaten, Struktur-Baum, Historie, Abrechnungspläne)
+js/objekte.js, controllers/ObjektController.js
+Dauerrechnungen
+view-dauerrechnungen (Zeilen 1135–1256)
+KPI-Karten (Aktive Pläne, Fällige Läufe, Dauerrechnungs-Umsatz), Suche, Auto-Erstellung, Sammelrechnung, Generierung, Pläne-Tabelle, Läufe-Panel
+js/dauerrechnungen.js, controllers/DauerrechnungController.js
+Putzplan & LV
+view-putzplan (Zeilen 1259–1347)
+KPI-Karten (Jahresstunden, Netto/Jahr, Netto/Monat, Zuschläge), Objekt-Auswahl, Objektbaum, LV-Bereiche, Zuschlagsprofil, Abrechnungsplan-Übernahme
+js/putzplan.js, controllers/ReinigungController.js
+Banking & OPOS
+view-banking (Zeilen 1350–1520)
+Kontoauszug-Import (CAMT.053/CSV), Transaktionstabelle, OPOS-Zahlungsabgleich, SEPA-Lastschriftlauf (pain.008 XML), Pre-Notification, Bankverbindungen & SEPA-Mandate
+js/banking.js, controllers/BankingController.js, controllers/SepaController.js
+Zeiterfassung
+view-zeiterfassung (Zeile 1530)
+Dynamisch gerendert via Container-Injektion
+views/ZeiterfassungView.js, controllers/ZeiterfassungController.js
+PWA & Sync Hub
+view-sync (Zeile 1535)
+Dynamisch gerendert via Container-Injektion
+views/SyncView.js
+Großhandel (IDS 2.5)
+view-grosshandel (Zeile 1735)
+Dynamisch gerendert via Container-Injektion
+views/GrosshandelView.js, controllers/IDSConnectController.js
+SOKA-BAU & Recht
+view-sokabau (Zeile 1738)
+Dynamisch gerendert via Container-Injektion
+views/SokaBauView.js, controllers/SokaBauController.js
+Einstellungen
+view-einstellungen (Zeilen 1538–1732)
+Firmendaten, Logo-Upload, Bankverbindung, Zahlungskonditionen & Mahnwesen, Erweiterte Optionen (Verzug, Handwerksmodul, Vorlagen), GoBD/GFS Auto-Backup Engine, SMTP-Mail-Konfiguration, E-Mail-Texte
+js/einstellungen.js
+GAEB Ausschreibung
+Modal Overlay (integriert in Modal Loader)
+Bepreisungs-Editor, GAEB X83/X84 Import/Export, Split-Screen mit BoQCtgy-Baum & Positionsdetails, BiReq, Stufenpreise
+js/gaeb_tender/tender_controller.js, js/gaeb_tender/tender_view.js, js/gaeb_tender/tender_state.js
+Zentraler Modals-Container
+#modals-container (Zeile 1747)
+Einhängepunkt für alle 33 Modal-Dialoge
+js/modal-loader.js
+
+B. DOM-Abhängigkeitsliste
+Nachfolgend sind die kritischen DOM-Selektoren (IDs, Klassen, Formulare, Container, Buttons und dynamische Elemente) aufgeführt, die von den JavaScript-Dateien zwingend im DOM erwartet werden:
+1. Navigations- & Header-DOM-IDs
+Container & Links: #nav-dashboard, #nav-rechnungen, #nav-artikel, #nav-angebote, #nav-gaeb-tender, #nav-kunden, #nav-projekte, #nav-objekte, #nav-dauerrechnungen, #nav-putzplan, #nav-banking, #nav-maengel, #nav-zeiterfassung, #nav-sync, #nav-grosshandel, #nav-sokabau, #nav-berichte, #nav-einstellungen.
+Header & Suche: #header-title, #header-subtitle, #global-search, #btn-notifications, #notif-dot, #notification-dropdown, #notif-count-badge, #notif-list, #fokusmodus-status-text.
+2. Formular- & Modal-IDs
+Rechnung / Angebot (rechnung-modal):
+Forms/Inputs: #rechnung-form, #rechnung-id, #rechnung-kunde, #rechnung-projekt, #rechnung-objekt, #rechnung-kunde-details, #rechnung-nr, #rechnung-datum, #rechnung-faellig, #rechnung-werktage, #rechnung-customer-type, #rechnung-eingabemodus, #rechnung-status, #rechnung-skonto-tage, #rechnung-skonto-prozent, #rechnung-vortext, #rechnung-fusstext, #rechnung-global-rabatt, #rechnung-global-rabatt-type, #rechnung-anzahlung, #rechnung-sicherheitseinbehalt-prozent, #rechnung-handwerk-sicherheitseinbehalt.
+Totals & Calculation labels: #rechnung-zwischensumme, #rechnung-rabatt-wert, #rechnung-netto, #rechnung-steuern-container, #rechnung-brutto, #rechnung-anzahlung-wert, #rechnung-sicherheitseinbehalt-row, #rechnung-sicherheitseinbehalt-label, #rechnung-sicherheitseinbehalt-wert, #rechnung-zahlbetrag, #rechnung-verrechnungen-row, #rechnung-verrechnungen-wert, #verrechnungen-summe-netto.
+E-Rechnung (B2G): #rechnung-b2g-section, #rechnung-leitweg-id, #rechnung-buyer-reference, #rechnung-erechnung-format, #rechnung-leitweg-required.
+B2C / B2B Buttons: #btn-type-b2c, #btn-type-b2b, #btn-type-b2g, #btn-mode-netto, #btn-mode-brutto.
+Item List: #rechnung-positionen, #rechnung-empty-state, #artikel-datalist.
+Buttons: #rechnung-modal-submit, #rechnung-modal-submit-text, #rechnung-modal-cancel.
+Kunde (kunde-modal): #kunde-form, #kunde-id, #kunde-firmenname, #kunde-vorname, #kunde-nachname, #kunde-strasse, #kunde-plz, #kunde-ort, #kunde-telefon, #kunde-email, #kunde-ustid, #kunde-steuernummer, #kunde-zahlungsziel, #kunde-skonto-prozent, #kunde-skonto-tage, #kunde-rabatt-prozent, #kunde-sicherheitseinbehalt, #kunde-is-subcontractor, #kunde-sec48b-status.
+Projekt (projekt-modal): #projekt-form, #projekt-id, #projekt-name, #projekt-kunde, #projekt-start, #projekt-ende, #projekt-budget, #projekt-status, #projekt-sicherheitseinbehalt, #projekt-notizen.
+Artikel (artikel-modal): #artikel-form, #artikel-id, #artikel-name, #artikel-ean, #artikel-katalog, #artikel-beschreibung, #artikel-lieferant, #artikel-einheit, #artikel-bestand, #artikel-ek, #artikel-vk, #artikel-mwst, #artikel-ist-bauleistung, #artikel-kostenart, #artikel-lohnanteil, #artikel-hersteller-name, #artikel-hersteller-kontakt, #artikel-charge-seriennummer, #artikel-eu-verantwortlicher, #artikel-warnhinweis.
+Weitere Modals: #bank-konto-modal, #custom-confirm-modal, #efb-export-modal, #eingangsrechnung-modal, #email-modal, #extend-deadline-modal, #formelassistent-modal, #gaeb-tender-modal, #generierung-modal, #help-modal, #mahnung-modal, #mandat-modal, #nachtrag-modal, #objekt-modal, #pdf-preview-modal, #plan-modal, #restore-modal, #sammel-modal, #sepa-lauf-detail-modal, #sepa-prenot-modal, #smtp-konto-modal, #nachweis-modal, #steuerbericht-modal, #storno-lauf-modal, #zuschlagsprofil-modal.
+3. Dynamisch erzeugte Elemente
+Table-Rows für Rechnungen (#rechnungen-table-body), Kunden (#kunden-table-body), Artikel (#artikel-table-body), Angebote (#angebote-table-body), Dauerrechnungen (#plaene-table-body), Objekte (#objekte-table-body), Banking-Transaktionen (#banking-transaktionen-tbody), OPOS-Matches (#banking-opos-tbody).
+Dynamische Aufmaßzeilen (#aufmass-rows-body, #ab-zeilen-body, #split-detail-zeilen-body).
+GAEB BoQCtgy-Baumstruktur (#gt-tree-container), GAEB-Positionen (#gt-detail-container, #gt-bireq-list).
+Benachrichtigungs-Items in #notif-list.
+Toast-Notifications (.toast-notification, #toast-container).
+
+C. Übersicht der Modal-Struktur & Modal-Loader-Analyse
+1. Architektur von js/modal-loader.js
+In js/modal-loader.js befindet sich das globale Objekt ModalLoader. Es beinhaltet das Wörterbuch MODAL_TEMPLATES, in dem der gesamte HTML-Code für derzeit 33 Modal-Dialoge als JavaScript-Strings gecacht ist:
+abnahme-modal
+artikel-modal
+aufmass-modal
+aufmass-uebergabe-modal
+aufmass-wizard-modal
+aufmassblatt-modal
+bank-konto-modal
+custom-confirm-modal
+efb-export-modal
+eingangsrechnung-modal
+email-modal
+extend-deadline-modal
+formelassistent-modal
+gaeb-tender-modal
+generierung-modal
+help-modal
+mahnung-modal
+mandat-modal
+nachtrag-modal
+objekt-modal
+pdf-preview-modal
+plan-modal
+projekt-modal
+rechnung-modal
+restore-modal
+sammel-modal
+sepa-lauf-detail-modal
+sepa-prenot-modal
+smtp-konto-modal
+nachweis-modal
+steuerbericht-modal
+storno-lauf-modal
+zuschlagsprofil-modal
+2. Funktionsweise des Bootstrappings
+Beim Laden von js/modal-loader.js führt die IIFE sofort autoInit() aus.
+Sobald document.body verfügbar ist (oder bei DOMContentLoaded), ruft ModalLoader.mountAll() auf.
+mountAll() sucht nach <div id="modals-container"> in code.html. Wenn der Container nicht existiert, wird er automatisch in <main> oder <body> erstellt.
+Alle Templates aus MODAL_TEMPLATES werden als DocumentFragment in den DOM eingefügt.
+Ergebnis: Sobald nachfolgende Skripte (wie editor.js, kunden.js, projekte.js) geladen werden, existieren sämtliche Modal-IDs und Formularfelder bereits synchron im DOM.
+3. Redundanz & Beziehung zu views/modals/
+Unter views/modals/ existieren separate .html-Dateien (z.B. rechnung-modal.html, artikel-modal.html, system-modals.html).
+Wichtige Erkenntnis: views/modals/system-modals.html fungierte früher als Sammeldatei. In der aktuellen Laufzeitumgebung nimmt js/modal-loader.js die führende Rolle ein, da Electron/Browser-Sicherheitsrichtlinien (CORS/File-Protokoll) synchronen Fetch-Zugriff beim Start erschweren.
+Wenn Modal-HTMLs in views/modals/*.html angepasst werden, müssen die geänderten Fragmente derzeit in MODAL_TEMPLATES in js/modal-loader.js gepflegt werden, damit sie zur Laufzeit sichtbar sind.
+
+D. Sichere Auslagerungskandidaten (Modularisierungsstruktur)
+Um code.html sauber aufzuteilen, ohne die bestehenden DOM-IDs oder Skript-Abhängigkeiten zu verletzen, wird folgende Zielstruktur in views/ empfohlen:
+views/
+├── layout/
+│   ├── sidebar.html             <!-- Navigations-Leiste (<aside>) -->
+│   └── header.html              <!-- Top Toolbar (<header>) -->
+├── pages/
+│   ├── dashboard.html           <!-- view-dashboard -->
+│   ├── rechnungen.html          <!-- view-rechnungen -->
+│   ├── artikel.html             <!-- view-artikel -->
+│   ├── kunden.html              <!-- view-kunden -->
+│   ├── angebote.html            <!-- view-angebote -->
+│   ├── berichte.html            <!-- view-berichte -->
+│   ├── projekte.html            <!-- view-projekte & view-projekt-details -->
+│   ├── objekte.html             <!-- view-objekte & view-objekt-details -->
+│   ├── dauerrechnungen.html     <!-- view-dauerrechnungen -->
+│   ├── putzplan.html            <!-- view-putzplan -->
+│   ├── banking.html             <!-- view-banking -->
+│   ├── zeiterfassung.html       <!-- view-zeiterfassung -->
+│   ├── sync.html                <!-- view-sync -->
+│   ├── grosshandel.html         <!-- view-grosshandel -->
+│   ├── sokabau.html             <!-- view-sokabau -->
+│   └── einstellungen.html       <!-- view-einstellungen -->
+└── modals/                      <!-- Sämtliche ausgelagerten Modal-HTML-Dateien -->
+    ├── rechnung-modal.html
+    ├── kunde-modal.html
+    ├── projekt-modal.html
+    ├── artikel-modal.html
+    └── ... (alle 33 Modals)
+
+
+E. Empfohlene Lade- und Initialisierungsstrategie
+Damit beim dynamischen Nachladen von View-Dateien keine Race-Conditions entstehen (z.B. ein Event-Listener versucht document.getElementById('rechnung-kunde') zu verbinden, bevor das HTML geladen ist), muss folgende Strategie eingehalten werden:
+Beibehaltung der synchronen Modal-Mounting-Garantie (ModalLoader): js/modal-loader.js muss weiterhin beim Initialisieren der App vor allen Fachlogik-Modulen (editor.js, kunden.js, etc.) ausgeführt werden. Dadurch ist garantiert, dass alle Modal-IDs sofort im DOM liegen.
+Proaktiver / Synchroner View-Loader im Haupt-Thread:
+Für die Hauptseiten-Views (pages/*.html) sollte ein schlanker ViewLoader-Mechanismus etabliert werden, der beim Bootstrapping der App (oder beim Umschalten via navigation.js switchView()) den Inhaltsbereich per async/await lädt.
+Cache-First-Prinzip: Bereits geladene Views bleiben im DOM (mit Klasse .hidden), um bestehende Zustände und Event-Listener nicht zu zerstören.
+Invariante Skript-Reihenfolge in code.html / index.html: Die nachfolgende Skript-Ladereihenfolge darf niemals verändert werden:
+Tailwind / CSS & Drittanbieter-Libs (html2pdf.bundle.min.js)
+js/modal-loader.js (Injiziert Modals in #modals-container)
+js/state.js, js/utils.js
+Domain-Modelle & Controller (models/*, controllers/*, views/*View.js)
+Fachlogik-Dateien (editor.js, kunden.js, projekte.js, objekte.js, banking.js, etc.)
+js/init.js (Führt DOMContentLoaded-Initialisierungen und Event-Verknüpfungen aus)
+
+F. Sichere Migrationsreihenfolge
+Die Migration sollte schrittweise in kleinen, isolierten Schritten erfolgen. Nach jedem Schritt wird die funktionale Integrität manuell überprüft.
++-----------------------------------------------------------------------+
+| Schritt 1: Statische, unabhängige Layout- & UI-Bereiche               |
+| - Auslagerung von Navigation (aside) & Header in views/layout/        |
++-----------------------------------------------------------------------+
+                                   |
+                                   v
++-----------------------------------------------------------------------+
+| Schritt 2: Einfache Stammdaten-Views                                  |
+| - Auslagerung von Dashboard, Artikel, Kunden                          |
++-----------------------------------------------------------------------+
+                                   |
+                                   v
++-----------------------------------------------------------------------+
+| Schritt 3: Modulare Fach-Views & Hilfs-Modals                         |
+| - Auslagerung von Einstellungen, Berichte, Banking, Dauerrechnungen   |
+| - Bereinigung einfacher Modals (Hilfe, Confirm, Mahnung, Restore)     |
++-----------------------------------------------------------------------+
+                                   |
+                                   v
++-----------------------------------------------------------------------+
+| Schritt 4: Komplexe operative Views & Editor-Modals                   |
+| - Auslagerung von Projekte, Objekte, Putzplan                        |
+| - Auslagerung des Haupt-Editors (Rechnung/Angebot Modal), GAEB-Editor |
++-----------------------------------------------------------------------+
+
+
+G. Risiken und manuelle Regressionstestliste
+1. Potenzielle Risiken bei der Auslagerung
+Missing DOM Elements (Null-Pointer-Fehler): Ein Skript führt document.getElementById('xyz').addEventListener(...) aus, bevor #xyz im DOM montiert wurde.
+Mehrfache Event-Registrierungen: Werden Views mehrfach nachgeladen, könnten Event-Listener unbeabsichtigt doppelt registriert werden.
+Zustandsverlust bei View-Switches: Wenn Views beim Wechseln zerstört und neu gerendert werden, gehen ungespeicherte Formulareingaben verloren.
+Form-Namen & Datalist-Konflikte: Autocomplete-Container wie #artikel-datalist müssen für alle Formulare erreichbar bleiben.
+
+2. Konkrete manuelle Regressionstestliste
+Nach jedem Migrationsschritt müssen folgende Schritte in der gestarteten Electron-Anwendung manuell geprüft werden:
+A. Anwendungsstart & Bootstrapping
+Anwendung via npm start oder electron . starten.
+Konsole auf JavaScript-Fehler (Uncaught TypeError, Cannot read properties of null) prüfen.
+Verifizieren, dass #modals-container in den DevTools alle Modal-IDs enthält.
+B. Navigation zwischen allen Hauptseiten
+Umschalten auf Dashboard: KPI-Karten und Tabelle der letzten Rechnungen geladen.
+Umschalten auf Rechnungen: Tabelle befüllt, Filter-Buttons (Alle, Bezahlt, Ausstehend, Überfällig) funktionsfähig.
+Umschalten auf Artikel: Suchfeld, CSV-Buttons und Artikelliste prüfen.
+Umschalten auf Kunden: Kundenliste und Suchfunktion prüfen.
+Umschalten auf Angebote: Angebotsübersicht prüfen.
+Umschalten auf Berichte: Zeitfilter wählen, Trend-Chart und Bestseller-Tabelle prüfen.
+Umschalten auf Projekte: Projekt-Grid prüfen, Detailansicht mit allen 8 Tabs öffnen.
+Umschalten auf Objekte: Objekte-Tabelle und Detailansicht prüfen.
+Umschalten auf Dauerrechnungen: Pläne und Läufe-Panel öffnen.
+Umschalten auf Putzplan & LV: Objekt auswählen, Objektbaum und Bereiche prüfen.
+Umschalten auf Banking & OPOS: Konten-Select, Transaktionstabelle und Tabs umschalten.
+Umschalten auf Zeiterfassung, Sync, Großhandel, SOKA-BAU und Einstellungen.
+C. Öffnen und Schließen aller Modals
+Rechnung-Modal: Auf "Neue Rechnung" klicken. Modal öffnet sich. Kundenauswahl, Position hinzufügen, Summenberechnung prüfen, abbrechen & schließen.
+Kunde-Modal: "Neuer Kunde" öffnen, Formular ausfüllen, abbrechen.
+Projekt-Modal: "Neues Projekt" öffnen, Felder prüfen, abbrechen.
+Artikel-Modal: "Neuer Artikel" öffnen, Einheiten & GPSR-Felder prüfen, abbrechen.
+PDF-Vorschau Modal: Rechnungs-PDF-Vorschau öffnen, Layout prüfen, schalten/schließen.
+E-Mail Modal: E-Mail-Versanddialog für Beleg öffnen, Anhänge und Historie prüfen, schließen.
+GAEB Tender Modal: GAEB Ausschreibung öffnen, BoQ-Baum und Bepreisung testen, schließen.
+Weitere Modals: Bankkonto, Custom Confirm, EFB Export, Eingangsrechnung, Fälligkeit verlängern, Formelassistent, Generierung, Hilfe, Mahnung, Mandat, Nachtrag, Objekt, Plan, Restore, Sammelrechnung, SEPA-Details, SEPA-Prenot, SMTP-Konto, Nachweis, Steuerbericht, Storno-Lauf, Zuschlagsprofil öffnen und schließen.
+D. Formularverarbeitung & Aktionen
+Speichern/Abbrechen: Testweise einen Kunden/Artikel speichern und verifizieren, dass der Neueintrag in der Liste erscheint.
+Fehleranzeigen & Validation: Pflichtfelder leer lassen und prüfen, ob HTML5- bzw. JS-Validierungsmeldungen korrekt erscheinen.
+Benachrichtigungen: Glocken-Icon im Header anklicken, Dropdown-Öffnung prüfen.
+Neustart der Anwendung: App schließen und neu starten, um den persistenten Zustand zu bestätigen.
+
+Hinweis: Gemäß den strikten Vorgaben wurden keinerlei Änderungen an Quellcode, Skripten oder Konfigurationsdateien durchgeführt.
+___
+Session 5:
+Hier ist der angeforderte Bericht zur Architektur und zukünftigen Modularisierung der Datei main/sync-server.js. Wie gewünscht wurden keine Dateien oder Daten im Repository verändert.
+Analyse von main/sync-server.js und Refactoring-Plan
+A. Verantwortlichkeiten der Datei main/sync-server.js
+Serverstart und -stop: HTTP/HTTPS, TLS-Zertifikatsprüfung und automatisiertes Port-Fallback (38400-38410).
+Request-Processing & Routing: Zentrales handleHttpRequest mit hartcodierten if/else Blöcken für API (/api/v1/sync/*) und PWA Static Files.
+Authentifizierung: Session-Handling, Token-Generierung und Validierung (authenticate, assertSession, revokeSession).
+Pairing: Token-Generation (createPairingToken) und Rate-Limiting für QR-Kopplung.
+WebSocket / SSE: Upgrades via nativem RFC 6455 (handleWsUpgrade, handleWsFrame), Frame-Parsing und Broadcasts.
+Security & Validierung: Host-Header Checks, CORS-Erlaubnis, Directory Traversal Checks (isContained), und File Size Limits (maxJsonBytes, maxPhotoBytes).
+Sync-Logik & Datenbankzugriff: Outbox-Push, Delta-Pull und Konfliktlösung (applyEntityMutation, resolveConflict). SQLite-Inserts via better-sqlite3.
+Streaming Uploads: Photo-Upload mit Magic-Bytes Inspektion (detectImageFormat), SHA-256 Validierung und atomic file links.
+B. Routen- und Abhängigkeitskarte
+HTTP-Routen:
+GET /api/v1/sync/version : Healthcheck (App- und Schema-Version, SW-Cache-Name). Ohne Auth.
+GET /api/v1/sync/ping / /info : Ping und Anzahl verbundener Clients. Ohne Auth.
+POST /api/v1/sync/pair : Initiales Pairing via Token, limitiert durch checkPairRate.
+POST /api/v1/sync/push : Empfang von Outbox-Mutationen (LWW/HLC Logik). Erfordert Auth & Body-Identity Prüfung.
+POST /api/v1/sync/pull : Senden der aktuellen Stammdaten (Projekte, MA, LV). Erfordert Auth.
+POST /api/v1/sync/unpair : Löscht die aktive Session (revokeSession).
+POST /api/v1/sync/photo-upload : Streaming-Endpunkt für .webp/.jpg/.png. Erfordert UUID, SHA256 und Session-Auth.
+GET /api/v1/sync/events : SSE-Event-Stream Fallback (max 8 Streams/Client).
+GET /ws : WebSocket-Endpunkt (RFC 6455).
+GET /* (Default) : Liefert statische HTML/JS/CSS-Dateien aus pwaDir oder controllers/. Path-Traversal-geschützt.
+Abhängigkeiten:
+Main Process: Verwendet strikt Node-Core (http, https, crypto, fs, net, path).
+Controller: Bindet ZeiterfassungController und BautagebuchMobileController ein.
+Externe Logik: HybridLogicalClock (hlc.js) für dezentrale Uhren-Synchronisation.
+C. Vorgeschlagene Modulstruktur
+Basierend auf den ca. 31 Funktionen des 68KB großen Monolithen wird folgende Ordnerstruktur (z.B. unter main/sync/) empfohlen:
+main/sync/
+  index.js              // Entrypoint: Startet Server und bündelt Module
+  config.js             // Defaults & Konstanten (MAX_SESSIONS, SESSION_TTL_MS, PAIRING_TTL_MS)
+  routes/
+    router.js           // Zentraler Verteiler (ersetzt den großen try/catch in handleHttpRequest)
+    pairing.js          // Routen: /pair, /unpair
+    sync.js             // Routen: /push, /pull
+    upload.js           // Routen: /photo-upload (Blob-Streaming)
+    pwa.js              // Routen: Static-File-Serving (serveStaticPwaFile)
+  middleware/
+    auth.js             // authenticate(), assertSession(), bindBodyIdentity()
+    security.js         // validateRequestBoundary(), checkPairRate()
+    body-parser.js      // readJsonBody() inkl. Size Limits
+  websockets/
+    handler.js          // handleWsUpgrade, handleWsFrame, sendWsMessage, broadcast
+  services/
+    db-mutations.js     // applyEntityMutation(), quarantineConflict()
+    conflict-mgmt.js    // getOpenConflicts(), resolveConflict()
+  utils/
+    helpers.js          // httpError(), getLocalIpAddress(), hashToken()
+    image.js            // detectImageFormat()
+
+D. Sichere Migrationsreihenfolge
+Um die Softwarearchitektur ohne Regressions- oder Security-Fehler zu migrieren:
+Reine Hilfsfunktionen & Konstanten auslagern: utils/helpers.js und config.js erstellen.
+Validatoren und Security separieren: validateRequestBoundary, Origin-Checks und Rate-Limiting (checkPairRate) in Middlewares kapseln.
+Auth/Sessions auslagern: Session-Maps und Token-Verifizierung in middleware/auth.js verschieben (Achtung: Memory-State muss als Singleton oder per DI geteilt werden!).
+Einzelne Route-Handler extrahieren: /pair, /push, /photo-upload jeweils in eigene Dateien auslagern. Das DB-Objekt muss an die Handler weitergegeben (injiziert) werden.
+WebSocket & Sync-Logik: Die RFC-6455-Handshakes und SQLite-Conflict-Resolver (applyEntityMutation) extrahieren.
+Server-Startlogik anpassen: Zuletzt main/sync-server.js (oder die neue index.js) so umschreiben, dass sie nur noch die Middleware-Kette aufbaut und den Socket bindet.
+E. Sicherheitscheckliste
+Beim Refactoring dürfen folgende bestehende Schutzmechanismen nicht beschädigt werden:
+Unautorisierte Requests: Der Auth-Block greift strikt vor jedem Body-Read und vor jedem DB-Befehl (Ausnahme: Public-Routen).
+Host/CORS-Boundary: validateRequestBoundary schützt davor, dass fremde Webseiten per CSRF oder DNS-Rebinding auf den localhost-Port zugreifen.
+Directory Traversal: Das Serving der PWA via fs.promises.realpath und path.relative ist extrem restriktiv. Wenn durch Standard-Router wie Express ersetzt, könnten diese lockerer sein (daher native Logik bevorzugen).
+DOS / Memory-Leaks: Photo-Streaming bricht per Backpressure ab, wenn Dateien > 10MB sind; JSON-Parser bei > 1MB. SSE/Websocket ist auf 8 Streams pro Client limitiert.
+Identitäts-Impersonierung: bindBodyIdentity verhindert, dass ein kompromittiertes Gerät Mutationen unter der UUID eines anderen Geräts pusht.
+F. Test- und Abnahmeplan
+Die Tests müssen kontinuierlich (vor und nach dem Umbau) durchlaufen:
+Authentifizierung: Gültiger Token wird akzeptiert, fehlender Token liefert 401, falsche Device-ID liefert 403.
+Validierung: Traversal-Versuche (z.B. /api/v1/sync/../../main.js) liefern 403. Abfragen auf nicht erlaubte Origins werden blockiert.
+Limits: Upload-Tests mit Bildern > 10MB und manipulierten Magic-Bytes (.txt als .webp getarnt) liefern 413 bzw. 415.
+Sync-Logik: Idempotenz-Tests der UUIDs und erfolgreiche Einordnung in die Quarantäne (sync_conflicts), wenn Aufmaß-Kollisionen stattfinden.
+Server-Lifecycle: Fallback-Ports beim Start (z.B. 38401 wenn 38400 belegt ist) und vollständige Trennung aller Sockets bei stop().
+G. Risiken, offene Fragen und Stop-Kriterien
+Zustand (State) im Memory: Der Server hält Sessions, WebSocket-Clients (activeSockets) und SSE-Streams im RAM. Beim Auslagern in unterschiedliche Dateien müssen diese Maps zentral verwaltet werden (z.B. Context-Object), sonst verliert der Auth-Layer den Zugriff auf aktive Sockets.
+Protokoll-Abhängigkeit: Der RFC 6455 Frame-Parser (handleWsFrame) verwendet strikte Bitmasken. Er darf im Zuge der Modularisierung nicht versehentlich durch Drittanbieter-Libraries (wie ws) ersetzt werden, um die Zero-Dependency-Politik des Kern-Moduls nicht zu brechen.
+Stop-Kriterium: Der Refactoring-Prozess muss abgebrochen werden, falls nach einer Auslagerung Datei-Uploads unvollständig abgebrochen werden (File-Locks) oder Client-Sockets beim Server-Stopp offenbleiben (Dangling Connections).
