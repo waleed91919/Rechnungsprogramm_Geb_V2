@@ -12,75 +12,34 @@ const crypto = require('crypto');
 const os = require('os');
 const net = require('net');
 
-const SAFE_ID = /^[A-Za-z0-9_-]{1,80}$/;
-const TOKEN = /^[A-Za-z0-9_-]{43}$/;
-const PAIRING_TTL_MS = 5 * 60 * 1000;
-const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
-const MAX_SESSIONS = 100;
-const MAX_PAIRING_TOKENS = 32;
-const PUBLIC_CONTROLLERS = new Set([
-    '/controllers/ZeiterfassungController.js',
-    '/controllers/BautagebuchMobileController.js',
-    '/controllers/MaengelController.js'
-]);
+const {
+    SAFE_ID,
+    TOKEN,
+    PAIRING_TTL_MS,
+    SESSION_TTL_MS,
+    MAX_SESSIONS,
+    MAX_PAIRING_TOKENS,
+    PUBLIC_CONTROLLERS
+} = require('./sync/config');
 
-function httpError(statusCode, message) {
-    return Object.assign(new Error(message), { statusCode });
-}
+const {
+    httpError,
+    positiveLimit,
+    hashToken,
+    isLoopback,
+    urlHost,
+    isContained,
+    getLocalIpAddress
+} = require('./sync/utils/helpers');
 
-function positiveLimit(value, fallback) {
-    return Number.isSafeInteger(value) && value > 0 ? value : fallback;
-}
-
-function hashToken(token) {
-    return crypto.createHash('sha256').update(token).digest('hex');
-}
-
-function isLoopback(host) {
-    if (net.isIP(host) === 4) return host.startsWith('127.');
-    return net.isIP(host) === 6 && new URL(`http://[${host}]`).hostname === '[::1]';
-}
-
-function urlHost(host) {
-    return net.isIP(host) === 6 ? `[${host}]` : host;
-}
-
-function isContained(root, candidate) {
-    const relative = path.relative(root, candidate);
-    return relative !== '' && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
-}
+const { detectImageFormat } = require('./sync/utils/image');
+const { readJsonBody } = require('./sync/middleware/body-parser');
+const { checkPairRate, validateRequestBoundary } = require('./sync/middleware/security');
+const { assertSession, authenticate, bindBodyIdentity } = require('./sync/middleware/auth');
 
 const ZeiterfassungController = require('../controllers/ZeiterfassungController');
 const BautagebuchMobileController = require('../controllers/BautagebuchMobileController');
 const HybridLogicalClock = require('./hlc');
-
-/**
- * Zero-Dependency Streaming Magic-Bytes Inspektion (JPEG, PNG, WebP)
- */
-function detectImageFormat(buffer) {
-    if (!buffer || buffer.length < 12) return null;
-
-    // 1. PNG Check (8 Bytes: 89 50 4E 47 0D 0A 1A 0A)
-    if (buffer.length >= 8 &&
-        buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47 &&
-        buffer[4] === 0x0D && buffer[5] === 0x0A && buffer[6] === 0x1A && buffer[7] === 0x0A) {
-        return { ext: 'png', mime: 'image/png' };
-    }
-
-    // 2. JPEG Check (3 Bytes: FF D8 FF)
-    if (buffer.length >= 3 && buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
-        return { ext: 'jpg', mime: 'image/jpeg' };
-    }
-
-    // 3. WebP Check (RIFF .... WEBP)
-    if (buffer.length >= 12 &&
-        buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
-        buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50) {
-        return { ext: 'webp', mime: 'image/webp' };
-    }
-
-    return null;
-}
 
 class SyncServer {
     /**
@@ -125,15 +84,7 @@ class SyncServer {
      * Ermittelt die primäre lokale IPv4-Adresse im WLAN/LAN.
      */
     static getLocalIpAddress() {
-        const interfaces = os.networkInterfaces();
-        for (const name of Object.keys(interfaces)) {
-            for (const iface of interfaces[name]) {
-                if (iface.family === 'IPv4' && !iface.internal) {
-                    return iface.address;
-                }
-            }
-        }
-        return '127.0.0.1';
+        return getLocalIpAddress();
     }
 
     /**
@@ -324,111 +275,23 @@ class SyncServer {
     }
 
     assertSession(session) {
-        if (!session || this.sessions.get(session.key) !== session || session.expiresAt <= Date.now()) {
-            if (session) this.revokeSession(session.key);
-            throw httpError(401, 'Sitzung ungültig oder abgelaufen.');
-        }
+        assertSession(this, session);
     }
 
     authenticate(req) {
-        this.pruneSecurityState();
-        const authorization = req.headers.authorization;
-        const deviceId = req.headers['x-device-id'];
-        const match = typeof authorization === 'string' && /^Bearer ([A-Za-z0-9_-]{43})$/.exec(authorization);
-        if (!match || typeof deviceId !== 'string' || !SAFE_ID.test(deviceId)) {
-            throw httpError(401, 'Bearer-Token und X-Device-Id erforderlich.');
-        }
-        const session = this.sessions.get(hashToken(match[1]));
-        this.assertSession(session);
-        if (session.deviceId !== deviceId) throw httpError(403, 'Geräteidentität stimmt nicht überein.');
-        return session;
+        return authenticate(this, req);
     }
 
     checkPairRate(req) {
-        this.pruneSecurityState();
-        const now = Date.now();
-        if (now - this.globalPairAttempts.startedAt >= 60000) {
-            this.globalPairAttempts = { startedAt: now, count: 0 };
-        }
-        // Bound both per-address storage and aggregate requests; forwarded IP headers are not trusted.
-        if (++this.globalPairAttempts.count > 100) throw httpError(429, 'Zu viele Pairing-Versuche.');
-        const address = req.socket.remoteAddress || 'unknown';
-        let attempt = this.pairAttempts.get(address);
-        if (!attempt) {
-            if (this.pairAttempts.size >= 256) throw httpError(429, 'Zu viele Pairing-Versuche.');
-            attempt = { startedAt: now, count: 0 };
-            this.pairAttempts.set(address, attempt);
-        }
-        if (++attempt.count > 10) throw httpError(429, 'Zu viele Pairing-Versuche.');
+        checkPairRate(this, req);
     }
 
     validateRequestBoundary(req, res = null) {
-        const info = this.getServerInfo();
-        const hosts = new Set([new URL(info.serverUrl).host.toLowerCase()]);
-        if (this.host !== '0.0.0.0' && this.host !== '::') hosts.add(`${urlHost(this.host)}:${this.port}`.toLowerCase());
-        if (isLoopback(this.advertisedHost || this.host)) {
-            hosts.add(`localhost:${this.port}`);
-            hosts.add(`127.0.0.1:${this.port}`);
-            hosts.add(`[::1]:${this.port}`);
-        }
-        const host = req.headers.host;
-        if (typeof host !== 'string' || !hosts.has(host.toLowerCase())) {
-            throw httpError(403, 'Host nicht erlaubt.');
-        }
-        const origin = req.headers.origin;
-        const sameOrigins = new Set([...hosts].map(validHost => `${this.useTls ? 'https' : 'http'}://${validHost}`));
-        if (origin !== undefined && (origin === 'null' || (!sameOrigins.has(origin) && !this.allowedOrigins.has(origin)))) {
-            throw httpError(403, 'Origin nicht erlaubt.');
-        }
-        if (res) {
-            res.setHeader('X-Content-Type-Options', 'nosniff');
-            res.setHeader('Referrer-Policy', 'no-referrer');
-            res.setHeader('Cache-Control', 'no-store');
-            res.setHeader('Vary', 'Origin');
-            if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
-            res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, OPTIONS');
-            res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Device-Id, X-Photo-Uuid, X-Entity-Type, X-Entity-Uuid, X-Sha256');
-        }
-        // Do not let URL normalization hide traversal or credentials in query strings.
-        if (!req.url.startsWith('/') || req.url.startsWith('//')) throw httpError(400, 'Ungültiger Request-Pfad.');
-        let pathname;
-        try { pathname = decodeURIComponent(req.url.split('?')[0]); }
-        catch (_e) { throw httpError(400, 'Ungültiger Request-Pfad.'); }
-        if (pathname.includes('\\') || /[\x00-\x1f\x7f]/.test(pathname) || pathname.split('/').some(part => part === '..' || part === '.')) {
-            throw httpError(403, 'Request-Pfad nicht erlaubt.');
-        }
-        const url = new URL(req.url, info.serverUrl);
-        for (const key of url.searchParams.keys()) {
-            if (/token|authorization/i.test(key)) throw httpError(400, 'Tokens in URLs sind nicht erlaubt.');
-        }
-        return pathname;
+        return validateRequestBoundary(this, req, res);
     }
 
     bindBodyIdentity(body, session) {
-        this.assertSession(session);
-        if (body.device_id !== undefined && body.device_id !== session.deviceId) {
-            throw httpError(403, 'Geräteidentität stimmt nicht überein.');
-        }
-        body.device_id = session.deviceId;
-        if (body.mutations !== undefined) {
-            if (!Array.isArray(body.mutations)) throw httpError(400, 'Mutations array required');
-            if (body.mutations.length > 50) throw httpError(413, 'Maximal 50 Mutationen pro Batch.');
-            // Validate the entire batch before any database side effects.
-            for (const mutation of body.mutations) {
-                if (!mutation || typeof mutation !== 'object' || Array.isArray(mutation)) throw httpError(400, 'Ungültige Mutation.');
-                let payload = mutation.payload ?? {};
-                if (typeof payload === 'string') {
-                    try { payload = JSON.parse(payload); }
-                    catch (_e) { throw httpError(400, 'Ungültiges Mutations-JSON.'); }
-                }
-                if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw httpError(400, 'Ungültige Mutation.');
-                // Older offline controllers used their own IDs. Normalize these to the session;
-                // the explicit batch device_id still has to match and cannot impersonate a peer.
-                mutation.device_id = session.deviceId;
-                mutation.payload = { ...payload, device_id: session.deviceId };
-            }
-        }
-        return body;
+        return bindBodyIdentity(this, body, session);
     }
 
     /**
@@ -1251,36 +1114,7 @@ class SyncServer {
     }
 
     readJsonBody(req) {
-        if (Number(req.headers['content-length']) > this.maxJsonBytes) return Promise.reject(httpError(413, 'JSON-Body zu groß.'));
-        return new Promise((resolve, reject) => {
-            const chunks = [];
-            let bytes = 0;
-            let failed = false;
-            const fail = err => {
-                if (failed) return;
-                failed = true;
-                chunks.length = 0;
-                reject(err);
-            };
-            req.on('data', chunk => {
-                if (failed) return;
-                bytes += chunk.length;
-                if (bytes > this.maxJsonBytes) return fail(httpError(413, 'JSON-Body zu groß.'));
-                chunks.push(chunk);
-            });
-            req.on('end', () => {
-                if (failed) return;
-                try {
-                    const body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
-                    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Object required');
-                    resolve(body);
-                } catch (_e) {
-                    fail(httpError(400, 'Ungültiges JSON im Request-Body.'));
-                }
-            });
-            req.on('aborted', () => fail(httpError(400, 'Request abgebrochen.')));
-            req.on('error', () => fail(httpError(400, 'Request abgebrochen.')));
-        });
+        return readJsonBody(req, this.maxJsonBytes);
     }
 
     // =========================================================================
