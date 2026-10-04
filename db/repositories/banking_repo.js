@@ -4,6 +4,7 @@
  */
 const BankingController = require('../../controllers/BankingController');
 const SepaController = require('../../controllers/SepaController');
+const { calculateDocumentContentHash } = require('../../main/audit.js');
 
 function createBankingRepo(deps) {
     const { db, dbQuery, dbRun, appendAuditLog, getDocumentWithChildren } = deps;
