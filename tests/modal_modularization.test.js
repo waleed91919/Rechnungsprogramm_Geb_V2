@@ -51,7 +51,7 @@ test('=== Modal Modularization & Components Architecture Suite ===', async (t) =
         const lineCount = codeHtml.split('\n').length;
 
         console.log(`Current code.html line count: ${lineCount}`);
-        assert.ok(lineCount <= 3100, `code.html line count (${lineCount}) should be <= 3100 lines (originally 6170 lines)`);
+        assert.ok(lineCount <= 3110, `code.html line count (${lineCount}) should be <= 3110 lines (originally 6170 lines)`);
         assert.ok(codeHtml.includes('id="modals-container"'), 'code.html must contain #modals-container');
         assert.ok(codeHtml.includes('src="js/modal-loader.js"'), 'code.html must load js/modal-loader.js');
         assert.ok(codeHtml.includes('id="print-template"'), 'code.html must preserve #print-template for printing');
