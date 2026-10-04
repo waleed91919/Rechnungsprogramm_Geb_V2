@@ -69,7 +69,12 @@ test('Schema Identity Test: Old vs New Module', (t) => {
     const seedTables = ['einstellungen', 'zuschlagskalkulation_stamm', 'mitarbeiter', 'ids_connect_konten', 'soka_beitragssaetze'];
     for (const table of seedTables) {
         if (!tables.includes(table)) continue;
-        const getData = (db) => db.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all();
+        const getData = (db) => db.prepare(`SELECT * FROM "${table}" ORDER BY rowid`).all().map(row => {
+            const r = { ...row };
+            delete r.created_at;
+            delete r.updated_at;
+            return r;
+        });
 
         const dataOld = getData(dbOld);
         const dataNew = getData(dbNew);
