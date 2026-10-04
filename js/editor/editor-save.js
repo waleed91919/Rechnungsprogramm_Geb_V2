@@ -1,11 +1,11 @@
 async function saveRechnung() {
-    if (isSavingRechnung) return;
+    if (window.isSavingRechnung) return;
     const submitBtn = document.getElementById('rechnung-modal-submit');
     const submitText = document.getElementById('rechnung-modal-submit-text');
     const originalText = submitText ? submitText.innerText : 'Rechnung Speichern';
 
     try {
-        isSavingRechnung = true;
+        window.isSavingRechnung = true;
         if (submitBtn) {
             submitBtn.disabled = true;
             submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
@@ -172,7 +172,7 @@ async function saveRechnung() {
         const errMsg = (e && e.message) ? e.message : 'Fehler beim Speichern in die Datenbank.';
         showToast(errMsg, 'error');
     } finally {
-        isSavingRechnung = false;
+        window.isSavingRechnung = false;
         if (submitBtn) {
             submitBtn.disabled = false;
             submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');

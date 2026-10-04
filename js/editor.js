@@ -3,7 +3,7 @@
 // sowie die zwingend benötigten window-Exports zur Abwärtskompatibilität, nachdem die Fachlogik
 // nach js/editor/* ausgelagert wurde.
 
-let isSavingRechnung = false;
+window.isSavingRechnung = false;
 
 const EMAIL_STANDARD_TEXTE = {
     'RECHNUNG': "Sehr geehrte Damen und Herren,\n\nanbei erhalten Sie unsere Rechnung {beleg_nr} vom {datum}.\nBitte begleichen Sie den Betrag von {betrag} bis zum {faelligkeit}.\n\nBei Rückfragen stehen wir Ihnen gerne zur Verfügung.\n\nMit freundlichen Grüßen",

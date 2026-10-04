@@ -63,7 +63,11 @@ const dbQuery = async (sql, params = []) => {
 };
 
 const dbRun = async (sql, params = []) => {
-    return db.prepare(sql).run(params);
+    const res = db.prepare(sql).run(params);
+    if (res && res.lastInsertRowid !== undefined && res.id === undefined) {
+        res.id = res.lastInsertRowid;
+    }
+    return res;
 };
 
 // Modular Repositories

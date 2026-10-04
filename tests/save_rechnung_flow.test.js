@@ -116,8 +116,28 @@ describe('Invoice Save Workflow & Validation (saveRechnung)', () => {
         window.eval(invoiceControllerCode);
 
         // Load editor.js saveRechnung
-        const editorCode = fs.readFileSync(path.join(__dirname, '../js/editor.js'), 'utf-8');
-        window.eval(editorCode);
+        
+        const eModes = fs.readFileSync(path.join(__dirname, '../js/editor/events/form-modes.js'), 'utf-8');
+        window.eval(eModes);
+        const eModal = fs.readFileSync(path.join(__dirname, '../js/editor/events/modal-events.js'), 'utf-8');
+        window.eval(eModal);
+        const eField = fs.readFileSync(path.join(__dirname, '../js/editor/events/field-listeners.js'), 'utf-8');
+        window.eval(eField);
+        
+        const eCalcCode = fs.readFileSync(path.join(__dirname, '../js/editor/editor-calculation.js'), 'utf-8');
+        window.eval(eCalcCode);
+        const ePosCode = fs.readFileSync(path.join(__dirname, '../js/editor/editor-positions.js'), 'utf-8');
+        window.eval(ePosCode);
+        const eRenderCode = fs.readFileSync(path.join(__dirname, '../js/editor/editor-render.js'), 'utf-8');
+        window.eval(eRenderCode);
+        const eEventsCode = fs.readFileSync(path.join(__dirname, '../js/editor/editor-events.js'), 'utf-8');
+        window.eval(eEventsCode);
+        const eSaveCode = fs.readFileSync(path.join(__dirname, '../js/editor/editor-save.js'), 'utf-8');
+        window.eval(eSaveCode);
+        const eExportCode = fs.readFileSync(path.join(__dirname, '../js/editor/editor-export.js'), 'utf-8');
+        window.eval(eExportCode);
+        const eCode = fs.readFileSync(path.join(__dirname, '../js/editor.js'), 'utf-8');
+        window.eval(eCode);
     });
 
     test('saveRechnung without selecting a customer prompts user to select a customer instead of DB error', async () => {
