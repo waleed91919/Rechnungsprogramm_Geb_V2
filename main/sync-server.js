@@ -39,6 +39,10 @@ const { assertSession, authenticate, bindBodyIdentity } = require('./sync/middle
 
 const ZeiterfassungController = require('../controllers/ZeiterfassungController');
 const BautagebuchMobileController = require('../controllers/BautagebuchMobileController');
+const { handleWsUpgrade, handleWsFrame, sendWsMessage, broadcast } = require("./sync/websocket");
+const { handlePhotoUpload } = require("./sync/photo-storage");
+const { handlePushSync, handlePullSync, applyEntityMutation, quarantineConflict, getOpenConflicts, resolveConflict } = require("./sync/sync-engine");
+const { serveStaticPwaFile } = require("./sync/static-server");
 const HybridLogicalClock = require('./hlc');
 
 class SyncServer {
@@ -298,158 +302,28 @@ class SyncServer {
      * Behandelt nativen RFC 6455 WebSocket-Handshake ohne externe Abhängigkeiten.
      */
     handleWsUpgrade(req, socket, head) {
-        let session;
-        try {
-            const pathname = this.validateRequestBoundary(req);
-            session = this.authenticate(req);
-            if (pathname !== '/ws' || req.method !== 'GET') throw httpError(404, 'WebSocket-Pfad nicht gefunden.');
-            if (session.channels.size >= 8) throw httpError(429, 'Zu viele offene Streams.');
-        } catch (err) {
-            const status = err.statusCode || 400;
-            socket.end(`HTTP/1.1 ${status} ${http.STATUS_CODES[status]}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
-            return;
-        }
-        const key = req.headers['sec-websocket-key'];
-        if (typeof key !== 'string' || !/^[A-Za-z0-9+/]{22}==$/.test(key)
-            || req.headers['sec-websocket-version'] !== '13' || req.headers.upgrade?.toLowerCase() !== 'websocket') {
-            socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
-            return;
-        }
-
-        const GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
-        const acceptKey = crypto.createHash('sha1').update(key + GUID).digest('base64');
-
-        const headers = [
-            'HTTP/1.1 101 Switching Protocols',
-            'Upgrade: websocket',
-            'Connection: Upgrade',
-            `Sec-WebSocket-Accept: ${acceptKey}`
-        ];
-
-        socket.write(headers.concat('\r\n').join('\r\n'));
-        socket.syncSession = session;
-        socket.syncBuffer = Buffer.alloc(0);
-        this.activeSockets.add(socket);
-        session.channels.add(socket);
-
-        socket.on('data', (buffer) => {
-            this.handleWsFrame(socket, buffer);
-        });
-
-        socket.on('close', () => {
-            this.activeSockets.delete(socket);
-            session.channels.delete(socket);
-        });
-
-        socket.on('error', () => {
-            this.activeSockets.delete(socket);
-            session.channels.delete(socket);
-        });
-
-        // Begrüßungsnachricht senden
-        this.sendWsMessage(socket, {
-            type: 'WELCOME',
-            app: 'W-Link ERP Sync Hub',
-            serverTime: new Date().toISOString()
-        });
-        if (head.length) this.handleWsFrame(socket, head);
+        return handleWsUpgrade(this, req, socket, head);
     }
 
     /**
      * Parst eingehende RFC 6455 Frames.
      */
     handleWsFrame(socket, buffer) {
-        try { this.assertSession(socket.syncSession); }
-        catch (_e) { socket.destroy(); return; }
-        if (socket.syncBuffer.length + buffer.length > 65536) {
-            socket.destroy();
-            return;
-        }
-        buffer = Buffer.concat([socket.syncBuffer, buffer]);
-        while (buffer.length >= 2) {
-            const opcode = buffer[0] & 0x0f;
-            // Only complete masked text/control frames are supported, with a bounded accumulator.
-            if (!(buffer[0] & 0x80) || (buffer[0] & 0x70) || !(buffer[1] & 0x80) || ![1, 8, 9, 10].includes(opcode)) {
-                socket.destroy();
-                return;
-            }
-            let length = buffer[1] & 0x7f;
-            let offset = 2;
-            if ((opcode >= 8 && length > 125) || length === 127) { socket.destroy(); return; }
-            if (length === 126) {
-                if (buffer.length < 4) break;
-                length = buffer.readUInt16BE(2);
-                offset = 4;
-            }
-            if (length + offset + 4 > 65536) { socket.destroy(); return; }
-            if (buffer.length < offset + 4 + length) break;
-            const mask = buffer.subarray(offset, offset + 4);
-            offset += 4;
-            const payload = Buffer.from(buffer.subarray(offset, offset + length));
-            for (let i = 0; i < length; i++) payload[i] ^= mask[i % 4];
-            buffer = buffer.subarray(offset + length);
-            if (opcode === 8) { socket.end(); return; }
-            if (opcode === 9) {
-                socket.write(Buffer.concat([Buffer.from([0x8a, length]), payload]));
-                continue;
-            }
-            try {
-                const data = JSON.parse(payload.toString('utf-8'));
-                if (opcode === 1 && data.type === 'PING') {
-                    this.sendWsMessage(socket, { type: 'PONG', time: new Date().toISOString() });
-                }
-            } catch (_e) { /* ignore */ }
-        }
-        socket.syncBuffer = Buffer.from(buffer);
+        return handleWsFrame(this, socket, buffer);
     }
 
     /**
      * Sendet Text-Frame an einen WebSocket.
      */
     sendWsMessage(socket, obj) {
-        try {
-            this.assertSession(socket.syncSession);
-            if (socket.destroyed || socket.writableLength > 1024 * 1024) {
-                socket.destroy();
-                return;
-            }
-            const text = JSON.stringify(obj);
-            const payload = Buffer.from(text, 'utf-8');
-            let header;
-            if (payload.length <= 125) {
-                header = Buffer.from([0x81, payload.length]);
-            } else if (payload.length <= 65535) {
-                header = Buffer.alloc(4);
-                header[0] = 0x81;
-                header[1] = 126;
-                header.writeUInt16BE(payload.length, 2);
-            } else {
-                header = Buffer.alloc(10);
-                header[0] = 0x81;
-                header[1] = 127;
-                header.writeBigUInt64BE(BigInt(payload.length), 2);
-            }
-            socket.write(Buffer.concat([header, payload]));
-        } catch (_e) { /* ignore */ }
+        return sendWsMessage(this, socket, obj);
     }
 
     /**
      * Sendet Broadcast-Nachricht an alle verbundenen WebSockets und SSE-Streams.
      */
     broadcast(messageObj) {
-        this.pruneSecurityState();
-        for (const socket of this.activeSockets) {
-            this.sendWsMessage(socket, messageObj);
-        }
-
-        const sseData = `data: ${JSON.stringify(messageObj)}\n\n`;
-        for (const res of this.sseClients) {
-            try {
-                this.assertSession(res.syncSession);
-                if (res.destroyed || res.writableLength > 1024 * 1024) res.destroy();
-                else res.write(sseData);
-            } catch (_e) { res.destroy(); }
-        }
+        return broadcast(this, messageObj);
     }
 
     /**
@@ -600,517 +474,42 @@ class SyncServer {
      * Verarbeitet eingehende Push-Mutations-Batches von der mobilen PWA.
      */
     handlePushSync(body = {}, res) {
-        const { device_id = 'MOBILE_PWA', mutations = [] } = body;
-        if (!Array.isArray(mutations)) {
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            return res.end(JSON.stringify({ error: 'Mutations array required' }));
-        }
-
-        const ackedUuids = [];
-        const conflicts = [];
-
-        const syncTx = this.db.transaction(() => {
-            const checkMutationStmt = this.db.prepare('SELECT id FROM sync_processed_mutations WHERE mutation_uuid = ?');
-            const recordMutationStmt = this.db.prepare(`
-                INSERT INTO sync_processed_mutations (mutation_uuid, device_id, entity_type, entity_uuid, created_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-            `);
-
-            for (const mut of mutations) {
-                if (!mut || !mut.uuid) continue;
-
-                // 1. Idempotenz-Prüfung: Bereits verarbeitet?
-                const existing = checkMutationStmt.get(mut.uuid);
-                if (existing) {
-                    ackedUuids.push(mut.uuid);
-                    continue;
-                }
-
-                // 2. Fachentität verarbeiten & Konflikte abfangen
-                try {
-                    const conflictInfo = this.applyEntityMutation(mut, device_id);
-                    if (conflictInfo && conflictInfo.conflict) {
-                        conflicts.push(conflictInfo);
-                        recordMutationStmt.run(mut.uuid, device_id, mut.entity_type, mut.entity_uuid);
-                        ackedUuids.push(mut.uuid);
-                    } else {
-                        recordMutationStmt.run(mut.uuid, device_id, mut.entity_type, mut.entity_uuid);
-                        ackedUuids.push(mut.uuid);
-                    }
-                } catch (_mutationErr) {
-                    conflicts.push({ uuid: mut.uuid, error: 'Mutation konnte nicht verarbeitet werden.' });
-                }
-            }
-        });
-
-        syncTx();
-
-        // WebSocket & SSE Broadcast über neue Daten
-        if (ackedUuids.length > 0) {
-            this.broadcast({
-                type: 'SYNC_UPDATE',
-                count: ackedUuids.length,
-                device_id
-            });
-        }
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-            status: 'SUCCESS',
-            acked_uuids: ackedUuids,
-            conflicts,
-            server_time: new Date().toISOString()
-        }));
+        return handlePushSync(this, body, res);
     }
 
     /**
      * Schreibt eine mobile Mutation in die SQLite-Hauptdatenbank oder leitet sie bei Konflikten in Quarantäne.
      */
     applyEntityMutation(mut, deviceId) {
-        const { entity_type, mutation_type, entity_uuid, payload, lamport_timestamp, hlc_timestamp } = mut;
-        const data = typeof payload === 'string' ? JSON.parse(payload) : (payload || {});
-        data.uuid = data.uuid || entity_uuid || mut.uuid;
-        data.device_id = deviceId;
-        if (hlc_timestamp && this.hlc) {
-            this.hlc.receive(hlc_timestamp);
-        }
-
-        if (entity_type === 'ZEITERFASSUNG') {
-            const serverRecord = this.db.prepare('SELECT * FROM zeiterfassung WHERE uuid = ?').get(data.uuid);
-            if (serverRecord && (serverRecord.status === 'FREIGEGEBEN' || serverRecord.status === 'ABGERECHNET')) {
-                this.quarantineConflict('ZEITERFASSUNG', data.uuid, deviceId, serverRecord, data, 'GoBD-Status FREIGEGEBEN/ABGERECHNET auf dem Server hat Vorrang.');
-                return { conflict: true, reason: 'GoBD-geschützt', uuid: mut.uuid };
-            }
-
-            ZeiterfassungController.saveZeiteintrag(this.db, data, this.auditLogger);
-            return { conflict: false };
-
-        } else if (entity_type === 'BAUTAGEBUCH') {
-            const serverBt = this.db.prepare('SELECT * FROM bautagebuch WHERE uuid = ?').get(data.uuid);
-            if (serverBt && serverBt.unterzeichnet_bauleiter === 1 && !data.unterzeichnet_polier) {
-                this.quarantineConflict('BAUTAGEBUCH', data.uuid, deviceId, serverBt, data, 'Bauleiter-Signatur auf dem Server vorhanden.');
-                return { conflict: true, reason: 'Bauleiter-Signatur vorhanden', uuid: mut.uuid };
-            }
-
-            const upsertBtStmt = this.db.prepare(`
-                INSERT INTO bautagebuch (
-                    uuid, project_id, datum, wetter, temperatur_min, temperatur_max,
-                    personal_eigen_anzahl, personal_eigen_stunden, personal_sub_json, geraete_json,
-                    tagesbericht, vorkommnisse_behinderungen, fotos_json, created_at
-                ) VALUES (
-                    @uuid, @project_id, @datum, @wetter, @temperatur_min, @temperatur_max,
-                    @personal_eigen_anzahl, @personal_eigen_stunden, @personal_sub_json, @geraete_json,
-                    @tagesbericht, @vorkommnisse_behinderungen, @fotos_json, @created_at
-                ) ON CONFLICT(uuid) DO UPDATE SET
-                    tagesbericht = excluded.tagesbericht,
-                    vorkommnisse_behinderungen = excluded.vorkommnisse_behinderungen,
-                    fotos_json = excluded.fotos_json,
-                    personal_eigen_anzahl = excluded.personal_eigen_anzahl,
-                    personal_eigen_stunden = excluded.personal_eigen_stunden
-            `);
-
-            upsertBtStmt.run({
-                uuid: data.uuid,
-                project_id: parseInt(data.projekt_id || data.project_id, 10),
-                datum: data.datum,
-                wetter: data.wetter || data.wetter_code || 'HEITER',
-                temperatur_min: parseFloat(data.temperatur_min) || 0.0,
-                temperatur_max: parseFloat(data.temperatur_max) || 0.0,
-                personal_eigen_anzahl: parseInt(data.personal_eigen_anzahl, 10) || 0,
-                personal_eigen_stunden: parseFloat(data.personal_eigen_stunden) || 0.0,
-                personal_sub_json: typeof data.personal_sub_json === 'string' ? data.personal_sub_json : JSON.stringify(data.personal_sub_json || []),
-                geraete_json: typeof data.geraete_json === 'string' ? data.geraete_json : JSON.stringify(data.geraete_json || []),
-                tagesbericht: data.tagesbericht || '',
-                vorkommnisse_behinderungen: data.vorkommnisse || data.vorkommnisse_behinderungen || '',
-                fotos_json: typeof data.fotos_json === 'string' ? data.fotos_json : JSON.stringify(data.fotos_json || []),
-                created_at: data.created_at || new Date().toISOString()
-            });
-
-            return { conflict: false };
-
-        } else if (entity_type === 'VOB_MELDUNG' || entity_type === 'BEDENKEN_BEHINDERUNGEN') {
-            BautagebuchMobileController.saveVobMeldung(this.db, data, this.auditLogger);
-            return { conflict: false };
-
-        } else if (entity_type === 'AUFMASS_ZEILE' || entity_type === 'AUFMASS') {
-            const existing = this.db.prepare('SELECT * FROM aufmass_zeilen WHERE uuid = ?').get(data.uuid);
-
-            if (existing) {
-                const isSameContent = existing.rechenansatz === data.rechenansatz &&
-                                      Math.abs(existing.ergebnis - data.ergebnis) < 0.0001;
-
-                if (!isSameContent) {
-                    const isStale = (data.base_version !== undefined && data.base_version < existing.version) ||
-                                    (existing.updated_by_device && existing.updated_by_device !== deviceId);
-
-                    if (isStale) {
-                        this.quarantineConflict(
-                            'AUFMASS_ZEILE',
-                            data.uuid,
-                            deviceId,
-                            existing,
-                            data,
-                            `Aufmaß-Kollision: Server hat Version ${existing.version || 1} (${existing.rechenansatz}), Client sendet (${data.rechenansatz})`
-                        );
-                        return { conflict: true, reason: 'Aufmaß-Kollision', uuid: mut.uuid };
-                    }
-                }
-            }
-
-            const currentHlc = (this.hlc && hlc_timestamp) ? this.hlc.now() : (hlc_timestamp || new Date().toISOString());
-
-            const stmt = this.db.prepare(`
-                INSERT INTO aufmass_zeilen (
-                    uuid, blatt_id, oz_code, zeilen_nr, bezeichnung, formel_reb, formel_code, rechenansatz, ergebnis, einheit, raum_id, version, hlc_timestamp, updated_by_device, last_synced_at
-                ) VALUES (
-                    @uuid, @blatt_id, @oz_code, @zeilen_nr, @bezeichnung, @formel_code, @formel_code, @rechenansatz, @ergebnis, @einheit, @raum_id, 1, @hlc_timestamp, @updated_by_device, CURRENT_TIMESTAMP
-                ) ON CONFLICT(uuid) DO UPDATE SET
-                    rechenansatz = excluded.rechenansatz,
-                    ergebnis = excluded.ergebnis,
-                    bezeichnung = excluded.bezeichnung,
-                    version = COALESCE(aufmass_zeilen.version, 1) + 1,
-                    hlc_timestamp = excluded.hlc_timestamp,
-                    updated_by_device = excluded.updated_by_device,
-                    last_synced_at = CURRENT_TIMESTAMP
-            `);
-            stmt.run({
-                uuid: data.uuid,
-                blatt_id: data.blatt_id || 1,
-                oz_code: data.oz || data.oz_code || '01.01.001',
-                zeilen_nr: data.zeilen_nr || 1,
-                bezeichnung: data.bezeichnung || '',
-                formel_code: data.formel_code || '91',
-                rechenansatz: data.rechenansatz || `${data.ergebnis || 0}=`,
-                ergebnis: parseFloat(data.ergebnis) || 0.0,
-                einheit: data.einheit || 'm²',
-                raum_id: data.raum_id || null,
-                hlc_timestamp: currentHlc,
-                updated_by_device: deviceId
-            });
-            return { conflict: false };
-
-        } else if (entity_type === 'MAENGEL' || entity_type === 'MANGEL') {
-            const stmt = this.db.prepare(`
-                INSERT INTO maengel (
-                    uuid, projekt_id, plan_id, mangel_nr, x_pct, y_pct, titel, beschreibung, status, frist_datum, created_at
-                ) VALUES (
-                    @uuid, @projekt_id, @plan_id, @mangel_nr, @x_pct, @y_pct, @titel, @beschreibung, @status, @frist_datum, @created_at
-                ) ON CONFLICT(uuid) DO UPDATE SET
-                    status = excluded.status,
-                    titel = excluded.titel
-            `);
-            stmt.run({
-                uuid: data.uuid,
-                projekt_id: parseInt(data.projekt_id, 10) || 1,
-                plan_id: data.plan_id || null,
-                mangel_nr: data.mangel_nr || 'M-001',
-                x_pct: parseFloat(data.x_pct) || 0.0,
-                y_pct: parseFloat(data.y_pct) || 0.0,
-                titel: data.titel || 'Mangel',
-                beschreibung: data.beschreibung || '',
-                status: data.status || 'ERFASST',
-                frist_datum: data.frist_datum || null,
-                created_at: data.created_at || new Date().toISOString()
-            });
-            return { conflict: false };
-
-        } else if (entity_type === 'GERAETE_BUCHUNG' || entity_type === 'GERAET') {
-            const stmt = this.db.prepare(`
-                INSERT INTO geraete_buchungen (
-                    uuid, projekt_id, geraet_code, datum, betriebsstunden, stillstand_stunden, stillstand_grund, device_id
-                ) VALUES (
-                    @uuid, @projekt_id, @geraet_code, @datum, @betriebsstunden, @stillstand_stunden, @stillstand_grund, @device_id
-                ) ON CONFLICT(uuid) DO UPDATE SET
-                    betriebsstunden = excluded.betriebsstunden,
-                    stillstand_stunden = excluded.stillstand_stunden,
-                    stillstand_grund = excluded.stillstand_grund
-            `);
-            stmt.run({
-                uuid: data.uuid,
-                projekt_id: parseInt(data.projekt_id, 10) || 1,
-                geraet_code: data.geraet_code || 'GERAET',
-                datum: data.datum || new Date().toISOString().split('T')[0],
-                betriebsstunden: parseFloat(data.betriebsstunden || data.stunden) || 0.0,
-                stillstand_stunden: parseFloat(data.stillstand_stunden) || 0.0,
-                stillstand_grund: data.stillstand_grund || null,
-                device_id: deviceId
-            });
-            return { conflict: false };
-
-        } else if (entity_type === 'LIEFERSCHEIN') {
-            const stmt = this.db.prepare(`
-                INSERT INTO lieferscheine_digital (
-                    uuid, projekt_id, lieferant_name, lieferschein_nr, datum, foto_pfad, sha256_hash, status, device_id
-                ) VALUES (
-                    @uuid, @projekt_id, @lieferant_name, @lieferschein_nr, @datum, @foto_pfad, @sha256_hash, @status, @device_id
-                ) ON CONFLICT(uuid) DO UPDATE SET
-                    lieferschein_nr = excluded.lieferschein_nr,
-                    status = excluded.status
-            `);
-            stmt.run({
-                uuid: data.uuid,
-                projekt_id: parseInt(data.projekt_id, 10) || 1,
-                lieferant_name: data.lieferant_name || 'Lieferant',
-                lieferschein_nr: data.lieferschein_nr || '',
-                datum: data.datum || new Date().toISOString().split('T')[0],
-                foto_pfad: data.foto_pfad || '',
-                sha256_hash: data.sha256_hash || '',
-                status: data.status || 'ERFASST',
-                device_id: deviceId
-            });
-            return { conflict: false };
-        }
-
-        return { conflict: false };
+        return applyEntityMutation(this, mut, deviceId);
     }
 
     /**
      * Isoliert kollidierende Mutationen in der Quarantäne-Tabelle sync_conflicts.
      */
     quarantineConflict(entityType, entityUuid, deviceId, serverData, clientData, reason) {
-        const stmt = this.db.prepare(`
-            INSERT INTO sync_conflicts (
-                entity_type, entity_uuid, client_device_id, server_data_json, client_data_json, conflict_reason, status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, 'OPEN', CURRENT_TIMESTAMP)
-        `);
-        stmt.run(
-            entityType,
-            entityUuid,
-            deviceId,
-            JSON.stringify(serverData || {}),
-            JSON.stringify(clientData || {}),
-            reason || 'Inhaltlicher Konflikt'
-        );
+        return quarantineConflict(this, entityType, entityUuid, deviceId, serverData, clientData, reason);
     }
 
     /**
      * Sendet Stammdaten-Delta an den mobilen Client.
      */
     handlePullSync(body = {}, res) {
-        const projekte = this.db.prepare("SELECT id, name, start, ende, status FROM projekte WHERE status != 'ARCHIVIERT'").all();
-        const liegenschaften = this.db.prepare('SELECT id, objekt_nr, name, ort FROM liegenschaften WHERE aktiv = 1').all();
-        const mitarbeiter = this.db.prepare('SELECT id, personalnummer, vorname, nachname FROM mitarbeiter WHERE aktiv = 1').all();
-        const lvPositionen = this.db.prepare('SELECT id, bereich_id, positionsnr, bezeichnung, menge, menge_einheit FROM lv_positionen').all();
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-            server_time: new Date().toISOString(),
-            data: {
-                projekte,
-                liegenschaften,
-                mitarbeiter,
-                lv_positionen: lvPositionen
-            }
-        }));
+        return handlePullSync(this, body, res);
     }
 
     /**
      * Large-Blob Streaming Foto-Upload mit SHA-256 Validierung & Dateispeicherung.
      */
     async handlePhotoUpload(req, res) {
-        const photoUuid = req.headers['x-photo-uuid'] || crypto.randomUUID();
-        const entityType = req.headers['x-entity-type'] || 'MANGEL';
-        const entityUuid = req.headers['x-entity-uuid'] || '';
-        const clientSha = req.headers['x-sha256'] || '';
-        if (!SAFE_ID.test(photoUuid)) throw httpError(400, 'Ungültige Foto-UUID.');
-        if (clientSha && !/^[a-fA-F0-9]{64}$/.test(clientSha)) throw httpError(400, 'Ungültiger SHA-256 Hash.');
-        if (!SAFE_ID.test(entityType) || (entityUuid && !SAFE_ID.test(entityUuid))) throw httpError(400, 'Ungültige Foto-Metadaten.');
-        if (Number(req.headers['content-length']) > this.maxPhotoBytes) throw httpError(413, 'Foto zu groß.');
-        this.assertSession(req.syncSession);
-        const configuredRoot = path.resolve(this.uploadsDir);
-        await fs.promises.mkdir(configuredRoot, { recursive: true, mode: 0o700 });
-        if ((await fs.promises.lstat(configuredRoot)).isSymbolicLink()) throw httpError(403, 'Upload-Verzeichnis nicht erlaubt.');
-        const root = await fs.promises.realpath(configuredRoot);
-        let fileName = `${photoUuid}.webp`;
-        let targetPath = path.join(root, fileName);
-        let stageDir;
-        let handle;
-        let published = false;
-        let completed = false;
-        let calculatedSha;
-        const hash = crypto.createHash('sha256');
-        try {
-            stageDir = await fs.promises.mkdtemp(path.join(root, '.sync-upload-'));
-            const stagePath = path.join(stageDir, 'photo.part');
-            handle = await fs.promises.open(stagePath,
-                fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW || 0), 0o600);
-            let bytes = 0;
-            const headerChunks = [];
-            let headerBytes = 0;
-            let detected = null;
-
-            // Async iteration supplies backpressure; early limit rejection must not destroy the response socket.
-            for await (const chunk of req.iterator({ destroyOnReturn: false })) {
-                this.assertSession(req.syncSession);
-                bytes += chunk.length;
-                if (bytes > this.maxPhotoBytes) throw httpError(413, 'Foto zu groß.');
-                if (!detected) {
-                    headerChunks.push(chunk);
-                    headerBytes += chunk.length;
-                    if (headerBytes >= 16) {
-                        const headerBuf = Buffer.concat(headerChunks);
-                        detected = detectImageFormat(headerBuf);
-                        if (!detected) {
-                            throw httpError(415, 'Nicht unterstütztes Bildformat. Erlaubt sind JPEG, PNG und WebP.');
-                        }
-                    }
-                }
-                hash.update(chunk);
-                await handle.writeFile(chunk);
-            }
-            if (req.aborted || !req.complete) throw httpError(400, 'Upload abgebrochen.');
-            if (!detected) {
-                const headerBuf = Buffer.concat(headerChunks);
-                detected = detectImageFormat(headerBuf);
-                if (!detected) {
-                    throw httpError(415, 'Nicht unterstütztes Bildformat. Erlaubt sind JPEG, PNG und WebP.');
-                }
-            }
-            fileName = `${photoUuid}.${detected.ext}`;
-            targetPath = path.join(root, fileName);
-            calculatedSha = hash.digest('hex');
-            if (clientSha && calculatedSha !== clientSha.toLowerCase()) throw httpError(422, 'SHA-256 stimmt nicht überein.');
-            await handle.sync();
-            await handle.close();
-            handle = null;
-            this.assertSession(req.syncSession);
-            if ((await fs.promises.lstat(configuredRoot)).isSymbolicLink()
-                || await fs.promises.realpath(configuredRoot) !== root
-                || await fs.promises.realpath(stageDir) !== stageDir) {
-                throw httpError(403, 'Upload-Verzeichnis wurde verändert.');
-            }
-            // Atomic publish without replacement: an existing file, hard link or symlink fails with EEXIST.
-            await fs.promises.link(stagePath, targetPath);
-            published = true;
-            this.assertSession(req.syncSession);
-            if (req.aborted || res.destroyed) throw httpError(400, 'Upload abgebrochen.');
-
-            // Preserve optional business linkage, only after the verified file is fully written.
-            if (entityType === 'MANGEL' && entityUuid) {
-                try {
-                    const mangel = this.db.prepare('SELECT id FROM maengelkataster WHERE id = ? OR mangel_nr = ?').get(entityUuid, entityUuid);
-                    if (mangel) {
-                        this.db.prepare(`
-                            INSERT INTO maengel_fotos (mangel_id, dateipfad, aufnahme_datum, typ, kommentar)
-                            VALUES (?, ?, CURRENT_TIMESTAMP, 'VOR_NACHBESSERUNG', ?)
-                        `).run(mangel.id, targetPath, `Mobil synchronisiert (UUID: ${photoUuid})`);
-                    }
-                } catch (_e) { /* ignore */ }
-            }
-            completed = true;
-            // Cleanup finishes before acknowledgement, so neither a partial file nor an absolute path escapes.
-            await fs.promises.rm(stageDir, { recursive: true, force: true });
-            stageDir = null;
-            this.sendJson(res, 200, {
-                status: 'UPLOADED',
-                photo_uuid: photoUuid,
-                file_name: fileName,
-                filePath: fileName, // legacy property, deliberately relative
-                sha256: calculatedSha,
-                clientShaMatches: true,
-                mime: detected.mime
-            });
-        } catch (err) {
-            if (err.code === 'EEXIST') {
-                let existingHandle;
-                try {
-                    const targetStat = await fs.promises.lstat(targetPath);
-                    if (!targetStat.isFile() || targetStat.isSymbolicLink()) throw httpError(409, 'Foto-UUID bereits vorhanden.');
-                    existingHandle = await fs.promises.open(targetPath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
-                    const openedStat = await existingHandle.stat();
-                    if (!openedStat.isFile() || openedStat.size > this.maxPhotoBytes
-                        || openedStat.dev !== targetStat.dev || openedStat.ino !== targetStat.ino) {
-                        throw httpError(409, 'Foto-UUID bereits vorhanden.');
-                    }
-                    const existingHash = crypto.createHash('sha256');
-                    for await (const chunk of existingHandle.createReadStream({ autoClose: false })) {
-                        this.assertSession(req.syncSession);
-                        existingHash.update(chunk);
-                    }
-                    if (existingHash.digest('hex') !== calculatedSha) throw httpError(409, 'Foto-UUID bereits vorhanden.');
-                    await existingHandle.close();
-                    existingHandle = null;
-                    await fs.promises.rm(stageDir, { recursive: true, force: true });
-                    stageDir = null;
-                    this.assertSession(req.syncSession);
-                    completed = true;
-                    this.sendJson(res, 200, {
-                        status: 'UPLOADED',
-                        photo_uuid: photoUuid,
-                        file_name: fileName,
-                        filePath: fileName,
-                        sha256: calculatedSha,
-                        clientShaMatches: true
-                    });
-                    return;
-                } finally {
-                    if (existingHandle) await existingHandle.close().catch(() => {});
-                }
-            }
-            throw err;
-        } finally {
-            if (handle) await handle.close().catch(() => {});
-            if (published && !completed) await fs.promises.unlink(targetPath).catch(() => {});
-            if (stageDir) await fs.promises.rm(stageDir, { recursive: true, force: true });
-        }
+        return handlePhotoUpload(this, req, res);
     }
 
     /**
      * Liefert statische HTML/JS/CSS-Dateien der PWA an mobile Endgeräte aus.
      */
     async serveStaticPwaFile(pathname, res, headOnly = false) {
-        const mimeTypes = {
-            '.html': 'text/html; charset=utf-8',
-            '.js': 'application/javascript; charset=utf-8',
-            '.css': 'text/css; charset=utf-8',
-            '.json': 'application/json; charset=utf-8',
-            '.webmanifest': 'application/manifest+json; charset=utf-8',
-            '.png': 'image/png',
-            '.jpg': 'image/jpeg',
-            '.webp': 'image/webp',
-            '.svg': 'image/svg+xml'
-        };
-        const relativePath = pathname === '/' ? 'index.html' : pathname.slice(1);
-        if (relativePath.split('/').some(part => part.startsWith('.'))) throw httpError(403, 'Datei nicht erlaubt.');
-        const ext = path.extname(relativePath).toLowerCase();
-        if (!Object.hasOwn(mimeTypes, ext)) throw httpError(404, 'Datei nicht gefunden.');
-        const publicController = PUBLIC_CONTROLLERS.has(pathname);
-        if (pathname.startsWith('/controllers/') && !publicController) throw httpError(404, 'Datei nicht gefunden.');
-        let file;
-        try {
-            const repositoryRoot = publicController ? await fs.promises.realpath(path.join(__dirname, '..')) : null;
-            const controllerRoot = publicController ? path.join(repositoryRoot, 'controllers') : null;
-            const root = await fs.promises.realpath(publicController ? controllerRoot : this.pwaDir);
-            if (publicController && root !== controllerRoot) throw httpError(403, 'Datei nicht erlaubt.');
-            const candidate = path.resolve(root, publicController ? path.basename(pathname) : relativePath);
-            if (!isContained(root, candidate)) throw httpError(403, 'Datei nicht erlaubt.');
-            const fullPath = await fs.promises.realpath(candidate);
-            if (!isContained(root, fullPath) || (publicController && fullPath !== candidate)) throw httpError(403, 'Datei nicht erlaubt.');
-            file = await fs.promises.open(fullPath, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
-            const stat = await file.stat();
-            const isServiceWorker = pathname === '/sw.js' || pathname === '/manifest.webmanifest';
-            const cacheControl = isServiceWorker
-                ? 'no-cache, no-store, must-revalidate, max-age=0'
-                : 'public, max-age=3600, stale-while-revalidate=86400';
-
-            res.writeHead(200, {
-                'Content-Type': mimeTypes[ext],
-                'Content-Length': stat.size,
-                'Cache-Control': cacheControl,
-                'Pragma': isServiceWorker ? 'no-cache' : 'public'
-            });
-            if (headOnly) return res.end();
-            const stream = file.createReadStream();
-            file = null; // stream owns and closes the descriptor
-            stream.on('error', () => res.destroy());
-            res.on('close', () => stream.destroy());
-            stream.pipe(res);
-        } catch (err) {
-            if (['ENOENT', 'ENOTDIR'].includes(err.code)) throw httpError(404, 'Datei nicht gefunden.');
-            throw err;
-        } finally {
-            if (file) await file.close();
-        }
+        return serveStaticPwaFile(this, pathname, res, headOnly);
     }
 
     readJsonBody(req) {
@@ -1122,128 +521,11 @@ class SyncServer {
     // =========================================================================
 
     getOpenConflicts() {
-        return this.db.prepare("SELECT * FROM sync_conflicts WHERE status = 'OPEN' ORDER BY created_at DESC").all();
+        return getOpenConflicts(this);
     }
 
     resolveConflict(conflictId, resolutionStrategy, mergedData = null) {
-        const conflict = this.db.prepare('SELECT * FROM sync_conflicts WHERE id = ?').get(conflictId);
-        if (!conflict) throw new Error(`Konflikt #${conflictId} nicht gefunden.`);
-
-        const effectiveData = resolutionStrategy === 'RESOLVED_CLIENT'
-            ? JSON.parse(conflict.client_data_json || '{}')
-            : (resolutionStrategy === 'RESOLVED_MERGE' ? mergedData : null);
-
-        const tx = this.db.transaction(() => {
-            if (effectiveData && (resolutionStrategy === 'RESOLVED_CLIENT' || resolutionStrategy === 'RESOLVED_MERGE')) {
-                const { entity_type, entity_uuid } = conflict;
-
-                if (entity_type === 'ZEITERFASSUNG') {
-                    ZeiterfassungController.saveZeiteintrag(this.db, effectiveData, this.auditLogger);
-
-                } else if (entity_type === 'BAUTAGEBUCH') {
-                    const upsertBt = this.db.prepare(`
-                        INSERT INTO bautagebuch (
-                            uuid, project_id, datum, wetter, temperatur_min, temperatur_max,
-                            personal_eigen_anzahl, personal_eigen_stunden, personal_sub_json, geraete_json,
-                            tagesbericht, vorkommnisse_behinderungen, fotos_json, updated_at
-                        ) VALUES (
-                            @uuid, @project_id, @datum, @wetter, @temperatur_min, @temperatur_max,
-                            @personal_eigen_anzahl, @personal_eigen_stunden, @personal_sub_json, @geraete_json,
-                            @tagesbericht, @vorkommnisse_behinderungen, @fotos_json, CURRENT_TIMESTAMP
-                        ) ON CONFLICT(uuid) DO UPDATE SET
-                            tagesbericht = excluded.tagesbericht,
-                            vorkommnisse_behinderungen = excluded.vorkommnisse_behinderungen,
-                            fotos_json = excluded.fotos_json,
-                            personal_eigen_anzahl = excluded.personal_eigen_anzahl,
-                            personal_eigen_stunden = excluded.personal_eigen_stunden,
-                            personal_sub_json = excluded.personal_sub_json,
-                            geraete_json = excluded.geraete_json,
-                            updated_at = CURRENT_TIMESTAMP
-                    `);
-
-                    upsertBt.run({
-                        uuid: entity_uuid,
-                        project_id: parseInt(effectiveData.projekt_id || effectiveData.project_id, 10),
-                        datum: effectiveData.datum,
-                        wetter: effectiveData.wetter || 'HEITER',
-                        temperatur_min: parseFloat(effectiveData.temperatur_min) || 0.0,
-                        temperatur_max: parseFloat(effectiveData.temperatur_max) || 0.0,
-                        personal_eigen_anzahl: parseInt(effectiveData.personal_eigen_anzahl, 10) || 0,
-                        personal_eigen_stunden: parseFloat(effectiveData.personal_eigen_stunden) || 0.0,
-                        personal_sub_json: typeof effectiveData.personal_sub_json === 'string'
-                            ? effectiveData.personal_sub_json : JSON.stringify(effectiveData.personal_sub_json || []),
-                        geraete_json: typeof effectiveData.geraete_json === 'string'
-                            ? effectiveData.geraete_json : JSON.stringify(effectiveData.geraete_json || []),
-                        tagesbericht: effectiveData.tagesbericht || '',
-                        vorkommnisse_behinderungen: effectiveData.vorkommnisse || effectiveData.vorkommnisse_behinderungen || '',
-                        fotos_json: typeof effectiveData.fotos_json === 'string'
-                            ? effectiveData.fotos_json : JSON.stringify(effectiveData.fotos_json || [])
-                    });
-
-                } else if (entity_type === 'AUFMASS_ZEILE' || entity_type === 'AUFMASS') {
-                    const upsertAufmass = this.db.prepare(`
-                        INSERT INTO aufmass_zeilen (
-                            uuid, blatt_id, oz_code, zeilen_nr, bezeichnung, formel_reb, formel_code,
-                            rechenansatz, ergebnis, einheit, raum_id, version, updated_at
-                        ) VALUES (
-                            @uuid, @blatt_id, @oz_code, @zeilen_nr, @bezeichnung, @formel_code, @formel_code,
-                            @rechenansatz, @ergebnis, @einheit, @raum_id, 1, CURRENT_TIMESTAMP
-                        ) ON CONFLICT(uuid) DO UPDATE SET
-                            rechenansatz = excluded.rechenansatz,
-                            ergebnis = excluded.ergebnis,
-                            bezeichnung = excluded.bezeichnung,
-                            version = COALESCE(aufmass_zeilen.version, 1) + 1,
-                            updated_at = CURRENT_TIMESTAMP
-                    `);
-
-                    upsertAufmass.run({
-                        uuid: entity_uuid,
-                        blatt_id: effectiveData.blatt_id || 1,
-                        oz_code: effectiveData.oz || effectiveData.oz_code || '01.01.001',
-                        zeilen_nr: effectiveData.zeilen_nr || 1,
-                        bezeichnung: effectiveData.bezeichnung || '',
-                        formel_code: effectiveData.formel_code || '91',
-                        rechenansatz: effectiveData.rechenansatz || `${effectiveData.ergebnis || 0}=`,
-                        ergebnis: parseFloat(effectiveData.ergebnis) || 0.0,
-                        einheit: effectiveData.einheit || 'm²',
-                        raum_id: effectiveData.raum_id || null
-                    });
-
-                } else if (entity_type === 'MAENGEL' || entity_type === 'MANGEL') {
-                    this.db.prepare(`
-                        UPDATE maengel SET
-                            titel = COALESCE(@titel, titel),
-                            beschreibung = COALESCE(@beschreibung, beschreibung),
-                            status = COALESCE(@status, status),
-                            frist_datum = COALESCE(@frist_datum, frist_datum),
-                            updated_at = CURRENT_TIMESTAMP
-                        WHERE uuid = @uuid
-                    `).run({
-                        uuid: entity_uuid,
-                        titel: effectiveData.titel,
-                        beschreibung: effectiveData.beschreibung,
-                        status: effectiveData.status,
-                        frist_datum: effectiveData.frist_datum
-                    });
-                }
-
-                if (this.auditLogger && this.auditLogger.appendAuditLog) {
-                    this.auditLogger.appendAuditLog({
-                        entityType: entity_type,
-                        entityId: conflictId,
-                        action: 'SYNC_CONFLICT_RESOLVED',
-                        details: { strategy: resolutionStrategy, uuid: entity_uuid }
-                    });
-                }
-            }
-
-            this.db.prepare(`
-                UPDATE sync_conflicts SET status = ?, resolved_at = CURRENT_TIMESTAMP WHERE id = ?
-            `).run(resolutionStrategy, conflictId);
-        });
-
-        tx();
-        return { success: true, conflictId, resolutionStrategy };
+        return resolveConflict(this, conflictId, resolutionStrategy, mergedData);
     }
 }
 
