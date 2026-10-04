@@ -10,7 +10,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const NachtragController = require('../controllers/NachtragController');
 
-const src = fs.readFileSync(path.join(__dirname, '..', 'js', 'projekte.js'), 'utf8');
+const projectDocFlowPath = path.join(__dirname, '..', 'js', 'projects', 'project-document-flow.js');
+const src = fs.existsSync(projectDocFlowPath)
+    ? fs.readFileSync(projectDocFlowPath, 'utf8')
+    : fs.readFileSync(path.join(__dirname, '..', 'js', 'projekte.js'), 'utf8');
+
 
 function fnBody(name) {
     const start = src.indexOf(`async function ${name}`);
