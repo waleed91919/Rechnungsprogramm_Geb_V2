@@ -238,8 +238,13 @@ test('Bautagebuch rendert synchronisierte HTML-Nutzlasten ausschließlich als Te
             createElement: () => ({})
         }
     });
+    const btbPath = path.join(__dirname, '../js/projects/project-bautagebuch.js');
+    if (fs.existsSync(btbPath)) {
+        vm.runInContext(fs.readFileSync(btbPath, 'utf8'), context);
+    }
     vm.runInContext(fs.readFileSync(path.join(__dirname, '../js/projekte.js'), 'utf8'), context);
-    await context.loadProjektBautagebuch(1);
+    const loadFn = context.loadProjektBautagebuch || context.window.loadProjektBautagebuch;
+    await loadFn(1);
     assert.equal(cards.length, 1);
     assert.doesNotMatch(cards[0].innerHTML, /<img/);
     assert.match(cards[0].innerHTML, /&lt;img/);
