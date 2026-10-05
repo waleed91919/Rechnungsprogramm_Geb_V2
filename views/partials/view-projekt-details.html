@@ -1,0 +1,647 @@
+<div id="view-projekt-details" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1200px] mx-auto flex flex-col gap-6">
+
+                <!-- Action Bar & Header -->
+                <div
+                    class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+                    <div
+                        class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full -z-0">
+                    </div>
+                    <div class="relative z-10 flex items-start gap-4">
+                        <button onclick="closeProjektDetails()"
+                            class="mt-1 p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors tooltip"
+                            title="Zurück zur Übersicht">
+                            <span class="material-symbols-outlined">arrow_back</span>
+                        </button>
+                        <div>
+                            <div class="flex items-center gap-3 mb-1">
+                                <h2 id="pd-name" class="text-2xl font-bold text-slate-800 tracking-tight">Projektname
+                                </h2>
+                                <span id="pd-status"
+                                    class="inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-slate-100 text-slate-800 border border-slate-200">Status</span>
+                            </div>
+                            <p id="pd-kunde" class="text-sm text-slate-500 font-medium flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">domain</span> Kunde GmbH
+                            </p>
+                        </div>
+                    </div>
+                    <div class="relative z-10 flex gap-2">
+                        <button id="pd-edit-btn" onclick=""
+                            class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-slate-200">
+                            <span class="material-symbols-outlined text-[18px]">edit</span>
+                            Projekt bearbeiten
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tab Navigation -->
+                <div class="flex items-center gap-2 border-b border-slate-200 bg-white px-4 pt-3 rounded-xl shadow-sm overflow-x-auto">
+                    <button type="button" onclick="switchProjektTab('finanzen')" id="pd-tab-btn-finanzen"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 border-primary text-primary transition-all">
+                        <span class="material-symbols-outlined text-[18px]">account_balance_wallet</span>
+                        Finanzen & Belege
+                    </button>
+                    <button type="button" onclick="switchProjektTab('aufmass')" id="pd-tab-btn-aufmass"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">square_foot</span>
+                        Aufmaß & DA11 (REB 23.003)
+                    </button>
+                    <button type="button" onclick="switchProjektTab('nachtraege')" id="pd-tab-btn-nachtraege"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">post_add</span>
+                        Nachträge (VOB/B)
+                    </button>
+                    <button type="button" onclick="switchProjektTab('bautagebuch')" id="pd-tab-btn-bautagebuch"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">engineering</span>
+                        Bautagebuch & Abnahme
+                    </button>
+                    <button type="button" onclick="switchProjektTab('controlling')" id="pd-tab-btn-controlling"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">monitoring</span>
+                        Controlling & Eingangsrechnungen
+                    </button>
+                    <button type="button" onclick="switchProjektTab('efb')" id="pd-tab-btn-efb"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">price_change</span>
+                        EFB-Preisblätter (221/223)
+                    </button>
+                    <button type="button" onclick="switchProjektTab('kalkulation')" id="pd-tab-btn-kalkulation"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">calculate</span>
+                        Zuschlagskalkulation (EFB 221/222)
+                    </button>
+                    <button type="button" onclick="switchProjektTab('maengel')" id="pd-tab-btn-maengel"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">assignment_late</span>
+                        Projekt-Mängel
+                    </button>
+                </div>
+
+                <!-- TAB 1: FINANZEN & BELEGE -->
+                <div id="pd-panel-finanzen" class="pd-tab-panel flex flex-col gap-6">
+                    <!-- KPIs and Budget Progress -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- KPI Cards -->
+                        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
+                            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-5 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[16px]">account_balance_wallet</span>
+                                Finanz-Übersicht
+                            </h3>
+                            <div class="flex justify-between items-end">
+                                <div>
+                                    <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Abrechenbarer Umsatz</p>
+                                    <p id="pd-umsatz" class="text-3xl font-bold text-slate-800 tracking-tight">€ 0,00</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Budget (Kostenlimit)</p>
+                                    <p id="pd-budget" class="text-xl font-bold text-slate-500 tracking-tight">€ 0,00</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
+                            <div class="flex justify-between items-end mb-3">
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Fortschritt ggü. Budget</span>
+                                <span id="pd-progress-text" class="text-xl font-bold text-slate-700">0%</span>
+                            </div>
+                            <div class="w-full bg-slate-100 rounded-full h-4 mb-4">
+                                <div id="pd-progress-bar" class="bg-primary h-4 rounded-full transition-all duration-700 ease-out" style="width: 0%"></div>
+                            </div>
+                            <div class="flex justify-between items-center text-xs text-slate-500 font-medium">
+                                <span class="flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-primary block"></span>
+                                    Verbraucht: <span id="pd-verbraucht" class="text-slate-700">€ 0,00</span>
+                                </span>
+                                <span class="flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-slate-300 block"></span>
+                                    Rest: <span id="pd-rest" class="text-slate-700">€ 0,00</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notizen Section -->
+                    <div id="pd-notizen-container" class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hidden">
+                        <h3 class="font-semibold text-slate-700 mb-3 flex items-center gap-2 text-sm">
+                            <span class="material-symbols-outlined text-[18px] text-slate-400">description</span>
+                            Projektbeschreibung & Notizen
+                        </h3>
+                        <div id="pd-notizen" class="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100 italic"></div>
+                    </div>
+
+                    <!-- Linked Documents -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Rechnungen -->
+                        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col max-h-[500px]">
+                            <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center sticky top-0">
+                                <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">receipt_long</span>
+                                    Verknüpfte Rechnungen
+                                </h3>
+                                <button type="button" onclick="createRechnungForProjekt()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary bg-primary/10 rounded-md hover:bg-primary/20 transition-colors">
+                                    <span class="material-symbols-outlined text-[16px]">add</span>
+                                    Neue Rechnung
+                                </button>
+                            </div>
+                            <div class="p-0 overflow-auto flex-1">
+                                <table class="w-full text-left whitespace-nowrap">
+                                    <thead class="sticky top-0 bg-white/95 backdrop-blur z-10">
+                                        <tr class="text-slate-400 text-[10px] uppercase tracking-wider border-b border-slate-200">
+                                            <th class="px-4 py-3 font-semibold">Nummer</th>
+                                            <th class="px-4 py-3 font-semibold">Datum</th>
+                                            <th class="px-4 py-3 font-semibold">Status</th>
+                                            <th class="px-4 py-3 font-semibold text-right">Summe</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="pd-rechnungen-body" class="divide-y divide-slate-100 text-sm"></tbody>
+                                </table>
+                                <div id="pd-rechnungen-empty" class="hidden p-10 text-center text-slate-400 text-sm flex flex-col justify-center items-center gap-2 h-full">
+                                    <span class="material-symbols-outlined text-4xl text-slate-200">receipt_long</span>
+                                    Keine Rechnungen zugeordnet.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Angebote -->
+                        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col max-h-[500px]">
+                            <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center sticky top-0">
+                                <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-[18px] text-amber-500">request_quote</span>
+                                    Verknüpfte Angebote
+                                </h3>
+                                <button type="button" onclick="createAngebotForProjekt()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-600 bg-amber-500/10 rounded-md hover:bg-amber-500/20 transition-colors">
+                                    <span class="material-symbols-outlined text-[16px]">add</span>
+                                    Neues Angebot
+                                </button>
+                            </div>
+                            <div class="p-0 overflow-auto flex-1">
+                                <table class="w-full text-left whitespace-nowrap">
+                                    <thead class="sticky top-0 bg-white/95 backdrop-blur z-10">
+                                        <tr class="text-slate-400 text-[10px] uppercase tracking-wider border-b border-slate-200">
+                                            <th class="px-4 py-3 font-semibold">Nummer</th>
+                                            <th class="px-4 py-3 font-semibold text-center">Datum</th>
+                                            <th class="px-4 py-3 font-semibold">Status</th>
+                                            <th class="px-4 py-3 font-semibold text-right">Summe</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="pd-angebote-body" class="divide-y divide-slate-100 text-sm"></tbody>
+                                </table>
+                                <div id="pd-angebote-empty" class="hidden p-10 text-center text-slate-400 text-sm flex flex-col justify-center items-center gap-2 h-full">
+                                    <span class="material-symbols-outlined text-4xl text-slate-200">request_quote</span>
+                                    Keine Angebote zugeordnet.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: AUFMASS & DA11 (REB 23.003) -->
+                <div id="pd-panel-aufmass" class="pd-tab-panel hidden flex-col gap-4">
+                    <!-- Aufmaßcenter Sub-Register Navigation (TopKontor Vorbild) -->
+                    <div class="flex items-center justify-between border-b border-slate-200 bg-white px-6 pt-3 rounded-t-xl">
+                        <div class="flex gap-2">
+                            <button type="button" id="pd-subtab-btn-aufmass-info" onclick="switchAufmassSubTab('info')" class="pd-subtab-btn px-4 py-2.5 text-xs font-bold border-b-2 border-primary text-primary transition-all flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">info</span>
+                                Register Informationen
+                            </button>
+                            <button type="button" id="pd-subtab-btn-aufmass-pos" onclick="switchAufmassSubTab('pos')" class="pd-subtab-btn px-4 py-2.5 text-xs font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition-all flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">view_column</span>
+                                Register Positionen & Detailaufmaß (Split-View)
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2 pb-2">
+                            <button type="button" onclick="openAufmassWizardModal()" class="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-bold rounded-lg shadow hover:bg-primary-dark transition-all">
+                                <span class="material-symbols-outlined text-[16px]">auto_awesome</span>
+                                Aufmaß-Assistent
+                            </button>
+                            <button type="button" onclick="openAufmassUebergabeModal()" class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white text-xs font-bold rounded-lg shadow hover:bg-amber-600 transition-all" title="Aufmaßmengen in Angebot oder Rechnung übergeben">
+                                <span class="material-symbols-outlined text-[16px]">drive_file_move</span>
+                                In Dokument übergeben
+                            </button>
+                            <button type="button" onclick="exportProjektDA11()" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg shadow hover:bg-emerald-700 transition-all" title="DA11 Datei nach REB 23.003 exportieren">
+                                <span class="material-symbols-outlined text-[16px]">file_download</span>
+                                DA11 Export
+                            </button>
+                            <button type="button" onclick="exportProjektGAEBX31()" class="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-xs font-bold rounded-lg shadow hover:bg-teal-700 transition-all" title="GAEB DA XML 3.3 Phase X31 Mengenermittlung exportieren">
+                                <span class="material-symbols-outlined text-[16px]">data_object</span>
+                                GAEB X31 Export
+                            </button>
+                            <button type="button" onclick="importProjektGAEBX31()" class="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 border border-teal-200 text-teal-700 text-xs font-bold rounded-lg hover:bg-teal-100 transition-all" title="GAEB DA XML 3.3 Phase X31 Mengenermittlung importieren">
+                                <span class="material-symbols-outlined text-[16px]">file_open</span>
+                                GAEB X31 Import
+                            </button>
+                            <button type="button" onclick="calculateSchlussaufmassForProjekt()" class="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold rounded-lg hover:bg-indigo-100 transition-all">
+                                <span class="material-symbols-outlined text-[16px]">calculate</span>
+                                Schlussaufmaß
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- SUBTAB 1: REGISTER INFORMATIONEN -->
+                    <div id="pd-subpanel-aufmass-info" class="pd-subpanel flex flex-col gap-6 bg-white p-6 rounded-b-xl border border-t-0 border-slate-200 shadow-sm">
+                        <!-- Liste der Aufmaßblätter -->
+                        <div class="overflow-x-auto rounded-lg border border-slate-200">
+                            <table class="w-full text-left text-sm whitespace-nowrap">
+                                <thead class="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                                    <tr>
+                                        <th class="px-4 py-3">Blatt-Nr.</th>
+                                        <th class="px-4 py-3">Titel / Leistungsbereich</th>
+                                        <th class="px-4 py-3 text-center">Zeilen</th>
+                                        <th class="px-4 py-3 text-center">Status</th>
+                                        <th class="px-4 py-3 text-center">Erstellt</th>
+                                        <th class="px-4 py-3 text-right">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pd-aufmass-blaetter-body" class="divide-y divide-slate-100 bg-white">
+                                    <!-- JS populated -->
+                                </tbody>
+                            </table>
+                            <div id="pd-aufmass-blaetter-empty" class="p-8 text-center text-slate-400 text-sm">
+                                <span class="material-symbols-outlined text-3xl text-slate-300 block mb-1">straighten</span>
+                                Noch keine Aufmaßblätter angelegt. Klicke auf "Aufmaß-Assistent" oder "Neues Aufmaßblatt".
+                            </div>
+                        </div>
+
+                        <!-- GAEB Dropzone -->
+                        <div id="gaeb-dropzone" onclick="document.getElementById('gaeb-file-input').click()" 
+                             class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center bg-slate-50 hover:bg-slate-100/80 transition-colors cursor-pointer">
+                            <span class="material-symbols-outlined text-3xl text-primary mb-1">upload_file</span>
+                            <p class="text-sm font-semibold text-slate-700">GAEB X83 Ausschreibung hierher ziehen oder klicken</p>
+                            <p class="text-xs text-slate-400 mt-0.5">Unterstützt GAEB XML 3.2, 3.3, X83 und DA83 Formate</p>
+                            <input type="file" id="gaeb-file-input" accept=".xml,.x83,.da83" class="hidden" onchange="handleGAEBFileUpload(event)">
+                        </div>
+                    </div>
+
+                    <!-- SUBTAB 2: REGISTER POSITIONEN & DETAILAUFMASS (TOPKONTOR SPLIT-VIEW) -->
+                    <div id="pd-subpanel-aufmass-pos" class="pd-subpanel hidden flex-col md:flex-row gap-4 bg-white p-4 rounded-b-xl border border-t-0 border-slate-200 shadow-sm min-h-[550px]">
+                        <!-- Linke Spalte: GAEB / Projekt-LV Positionen (40%) -->
+                        <div class="w-full md:w-5/12 border border-slate-200 rounded-xl flex flex-col bg-slate-50/50 overflow-hidden">
+                            <div class="p-3 bg-slate-100 border-b border-slate-200 flex justify-between items-center">
+                                <span class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                    <span class="material-symbols-outlined text-[16px] text-primary">format_list_numbered</span>
+                                    1. LV-Positionen (GAEB / Projekt)
+                                </span>
+                                <span id="split-pos-count" class="text-[11px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">0 Pos.</span>
+                            </div>
+                            <div class="p-0 overflow-y-auto flex-1 max-h-[480px]">
+                                <table class="w-full text-left text-xs whitespace-nowrap">
+                                    <thead class="sticky top-0 bg-slate-100 text-slate-600 font-semibold border-b border-slate-200">
+                                        <tr>
+                                            <th class="px-3 py-2 w-20">OZ</th>
+                                            <th class="px-3 py-2">Kurztext</th>
+                                            <th class="px-3 py-2 text-right">Soll</th>
+                                            <th class="px-3 py-2 text-right">Aufmaß</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="split-positions-body" class="divide-y divide-slate-200/60 bg-white">
+                                        <!-- JS populated -->
+                                    </tbody>
+                                </table>
+                                <div id="split-positions-empty" class="p-8 text-center text-slate-400 text-xs">
+                                    Keine LV-Positionen vorhanden.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Rechte Spalte: Detailaufmaß der gewählten Position (60%) -->
+                        <div class="w-full md:w-7/12 border border-slate-200 rounded-xl flex flex-col bg-white overflow-hidden shadow-sm">
+                            <div class="p-3 bg-primary/5 border-b border-primary/20 flex flex-wrap justify-between items-center gap-2">
+                                <div>
+                                    <span id="detail-active-oz" class="font-mono font-bold text-primary text-xs bg-primary/10 px-2 py-0.5 rounded">OZ 01.01.0010</span>
+                                    <span id="detail-active-title" class="text-xs font-bold text-slate-800 ml-1.5">Bitte Position links wählen</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button type="button" onclick="printActiveSplitPositionAufmass()" class="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold rounded shadow-sm transition-all" title="Aktuelle Position als Einzelaufmaß drucken / PDF">
+                                        <span class="material-symbols-outlined text-[14px] text-slate-600">print</span>
+                                        Drucken
+                                    </button>
+                                    <button type="button" onclick="openFormelassistentModal()" class="flex items-center gap-1 px-2.5 py-1 bg-indigo-600 text-white text-xs font-bold rounded shadow hover:bg-indigo-700">
+                                        <span class="material-symbols-outlined text-[14px]">functions</span>
+                                        Formelassistent
+                                    </button>
+                                    <button type="button" onclick="addSplitAufmassZeile()" class="flex items-center gap-1 px-2.5 py-1 bg-primary text-white text-xs font-bold rounded shadow hover:bg-primary-dark">
+                                        <span class="material-symbols-outlined text-[14px]">add</span>
+                                        Zeile +
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="p-3 overflow-y-auto flex-1 max-h-[380px]">
+                                <table class="w-full text-left text-xs whitespace-nowrap">
+                                    <thead class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+                                        <tr>
+                                            <th class="px-2.5 py-2 w-8 text-center text-slate-500">#</th>
+                                            <th class="px-2.5 py-2">Raum / Erläuterung</th>
+                                            <th class="px-2.5 py-2 w-48">Flächenansatz / Formel</th>
+                                            <th class="px-2.5 py-2 w-24 text-center">Vorzeichen (+/−)</th>
+                                            <th class="px-2.5 py-2 w-24 text-right">Ergebnis</th>
+                                            <th class="px-1.5 py-2 w-7 text-center"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="split-detail-zeilen-body" class="divide-y divide-slate-100">
+                                        <!-- JS populated -->
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Footer mit Verschnitt % und Gesamtergebnis -->
+                            <div class="p-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center flex-wrap gap-2 text-xs">
+                                <div class="flex items-center gap-2">
+                                    <label class="font-semibold text-slate-600">Verschnitt / Zuschlag:</label>
+                                    <input type="number" id="split-verschnitt-input" oninput="recalcSplitDetailTotal()" value="0" step="0.5" class="w-16 px-2 py-1 border border-slate-300 rounded text-center font-bold">
+                                    <span class="text-slate-500 font-bold">%</span>
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    <div class="text-right">
+                                        <span class="text-slate-500 block text-[10px] uppercase font-bold">Gesamtaufmaß Pos.:</span>
+                                        <span id="split-detail-total-result" class="font-mono font-bold text-base text-primary">0.00 m²</span>
+                                    </div>
+                                    <button type="button" onclick="saveSplitDetailAufmass()" class="px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg shadow hover:bg-emerald-700 transition-all">
+                                        Aufmaß speichern
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: NACHTRÄGE (VOB/B) -->
+                <div id="pd-panel-nachtraege" class="pd-tab-panel hidden flex-col gap-6">
+                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-6 border-b border-slate-200">
+                            <div>
+                                <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-indigo-600">post_add</span>
+                                    VOB/B Nachtragsverwaltung & Nachtragsangebote
+                                </h3>
+                                <p class="text-xs text-slate-500 mt-1">Erfassung nach VOB/B § 2 Abs. 5 (geändert) & § 2 Abs. 6 (zusätzlich) mit automatischer Rechnungsübernahme</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="applyApprovedNachtraegeToCurrentInvoice()" class="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg shadow hover:bg-emerald-700 transition-all" title="Übernimmt alle genehmigten Nachträge in die nächste Rechnung">
+                                    <span class="material-symbols-outlined text-[16px]">sync_alt</span>
+                                    In Rechnung übernehmen
+                                </button>
+                                <button type="button" onclick="openNachtragModal()" class="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg shadow hover:bg-indigo-700 transition-all">
+                                    <span class="material-symbols-outlined text-[16px]">add</span>
+                                    Neuer Nachtrag
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Summary Cards -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Eingereichte Nachträge</span>
+                                <span id="pd-nachtrag-sum-eingereicht" class="text-xl font-bold text-amber-600">€ 0,00</span>
+                            </div>
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Genehmigte Nachträge</span>
+                                <span id="pd-nachtrag-sum-genehmigt" class="text-xl font-bold text-emerald-600">€ 0,00</span>
+                            </div>
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Abgelehnte Nachträge</span>
+                                <span id="pd-nachtrag-sum-abgelehnt" class="text-xl font-bold text-red-500">€ 0,00</span>
+                            </div>
+                        </div>
+
+                        <!-- Tabelle der Nachträge -->
+                        <div class="overflow-x-auto rounded-lg border border-slate-200">
+                            <table class="w-full text-left text-sm whitespace-nowrap">
+                                <thead class="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                                    <tr>
+                                        <th class="px-4 py-3">Nr.</th>
+                                        <th class="px-4 py-3">Titel</th>
+                                        <th class="px-4 py-3">Rechtsgrundlage</th>
+                                        <th class="px-4 py-3 text-right">Summe Netto</th>
+                                        <th class="px-4 py-3 text-center">Status</th>
+                                        <th class="px-4 py-3 text-right">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pd-nachtraege-body" class="divide-y divide-slate-100 bg-white">
+                                    <!-- JS populated -->
+                                </tbody>
+                            </table>
+                            <div id="pd-nachtraege-empty" class="p-8 text-center text-slate-400 text-sm">
+                                <span class="material-symbols-outlined text-3xl text-slate-300 block mb-1">playlist_add_check</span>
+                                Noch keine Nachträge für dieses Projekt angelegt.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: BAUTAGEBUCH & ABNAHMEPROTOKOLL -->
+                <div id="pd-panel-bautagebuch" class="pd-tab-panel hidden flex-col gap-6">
+                    <!-- Bautagebuch Section -->
+                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-6 border-b border-slate-200">
+                            <div>
+                                <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-amber-600">engineering</span>
+                                    Bautagebuch & Tagesberichte
+                                </h3>
+                                <p class="text-xs text-slate-500 mt-1">Witterung, Anwesenheit von Eigen- & Subpersonal, Großgeräte und VOB/B § 6 Behinderungsanzeigen</p>
+                            </div>
+                            <button type="button" onclick="saveBautagebuchEntry()" class="flex items-center gap-1.5 px-4 py-2 bg-amber-600 text-white text-xs font-bold rounded-lg shadow hover:bg-amber-700 transition-all">
+                                <span class="material-symbols-outlined text-[16px]">save</span>
+                                Tagesbericht speichern
+                            </button>
+                        </div>
+
+                        <!-- Wetter Schnell-Auswahl -->
+                        <div class="flex items-center gap-2 mb-4 p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                            <span class="text-xs font-bold text-slate-600 mr-2">Wetter-Schnellwahl:</span>
+                            <button type="button" onclick="selectWeatherQuick('☀️ Sonnig, 24°C')" class="px-2.5 py-1 bg-white border border-slate-200 rounded text-xs hover:bg-amber-50 font-medium">☀️ Sonnig (24°C)</button>
+                            <button type="button" onclick="selectWeatherQuick('⛅ Bewölkt, 18°C')" class="px-2.5 py-1 bg-white border border-slate-200 rounded text-xs hover:bg-blue-50 font-medium">⛅ Bewölkt (18°C)</button>
+                            <button type="button" onclick="selectWeatherQuick('🌧️ Regen / Nässe, 14°C')" class="px-2.5 py-1 bg-white border border-slate-200 rounded text-xs hover:bg-slate-100 font-medium">🌧️ Regen (14°C)</button>
+                            <button type="button" onclick="selectWeatherQuick('❄️ Frost / Schnee, -2°C')" class="px-2.5 py-1 bg-white border border-slate-200 rounded text-xs hover:bg-indigo-50 font-medium">❄️ Frost (-2°C)</button>
+                            <button type="button" onclick="selectWeatherQuick('💨 Wind / Sturm, 16°C')" class="px-2.5 py-1 bg-white border border-slate-200 rounded text-xs hover:bg-slate-100 font-medium">💨 Windig (16°C)</button>
+                        </div>
+
+                        <!-- Eingabemaske -->
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 text-sm">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Datum</label>
+                                <input type="date" id="bautagebuch-datum" class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm bg-slate-50">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Witterung / Temp (°C)</label>
+                                <input type="text" id="bautagebuch-wetter" placeholder="z.B. Sonnig, 22°C" class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm bg-slate-50">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Eigenpersonal (Anzahl / Std)</label>
+                                <div class="flex gap-2">
+                                    <input type="number" id="bautagebuch-arbeiter" placeholder="Köpfe" class="w-1/2 px-3 py-1.5 border border-slate-300 rounded text-sm bg-slate-50">
+                                    <input type="number" step="0.5" id="bautagebuch-stunden" placeholder="Std" class="w-1/2 px-3 py-1.5 border border-slate-300 rounded text-sm bg-slate-50">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Großgeräte im Einsatz</label>
+                                <input type="text" id="bautagebuch-geraete" placeholder="z.B. Bagger 15t, Kran" class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm bg-slate-50">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-sm">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Tagesbericht & ausgeführte Arbeiten</label>
+                                <textarea id="bautagebuch-notiz" rows="3" placeholder="Beschreibung der erbrachten Tagesleistungen je Bauteil..." class="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-slate-50"></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Behinderungsanzeigen / Bedenken (VOB/B § 6)</label>
+                                <textarea id="bautagebuch-behinderungen" rows="3" placeholder="Bauverzögerungen, fehlende Vorleistungen, Witterungshindernisse..." class="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-slate-50"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Historie der Tagesberichte -->
+                        <div class="mt-6 border-t border-slate-200 pt-4">
+                            <h4 class="font-bold text-slate-700 text-sm mb-3">Erfasste Tagesberichte</h4>
+                            <div id="pd-bautagebuch-list" class="space-y-3">
+                                <!-- JS populated -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Digitales Abnahmeprotokoll Section -->
+                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-6 border-b border-slate-200">
+                            <div>
+                                <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-emerald-600">verified</span>
+                                    Digitales Abnahmeprotokoll (VOB/B § 12 / BGB § 640)
+                                </h3>
+                                <p class="text-xs text-slate-500 mt-1">Rechtssichere Bauabnahme mit Mängelerfassung, Fristen und digitaler Canvas-Signatur</p>
+                            </div>
+                            <button type="button" onclick="openAbnahmeModal()" class="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg shadow hover:bg-emerald-700 transition-all">
+                                <span class="material-symbols-outlined text-[16px]">draw</span>
+                                Abnahmeprotokoll erstellen
+                            </button>
+                        </div>
+
+                        <div id="pd-abnahmen-container" class="space-y-4">
+                            <!-- JS populated -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 5: EINGANGSRECHNUNGEN & CONTROLLING -->
+                <div id="pd-panel-controlling" class="pd-tab-panel hidden flex-col gap-6">
+                    <!-- Controlling KPI Bar -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Auftragsvolumen (Soll)</span>
+                            <span id="ctrl-soll-gesamt" class="text-2xl font-bold text-slate-800">€ 0,00</span>
+                        </div>
+                        <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Ist-Kosten Gesamt</span>
+                            <span id="ctrl-ist-gesamt" class="text-2xl font-bold text-slate-700">€ 0,00</span>
+                        </div>
+                        <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Deckungsbeitrag</span>
+                            <span id="ctrl-deckungsbeitrag" class="text-2xl font-bold text-emerald-600">€ 0,00</span>
+                        </div>
+                        <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Ist-Marge</span>
+                            <span id="ctrl-marge-prozent" class="text-2xl font-bold text-primary">0.0%</span>
+                        </div>
+                    </div>
+
+                    <!-- Kostenaufschlüsselung & § 48b Box -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm lg:col-span-2">
+                            <h4 class="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px] text-slate-500">pie_chart</span>
+                                Ist-Kosten nach Kostenarten
+                            </h4>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                                <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                    <span class="text-xs text-slate-500 block mb-0.5">Lohnkosten</span>
+                                    <span id="ctrl-ist-lohn" class="font-bold text-slate-800">€ 0,00</span>
+                                </div>
+                                <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                    <span class="text-xs text-slate-500 block mb-0.5">Material</span>
+                                    <span id="ctrl-ist-material" class="font-bold text-slate-800">€ 0,00</span>
+                                </div>
+                                <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                    <span class="text-xs text-slate-500 block mb-0.5">Subunternehmer</span>
+                                    <span id="ctrl-ist-sub" class="font-bold text-slate-800">€ 0,00</span>
+                                </div>
+                                <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                    <span class="text-xs text-slate-500 block mb-0.5">Geräte / Sonst.</span>
+                                    <span id="ctrl-ist-geraet" class="font-bold text-slate-800">€ 0,00</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-indigo-50/70 border border-indigo-100 rounded-xl p-6 flex flex-col justify-between">
+                            <div>
+                                <h4 class="font-bold text-indigo-950 text-sm mb-2 flex items-center gap-1.5">
+                                    <span class="material-symbols-outlined text-indigo-600 text-[20px]">shield</span>
+                                    § 48b Bauabzugsteuer Status
+                                </h4>
+                                <p class="text-xs text-indigo-800 leading-relaxed">
+                                    Subunternehmer-Rechnungen ohne gültige Freistellungsbescheinigung unterliegen dem 15 % Steuereinbehalt zur Abführung an das Finanzamt.
+                                </p>
+                            </div>
+                            <div class="mt-4 pt-3 border-t border-indigo-200 flex justify-between items-center text-sm font-bold text-indigo-950">
+                                <span>Einbehaltene Steuer:</span>
+                                <span id="ctrl-bauabzug-gesamt" class="text-base text-indigo-700">€ 0,00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Eingangsrechnungen Tabelle -->
+                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-200">
+                            <h4 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                                <span class="material-symbols-outlined text-slate-600">receipt</span>
+                                Eingangsrechnungen zum Projekt
+                            </h4>
+                            <button type="button" onclick="openEingangsrechnungModal()" class="flex items-center gap-1.5 px-3.5 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow hover:bg-primary-dark transition-all">
+                                <span class="material-symbols-outlined text-[16px]">add</span>
+                                Eingangsrechnung erfassen
+                            </button>
+                        </div>
+
+                        <div class="overflow-x-auto rounded-lg border border-slate-200">
+                            <table class="w-full text-left text-sm whitespace-nowrap">
+                                <thead class="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                                    <tr>
+                                        <th class="px-4 py-3">Beleg-Nr.</th>
+                                        <th class="px-4 py-3">Lieferant / Subunternehmer</th>
+                                        <th class="px-4 py-3">Datum</th>
+                                        <th class="px-4 py-3">Kostenart</th>
+                                        <th class="px-4 py-3 text-right">Netto</th>
+                                        <th class="px-4 py-3 text-right">Brutto</th>
+                                        <th class="px-4 py-3 text-center">§ 48b Status</th>
+                                        <th class="px-4 py-3 text-right">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pd-eingangsrechnungen-body" class="divide-y divide-slate-100 bg-white">
+                                    <!-- JS populated -->
+                                </tbody>
+                            </table>
+                            <div id="pd-eingangsrechnungen-empty" class="p-8 text-center text-slate-400 text-sm">
+                                <span class="material-symbols-outlined text-3xl text-slate-300 block mb-1">receipt</span>
+                                Keine Eingangsrechnungen für dieses Projekt vorhanden.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 6: EFB-PREISBLÄTTER 221 & 223 (VHB BUND) -->
+                <div id="pd-panel-efb" class="pd-tab-panel hidden flex-col gap-6">
+                    <!-- EFBView dynamically renders here -->
+                </div>
+
+                <!-- TAB 7: ZUSCHLAGSKALKULATION & MITTELLOHN -->
+                <div id="pd-panel-kalkulation" class="pd-tab-panel hidden flex-col gap-6">
+                    <!-- KalkulationView dynamically renders here -->
+                </div>
+
+                <!-- TAB 8: PROJEKT-MÄNGELKATASTER -->
+                <div id="pd-panel-maengel" class="pd-tab-panel hidden flex-col gap-6">
+                    <!-- MaengelView dynamically renders here -->
+                </div>
+            </div>
+        </div>

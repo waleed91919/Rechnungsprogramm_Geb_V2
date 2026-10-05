@@ -1,0 +1,95 @@
+<div id="view-kunden" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+
+                <!-- KPI Cards Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gesamtkunden
+                                </p>
+                                <h3 id="kpi-total-kunden" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">group</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Neu in diesem
+                                    Monat</p>
+                                <h3 id="kpi-neue-kunden" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">person_add</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Functional Area -->
+                <div class="flex flex-col gap-3 h-full">
+                    <div
+                        class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                        <div class="flex items-center gap-2">
+                            <div class="relative">
+                                <span
+                                    class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                                <input id="search-kunden"
+                                    class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-64 placeholder:text-slate-400"
+                                    placeholder="Kunde suchen..." type="text">
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <!-- Hidden File Input for CSV Upload -->
+                            <input type="file" id="csv-kunden-upload" accept=".csv" class="hidden"
+                                onchange="importKundenCsv(event)">
+
+                            <button onclick="exportKundenCsv()"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">upload</span>
+                                CSV Export
+                            </button>
+                            <button onclick="document.getElementById('csv-kunden-upload').click()"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">download</span>
+                                CSV Import
+                            </button>
+                            <button onclick="openKundeModal()"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">add</span>
+                                Neuer Kunde
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Data Grid -->
+                    <div
+                        class="border border-slate-300 rounded-md bg-white shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm dense-table">
+                                <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
+                                    <tr>
+                                        <th class="px-4 font-semibold w-16 whitespace-nowrap">ID</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Firmen-/Name</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Adresse</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">PLZ</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Telefonnummer</th>
+                                        <th class="px-4 font-semibold text-right w-24 whitespace-nowrap">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="kunden-table-body" class="divide-y divide-slate-200 text-slate-700 bg-white">
+                                    <!-- JS populated -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>

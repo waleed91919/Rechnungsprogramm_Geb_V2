@@ -1,0 +1,144 @@
+<div id="view-dauerrechnungen" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+
+                <!-- KPI Cards Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Aktive Pläne</p>
+                                <h3 id="kpi-plaene-aktiv" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">event_repeat</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fällige Läufe (diesen Monat)</p>
+                                <h3 id="kpi-faellig-monat" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">schedule_send</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Dauerrechnungs-Umsatz (Monat netto)</p>
+                                <h3 id="kpi-umsatz-dauerrechnungen" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">euro</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Toolbar -->
+                <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                    <div class="flex items-center gap-2">
+                        <div class="relative">
+                            <span
+                                class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                            <input id="search-plaene"
+                                class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-56 placeholder:text-slate-400"
+                                placeholder="Plan suchen..." type="text">
+                        </div>
+                        <select id="filter-plaene-status"
+                            class="px-3 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary">
+                            <option value="alle">Alle</option>
+                            <option value="aktiv">Aktiv</option>
+                            <option value="inaktiv">Inaktiv</option>
+                            <option value="faellig">Fällig</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <label class="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer px-2">
+                            <input type="checkbox" id="dr-auto-erstellen" onchange="toggleDauerrechnungenAuto(this.checked)"
+                                class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                            Auto-Erstellung beim Start
+                        </label>
+                        <button onclick="openSammelModal()"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">receipt_long</span>
+                            Sammelrechnung erstellen
+                        </button>
+                        <button onclick="openGenerierungModal()"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+                            Fällige generieren
+                        </button>
+                        <button onclick="openPlanModal()"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">add</span>
+                            Neuer Plan
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Pläne-Tabelle -->
+                <div class="border border-slate-300 rounded-md bg-white shadow-sm overflow-hidden flex flex-col min-h-[300px]">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm dense-table">
+                            <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
+                                <tr>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Name</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Objekt</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Empfänger</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Rhythmus</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Zeitraum</th>
+                                    <th class="px-4 font-semibold text-right whitespace-nowrap">Netto</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Nächster Lauf</th>
+                                    <th class="px-4 font-semibold text-center whitespace-nowrap">Status</th>
+                                    <th class="px-4 font-semibold text-right w-64 whitespace-nowrap">Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="plaene-table-body" class="divide-y divide-slate-200 text-slate-700 bg-white"></tbody>
+                        </table>
+                    </div>
+                    <div id="plaene-leer" class="hidden p-10 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
+                        <span class="material-symbols-outlined text-4xl text-slate-200">event_repeat</span>
+                        Noch keine Abrechnungspläne angelegt.
+                    </div>
+                </div>
+
+                <!-- Läufe-Panel -->
+                <div id="laeufe-panel" class="hidden bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+                    <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                        <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[18px] text-primary">history</span>
+                            Läufe: <span id="laeufe-plan-name" class="font-bold"></span>
+                        </h3>
+                        <button onclick="closeLaeufePanel()" class="text-slate-400 hover:text-slate-600">
+                            <span class="material-symbols-outlined text-[20px]">close</span>
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm dense-table">
+                            <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
+                                <tr>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Periode</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Rechnungs-Nr.</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Datum</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Fällig</th>
+                                    <th class="px-4 font-semibold text-right whitespace-nowrap">Brutto</th>
+                                    <th class="px-4 font-semibold text-center whitespace-nowrap">Status</th>
+                                    <th class="px-4 font-semibold text-right w-28 whitespace-nowrap">Aktion</th>
+                                </tr>
+                            </thead>
+                            <tbody id="laeufe-table-body" class="divide-y divide-slate-200 text-slate-700 bg-white"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>

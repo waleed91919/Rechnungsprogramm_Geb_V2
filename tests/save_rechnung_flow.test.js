@@ -132,7 +132,13 @@ describe('Invoice Save Workflow & Validation (saveRechnung)', () => {
         window.eval(eRenderCode);
         const eEventsCode = fs.readFileSync(path.join(__dirname, '../js/editor/editor-events.js'), 'utf-8');
         window.eval(eEventsCode);
+        const eSaveRechnungCode = fs.readFileSync(path.join(__dirname, '../js/editor/save/editor-save-rechnung.js'), 'utf-8');
+        const eSaveStatusCode = fs.readFileSync(path.join(__dirname, '../js/editor/save/editor-save-status.js'), 'utf-8');
+        const eSaveAngebotCode = fs.readFileSync(path.join(__dirname, '../js/editor/save/editor-save-angebot.js'), 'utf-8');
         const eSaveCode = fs.readFileSync(path.join(__dirname, '../js/editor/editor-save.js'), 'utf-8');
+        window.eval(eSaveRechnungCode);
+        window.eval(eSaveStatusCode);
+        window.eval(eSaveAngebotCode);
         window.eval(eSaveCode);
         const eExportCode = fs.readFileSync(path.join(__dirname, '../js/editor/editor-export.js'), 'utf-8');
         window.eval(eExportCode);

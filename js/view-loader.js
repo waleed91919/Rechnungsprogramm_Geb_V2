@@ -1,0 +1,2679 @@
+
+const VIEW_TEMPLATES = {
+    "view-angebote": `<div id="view-angebote" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+                <!-- KPI Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 h-32 relative overflow-hidden group">
+                        <div class="flex justify-between items-start z-10 relative">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Offene Angebote
+                                </p>
+                                <h3 id="kpi-angebote-offen" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">history_edu</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Action Bar -->
+                <div
+                    class="flex items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                    <h3 class="font-semibold text-slate-700 pl-2">Angebote verwalten</h3>
+                    <button onclick="openAngebotModal()"
+                        class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow shadow-primary/30 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">add</span>
+                        Neues Angebot
+                    </button>
+                </div>
+                <!-- Table -->
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
+                            <tr>
+                                <th class="px-4 py-3 font-semibold w-32">Angebots-Nr.</th>
+                                <th class="px-4 py-3 font-semibold text-center w-20">Version</th>
+                                <th class="px-4 py-3 font-semibold">Datum</th>
+                                <th class="px-4 py-3 font-semibold">Kunde</th>
+                                <th class="px-4 py-3 font-semibold text-right">Betrag</th>
+                                <th class="px-4 py-3 font-semibold text-center w-36">Status</th>
+                                <th class="px-4 py-3 font-semibold text-right w-44">Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="angebote-table-body" class="divide-y divide-slate-100 text-slate-700">
+                            <!-- JS populated -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>`,
+    "view-artikel": `<div id="view-artikel" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+
+                <!-- KPI Cards Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gesamtsortiment
+                                </p>
+                                <h3 id="kpi-total-items" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">inventory</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Lagerwert (EK)
+                                </p>
+                                <h3 id="kpi-total-value" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">account_balance_wallet</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Geringer
+                                    Bestand</p>
+                                <h3 id="kpi-low-stock" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">warning</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Functional Area -->
+                <div class="flex flex-col gap-3 h-full">
+                    <div
+                        class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                        <div class="flex items-center gap-2">
+                            <div class="relative">
+                                <span
+                                    class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                                <input id="search-artikel"
+                                    class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-64 placeholder:text-slate-400"
+                                    placeholder="Artikel suchen..." type="text">
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <!-- Hidden File Input for CSV Upload -->
+                            <input type="file" id="csv-artikel-upload" accept=".csv" class="hidden"
+                                onchange="importArtikelCsv(event)">
+
+                            <button onclick="exportArtikelCsv()"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">upload</span>
+                                CSV Export
+                            </button>
+                            <button onclick="document.getElementById('csv-artikel-upload').click()"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">download</span>
+                                CSV Import
+                            </button>
+                            <button onclick="if (!window.datanormViewInstance && window.DatanormView) { window.datanormViewInstance = new window.DatanormView(); } if (window.datanormViewInstance) { window.datanormViewInstance.openModal(); }"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">upload_file</span>
+                                DATANORM Import
+                            </button>
+                            <button onclick="openArtikelModal()"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">add</span>
+                                Neuer Artikel
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Data Grid -->
+                    <div
+                        class="border border-slate-300 rounded-md bg-white shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm dense-table">
+                                <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
+                                    <tr>
+                                        <th class="px-4 font-semibold w-12 text-center">Bild</th>
+                                        <th class="px-4 font-semibold w-16 whitespace-nowrap">ID</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Artikelname</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Katalog</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap text-center">Einheit</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap text-right">Bestand</th>
+                                        <th class="px-4 font-semibold text-right whitespace-nowrap">VK-Preis</th>
+                                        <th class="px-4 font-semibold text-right w-24 whitespace-nowrap">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="artikel-table-body"
+                                    class="divide-y divide-slate-200 text-slate-700 bg-white">
+                                    <!-- JS populated -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`,
+    "view-banking": `<div id="view-banking" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1400px] mx-auto flex flex-col gap-6">
+
+                <!-- Header Bar with Account Selection & Quick Actions -->
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2.5 bg-primary/10 rounded-lg text-primary">
+                            <span class="material-symbols-outlined text-2xl">account_balance</span>
+                        </div>
+                        <div>
+                            <h2 class="text-lg font-bold text-slate-800">Banking &amp; OPOS-Zahlungsabgleich</h2>
+                            <p class="text-xs text-slate-500">Elektronische Kontoauszüge, automatischer Rechnungsabgleich &amp; SEPA-Lastschriften</p>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                        <div class="flex items-center gap-2">
+                            <label for="banking-konto-select" class="text-xs font-semibold text-slate-600">Konto:</label>
+                            <select id="banking-konto-select" onchange="onBankingKontoChange(this.value)"
+                                class="text-xs border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3 bg-slate-50 font-medium text-slate-800">
+                            </select>
+                        </div>
+                        <label class="cursor-pointer px-3.5 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 shadow-sm">
+                            <span class="material-symbols-outlined text-sm">upload_file</span>
+                            <span>Kontoauszug importieren</span>
+                            <input type="file" id="banking-file-input" accept=".xml,.camt,.csv,.txt" class="hidden" onchange="handleBankFileUpload(this.files[0])">
+                        </label>
+                        <button onclick="oeffneBankKontoModal()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5">
+                            <span class="material-symbols-outlined text-sm">add_circle</span>
+                            <span>Konto anlegen</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Navigation Tabs -->
+                <div class="border-b border-slate-200 bg-white px-4 rounded-t-xl">
+                    <nav id="banking-tab-nav" class="flex gap-2 -mb-px overflow-x-auto"></nav>
+                </div>
+
+                <!-- Tab 1: Kontoauszug & Import -->
+                <div id="banking-panel-kontoauszug" class="flex flex-col gap-4">
+                    <!-- Dropzone & Filters -->
+                    <div id="banking-dropzone" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 border-dashed">
+                        <div class="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                            <div class="relative w-64">
+                                <span class="material-symbols-outlined absolute left-3 top-2.5 text-slate-400 text-sm">search</span>
+                                <input type="text" id="banking-search-input" placeholder="Suchen nach Partner, VWZ, IBAN..."
+                                    oninput="bankingState.filterSearch = this.value; ladeTransaktionen()"
+                                    class="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary">
+                            </div>
+                            <select id="banking-status-filter" onchange="bankingState.filterStatus = this.value; ladeTransaktionen()"
+                                class="text-xs border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-1.5 px-3">
+                                <option value="">Alle Status</option>
+                                <option value="OFFEN">Nur Offene</option>
+                                <option value="ZUGEORDNET">Zugeordnet</option>
+                                <option value="TEILWEISE_ZUGEORDNET">Teilweise zugeordnet</option>
+                                <option value="IGNORIERT">Ignoriert</option>
+                            </select>
+                            <span class="text-xs text-slate-400 italic">oder Datei hierher ziehen (.xml / .csv)</span>
+                        </div>
+                        <div class="text-xs text-slate-500 flex items-center gap-2">
+                            <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+                            Unterstützte Formate: CAMT.053 XML (ISO 20022), Sparkasse, Volksbanken FIDUCIA, Deutsche Bank, Commerzbank CSV
+                        </div>
+                    </div>
+
+                    <!-- Transactions Table -->
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs font-semibold">
+                                        <th class="px-4 py-3">Buchungstag</th>
+                                        <th class="px-4 py-3">Zahlungspartner</th>
+                                        <th class="px-4 py-3">Verwendungszweck</th>
+                                        <th class="px-4 py-3">Partner-IBAN</th>
+                                        <th class="px-4 py-3 text-right">Betrag</th>
+                                        <th class="px-4 py-3 text-center">Status</th>
+                                        <th class="px-4 py-3 text-center">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="banking-transaktionen-tbody" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: OPOS-Zahlungsabgleich -->
+                <div id="banking-panel-opos" class="hidden flex flex-col gap-4">
+                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
+                        <div class="flex items-center gap-3">
+                            <button onclick="starteOposAbgleich()"
+                                class="px-4 py-2 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
+                                <span class="material-symbols-outlined text-sm">sync</span>
+                                <span>Abgleich jetzt starten</span>
+                            </button>
+                            <button id="banking-opos-auto-btn" onclick="uebernehmeAlleAusgewaehltenMatches()"
+                                class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 shadow-sm">
+                                <span class="material-symbols-outlined text-sm">done_all</span>
+                                <span>Ausgewählte Matches übernehmen</span>
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span id="banking-opos-badge-count" class="px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-semibold">0 Vorschläge</span>
+                            <span class="text-xs text-slate-500" title="Bemessungsgrundlage: §§ 10 Abs. 1, 17 Abs. 1 UStG">Auto-Skonto nach § 14 Abs. 4 Satz 1 Nr. 7 UStG (Toleranz: 2 Tage)</span>
+                        </div>
+                    </div>
+
+                    <!-- Matches Table -->
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs font-semibold">
+                                        <th class="px-4 py-3 w-10 text-center">
+                                            <input type="checkbox" onchange="document.querySelectorAll('.opos-match-checkbox').forEach(cb => cb.checked = this.checked)" checked>
+                                        </th>
+                                        <th class="px-4 py-3 text-center">Score</th>
+                                        <th class="px-4 py-3">Banktransaktion</th>
+                                        <th class="px-4 py-3">Zugeordneter Beleg</th>
+                                        <th class="px-4 py-3 text-right">Zahlbetrag</th>
+                                        <th class="px-4 py-3 text-center">Skonto-Abzug</th>
+                                        <th class="px-4 py-3 text-center">Aktion</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="banking-opos-tbody" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 3: SEPA-Lastschriften -->
+                <div id="banking-panel-sepa" class="hidden flex flex-col gap-6">
+                    <!-- Config & Actions Card -->
+                    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-4">
+                        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-800">SEPA-Lastschriftlauf konfigurieren</h3>
+                                <p class="text-xs text-slate-500">Wählen Sie die fälligen Ausgangsrechnungen aus, um eine Sammellastschrift (pain.008 XML) zu erstellen.</p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <div class="text-right">
+                                    <div class="text-xs text-slate-500">Ausgewählte Summe:</div>
+                                    <div id="sepa-auswahl-summe" class="text-base font-bold text-primary">0,00 €</div>
+                                </div>
+                                <button onclick="erstelleSepaLastschriftlauf()"
+                                    class="px-4 py-2.5 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 shadow-sm">
+                                    <span class="material-symbols-outlined text-sm">download_for_offline</span>
+                                    <span>Lastschriftlauf erstellen &amp; XML generieren</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Ausführungstermin (TARGET2):</label>
+                                <input type="date" id="sepa-ausfuehrungs-datum"
+                                    class="w-full text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">XML-Formatstandard:</label>
+                                <select id="sepa-format-select"
+                                    class="w-full text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                                    <option value="pain.008.001.08" selected>pain.008.001.08 (Aktueller Standard)</option>
+                                    <option value="pain.008.001.02">pain.008.001.02 (Kompatibilitätsmodus)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Verfahren:</label>
+                                <select id="sepa-type-select"
+                                    class="w-full text-xs border border-slate-200 rounded-lg focus:ring-primary focus:border-primary py-2 px-3">
+                                    <option value="CORE" selected>CORE (Basislastschrift - 8 Wochen Rückgabe)</option>
+                                    <option value="B2B">B2B (Firmenlastschrift - Kein Rückgaberecht)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 pt-1">
+                            <input type="checkbox" id="sepa-prenot-frist-bestaetigt" class="rounded border-slate-300 text-primary focus:ring-primary">
+                            <label for="sepa-prenot-frist-bestaetigt" class="text-xs text-slate-700">Verkürzte Pre-Notification-Frist vereinbart (Abweichung von Art. 5.6 SEPA Rulebook wird protokolliert)</label>
+                        </div>
+                    </div>
+
+                    <!-- Invoices with Mandate Table -->
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                            <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Fällige Rechnungen mit Mandat</h4>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50/50 border-b border-slate-200 text-slate-600 text-xs font-semibold">
+                                        <th class="px-4 py-3 w-10 text-center">
+                                            <input type="checkbox" onchange="document.querySelectorAll('.sepa-doc-checkbox').forEach(cb => cb.checked = this.checked); updateSepaAuswahlSumme();" checked>
+                                        </th>
+                                        <th class="px-4 py-3">Rechnung</th>
+                                        <th class="px-4 py-3">Kunde</th>
+                                        <th class="px-4 py-3">Mandatsreferenz</th>
+                                        <th class="px-4 py-3">Debitor-IBAN</th>
+                                        <th class="px-4 py-3 text-right">Offener Betrag</th>
+                                        <th class="px-4 py-3 text-center">Pre-Notification</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sepa-offene-rechnungen-tbody" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Previous SEPA Runs History -->
+                    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                            <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider">Bisherige Lastschriftläufe</h4>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-slate-50/50 border-b border-slate-200 text-slate-600 text-xs font-semibold">
+                                        <th class="px-4 py-3">Lauf-Nummer</th>
+                                        <th class="px-4 py-3">Bankkonto</th>
+                                        <th class="px-4 py-3 text-center">Fälligkeit</th>
+                                        <th class="px-4 py-3 text-center">Anzahl Posten</th>
+                                        <th class="px-4 py-3 text-right">Gesamtsumme</th>
+                                        <th class="px-4 py-3 text-center">Status</th>
+                                        <th class="px-4 py-3 text-center">Aktion</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="sepa-laeufe-tbody" class="divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 4: Konten & Mandate -->
+                <div id="banking-panel-mandate" class="hidden flex flex-col gap-6">
+                    <!-- Own Bank Accounts -->
+                    <div class="flex flex-col gap-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-slate-800 uppercase tracking-wider">Eigene Bankverbindungen</h3>
+                            <button onclick="oeffneBankKontoModal()"
+                                class="px-3 py-1.5 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1">
+                                <span class="material-symbols-outlined text-sm">add</span>
+                                <span>Konto hinzufügen</span>
+                            </button>
+                        </div>
+                        <div id="banking-konten-list" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+                    </div>
+
+                    <!-- Customer SEPA Mandates -->
+                    <div class="flex flex-col gap-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-slate-800 uppercase tracking-wider">SEPA-Mandate der Kunden</h3>
+                            <button onclick="oeffneMandatModal()"
+                                class="px-3 py-1.5 bg-primary hover:bg-primary-dark text-white rounded-lg text-xs font-semibold transition-colors flex items-center gap-1">
+                                <span class="material-symbols-outlined text-sm">add</span>
+                                <span>Mandat anlegen</span>
+                            </button>
+                        </div>
+                        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr class="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs font-semibold">
+                                            <th class="px-4 py-3">Kunde</th>
+                                            <th class="px-4 py-3">Mandatsreferenz</th>
+                                            <th class="px-4 py-3 text-center">Typ</th>
+                                            <th class="px-4 py-3">IBAN</th>
+                                            <th class="px-4 py-3 text-center">Unterschrift</th>
+                                            <th class="px-4 py-3 text-center">Status</th>
+                                            <th class="px-4 py-3 text-center">Aktion</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="banking-mandate-tbody" class="divide-y divide-slate-100"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>`,
+    "view-berichte": `<div id="view-berichte" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6 animate-fade-in fade-in">
+                <!-- Header & Filters -->
+                <div
+                    class="flex flex-col md:flex-row md:justify-between md:items-end gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative">
+                    <div class="absolute right-0 top-0 w-64 h-full bg-gradient-to-l from-indigo-50/50 to-transparent">
+                    </div>
+                    <div class="z-10 relative">
+                        <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight">Erweiterte Berichte</h1>
+                        <p class="text-slate-500 mt-2 font-medium">Ihre Geschäftszahlen auf einen Blick</p>
+                    </div>
+
+                    <div class="z-10 relative flex flex-col items-end gap-2">
+                        <div class="flex items-center bg-white border border-slate-200 rounded-xl p-1 shadow-sm">
+                            <button onclick="openSteuerberichtModal()"
+                                class="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap shadow-sm active:translate-y-px">
+                                <span class="material-symbols-outlined text-[20px]">description</span>
+                                Steuerbericht für StB
+                            </button>
+                            <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                            <div class="relative inline-block text-left">
+                                <button type="button" onclick="toggleReportFilterDropdown()"
+                                    class="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 rounded-lg transition-all cursor-pointer outline-none group">
+                                    <span class="material-symbols-outlined text-slate-400 text-[20px] group-hover:text-primary transition-colors">calendar_month</span>
+                                    <span id="report-time-filter-label">Gesamter Zeitraum</span>
+                                    <span class="material-symbols-outlined text-slate-400 text-[18px] transition-transform duration-200" id="report-filter-arrow">expand_more</span>
+                                </button>
+                                
+                                <div id="report-filter-dropdown" 
+                                    class="hidden absolute right-0 mt-3 w-56 origin-top-right bg-white border border-slate-200 rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] z-[110] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div class="py-1">
+                                        <button onclick="selectReportFilter('this_month', 'Dieser Monat')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">Dieser Monat</button>
+                                        <button onclick="selectReportFilter('last_month', 'Letzter Monat')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">Letzter Monat</button>
+                                        <button onclick="selectReportFilter('this_quarter', 'Dieses Quartal')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">Dieses Quartal</button>
+                                        <button onclick="selectReportFilter('this_year', 'Dieses Jahr')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">Dieses Jahr</button>
+                                        <button onclick="selectReportFilter('last_year', 'Letztes Jahr')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors">Letztes Jahr</button>
+                                        <button onclick="selectReportFilter('all_time', 'Gesamter Zeitraum')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors font-semibold bg-blue-50/30">Gesamter Zeitraum</button>
+                                        <button onclick="selectReportFilter('custom', 'Benutzerdefiniert')" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors border-t border-slate-100">Benutzerdefiniert</button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Hidden select to keep compatibility with existing JS -->
+                                <select id="report-time-filter" class="hidden" onchange="handleReportTimeFilterChange()">
+                                    <option value="this_month">Dieser Monat</option>
+                                    <option value="last_month">Letzter Monat</option>
+                                    <option value="this_quarter">Dieses Quartal</option>
+                                    <option value="this_year">Dieses Jahr</option>
+                                    <option value="last_year">Letztes Jahr</option>
+                                    <option value="all_time" selected>Gesamter Zeitraum</option>
+                                    <option value="custom">Benutzerdefiniert</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="report-custom-dates"
+                            class="hidden flex items-center gap-2 mt-2 bg-slate-50 border border-slate-200 p-2 rounded-lg shadow-inner">
+                            <input type="date" id="report-date-from" onchange="renderBerichte()"
+                                class="text-xs text-slate-700 bg-white border border-slate-300 rounded px-2 py-1 outline-none focus:border-primary">
+                            <span class="text-slate-400 text-xs">-</span>
+                            <input type="date" id="report-date-to" onchange="renderBerichte()"
+                                class="text-xs text-slate-700 bg-white border border-slate-300 rounded px-2 py-1 outline-none focus:border-primary">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- KPI Widgets Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Net Profit Margin -->
+                    <div
+                        class="bg-white rounded-xl border-2 border-emerald-500/20 p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">
+                                    Nettogewinnmarge</p>
+                                <h3 id="report-margin" class="text-3xl font-bold text-emerald-600">0,0%</h3>
+                            </div>
+                            <div class="p-3 bg-emerald-100/50 text-emerald-600 rounded-lg">
+                                <span class="material-symbols-outlined font-bold">savings</span>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-4 font-medium flex gap-2">
+                            <span>Summe Gewinn:</span><span id="report-total-profit"
+                                class="font-bold text-slate-600">0,00 €</span>
+                        </p>
+                        <div class="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-teal-400 group-hover:h-2 transition-all">
+                        </div>
+                    </div>
+
+                    <!-- Gross Revenue -->
+                    <div
+                        class="bg-white rounded-xl border-2 border-blue-500/20 p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">Umsatz (Brutto)
+                                </p>
+                                <h3 id="report-revenue" class="text-3xl font-bold text-blue-600">0,00 €</h3>
+                            </div>
+                            <div class="p-3 bg-blue-100/50 text-primary rounded-lg">
+                                <span class="material-symbols-outlined font-bold">account_balance_wallet</span>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-4 font-medium flex gap-2">
+                            <span>Nur bezahlte Rechnungen</span>
+                        </p>
+                        <div class="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-indigo-400 group-hover:h-2 transition-all">
+                        </div>
+                    </div>
+
+                    <!-- Umsatzsteuer Aktueller Monat -->
+                    <div
+                        class="bg-white rounded-xl border-2 border-primary/20 p-6 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">
+                                    Vorauss. USt.-Zahllast
+                                </p>
+                                <div class="flex items-center gap-2">
+                                    <h3 id="report-monthly-tax" class="text-3xl font-bold text-primary">0,00 €</h3>
+                                </div>
+                            </div>
+                            <div class="p-3 bg-indigo-100/50 text-indigo-600 rounded-lg">
+                                <span class="material-symbols-outlined font-bold">receipt_long</span>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-4 font-medium flex flex-col gap-1">
+                            <span id="report-current-month-label">für diesen Monat</span>
+                            <span class="text-slate-400">aus bezahlten Rechnungen</span>
+                        </p>
+                        <div
+                            class="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-indigo-400 group-hover:h-2 transition-all">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trend Chart Section -->
+                <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-indigo-500">monitoring</span>
+                            Umsatztrend (letzte 6 Monate)
+                        </h2>
+                        <span
+                            class="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded uppercase tracking-wider">Nettoumsatz</span>
+                    </div>
+
+                    <div class="relative h-48 w-full flex items-end justify-between gap-4 px-2 pb-6 mt-4 border-b border-slate-200"
+                        id="report-trend-chart">
+                        <!-- Bars dynamically populated by JS -->
+                        <div class="w-full text-center text-slate-400 py-10">Lade Trenddaten...</div>
+                    </div>
+                </div>
+
+                <!-- Bottom Row: Top Products & Top Customers -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-12">
+
+                    <!-- Top Products Table -->
+                    <div
+                        class="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden max-h-[400px]">
+                        <div
+                            class="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center sticky top-0">
+                            <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-amber-500">star</span>
+                                Bestseller Produkte
+                            </h2>
+                        </div>
+                        <div class="overflow-y-auto flex-1 p-0">
+                            <table class="w-full text-left">
+                                <thead class="sticky top-0 bg-white/95 backdrop-blur z-10">
+                                    <tr
+                                        class="text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                                        <th class="px-5 py-3 font-semibold w-12 text-center">#</th>
+                                        <th class="px-5 py-3 font-semibold">Artikel</th>
+                                        <th class="px-5 py-3 font-semibold text-center">Verkauft</th>
+                                        <th class="px-5 py-3 font-semibold text-right">Umsatz (Netto)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="report-topsellers-body" class="text-sm divide-y divide-slate-50">
+                                    <!-- Populated by JS -->
+                                    <tr>
+                                        <td colspan="4" class="text-center py-8 text-slate-400">Daten werden geladen...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Top Customers Table & Actions -->
+                    <div class="flex flex-col gap-6">
+                        <!-- Table -->
+                        <div
+                            class="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col overflow-hidden flex-1 max-h-[300px]">
+                            <div
+                                class="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center sticky top-0">
+                                <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-emerald-500">emoji_events</span>
+                                    Top-Kunden
+                                </h2>
+                            </div>
+                            <div class="overflow-y-auto flex-1 p-0">
+                                <table class="w-full text-left">
+                                    <thead class="sticky top-0 bg-white/95 backdrop-blur d-10">
+                                        <tr
+                                            class="text-xs uppercase tracking-wider text-slate-500 border-b border-slate-200">
+                                            <th class="px-5 py-3 font-semibold w-12 text-center">#</th>
+                                            <th class="px-5 py-3 font-semibold">Kunde</th>
+                                            <th class="px-5 py-3 font-semibold text-center">Rechnungen</th>
+                                            <th class="px-5 py-3 font-semibold text-right">Umsatz (Netto)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="report-topcustomers-body" class="text-sm divide-y divide-slate-50">
+                                        <!-- Populated by JS -->
+                                        <tr>
+                                            <td colspan="4" class="text-center py-8 text-slate-400">Daten werden
+                                                geladen...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        </div>
+                        </div>
+                        </div>
+        </div>`,
+    "view-dashboard": `<div id="view-dashboard" class="flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+                <!-- KPI Cards Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- KPI 1 -->
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Umsatz
+                                    (Bezahlt)</p>
+                                <h3 id="kpi-umsatz" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                        </div>
+                        <!-- Background Pattern -->
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">payments</span>
+                        </div>
+                    </div>
+                    <!-- KPI 2 -->
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ausstehende
+                                    Zahlungen</p>
+                                <h3 id="kpi-ausstehend" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                            <div id="kpi-ausstehend-count"
+                                class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1 border border-slate-200">
+                                0 Rg.
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">pending_actions</span>
+                        </div>
+                    </div>
+                    <!-- KPI 3 -->
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-red-200 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Überfällige
+                                    Rechnungen</p>
+                                <h3 id="kpi-uberfallig" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                            <div id="kpi-uberfallig-count"
+                                class="bg-red-50 text-red-700 px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1 border border-red-100">
+                                <span class="material-symbols-outlined text-[14px]">warning</span>
+                                0 Rg.
+                            </div>
+                        </div>
+                        <div id="kpi-uberfallig-warning" class="mt-auto z-10 hidden">
+                            <p class="text-xs text-red-600 font-medium whitespace-nowrap overflow-hidden text-ellipsis">
+                                Sofortige Aufmerksamkeit erforderlich</p>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-red-50 transform rotate-12 group-hover:text-red-50 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">error_outline</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Quick Actions & Recent Activity -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Quick Actions -->
+                    <div class="bg-white rounded-md border border-slate-200 shadow-sm p-5 flex flex-col gap-4">
+                        <h3 class="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary text-[20px]">bolt</span>
+                            Schnellaktionen
+                        </h3>
+                        <div class="flex flex-col gap-3">
+                            <button onclick="openRechnungModal()"
+                                class="flex items-center gap-3 p-3 rounded border border-slate-200 hover:border-primary hover:bg-slate-50 transition-colors text-left group">
+                                <span
+                                    class="material-symbols-outlined p-2 rounded bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-colors">receipt_long</span>
+                                <div>
+                                    <p class="font-medium text-slate-800 text-sm">Neue Rechnung</p>
+                                    <p class="text-xs text-slate-500">Rechnung erstellen & senden</p>
+                                </div>
+                            </button>
+                            <button onclick="switchView('kunden'); setTimeout(openKundeModal, 100)"
+                                class="flex items-center gap-3 p-3 rounded border border-slate-200 hover:border-primary hover:bg-slate-50 transition-colors text-left group">
+                                <span
+                                    class="material-symbols-outlined p-2 rounded bg-slate-100 text-slate-600 group-hover:bg-primary group-hover:text-white transition-colors">person_add</span>
+                                <div>
+                                    <p class="font-medium text-slate-800 text-sm">Neuer Kunde</p>
+                                    <p class="text-xs text-slate-500">Kontakt im Adressbuch anlegen</p>
+                                </div>
+                            </button>
+                            <button onclick="switchView('artikel'); setTimeout(openArtikelModal, 100)"
+                                class="flex items-center gap-3 p-3 rounded border border-slate-200 hover:border-primary hover:bg-slate-50 transition-colors text-left group">
+                                <span
+                                    class="material-symbols-outlined p-2 rounded bg-slate-100 text-slate-600 group-hover:bg-primary group-hover:text-white transition-colors">inventory_2</span>
+                                <div>
+                                    <p class="font-medium text-slate-800 text-sm">Neuer Artikel</p>
+                                    <p class="text-xs text-slate-500">Produkt zum Katalog hinzufügen</p>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Recent Invoices -->
+                    <div
+                        class="lg:col-span-2 bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                        <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50/50">
+                            <h3 class="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                                <span class="material-symbols-outlined text-slate-500 text-[20px]">history</span>
+                                Letzte Rechnungen
+                            </h3>
+                            <button onclick="switchView('rechnungen')"
+                                class="text-primary hover:text-primary-dark text-xs font-medium flex items-center">
+                                Alle anzeigen <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm dense-table">
+                                <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
+                                    <tr>
+                                        <th class="px-4 py-2 font-medium">Rechnungs-Nr.</th>
+                                        <th class="px-4 py-2 font-medium">Kunde</th>
+                                        <th class="px-4 py-2 font-medium text-right">Betrag</th>
+                                        <th class="px-4 py-2 font-medium text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dashboard-recent-table-body"
+                                    class="divide-y divide-slate-100 text-slate-700">
+                                    <!-- JS populated -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`,
+    "view-dauerrechnungen": `<div id="view-dauerrechnungen" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+
+                <!-- KPI Cards Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Aktive Pläne</p>
+                                <h3 id="kpi-plaene-aktiv" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">event_repeat</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fällige Läufe (diesen Monat)</p>
+                                <h3 id="kpi-faellig-monat" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">schedule_send</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Dauerrechnungs-Umsatz (Monat netto)</p>
+                                <h3 id="kpi-umsatz-dauerrechnungen" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">euro</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Toolbar -->
+                <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                    <div class="flex items-center gap-2">
+                        <div class="relative">
+                            <span
+                                class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                            <input id="search-plaene"
+                                class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-56 placeholder:text-slate-400"
+                                placeholder="Plan suchen..." type="text">
+                        </div>
+                        <select id="filter-plaene-status"
+                            class="px-3 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary">
+                            <option value="alle">Alle</option>
+                            <option value="aktiv">Aktiv</option>
+                            <option value="inaktiv">Inaktiv</option>
+                            <option value="faellig">Fällig</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <label class="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer px-2">
+                            <input type="checkbox" id="dr-auto-erstellen" onchange="toggleDauerrechnungenAuto(this.checked)"
+                                class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                            Auto-Erstellung beim Start
+                        </label>
+                        <button onclick="openSammelModal()"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">receipt_long</span>
+                            Sammelrechnung erstellen
+                        </button>
+                        <button onclick="openGenerierungModal()"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+                            Fällige generieren
+                        </button>
+                        <button onclick="openPlanModal()"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">add</span>
+                            Neuer Plan
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Pläne-Tabelle -->
+                <div class="border border-slate-300 rounded-md bg-white shadow-sm overflow-hidden flex flex-col min-h-[300px]">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm dense-table">
+                            <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
+                                <tr>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Name</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Objekt</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Empfänger</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Rhythmus</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Zeitraum</th>
+                                    <th class="px-4 font-semibold text-right whitespace-nowrap">Netto</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Nächster Lauf</th>
+                                    <th class="px-4 font-semibold text-center whitespace-nowrap">Status</th>
+                                    <th class="px-4 font-semibold text-right w-64 whitespace-nowrap">Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="plaene-table-body" class="divide-y divide-slate-200 text-slate-700 bg-white"></tbody>
+                        </table>
+                    </div>
+                    <div id="plaene-leer" class="hidden p-10 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
+                        <span class="material-symbols-outlined text-4xl text-slate-200">event_repeat</span>
+                        Noch keine Abrechnungspläne angelegt.
+                    </div>
+                </div>
+
+                <!-- Läufe-Panel -->
+                <div id="laeufe-panel" class="hidden bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+                    <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                        <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[18px] text-primary">history</span>
+                            Läufe: <span id="laeufe-plan-name" class="font-bold"></span>
+                        </h3>
+                        <button onclick="closeLaeufePanel()" class="text-slate-400 hover:text-slate-600">
+                            <span class="material-symbols-outlined text-[20px]">close</span>
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm dense-table">
+                            <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
+                                <tr>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Periode</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Rechnungs-Nr.</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Datum</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Fällig</th>
+                                    <th class="px-4 font-semibold text-right whitespace-nowrap">Brutto</th>
+                                    <th class="px-4 font-semibold text-center whitespace-nowrap">Status</th>
+                                    <th class="px-4 font-semibold text-right w-28 whitespace-nowrap">Aktion</th>
+                                </tr>
+                            </thead>
+                            <tbody id="laeufe-table-body" class="divide-y divide-slate-200 text-slate-700 bg-white"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>`,
+    "view-einstellungen": `<div id="view-einstellungen" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden">
+            <div class="max-w-4xl mx-auto flex flex-col gap-6">
+                <!-- Header -->
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800">Unternehmenseinstellungen</h2>
+                    <p class="text-sm text-slate-500 mt-1">Konfigurieren Sie Ihre Firmendaten für die
+                        Rechnungsausgabe.
+                    </p>
+                </div>
+
+                <!-- Form Section -->
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 bg-slate-50/50">
+                        <h3 class="text-base font-semibold text-slate-800 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[20px] text-primary">storefront</span>
+                            Firmendaten
+                        </h3>
+                    </div>
+                    <div class="p-6 space-y-6">
+                        <!-- Logo Upload -->
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Firmenlogo (für
+                                Rechnungen)</label>
+                            <div class="flex items-center gap-6">
+                                <div id="logo-preview-container"
+                                    class="w-32 h-32 border-2 border-dashed border-slate-300 rounded-lg flex items-center justify-center bg-slate-50 overflow-hidden relative group">
+                                    <span
+                                        class="material-symbols-outlined text-4xl text-slate-300 group-hover:text-slate-400 transition-colors">image</span>
+                                    <img id="logo-preview-image"
+                                        class="absolute inset-0 w-full h-full object-contain hidden bg-white">
+                                </div>
+                                <div class="flex flex-col gap-2">
+                                    <input type="file" id="logo-upload" accept="image/png, image/jpeg, image/jpg"
+                                        class="text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-primary/5 file:text-primary hover:file:bg-primary/10 cursor-pointer transition-colors"
+                                        onchange="handleLogoUpload(event)">
+                                    <p class="text-xs text-slate-500 leading-snug">Max. 2MB. Erlaubte Formate: PNG,
+                                        JPG.<br>Dies wird auf der A4-Rechnung oben links platziert.</p>
+                                    <button type="button" onclick="removeLogo()"
+                                        class="text-sm text-red-500 hover:text-red-700 font-medium self-start mt-1 hidden focus:outline-none"
+                                        id="btn-remove-logo">Logo entfernen</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Firm/Address -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="col-span-1 md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Unternehmensname</label>
+                                <input type="text" id="setting-firma"
+                                    class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all"
+                                    placeholder="Musterfirma GmbH">
+                            </div>
+                            <div class="col-span-1 md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Adresse</label>
+                                <textarea id="setting-adresse" rows="3"
+                                    class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all resize-y"
+                                    placeholder="Musterstraße 1&#10;12345 Musterstadt"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bank Details -->
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 bg-slate-50/50">
+                        <h3 class="text-base font-semibold text-slate-800 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[20px] text-primary">account_balance</span>
+                            Bankverbindung & Steuernummer
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 flex-wrap">
+                            <div class="col-span-1 min-w-0">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Bankname</label>
+                                <input type="text" id="setting-bank"
+                                    class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all truncate"
+                                    placeholder="Musterbank eG">
+                            </div>
+                            <div class="col-span-1 min-w-0">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Steuernummer /
+                                    USt-IdNr.</label>
+                                <input type="text" id="setting-steuer"
+                                    class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all uppercase truncate"
+                                    placeholder="DE123456789">
+                            </div>
+                            <div class="col-span-1 md:col-span-2">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">IBAN</label>
+                                <input type="text" id="setting-iban"
+                                    class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm font-mono text-slate-600 transition-all uppercase tracking-wider"
+                                    placeholder="DEXX XXXX XXXX XXXX XXXX XX">
+                            </div>
+                            <div class="col-span-1 min-w-0">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">BIC</label>
+                                <input type="text" id="setting-bic"
+                                    class="w-full px-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm font-mono text-slate-600 transition-all uppercase tracking-wider"
+                                    placeholder="XXXXXXXXXXX">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment Conditions -->
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 bg-slate-50/50">
+                        <h3 class="text-base font-semibold text-slate-800 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[20px] text-primary">payments</span>
+                            Zahlungskonditionen & Mahnwesen
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <!-- Standard Zahlungsziel -->
+                            <div class="col-span-1 md:col-span-3 pb-4 border-b border-slate-100">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">Standard-Zahlungsziel (Tage)</label>
+                                <div class="relative w-full md:w-64">
+                                    <input type="number" id="setting-zahlungsziel" min="0"
+                                        class="w-full pl-4 pr-12 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all"
+                                        placeholder="14">
+                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                        <span class="text-slate-400 text-sm">Tage</span>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-1.5">Standardfrist für neue Rechnungen.</p>
+                            </div>
+
+                            <!-- Mahnstufe 1 -->
+                            <div class="col-span-1">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">1. Mahnung (Erinnerung)</label>
+                                <div class="relative">
+                                    <input type="number" id="setting-mahngebuehr-1" step="0.01" min="0"
+                                        class="w-full pl-4 pr-10 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all"
+                                        placeholder="0.00">
+                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                        <span class="text-slate-400 text-sm">€</span>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-1.5">Meist kostenlos oder geringe Gebühr.</p>
+                            </div>
+
+                            <!-- Mahnstufe 2 -->
+                            <div class="col-span-1">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">2. Mahnung</label>
+                                <div class="relative">
+                                    <input type="number" id="setting-mahngebuehr-2" step="0.01" min="0"
+                                        class="w-full pl-4 pr-10 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all"
+                                        placeholder="5.00">
+                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                        <span class="text-slate-400 text-sm">€</span>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-1.5">Erhöhte Gebühr für Verzug.</p>
+                            </div>
+
+                            <!-- Mahnstufe 3 -->
+                            <div class="col-span-1">
+                                <label class="block text-sm font-medium text-slate-700 mb-1.5">3. Mahnung (Letzte)</label>
+                                <div class="relative">
+                                    <input type="number" id="setting-mahngebuehr-3" step="0.01" min="0"
+                                        class="w-full pl-4 pr-10 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all"
+                                        placeholder="10.00">
+                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                        <span class="text-slate-400 text-sm">€</span>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-1.5">Maximale Mahngebühr.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Allgemeine Einstellungen Section -->
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 bg-slate-50/50">
+                        <h3 class="text-base font-semibold text-slate-800 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[20px] text-primary">toggle_on</span>
+                            Erweiterte Optionen
+                        </h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-slate-800">Manuelle Rechnungs- und Angebotsnummern</p>
+                                <p class="text-xs text-slate-500 mt-1">Erlaubt das manuelle Bearbeiten der automatisch generierten Nummern im Editor.</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="setting-manuelle-nummern" class="sr-only peer">
+                                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                            </label>
+                        </div>
+                        
+                        <div class="h-px bg-slate-200 my-4"></div>
+
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-slate-800">Standard-Eingabemodus (Preise)</p>
+                                <p class="text-xs text-slate-500 mt-1">Wählen Sie, ob Preise standardmäßig als Netto (zzgl. MwSt.) oder Brutto (inkl. MwSt.) eingegeben werden.</p>
+                            </div>
+                            <div class="w-48">
+                                <select id="setting-eingabemodus" class="w-full pl-3 pr-8 py-2 bg-white border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all cursor-pointer">
+                                    <option value="netto">Netto (B2B / Firmen)</option>
+                                    <option value="brutto">Brutto (B2C / Privat)</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="h-px bg-slate-200 my-4"></div>
+
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-slate-800">Unternehmensart / Handwerks-Modul</p>
+                                <p class="text-xs text-slate-500 mt-1">Wählen Sie, ob es sich um ein Handwerksunternehmen (mit Handwerks-Modul: VOB, Bauabzugsteuer §48, §13b, Abschlagsrechnungen) oder ein normales Unternehmen (Handel / Dienstleistung) handelt.</p>
+                            </div>
+                            <div class="w-64">
+                                <select id="setting-unternehmensart" class="w-full pl-3 pr-8 py-2 bg-white border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all cursor-pointer">
+                                    <option value="handwerk">Handwerksunternehmen (Handwerksmodul: VOB, § 48b, § 13b, Abschlagsrechnungen)</option>
+                                    <option value="bauhauptgewerbe">Bauhauptgewerbe (B2G XRechnung, Subunternehmer §48b, VOB/B, GAEB)</option>
+                                    <option value="b2g_spezialist">Öffentliche Aufträge / B2G Spezialist (XRechnung & ZUGFeRD, Leitweg-ID Pflicht)</option>
+                                    <option value="normal">Normales Unternehmen (Handel / Dienstleistung)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="h-px bg-slate-200 my-4"></div>
+
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-slate-800">Rechnungsvorlage (Design)</p>
+                                <p class="text-xs text-slate-500 mt-1">Wählen Sie das Design für Ihre PDF-Rechnungen und Angebote.</p>
+                            </div>
+                            <div class="w-48">
+                                <select id="setting-rechnungsvorlage" class="w-full pl-3 pr-8 py-2 bg-white border border-slate-300 rounded-md focus:ring-2 focus:ring-primary/20 focus:border-primary text-sm shadow-sm transition-all cursor-pointer">
+                                    <option value="klassisch">Klassisch (Standard)</option>
+                                    <option value="modern">Modern (Elegant)</option>
+                                    <option value="minimalistisch">Minimalistisch</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Datensicherung / Revisionssichere Auto-Backup Engine (GoBD & GFS) -->
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 bg-amber-50/50 flex flex-wrap items-center justify-between gap-4">
+                        <div>
+                            <h3 class="text-base font-semibold text-amber-800 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[22px] text-amber-600">verified_user</span>
+                                Revisionssichere Auto-Backup Engine (GoBD &amp; GFS)
+                            </h3>
+                            <p class="text-xs text-amber-700/80 mt-0.5">
+                                Unterbrechungsfreie Online-Snapshots, Gzip-Kompression, SHA-256 Prüfsummen und Grandfather-Father-Son Aufbewahrungsfristen
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button type="button" onclick="createDatabaseBackup()"
+                                class="px-4 py-2 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 shadow-md shadow-amber-600/20 transition-all flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">cloud_upload</span>
+                                Jetzt sichern (Snapshot &amp; Gzip)
+                            </button>
+                            <button type="button" onclick="exportManualBackup()"
+                                class="px-3 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">file_download</span>
+                                Export (.sqlite)
+                            </button>
+                            <button type="button" onclick="openRestoreModal()"
+                                class="px-3 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">settings_backup_restore</span>
+                                Datei wiederherstellen
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-6 space-y-6">
+                        <!-- Auto-Backup Konfiguration -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-800">Automatisches Hintergrund-Intervall</p>
+                                    <p class="text-xs text-slate-500">Regelmäßige Online-Sicherungen im laufenden Betrieb.</p>
+                                </div>
+                                <select id="setting-backup-interval" class="w-36 px-3 py-1.5 bg-white border border-slate-300 rounded-md text-xs font-semibold focus:ring-2 focus:ring-primary/20">
+                                    <option value="2">Alle 2 Stunden</option>
+                                    <option value="4">Alle 4 Stunden (Standard)</option>
+                                    <option value="8">Alle 8 Stunden</option>
+                                    <option value="24">Einmal täglich (24h)</option>
+                                    <option value="0">Deaktiviert</option>
+                                </select>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-800">Auto-Backup beim Schließen</p>
+                                    <p class="text-xs text-slate-500">Erstellt vor dem Beenden einen finalen Snapshot.</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="setting-backup-auto-exit" class="sr-only peer" checked>
+                                    <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-600"></div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Backup Historie Tabelle -->
+                        <div>
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                    <span class="material-symbols-outlined text-[16px] text-amber-600">history</span>
+                                    Archivierte GoBD-Sicherungen &amp; GFS-Historie
+                                </h4>
+                                <button type="button" onclick="loadBackupHistory()" class="text-xs text-primary font-semibold hover:underline flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-[14px]">refresh</span>
+                                    Aktualisieren
+                                </button>
+                            </div>
+                            <div class="overflow-x-auto rounded-lg border border-slate-200">
+                                <table class="w-full text-left text-xs whitespace-nowrap">
+                                    <thead class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+                                        <tr>
+                                            <th class="px-3 py-2.5">Dateiname</th>
+                                            <th class="px-3 py-2.5">Erstellt am</th>
+                                            <th class="px-3 py-2.5">Typ / Auslöser</th>
+                                            <th class="px-3 py-2.5">GFS Generation</th>
+                                            <th class="px-3 py-2.5 text-right">Größe (Gz / Raw)</th>
+                                            <th class="px-3 py-2.5">SHA-256 Hash</th>
+                                            <th class="px-3 py-2.5 text-right">Aktionen</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="backup-history-body" class="divide-y divide-slate-100 bg-white">
+                                        <!-- JS populated -->
+                                    </tbody>
+                                </table>
+                                <div id="backup-history-empty" class="p-6 text-center text-slate-400 text-xs">
+                                    Noch keine archivierten Backups vorhanden. Klicken Sie oben auf "Jetzt sichern".
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- E-Mail-Versand (SMTP) Section (F10) -->
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 bg-emerald-50/50 flex items-center justify-between gap-3">
+                        <h3 class="text-base font-semibold text-emerald-800 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[20px] text-emerald-600">mail</span>
+                            E-Mail-Versand (SMTP)
+                        </h3>
+                        <button type="button" onclick="openSmtpKontoModal()"
+                            class="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded shadow-sm transition-colors">
+                            <span class="material-symbols-outlined text-[16px]">add</span>
+                            Konto hinzufügen
+                        </button>
+                    </div>
+                    <div class="p-6">
+                        <div id="smtp-konten-liste" class="flex flex-col gap-3"></div>
+                        <div id="smtp-konten-leer" class="p-4 text-center text-slate-400 text-xs">
+                            Noch kein SMTP-Konto eingerichtet – Rechnungen können noch nicht per E-Mail versendet werden.
+                        </div>
+                        <div class="mt-4 rounded-md bg-blue-50 border border-blue-200 px-4 py-3 text-xs text-blue-800 leading-relaxed">
+                            Gmail/Google Workspace: App-Passwort erforderlich (Konto mit 2-Faktor). Port 465 = SSL (implizit), Port 587 = STARTTLS.
+                            Passwörter werden verschlüsselt im Betriebssystem-Schlüsselspeicher abgelegt und niemals im Klartext angezeigt.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- E-Mail-Texte Section (F10) -->
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <div class="p-6 border-b border-slate-200 bg-slate-50">
+                        <h3 class="text-base font-semibold text-slate-800 flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[20px] text-primary">drafts</span>
+                            E-Mail-Texte &amp; Signatur
+                        </h3>
+                    </div>
+                    <div class="p-6 flex flex-col gap-5">
+                        <p class="text-xs text-slate-500 -mt-2">
+                            Verfügbare Platzhalter: <code class="bg-slate-100 px-1 rounded">{{kunde_name}}</code>
+                            <code class="bg-slate-100 px-1 rounded">{{nummer}}</code> <code class="bg-slate-100 px-1 rounded">{{datum}}</code>
+                            <code class="bg-slate-100 px-1 rounded">{{faelligkeit}}</code> <code class="bg-slate-100 px-1 rounded">{{betrag_brutto}}</code>
+                            <code class="bg-slate-100 px-1 rounded">{{firmenname}}</code> – leer gelassene Felder verwenden Standardtexte.
+                        </p>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Text für Rechnungen</label>
+                            <textarea id="setting-email-text-rechnung" rows="5"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-y"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Text für Mahnungen</label>
+                            <textarea id="setting-email-text-mahnung" rows="5"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-y"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Text für Angebote</label>
+                            <textarea id="setting-email-text-angebot" rows="5"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-y"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Signatur</label>
+                            <textarea id="setting-email-signatur" rows="3" placeholder="Mit freundlichen Grüßen&#10;Ihr W-LINK Team"
+                                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-sm resize-y"></textarea>
+                        </div>
+                        <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer w-fit">
+                            <input type="checkbox" id="setting-email-pdf-kopie" class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
+                            <span>Gesendete PDFs zusätzlich lokal im Postausgangs-Ordner speichern</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Einstellungen -> Ansicht & Fokusmodus (NAV-1, B-13) -->
+                <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mt-2">
+                    <div class="flex items-start justify-between">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-outlined text-primary text-xl">filter_center_focus</span>
+                                <h3 class="text-sm font-bold text-slate-800">UI-Fokusmodus &amp; Modulsichtbarkeit</h3>
+                            </div>
+                            <p class="text-xs text-slate-500 max-w-xl">
+                                Der Fokusmodus reduziert die Seitennavigation auf den Kern-Workflow (Kunde → Angebot → Projekt/Aufmaß → Rechnung → OPOS → Export). Experimentelle Module (SOKA-BAU, IDS Connect, Mängelkataster, Putzplan) werden ausgeblendet.
+                            </p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="setting-experimental-module" class="sr-only peer" onchange="toggleExperimentalModules(this.checked)">
+                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                        </label>
+                    </div>
+                    <div class="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+                        <span>Aktiver Modus: <strong id="fokusmodus-status-text" class="text-slate-600 font-medium">Fokusmodus aktiv (Kern-Views)</strong></span>
+                        <span class="italic">Wirksam sofort für diesen Arbeitsplatz</span>
+                    </div>
+                </div>
+
+                <!-- Save Action -->
+                <div class="flex justify-end gap-3 mt-4 mb-12">
+                    <button type="button" onclick="loadEinstellungenToForm()"
+                        class="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 shadow-sm transition-colors focus:ring-2 focus:ring-slate-200">Zurücksetzen</button>
+                    <button type="button" onclick="saveEinstellungen()"
+                        class="px-6 py-2.5 text-sm font-semibold text-white bg-primary rounded-lg hover:bg-primary-dark shadow-md transition-colors flex items-center gap-2 focus:ring-2 focus:ring-primary/50">
+                        <span class="material-symbols-outlined text-[18px]">save</span>
+                        Einstellungen Speichern
+                    </button>
+                </div>
+            </div>
+        </div>`,
+    "view-grosshandel": `<div id="view-grosshandel" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6"></div>`,
+    "view-kunden": `<div id="view-kunden" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+
+                <!-- KPI Cards Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gesamtkunden
+                                </p>
+                                <h3 id="kpi-total-kunden" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">group</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Neu in diesem
+                                    Monat</p>
+                                <h3 id="kpi-neue-kunden" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">person_add</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Functional Area -->
+                <div class="flex flex-col gap-3 h-full">
+                    <div
+                        class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                        <div class="flex items-center gap-2">
+                            <div class="relative">
+                                <span
+                                    class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                                <input id="search-kunden"
+                                    class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-64 placeholder:text-slate-400"
+                                    placeholder="Kunde suchen..." type="text">
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <!-- Hidden File Input for CSV Upload -->
+                            <input type="file" id="csv-kunden-upload" accept=".csv" class="hidden"
+                                onchange="importKundenCsv(event)">
+
+                            <button onclick="exportKundenCsv()"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">upload</span>
+                                CSV Export
+                            </button>
+                            <button onclick="document.getElementById('csv-kunden-upload').click()"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">download</span>
+                                CSV Import
+                            </button>
+                            <button onclick="openKundeModal()"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">add</span>
+                                Neuer Kunde
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Data Grid -->
+                    <div
+                        class="border border-slate-300 rounded-md bg-white shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm dense-table">
+                                <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
+                                    <tr>
+                                        <th class="px-4 font-semibold w-16 whitespace-nowrap">ID</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Firmen-/Name</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Adresse</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">PLZ</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Telefonnummer</th>
+                                        <th class="px-4 font-semibold text-right w-24 whitespace-nowrap">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="kunden-table-body" class="divide-y divide-slate-200 text-slate-700 bg-white">
+                                    <!-- JS populated -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`,
+    "view-maengel": `<div id="view-maengel" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <!-- MaengelView dynamically renders here -->
+        </div>`,
+    "view-objekt-details": `<div id="view-objekt-details" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1200px] mx-auto flex flex-col gap-6">
+
+                <!-- Header Card -->
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+                    <div class="relative z-10 flex items-start gap-4">
+                        <button onclick="closeObjektDetails()"
+                            class="mt-1 p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"
+                            title="Zurück zur Übersicht">
+                            <span class="material-symbols-outlined">arrow_back</span>
+                        </button>
+                        <div>
+                            <div class="flex items-center gap-3 mb-1">
+                                <h2 id="od-name" class="text-2xl font-bold text-slate-800 tracking-tight">Objekt</h2>
+                                <span id="od-typ"
+                                    class="inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-slate-100 text-slate-800 border border-slate-200">Typ</span>
+                            </div>
+                            <p id="od-pfad" class="text-sm text-slate-500 font-medium"></p>
+                            <p id="od-empfaenger" class="text-sm text-slate-600 font-medium flex items-center gap-1.5 mt-1"></p>
+                        </div>
+                    </div>
+                    <div class="relative z-10 flex gap-2">
+                        <button id="od-edit-btn"
+                            class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-slate-200">
+                            <span class="material-symbols-outlined text-[18px]">edit</span>
+                            Bearbeiten
+                        </button>
+                        <button id="od-neu-btn"
+                            class="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-primary/20">
+                            <span class="material-symbols-outlined text-[18px]">add</span>
+                            Neu anlegen
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tab Navigation -->
+                <div class="flex items-center gap-2 border-b border-slate-200 bg-white px-4 pt-3 rounded-xl shadow-sm overflow-x-auto">
+                    <button type="button" onclick="switchObjektTab('stammdaten')" id="od-tab-btn-stammdaten"
+                        class="od-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 border-primary text-primary transition-all">
+                        <span class="material-symbols-outlined text-[18px]">info</span>
+                        Stammdaten
+                    </button>
+                    <button type="button" onclick="switchObjektTab('struktur')" id="od-tab-btn-struktur"
+                        class="od-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">account_tree</span>
+                        Struktur
+                    </button>
+                    <button type="button" onclick="switchObjektTab('historie')" id="od-tab-btn-historie"
+                        class="od-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">history</span>
+                        Historie
+                    </button>
+                    <button type="button" onclick="switchObjektTab('abrechnungsplaene')" id="od-tab-btn-abrechnungsplaene"
+                        class="od-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">event_repeat</span>
+                        Abrechnungspläne
+                    </button>
+                </div>
+
+                <!-- TAB 1: STAMMDATEN -->
+                <div id="od-panel-stammdaten" class="od-tab-panel flex flex-col gap-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[16px]">info</span>
+                                Stammdaten
+                            </h3>
+                            <dl id="od-stammdaten" class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm"></dl>
+                        </div>
+                        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
+                            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[16px]">analytics</span>
+                                Kennzahlen
+                            </h3>
+                            <div id="od-kennzahlen" class="grid grid-cols-2 gap-4"></div>
+                            <div id="od-notizen" class="mt-4 text-sm text-slate-600 whitespace-pre-wrap leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100 italic hidden"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: STRUKTUR -->
+                <div id="od-panel-struktur" class="od-tab-panel hidden flex-col gap-4">
+                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px] text-primary">account_tree</span>
+                                Unterobjekte
+                            </h3>
+                            <button type="button" onclick="odEbeneHinzufuegen()"
+                                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary bg-primary/10 rounded-md hover:bg-primary/20 transition-colors">
+                                <span class="material-symbols-outlined text-[16px]">add</span>
+                                Ebene hinzufügen
+                            </button>
+                        </div>
+                        <ul id="od-struktur-baum" class="text-sm space-y-1"></ul>
+                        <div id="od-struktur-leer" class="hidden p-8 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
+                            <span class="material-symbols-outlined text-4xl text-slate-200">account_tree</span>
+                            Keine Unterobjekte vorhanden.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: HISTORIE -->
+                <div id="od-panel-historie" class="od-tab-panel hidden flex-col gap-4">
+                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+                        <div class="p-4 border-b border-slate-200 bg-slate-50 flex flex-wrap justify-between items-center gap-2">
+                            <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px] text-primary">history</span>
+                                Beleg-Historie (inkl. Unterobjekte)
+                            </h3>
+                            <div class="flex items-center gap-1" id="od-hist-filter">
+                                <button type="button" data-filter="alle" onclick="setObjektHistorieFilter('alle')"
+                                    class="od-hist-chip px-3 py-1 text-xs font-semibold rounded-full bg-primary text-white">Alle</button>
+                                <button type="button" data-filter="RE" onclick="setObjektHistorieFilter('RE')"
+                                    class="od-hist-chip px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">Nur Rechnungen</button>
+                                <button type="button" data-filter="AN" onclick="setObjektHistorieFilter('AN')"
+                                    class="od-hist-chip px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">Nur Angebote</button>
+                                <button type="button" data-filter="DAUERRECHNUNG" onclick="setObjektHistorieFilter('DAUERRECHNUNG')"
+                                    class="od-hist-chip px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">Dauerrechnungs-Läufe</button>
+                            </div>
+                        </div>
+                        <div class="overflow-auto max-h-[480px]">
+                            <table class="w-full text-left text-sm dense-table">
+                                <thead class="bg-slate-100 text-slate-600 border-b border-slate-300 sticky top-0">
+                                    <tr>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Nr.</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Typ</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Datum</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Fällig</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Status</th>
+                                        <th class="px-4 font-semibold text-right whitespace-nowrap">Netto</th>
+                                        <th class="px-4 font-semibold text-right whitespace-nowrap">Brutto</th>
+                                        <th class="px-4 font-semibold whitespace-nowrap">Kunde</th>
+                                        <th class="px-4 font-semibold text-right w-20 whitespace-nowrap">Aktion</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="od-historie-body" class="divide-y divide-slate-200 text-slate-700 bg-white"></tbody>
+                                <tfoot id="od-historie-summen" class="bg-slate-50 border-t border-slate-300 text-xs font-semibold text-slate-600"></tfoot>
+                            </table>
+                        </div>
+                        <div id="od-historie-leer" class="hidden p-10 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
+                            <span class="material-symbols-outlined text-4xl text-slate-200">history</span>
+                            Keine Belege vorhanden.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: ABRECHNUNGSPLÄNE (Container, wird von F2 befüllt) -->
+                <div id="od-panel-abrechnungsplaene" class="od-tab-panel hidden flex-col gap-4">
+                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
+                        <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                            <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px] text-primary">event_repeat</span>
+                                Abrechnungspläne für dieses Objekt
+                            </h3>
+                            <button type="button" onclick="odOpenPlanModal()"
+                                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary bg-primary/10 rounded-md hover:bg-primary/20 transition-colors">
+                                <span class="material-symbols-outlined text-[16px]">add</span>
+                                Plan anlegen
+                            </button>
+                        </div>
+                        <div id="od-plaene-inhalt" class="p-6"></div>
+                    </div>
+                </div>
+            </div>
+        </div>`,
+    "view-objekte": `<div id="view-objekte" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+
+                <!-- KPI Cards Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Liegenschaften</p>
+                                <h3 id="kpi-anzahl-liegenschaften" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">apartment</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gebäude</p>
+                                <h3 id="kpi-anzahl-gebaeude" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">domain</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fläche gesamt (m²)</p>
+                                <h3 id="kpi-flaeche-gesamt" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">square_foot</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Toolbar -->
+                <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="relative">
+                            <span
+                                class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                            <input id="search-objekte"
+                                class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-64 placeholder:text-slate-400"
+                                placeholder="Name, Nr., Ort, Raumtyp suchen..." type="text">
+                        </div>
+                        <select id="filter-objekte-status" onchange="renderObjekte()"
+                            class="px-3 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-slate-700">
+                            <option value="alle">Alle Status</option>
+                            <option value="aktiv" selected>Nur Aktive</option>
+                            <option value="inaktiv">Nur Inaktive</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="exportObjekteCSV()" type="button"
+                            class="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-sm font-semibold rounded shadow-sm transition-all"
+                            title="Objektstruktur als CSV exportieren">
+                            <span class="material-symbols-outlined text-[18px] text-slate-600">download</span>
+                            Export CSV
+                        </button>
+                        <button onclick="openObjektModal('LIEGENSCHAFT')"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">add</span>
+                            Neue Liegenschaft
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Data Grid -->
+                <div class="border border-slate-300 rounded-md bg-white shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm dense-table">
+                            <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
+                                <tr>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Objekt-Nr.</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Name</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Typ</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Ort</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Rechnungsempfänger</th>
+                                    <th class="px-4 font-semibold text-right whitespace-nowrap">Fläche Σ</th>
+                                    <th class="px-4 font-semibold text-center whitespace-nowrap">Status</th>
+                                    <th class="px-4 font-semibold text-right w-56 whitespace-nowrap">Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="objekte-table-body" class="divide-y divide-slate-200 text-slate-700 bg-white">
+                                <!-- JS populated -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>`,
+    "view-projekt-details": `<div id="view-projekt-details" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1200px] mx-auto flex flex-col gap-6">
+
+                <!-- Action Bar & Header -->
+                <div
+                    class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
+                    <div
+                        class="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full -z-0">
+                    </div>
+                    <div class="relative z-10 flex items-start gap-4">
+                        <button onclick="closeProjektDetails()"
+                            class="mt-1 p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors tooltip"
+                            title="Zurück zur Übersicht">
+                            <span class="material-symbols-outlined">arrow_back</span>
+                        </button>
+                        <div>
+                            <div class="flex items-center gap-3 mb-1">
+                                <h2 id="pd-name" class="text-2xl font-bold text-slate-800 tracking-tight">Projektname
+                                </h2>
+                                <span id="pd-status"
+                                    class="inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-slate-100 text-slate-800 border border-slate-200">Status</span>
+                            </div>
+                            <p id="pd-kunde" class="text-sm text-slate-500 font-medium flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">domain</span> Kunde GmbH
+                            </p>
+                        </div>
+                    </div>
+                    <div class="relative z-10 flex gap-2">
+                        <button id="pd-edit-btn" onclick=""
+                            class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-slate-200">
+                            <span class="material-symbols-outlined text-[18px]">edit</span>
+                            Projekt bearbeiten
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tab Navigation -->
+                <div class="flex items-center gap-2 border-b border-slate-200 bg-white px-4 pt-3 rounded-xl shadow-sm overflow-x-auto">
+                    <button type="button" onclick="switchProjektTab('finanzen')" id="pd-tab-btn-finanzen"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 border-primary text-primary transition-all">
+                        <span class="material-symbols-outlined text-[18px]">account_balance_wallet</span>
+                        Finanzen & Belege
+                    </button>
+                    <button type="button" onclick="switchProjektTab('aufmass')" id="pd-tab-btn-aufmass"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">square_foot</span>
+                        Aufmaß & DA11 (REB 23.003)
+                    </button>
+                    <button type="button" onclick="switchProjektTab('nachtraege')" id="pd-tab-btn-nachtraege"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">post_add</span>
+                        Nachträge (VOB/B)
+                    </button>
+                    <button type="button" onclick="switchProjektTab('bautagebuch')" id="pd-tab-btn-bautagebuch"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">engineering</span>
+                        Bautagebuch & Abnahme
+                    </button>
+                    <button type="button" onclick="switchProjektTab('controlling')" id="pd-tab-btn-controlling"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">monitoring</span>
+                        Controlling & Eingangsrechnungen
+                    </button>
+                    <button type="button" onclick="switchProjektTab('efb')" id="pd-tab-btn-efb"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">price_change</span>
+                        EFB-Preisblätter (221/223)
+                    </button>
+                    <button type="button" onclick="switchProjektTab('kalkulation')" id="pd-tab-btn-kalkulation"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">calculate</span>
+                        Zuschlagskalkulation (EFB 221/222)
+                    </button>
+                    <button type="button" onclick="switchProjektTab('maengel')" id="pd-tab-btn-maengel"
+                        class="pd-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">assignment_late</span>
+                        Projekt-Mängel
+                    </button>
+                </div>
+
+                <!-- TAB 1: FINANZEN & BELEGE -->
+                <div id="pd-panel-finanzen" class="pd-tab-panel flex flex-col gap-6">
+                    <!-- KPIs and Budget Progress -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- KPI Cards -->
+                        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
+                            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-5 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[16px]">account_balance_wallet</span>
+                                Finanz-Übersicht
+                            </h3>
+                            <div class="flex justify-between items-end">
+                                <div>
+                                    <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Abrechenbarer Umsatz</p>
+                                    <p id="pd-umsatz" class="text-3xl font-bold text-slate-800 tracking-tight">€ 0,00</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Budget (Kostenlimit)</p>
+                                    <p id="pd-budget" class="text-xl font-bold text-slate-500 tracking-tight">€ 0,00</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
+                            <div class="flex justify-between items-end mb-3">
+                                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Fortschritt ggü. Budget</span>
+                                <span id="pd-progress-text" class="text-xl font-bold text-slate-700">0%</span>
+                            </div>
+                            <div class="w-full bg-slate-100 rounded-full h-4 mb-4">
+                                <div id="pd-progress-bar" class="bg-primary h-4 rounded-full transition-all duration-700 ease-out" style="width: 0%"></div>
+                            </div>
+                            <div class="flex justify-between items-center text-xs text-slate-500 font-medium">
+                                <span class="flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-primary block"></span>
+                                    Verbraucht: <span id="pd-verbraucht" class="text-slate-700">€ 0,00</span>
+                                </span>
+                                <span class="flex items-center gap-1.5">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-slate-300 block"></span>
+                                    Rest: <span id="pd-rest" class="text-slate-700">€ 0,00</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Notizen Section -->
+                    <div id="pd-notizen-container" class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hidden">
+                        <h3 class="font-semibold text-slate-700 mb-3 flex items-center gap-2 text-sm">
+                            <span class="material-symbols-outlined text-[18px] text-slate-400">description</span>
+                            Projektbeschreibung & Notizen
+                        </h3>
+                        <div id="pd-notizen" class="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100 italic"></div>
+                    </div>
+
+                    <!-- Linked Documents -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Rechnungen -->
+                        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col max-h-[500px]">
+                            <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center sticky top-0">
+                                <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-[18px] text-primary">receipt_long</span>
+                                    Verknüpfte Rechnungen
+                                </h3>
+                                <button type="button" onclick="createRechnungForProjekt()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary bg-primary/10 rounded-md hover:bg-primary/20 transition-colors">
+                                    <span class="material-symbols-outlined text-[16px]">add</span>
+                                    Neue Rechnung
+                                </button>
+                            </div>
+                            <div class="p-0 overflow-auto flex-1">
+                                <table class="w-full text-left whitespace-nowrap">
+                                    <thead class="sticky top-0 bg-white/95 backdrop-blur z-10">
+                                        <tr class="text-slate-400 text-[10px] uppercase tracking-wider border-b border-slate-200">
+                                            <th class="px-4 py-3 font-semibold">Nummer</th>
+                                            <th class="px-4 py-3 font-semibold">Datum</th>
+                                            <th class="px-4 py-3 font-semibold">Status</th>
+                                            <th class="px-4 py-3 font-semibold text-right">Summe</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="pd-rechnungen-body" class="divide-y divide-slate-100 text-sm"></tbody>
+                                </table>
+                                <div id="pd-rechnungen-empty" class="hidden p-10 text-center text-slate-400 text-sm flex flex-col justify-center items-center gap-2 h-full">
+                                    <span class="material-symbols-outlined text-4xl text-slate-200">receipt_long</span>
+                                    Keine Rechnungen zugeordnet.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Angebote -->
+                        <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col max-h-[500px]">
+                            <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center sticky top-0">
+                                <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-[18px] text-amber-500">request_quote</span>
+                                    Verknüpfte Angebote
+                                </h3>
+                                <button type="button" onclick="createAngebotForProjekt()" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-amber-600 bg-amber-500/10 rounded-md hover:bg-amber-500/20 transition-colors">
+                                    <span class="material-symbols-outlined text-[16px]">add</span>
+                                    Neues Angebot
+                                </button>
+                            </div>
+                            <div class="p-0 overflow-auto flex-1">
+                                <table class="w-full text-left whitespace-nowrap">
+                                    <thead class="sticky top-0 bg-white/95 backdrop-blur z-10">
+                                        <tr class="text-slate-400 text-[10px] uppercase tracking-wider border-b border-slate-200">
+                                            <th class="px-4 py-3 font-semibold">Nummer</th>
+                                            <th class="px-4 py-3 font-semibold text-center">Datum</th>
+                                            <th class="px-4 py-3 font-semibold">Status</th>
+                                            <th class="px-4 py-3 font-semibold text-right">Summe</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="pd-angebote-body" class="divide-y divide-slate-100 text-sm"></tbody>
+                                </table>
+                                <div id="pd-angebote-empty" class="hidden p-10 text-center text-slate-400 text-sm flex flex-col justify-center items-center gap-2 h-full">
+                                    <span class="material-symbols-outlined text-4xl text-slate-200">request_quote</span>
+                                    Keine Angebote zugeordnet.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: AUFMASS & DA11 (REB 23.003) -->
+                <div id="pd-panel-aufmass" class="pd-tab-panel hidden flex-col gap-4">
+                    <!-- Aufmaßcenter Sub-Register Navigation (TopKontor Vorbild) -->
+                    <div class="flex items-center justify-between border-b border-slate-200 bg-white px-6 pt-3 rounded-t-xl">
+                        <div class="flex gap-2">
+                            <button type="button" id="pd-subtab-btn-aufmass-info" onclick="switchAufmassSubTab('info')" class="pd-subtab-btn px-4 py-2.5 text-xs font-bold border-b-2 border-primary text-primary transition-all flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">info</span>
+                                Register Informationen
+                            </button>
+                            <button type="button" id="pd-subtab-btn-aufmass-pos" onclick="switchAufmassSubTab('pos')" class="pd-subtab-btn px-4 py-2.5 text-xs font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-700 transition-all flex items-center gap-1.5">
+                                <span class="material-symbols-outlined text-[16px]">view_column</span>
+                                Register Positionen & Detailaufmaß (Split-View)
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2 pb-2">
+                            <button type="button" onclick="openAufmassWizardModal()" class="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-white text-xs font-bold rounded-lg shadow hover:bg-primary-dark transition-all">
+                                <span class="material-symbols-outlined text-[16px]">auto_awesome</span>
+                                Aufmaß-Assistent
+                            </button>
+                            <button type="button" onclick="openAufmassUebergabeModal()" class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white text-xs font-bold rounded-lg shadow hover:bg-amber-600 transition-all" title="Aufmaßmengen in Angebot oder Rechnung übergeben">
+                                <span class="material-symbols-outlined text-[16px]">drive_file_move</span>
+                                In Dokument übergeben
+                            </button>
+                            <button type="button" onclick="exportProjektDA11()" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg shadow hover:bg-emerald-700 transition-all" title="DA11 Datei nach REB 23.003 exportieren">
+                                <span class="material-symbols-outlined text-[16px]">file_download</span>
+                                DA11 Export
+                            </button>
+                            <button type="button" onclick="exportProjektGAEBX31()" class="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 text-white text-xs font-bold rounded-lg shadow hover:bg-teal-700 transition-all" title="GAEB DA XML 3.3 Phase X31 Mengenermittlung exportieren">
+                                <span class="material-symbols-outlined text-[16px]">data_object</span>
+                                GAEB X31 Export
+                            </button>
+                            <button type="button" onclick="importProjektGAEBX31()" class="flex items-center gap-1.5 px-3 py-1.5 bg-teal-50 border border-teal-200 text-teal-700 text-xs font-bold rounded-lg hover:bg-teal-100 transition-all" title="GAEB DA XML 3.3 Phase X31 Mengenermittlung importieren">
+                                <span class="material-symbols-outlined text-[16px]">file_open</span>
+                                GAEB X31 Import
+                            </button>
+                            <button type="button" onclick="calculateSchlussaufmassForProjekt()" class="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold rounded-lg hover:bg-indigo-100 transition-all">
+                                <span class="material-symbols-outlined text-[16px]">calculate</span>
+                                Schlussaufmaß
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- SUBTAB 1: REGISTER INFORMATIONEN -->
+                    <div id="pd-subpanel-aufmass-info" class="pd-subpanel flex flex-col gap-6 bg-white p-6 rounded-b-xl border border-t-0 border-slate-200 shadow-sm">
+                        <!-- Liste der Aufmaßblätter -->
+                        <div class="overflow-x-auto rounded-lg border border-slate-200">
+                            <table class="w-full text-left text-sm whitespace-nowrap">
+                                <thead class="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                                    <tr>
+                                        <th class="px-4 py-3">Blatt-Nr.</th>
+                                        <th class="px-4 py-3">Titel / Leistungsbereich</th>
+                                        <th class="px-4 py-3 text-center">Zeilen</th>
+                                        <th class="px-4 py-3 text-center">Status</th>
+                                        <th class="px-4 py-3 text-center">Erstellt</th>
+                                        <th class="px-4 py-3 text-right">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pd-aufmass-blaetter-body" class="divide-y divide-slate-100 bg-white">
+                                    <!-- JS populated -->
+                                </tbody>
+                            </table>
+                            <div id="pd-aufmass-blaetter-empty" class="p-8 text-center text-slate-400 text-sm">
+                                <span class="material-symbols-outlined text-3xl text-slate-300 block mb-1">straighten</span>
+                                Noch keine Aufmaßblätter angelegt. Klicke auf "Aufmaß-Assistent" oder "Neues Aufmaßblatt".
+                            </div>
+                        </div>
+
+                        <!-- GAEB Dropzone -->
+                        <div id="gaeb-dropzone" onclick="document.getElementById('gaeb-file-input').click()" 
+                             class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center bg-slate-50 hover:bg-slate-100/80 transition-colors cursor-pointer">
+                            <span class="material-symbols-outlined text-3xl text-primary mb-1">upload_file</span>
+                            <p class="text-sm font-semibold text-slate-700">GAEB X83 Ausschreibung hierher ziehen oder klicken</p>
+                            <p class="text-xs text-slate-400 mt-0.5">Unterstützt GAEB XML 3.2, 3.3, X83 und DA83 Formate</p>
+                            <input type="file" id="gaeb-file-input" accept=".xml,.x83,.da83" class="hidden" onchange="handleGAEBFileUpload(event)">
+                        </div>
+                    </div>
+
+                    <!-- SUBTAB 2: REGISTER POSITIONEN & DETAILAUFMASS (TOPKONTOR SPLIT-VIEW) -->
+                    <div id="pd-subpanel-aufmass-pos" class="pd-subpanel hidden flex-col md:flex-row gap-4 bg-white p-4 rounded-b-xl border border-t-0 border-slate-200 shadow-sm min-h-[550px]">
+                        <!-- Linke Spalte: GAEB / Projekt-LV Positionen (40%) -->
+                        <div class="w-full md:w-5/12 border border-slate-200 rounded-xl flex flex-col bg-slate-50/50 overflow-hidden">
+                            <div class="p-3 bg-slate-100 border-b border-slate-200 flex justify-between items-center">
+                                <span class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                                    <span class="material-symbols-outlined text-[16px] text-primary">format_list_numbered</span>
+                                    1. LV-Positionen (GAEB / Projekt)
+                                </span>
+                                <span id="split-pos-count" class="text-[11px] font-semibold text-slate-500 bg-white px-2 py-0.5 rounded border border-slate-200">0 Pos.</span>
+                            </div>
+                            <div class="p-0 overflow-y-auto flex-1 max-h-[480px]">
+                                <table class="w-full text-left text-xs whitespace-nowrap">
+                                    <thead class="sticky top-0 bg-slate-100 text-slate-600 font-semibold border-b border-slate-200">
+                                        <tr>
+                                            <th class="px-3 py-2 w-20">OZ</th>
+                                            <th class="px-3 py-2">Kurztext</th>
+                                            <th class="px-3 py-2 text-right">Soll</th>
+                                            <th class="px-3 py-2 text-right">Aufmaß</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="split-positions-body" class="divide-y divide-slate-200/60 bg-white">
+                                        <!-- JS populated -->
+                                    </tbody>
+                                </table>
+                                <div id="split-positions-empty" class="p-8 text-center text-slate-400 text-xs">
+                                    Keine LV-Positionen vorhanden.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Rechte Spalte: Detailaufmaß der gewählten Position (60%) -->
+                        <div class="w-full md:w-7/12 border border-slate-200 rounded-xl flex flex-col bg-white overflow-hidden shadow-sm">
+                            <div class="p-3 bg-primary/5 border-b border-primary/20 flex flex-wrap justify-between items-center gap-2">
+                                <div>
+                                    <span id="detail-active-oz" class="font-mono font-bold text-primary text-xs bg-primary/10 px-2 py-0.5 rounded">OZ 01.01.0010</span>
+                                    <span id="detail-active-title" class="text-xs font-bold text-slate-800 ml-1.5">Bitte Position links wählen</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button type="button" onclick="printActiveSplitPositionAufmass()" class="flex items-center gap-1 px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold rounded shadow-sm transition-all" title="Aktuelle Position als Einzelaufmaß drucken / PDF">
+                                        <span class="material-symbols-outlined text-[14px] text-slate-600">print</span>
+                                        Drucken
+                                    </button>
+                                    <button type="button" onclick="openFormelassistentModal()" class="flex items-center gap-1 px-2.5 py-1 bg-indigo-600 text-white text-xs font-bold rounded shadow hover:bg-indigo-700">
+                                        <span class="material-symbols-outlined text-[14px]">functions</span>
+                                        Formelassistent
+                                    </button>
+                                    <button type="button" onclick="addSplitAufmassZeile()" class="flex items-center gap-1 px-2.5 py-1 bg-primary text-white text-xs font-bold rounded shadow hover:bg-primary-dark">
+                                        <span class="material-symbols-outlined text-[14px]">add</span>
+                                        Zeile +
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="p-3 overflow-y-auto flex-1 max-h-[380px]">
+                                <table class="w-full text-left text-xs whitespace-nowrap">
+                                    <thead class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+                                        <tr>
+                                            <th class="px-2.5 py-2 w-8 text-center text-slate-500">#</th>
+                                            <th class="px-2.5 py-2">Raum / Erläuterung</th>
+                                            <th class="px-2.5 py-2 w-48">Flächenansatz / Formel</th>
+                                            <th class="px-2.5 py-2 w-24 text-center">Vorzeichen (+/−)</th>
+                                            <th class="px-2.5 py-2 w-24 text-right">Ergebnis</th>
+                                            <th class="px-1.5 py-2 w-7 text-center"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="split-detail-zeilen-body" class="divide-y divide-slate-100">
+                                        <!-- JS populated -->
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Footer mit Verschnitt % und Gesamtergebnis -->
+                            <div class="p-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center flex-wrap gap-2 text-xs">
+                                <div class="flex items-center gap-2">
+                                    <label class="font-semibold text-slate-600">Verschnitt / Zuschlag:</label>
+                                    <input type="number" id="split-verschnitt-input" oninput="recalcSplitDetailTotal()" value="0" step="0.5" class="w-16 px-2 py-1 border border-slate-300 rounded text-center font-bold">
+                                    <span class="text-slate-500 font-bold">%</span>
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    <div class="text-right">
+                                        <span class="text-slate-500 block text-[10px] uppercase font-bold">Gesamtaufmaß Pos.:</span>
+                                        <span id="split-detail-total-result" class="font-mono font-bold text-base text-primary">0.00 m²</span>
+                                    </div>
+                                    <button type="button" onclick="saveSplitDetailAufmass()" class="px-4 py-2 bg-emerald-600 text-white font-bold rounded-lg shadow hover:bg-emerald-700 transition-all">
+                                        Aufmaß speichern
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: NACHTRÄGE (VOB/B) -->
+                <div id="pd-panel-nachtraege" class="pd-tab-panel hidden flex-col gap-6">
+                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-6 border-b border-slate-200">
+                            <div>
+                                <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-indigo-600">post_add</span>
+                                    VOB/B Nachtragsverwaltung & Nachtragsangebote
+                                </h3>
+                                <p class="text-xs text-slate-500 mt-1">Erfassung nach VOB/B § 2 Abs. 5 (geändert) & § 2 Abs. 6 (zusätzlich) mit automatischer Rechnungsübernahme</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="applyApprovedNachtraegeToCurrentInvoice()" class="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg shadow hover:bg-emerald-700 transition-all" title="Übernimmt alle genehmigten Nachträge in die nächste Rechnung">
+                                    <span class="material-symbols-outlined text-[16px]">sync_alt</span>
+                                    In Rechnung übernehmen
+                                </button>
+                                <button type="button" onclick="openNachtragModal()" class="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg shadow hover:bg-indigo-700 transition-all">
+                                    <span class="material-symbols-outlined text-[16px]">add</span>
+                                    Neuer Nachtrag
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Summary Cards -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Eingereichte Nachträge</span>
+                                <span id="pd-nachtrag-sum-eingereicht" class="text-xl font-bold text-amber-600">€ 0,00</span>
+                            </div>
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Genehmigte Nachträge</span>
+                                <span id="pd-nachtrag-sum-genehmigt" class="text-xl font-bold text-emerald-600">€ 0,00</span>
+                            </div>
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-1">Abgelehnte Nachträge</span>
+                                <span id="pd-nachtrag-sum-abgelehnt" class="text-xl font-bold text-red-500">€ 0,00</span>
+                            </div>
+                        </div>
+
+                        <!-- Tabelle der Nachträge -->
+                        <div class="overflow-x-auto rounded-lg border border-slate-200">
+                            <table class="w-full text-left text-sm whitespace-nowrap">
+                                <thead class="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                                    <tr>
+                                        <th class="px-4 py-3">Nr.</th>
+                                        <th class="px-4 py-3">Titel</th>
+                                        <th class="px-4 py-3">Rechtsgrundlage</th>
+                                        <th class="px-4 py-3 text-right">Summe Netto</th>
+                                        <th class="px-4 py-3 text-center">Status</th>
+                                        <th class="px-4 py-3 text-right">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pd-nachtraege-body" class="divide-y divide-slate-100 bg-white">
+                                    <!-- JS populated -->
+                                </tbody>
+                            </table>
+                            <div id="pd-nachtraege-empty" class="p-8 text-center text-slate-400 text-sm">
+                                <span class="material-symbols-outlined text-3xl text-slate-300 block mb-1">playlist_add_check</span>
+                                Noch keine Nachträge für dieses Projekt angelegt.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: BAUTAGEBUCH & ABNAHMEPROTOKOLL -->
+                <div id="pd-panel-bautagebuch" class="pd-tab-panel hidden flex-col gap-6">
+                    <!-- Bautagebuch Section -->
+                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-6 border-b border-slate-200">
+                            <div>
+                                <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-amber-600">engineering</span>
+                                    Bautagebuch & Tagesberichte
+                                </h3>
+                                <p class="text-xs text-slate-500 mt-1">Witterung, Anwesenheit von Eigen- & Subpersonal, Großgeräte und VOB/B § 6 Behinderungsanzeigen</p>
+                            </div>
+                            <button type="button" onclick="saveBautagebuchEntry()" class="flex items-center gap-1.5 px-4 py-2 bg-amber-600 text-white text-xs font-bold rounded-lg shadow hover:bg-amber-700 transition-all">
+                                <span class="material-symbols-outlined text-[16px]">save</span>
+                                Tagesbericht speichern
+                            </button>
+                        </div>
+
+                        <!-- Wetter Schnell-Auswahl -->
+                        <div class="flex items-center gap-2 mb-4 p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                            <span class="text-xs font-bold text-slate-600 mr-2">Wetter-Schnellwahl:</span>
+                            <button type="button" onclick="selectWeatherQuick('☀️ Sonnig, 24°C')" class="px-2.5 py-1 bg-white border border-slate-200 rounded text-xs hover:bg-amber-50 font-medium">☀️ Sonnig (24°C)</button>
+                            <button type="button" onclick="selectWeatherQuick('⛅ Bewölkt, 18°C')" class="px-2.5 py-1 bg-white border border-slate-200 rounded text-xs hover:bg-blue-50 font-medium">⛅ Bewölkt (18°C)</button>
+                            <button type="button" onclick="selectWeatherQuick('🌧️ Regen / Nässe, 14°C')" class="px-2.5 py-1 bg-white border border-slate-200 rounded text-xs hover:bg-slate-100 font-medium">🌧️ Regen (14°C)</button>
+                            <button type="button" onclick="selectWeatherQuick('❄️ Frost / Schnee, -2°C')" class="px-2.5 py-1 bg-white border border-slate-200 rounded text-xs hover:bg-indigo-50 font-medium">❄️ Frost (-2°C)</button>
+                            <button type="button" onclick="selectWeatherQuick('💨 Wind / Sturm, 16°C')" class="px-2.5 py-1 bg-white border border-slate-200 rounded text-xs hover:bg-slate-100 font-medium">💨 Windig (16°C)</button>
+                        </div>
+
+                        <!-- Eingabemaske -->
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 text-sm">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Datum</label>
+                                <input type="date" id="bautagebuch-datum" class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm bg-slate-50">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Witterung / Temp (°C)</label>
+                                <input type="text" id="bautagebuch-wetter" placeholder="z.B. Sonnig, 22°C" class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm bg-slate-50">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Eigenpersonal (Anzahl / Std)</label>
+                                <div class="flex gap-2">
+                                    <input type="number" id="bautagebuch-arbeiter" placeholder="Köpfe" class="w-1/2 px-3 py-1.5 border border-slate-300 rounded text-sm bg-slate-50">
+                                    <input type="number" step="0.5" id="bautagebuch-stunden" placeholder="Std" class="w-1/2 px-3 py-1.5 border border-slate-300 rounded text-sm bg-slate-50">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Großgeräte im Einsatz</label>
+                                <input type="text" id="bautagebuch-geraete" placeholder="z.B. Bagger 15t, Kran" class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm bg-slate-50">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-sm">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Tagesbericht & ausgeführte Arbeiten</label>
+                                <textarea id="bautagebuch-notiz" rows="3" placeholder="Beschreibung der erbrachten Tagesleistungen je Bauteil..." class="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-slate-50"></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Behinderungsanzeigen / Bedenken (VOB/B § 6)</label>
+                                <textarea id="bautagebuch-behinderungen" rows="3" placeholder="Bauverzögerungen, fehlende Vorleistungen, Witterungshindernisse..." class="w-full px-3 py-2 border border-slate-300 rounded text-sm bg-slate-50"></textarea>
+                            </div>
+                        </div>
+
+                        <!-- Historie der Tagesberichte -->
+                        <div class="mt-6 border-t border-slate-200 pt-4">
+                            <h4 class="font-bold text-slate-700 text-sm mb-3">Erfasste Tagesberichte</h4>
+                            <div id="pd-bautagebuch-list" class="space-y-3">
+                                <!-- JS populated -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Digitales Abnahmeprotokoll Section -->
+                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-6 border-b border-slate-200">
+                            <div>
+                                <h3 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-emerald-600">verified</span>
+                                    Digitales Abnahmeprotokoll (VOB/B § 12 / BGB § 640)
+                                </h3>
+                                <p class="text-xs text-slate-500 mt-1">Rechtssichere Bauabnahme mit Mängelerfassung, Fristen und digitaler Canvas-Signatur</p>
+                            </div>
+                            <button type="button" onclick="openAbnahmeModal()" class="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg shadow hover:bg-emerald-700 transition-all">
+                                <span class="material-symbols-outlined text-[16px]">draw</span>
+                                Abnahmeprotokoll erstellen
+                            </button>
+                        </div>
+
+                        <div id="pd-abnahmen-container" class="space-y-4">
+                            <!-- JS populated -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 5: EINGANGSRECHNUNGEN & CONTROLLING -->
+                <div id="pd-panel-controlling" class="pd-tab-panel hidden flex-col gap-6">
+                    <!-- Controlling KPI Bar -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Auftragsvolumen (Soll)</span>
+                            <span id="ctrl-soll-gesamt" class="text-2xl font-bold text-slate-800">€ 0,00</span>
+                        </div>
+                        <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Ist-Kosten Gesamt</span>
+                            <span id="ctrl-ist-gesamt" class="text-2xl font-bold text-slate-700">€ 0,00</span>
+                        </div>
+                        <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Deckungsbeitrag</span>
+                            <span id="ctrl-deckungsbeitrag" class="text-2xl font-bold text-emerald-600">€ 0,00</span>
+                        </div>
+                        <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+                            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">Ist-Marge</span>
+                            <span id="ctrl-marge-prozent" class="text-2xl font-bold text-primary">0.0%</span>
+                        </div>
+                    </div>
+
+                    <!-- Kostenaufschlüsselung & § 48b Box -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm lg:col-span-2">
+                            <h4 class="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px] text-slate-500">pie_chart</span>
+                                Ist-Kosten nach Kostenarten
+                            </h4>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                                <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                    <span class="text-xs text-slate-500 block mb-0.5">Lohnkosten</span>
+                                    <span id="ctrl-ist-lohn" class="font-bold text-slate-800">€ 0,00</span>
+                                </div>
+                                <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                    <span class="text-xs text-slate-500 block mb-0.5">Material</span>
+                                    <span id="ctrl-ist-material" class="font-bold text-slate-800">€ 0,00</span>
+                                </div>
+                                <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                    <span class="text-xs text-slate-500 block mb-0.5">Subunternehmer</span>
+                                    <span id="ctrl-ist-sub" class="font-bold text-slate-800">€ 0,00</span>
+                                </div>
+                                <div class="bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                    <span class="text-xs text-slate-500 block mb-0.5">Geräte / Sonst.</span>
+                                    <span id="ctrl-ist-geraet" class="font-bold text-slate-800">€ 0,00</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-indigo-50/70 border border-indigo-100 rounded-xl p-6 flex flex-col justify-between">
+                            <div>
+                                <h4 class="font-bold text-indigo-950 text-sm mb-2 flex items-center gap-1.5">
+                                    <span class="material-symbols-outlined text-indigo-600 text-[20px]">shield</span>
+                                    § 48b Bauabzugsteuer Status
+                                </h4>
+                                <p class="text-xs text-indigo-800 leading-relaxed">
+                                    Subunternehmer-Rechnungen ohne gültige Freistellungsbescheinigung unterliegen dem 15 % Steuereinbehalt zur Abführung an das Finanzamt.
+                                </p>
+                            </div>
+                            <div class="mt-4 pt-3 border-t border-indigo-200 flex justify-between items-center text-sm font-bold text-indigo-950">
+                                <span>Einbehaltene Steuer:</span>
+                                <span id="ctrl-bauabzug-gesamt" class="text-base text-indigo-700">€ 0,00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Eingangsrechnungen Tabelle -->
+                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-200">
+                            <h4 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                                <span class="material-symbols-outlined text-slate-600">receipt</span>
+                                Eingangsrechnungen zum Projekt
+                            </h4>
+                            <button type="button" onclick="openEingangsrechnungModal()" class="flex items-center gap-1.5 px-3.5 py-2 bg-primary text-white text-xs font-bold rounded-lg shadow hover:bg-primary-dark transition-all">
+                                <span class="material-symbols-outlined text-[16px]">add</span>
+                                Eingangsrechnung erfassen
+                            </button>
+                        </div>
+
+                        <div class="overflow-x-auto rounded-lg border border-slate-200">
+                            <table class="w-full text-left text-sm whitespace-nowrap">
+                                <thead class="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+                                    <tr>
+                                        <th class="px-4 py-3">Beleg-Nr.</th>
+                                        <th class="px-4 py-3">Lieferant / Subunternehmer</th>
+                                        <th class="px-4 py-3">Datum</th>
+                                        <th class="px-4 py-3">Kostenart</th>
+                                        <th class="px-4 py-3 text-right">Netto</th>
+                                        <th class="px-4 py-3 text-right">Brutto</th>
+                                        <th class="px-4 py-3 text-center">§ 48b Status</th>
+                                        <th class="px-4 py-3 text-right">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="pd-eingangsrechnungen-body" class="divide-y divide-slate-100 bg-white">
+                                    <!-- JS populated -->
+                                </tbody>
+                            </table>
+                            <div id="pd-eingangsrechnungen-empty" class="p-8 text-center text-slate-400 text-sm">
+                                <span class="material-symbols-outlined text-3xl text-slate-300 block mb-1">receipt</span>
+                                Keine Eingangsrechnungen für dieses Projekt vorhanden.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 6: EFB-PREISBLÄTTER 221 & 223 (VHB BUND) -->
+                <div id="pd-panel-efb" class="pd-tab-panel hidden flex-col gap-6">
+                    <!-- EFBView dynamically renders here -->
+                </div>
+
+                <!-- TAB 7: ZUSCHLAGSKALKULATION & MITTELLOHN -->
+                <div id="pd-panel-kalkulation" class="pd-tab-panel hidden flex-col gap-6">
+                    <!-- KalkulationView dynamically renders here -->
+                </div>
+
+                <!-- TAB 8: PROJEKT-MÄNGELKATASTER -->
+                <div id="pd-panel-maengel" class="pd-tab-panel hidden flex-col gap-6">
+                    <!-- MaengelView dynamically renders here -->
+                </div>
+            </div>
+        </div>`,
+    "view-projekte": `<div id="view-projekte" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+                <!-- Action Bar -->
+                <div
+                    class="flex items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                    <h3 class="font-semibold text-slate-700 pl-2">Projektübersicht & Rentabilität</h3>
+                    <button onclick="openProjektModal()"
+                        class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow shadow-primary/30 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">add</span>
+                        Neues Projekt
+                    </button>
+                </div>
+
+                <!-- Projects Grid -->
+                <!-- Replace with list or card layout dependent on rentabilität -->
+                <div id="projekte-grid" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    <!-- JS populated -->
+                </div>
+            </div>
+        </div>`,
+    "view-putzplan": `<div id="view-putzplan" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Jahresstunden</p>
+                                <h3 id="kpi-lv-stunden" class="text-2xl font-bold text-slate-800 mt-1">0 h</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">schedule</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Netto / Jahr (inkl. Zuschläge)</p>
+                                <h3 id="kpi-lv-netto-jahr" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">payments</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Netto / Monat</p>
+                                <h3 id="kpi-lv-netto-monat" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">calendar_month</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Zuschläge / Jahr</p>
+                                <h3 id="kpi-lv-zuschlaege" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">trending_up</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <select id="putzplan-objekt-select"
+                            class="px-3 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary min-w-[280px]"
+                            onchange="onPutzplanSelectChange(this.value)"></select>
+                        <div class="relative">
+                            <span
+                                class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                            <input id="search-lv"
+                                class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-56 placeholder:text-slate-400"
+                                placeholder="LV suchen..." type="text" oninput="renderLvBereiche()">
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <button onclick="openZuschlagsprofilModal()"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">percent</span>
+                            Zuschlagsprofil
+                        </button>
+                        <button onclick="openLvBereichModal()"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">add</span>
+                            Bereich
+                        </button>
+                        <button id="btn-lv-uebernehmen" onclick="uebernehmeLvInPlan()"
+                            disabled
+                            class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+                            ➜ Abrechnungsplan erstellen/aktualisieren
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-1 bg-white border border-slate-200 rounded-md shadow-sm overflow-hidden self-start">
+                        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                            <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px] text-primary">account_tree</span>
+                                Objektbaum
+                            </h3>
+                        </div>
+                        <div id="putzplan-baum" class="p-2 max-h-[520px] overflow-y-auto"></div>
+                    </div>
+                    <div class="lg:col-span-2 flex flex-col gap-4">
+                        <div id="lv-bereiche-liste" class="flex flex-col gap-4"></div>
+                        <div id="lv-leer" class="hidden p-10 text-center text-slate-400 text-sm flex flex-col items-center gap-2 bg-white border border-dashed border-slate-300 rounded-md">
+                            <span class="material-symbols-outlined text-4xl text-slate-200">cleaning_services</span>
+                            Kein Leistungsverzeichnis an diesem Objekt. Legen Sie einen Leistungsbereich an.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`,
+    "view-rechnungen": `<div id="view-rechnungen" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6 h-full">
+                <!-- Functional Area -->
+                <div class="flex flex-col gap-3 h-full">
+                    <!-- Action Bar -->
+                    <div
+                        class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                        <div class="flex items-center gap-2">
+                            <div class="flex items-center bg-slate-100 rounded p-1 border border-slate-200"
+                                id="filter-buttons">
+                                <button onclick="filterRechnungen('Alle')"
+                                    class="filter-btn px-3 py-1 text-xs font-semibold bg-white rounded shadow-sm text-slate-800"
+                                    data-filter="Alle">Alle</button>
+                                <button onclick="filterRechnungen('Bezahlt')"
+                                    class="filter-btn px-3 py-1 text-xs font-medium text-slate-600 hover:text-slate-900"
+                                    data-filter="Bezahlt">Bezahlt</button>
+                                <button onclick="filterRechnungen('Ausstehend')"
+                                    class="filter-btn px-3 py-1 text-xs font-medium text-slate-600 hover:text-slate-900"
+                                    data-filter="Ausstehend">Ausstehend</button>
+                                <button onclick="filterRechnungen('Überfällig')"
+                                    class="filter-btn px-3 py-1 text-xs font-medium text-slate-600 hover:text-slate-900"
+                                    data-filter="Überfällig">Überfällig</button>
+                            </div>
+                            <div class="h-6 w-px bg-slate-200 mx-1"></div>
+                            <button onclick="exportDATEV()"
+                                class="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-300 rounded hover:bg-slate-50">
+                                <span class="material-symbols-outlined text-[16px]">file_upload</span>
+                                DATEV Export
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button onclick="openRechnungModal()"
+                                class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
+                                <span class="material-symbols-outlined text-[18px]">add</span>
+                                Neue Rechnung
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Bulk Action Bar -->
+                    <div id="bulk-action-bar"
+                        class="hidden items-center justify-between bg-blue-50/80 border border-blue-200 rounded-md p-3 shadow-sm transition-all duration-300">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-blue-500 text-[20px]">check_box</span>
+                            <span class="text-sm font-medium text-blue-900"><span id="bulk-selected-count">0</span>
+                                Rechnungen ausgewählt</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button id="bulk-btn-paid" onclick="bulkAction('paid')"
+                                class="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-100 hover:bg-emerald-200 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors">
+                                <span class="material-symbols-outlined text-[16px]">task_alt</span>
+                                Als Bezahlt markieren
+                            </button>
+                            <button id="bulk-btn-dunning" onclick="bulkAction('dunning')"
+                                class="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors">
+                                <span class="material-symbols-outlined text-[16px]">gavel</span>
+                                Mahnungen Senden
+                            </button>
+                            <button id="bulk-btn-pdf" onclick="bulkAction('pdf')"
+                                class="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-100 hover:bg-white border border-blue-200 disabled:opacity-50 disabled:cursor-not-allowed rounded transition-colors shadow-sm">
+                                <span class="material-symbols-outlined text-[16px]">picture_as_pdf</span>
+                                PDFs Exportieren
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Data Grid Container -->
+                    <div
+                        class="border border-slate-300 rounded-md bg-white shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm dense-table">
+                                <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
+                                    <tr>
+                                        <th class="px-4 font-semibold w-10">
+                                            <input id="selectAll"
+                                                class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4"
+                                                type="checkbox" onchange="toggleAllSelections(this)" />
+                                        </th>
+                                        <th class="px-4 font-semibold">Rechnungs-Nr.</th>
+                                        <th class="px-4 font-semibold">Datum</th>
+                                        <th class="px-4 font-semibold">Kundenname</th>
+                                        <th class="px-4 font-semibold text-center">Rechnungsart</th>
+                                        <th class="px-4 font-semibold text-right">Betrag</th>
+                                        <th class="px-4 font-semibold text-right">Restbetrag</th>
+                                        <th class="px-4 font-semibold text-center">Status</th>
+                                        <th class="px-4 font-semibold text-right w-36">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rechnungen-table-body"
+                                    class="divide-y divide-slate-200 text-slate-700 bg-white">
+                                    <!-- JS populated -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <!-- Footer Pagination -->
+                        <div
+                            class="bg-slate-50 p-3 border-t border-slate-300 flex items-center justify-between text-xs text-slate-500 mt-auto">
+                            <div id="rechnung-pagination-info">Zeige 0 von 0 Rechnungen</div>
+                            <div class="flex gap-1" id="rechnung-pagination-controls">
+                                <!-- JS populated -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`,
+    "view-sokabau": `<div id="view-sokabau" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6"></div>`,
+    "view-sync": `<div id="view-sync" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden">
+            <!-- Dynamically rendered by SyncView -->
+        </div>`,
+    "view-zeiterfassung": `<div id="view-zeiterfassung" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden">
+            <!-- Dynamically rendered by ZeiterfassungView -->
+        </div>`,
+};
+
+(function() {
+    const doc = typeof document !== 'undefined' ? document : null;
+    
+    if (!doc) return;
+
+    let viewsInitialized = false;
+
+    function initViews() {
+        if (viewsInitialized) return;
+        viewsInitialized = true;
+        
+        for (const [id, html] of Object.entries(VIEW_TEMPLATES)) {
+            let container = doc.getElementById(id);
+            if (container) {
+                const temp = doc.createElement('div');
+                temp.innerHTML = html.trim();
+                const viewEl = temp.firstElementChild;
+                if (viewEl) {
+                    container.replaceWith(viewEl);
+                }
+            }
+        }
+    }
+
+    // Auto-init synchronously for test environments and browser since script is at end of body
+    if (doc && doc.body) {
+        initViews();
+    } else {
+        doc.addEventListener('DOMContentLoaded', initViews);
+    }
+})();

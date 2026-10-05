@@ -1,0 +1,50 @@
+<div id="view-angebote" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+                <!-- KPI Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 h-32 relative overflow-hidden group">
+                        <div class="flex justify-between items-start z-10 relative">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Offene Angebote
+                                </p>
+                                <h3 id="kpi-angebote-offen" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">history_edu</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Action Bar -->
+                <div
+                    class="flex items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                    <h3 class="font-semibold text-slate-700 pl-2">Angebote verwalten</h3>
+                    <button onclick="openAngebotModal()"
+                        class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow shadow-primary/30 transition-all">
+                        <span class="material-symbols-outlined text-[18px]">add</span>
+                        Neues Angebot
+                    </button>
+                </div>
+                <!-- Table -->
+                <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-slate-50 border-b border-slate-200 text-slate-600">
+                            <tr>
+                                <th class="px-4 py-3 font-semibold w-32">Angebots-Nr.</th>
+                                <th class="px-4 py-3 font-semibold text-center w-20">Version</th>
+                                <th class="px-4 py-3 font-semibold">Datum</th>
+                                <th class="px-4 py-3 font-semibold">Kunde</th>
+                                <th class="px-4 py-3 font-semibold text-right">Betrag</th>
+                                <th class="px-4 py-3 font-semibold text-center w-36">Status</th>
+                                <th class="px-4 py-3 font-semibold text-right w-44">Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="angebote-table-body" class="divide-y divide-slate-100 text-slate-700">
+                            <!-- JS populated -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>

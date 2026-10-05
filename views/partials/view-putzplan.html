@@ -1,0 +1,111 @@
+<div id="view-putzplan" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Jahresstunden</p>
+                                <h3 id="kpi-lv-stunden" class="text-2xl font-bold text-slate-800 mt-1">0 h</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">schedule</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Netto / Jahr (inkl. Zuschläge)</p>
+                                <h3 id="kpi-lv-netto-jahr" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">payments</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Netto / Monat</p>
+                                <h3 id="kpi-lv-netto-monat" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">calendar_month</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Zuschläge / Jahr</p>
+                                <h3 id="kpi-lv-zuschlaege" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">trending_up</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <select id="putzplan-objekt-select"
+                            class="px-3 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary min-w-[280px]"
+                            onchange="onPutzplanSelectChange(this.value)"></select>
+                        <div class="relative">
+                            <span
+                                class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                            <input id="search-lv"
+                                class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-56 placeholder:text-slate-400"
+                                placeholder="LV suchen..." type="text" oninput="renderLvBereiche()">
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <button onclick="openZuschlagsprofilModal()"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">percent</span>
+                            Zuschlagsprofil
+                        </button>
+                        <button onclick="openLvBereichModal()"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">add</span>
+                            Bereich
+                        </button>
+                        <button id="btn-lv-uebernehmen" onclick="uebernehmeLvInPlan()"
+                            disabled
+                            class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+                            ➜ Abrechnungsplan erstellen/aktualisieren
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-1 bg-white border border-slate-200 rounded-md shadow-sm overflow-hidden self-start">
+                        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                            <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
+                                <span class="material-symbols-outlined text-[18px] text-primary">account_tree</span>
+                                Objektbaum
+                            </h3>
+                        </div>
+                        <div id="putzplan-baum" class="p-2 max-h-[520px] overflow-y-auto"></div>
+                    </div>
+                    <div class="lg:col-span-2 flex flex-col gap-4">
+                        <div id="lv-bereiche-liste" class="flex flex-col gap-4"></div>
+                        <div id="lv-leer" class="hidden p-10 text-center text-slate-400 text-sm flex flex-col items-center gap-2 bg-white border border-dashed border-slate-300 rounded-md">
+                            <span class="material-symbols-outlined text-4xl text-slate-200">cleaning_services</span>
+                            Kein Leistungsverzeichnis an diesem Objekt. Legen Sie einen Leistungsbereich an.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>

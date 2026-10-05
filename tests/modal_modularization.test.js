@@ -135,6 +135,10 @@ test('=== Modal Modularization & Components Architecture Suite ===', async (t) =
 
         const loaderScript = fs.readFileSync(path.join(__dirname, '../js/modal-loader.js'), 'utf8');
         curWin.eval(loaderScript);
+        if (fs.existsSync(path.join(__dirname, '../js/view-loader.js'))) {
+            const viewLoaderScript = fs.readFileSync(path.join(__dirname, '../js/view-loader.js'), 'utf8');
+            curWin.eval(viewLoaderScript);
+        }
 
         const missing = [];
         origIds.forEach(id => {

@@ -1,0 +1,102 @@
+<div id="view-objekte" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+
+                <!-- KPI Cards Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Liegenschaften</p>
+                                <h3 id="kpi-anzahl-liegenschaften" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">apartment</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gebäude</p>
+                                <h3 id="kpi-anzahl-gebaeude" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">domain</span>
+                        </div>
+                    </div>
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fläche gesamt (m²)</p>
+                                <h3 id="kpi-flaeche-gesamt" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">square_foot</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Toolbar -->
+                <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <div class="relative">
+                            <span
+                                class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                            <input id="search-objekte"
+                                class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-64 placeholder:text-slate-400"
+                                placeholder="Name, Nr., Ort, Raumtyp suchen..." type="text">
+                        </div>
+                        <select id="filter-objekte-status" onchange="renderObjekte()"
+                            class="px-3 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-slate-700">
+                            <option value="alle">Alle Status</option>
+                            <option value="aktiv" selected>Nur Aktive</option>
+                            <option value="inaktiv">Nur Inaktive</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="exportObjekteCSV()" type="button"
+                            class="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-sm font-semibold rounded shadow-sm transition-all"
+                            title="Objektstruktur als CSV exportieren">
+                            <span class="material-symbols-outlined text-[18px] text-slate-600">download</span>
+                            Export CSV
+                        </button>
+                        <button onclick="openObjektModal('LIEGENSCHAFT')"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px]">add</span>
+                            Neue Liegenschaft
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Data Grid -->
+                <div class="border border-slate-300 rounded-md bg-white shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm dense-table">
+                            <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
+                                <tr>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Objekt-Nr.</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Name</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Typ</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Ort</th>
+                                    <th class="px-4 font-semibold whitespace-nowrap">Rechnungsempfänger</th>
+                                    <th class="px-4 font-semibold text-right whitespace-nowrap">Fläche Σ</th>
+                                    <th class="px-4 font-semibold text-center whitespace-nowrap">Status</th>
+                                    <th class="px-4 font-semibold text-right w-56 whitespace-nowrap">Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody id="objekte-table-body" class="divide-y divide-slate-200 text-slate-700 bg-white">
+                                <!-- JS populated -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>

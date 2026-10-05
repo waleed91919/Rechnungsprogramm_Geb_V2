@@ -1,0 +1,135 @@
+<div id="view-dashboard" class="flex-1 overflow-y-auto bg-slate-50/50 p-6">
+            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
+                <!-- KPI Cards Row -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- KPI 1 -->
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Umsatz
+                                    (Bezahlt)</p>
+                                <h3 id="kpi-umsatz" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                        </div>
+                        <!-- Background Pattern -->
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">payments</span>
+                        </div>
+                    </div>
+                    <!-- KPI 2 -->
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ausstehende
+                                    Zahlungen</p>
+                                <h3 id="kpi-ausstehend" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                            <div id="kpi-ausstehend-count"
+                                class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1 border border-slate-200">
+                                0 Rg.
+                            </div>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">pending_actions</span>
+                        </div>
+                    </div>
+                    <!-- KPI 3 -->
+                    <div
+                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-red-200 transition-colors">
+                        <div class="flex justify-between items-start z-10">
+                            <div>
+                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Überfällige
+                                    Rechnungen</p>
+                                <h3 id="kpi-uberfallig" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
+                            </div>
+                            <div id="kpi-uberfallig-count"
+                                class="bg-red-50 text-red-700 px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1 border border-red-100">
+                                <span class="material-symbols-outlined text-[14px]">warning</span>
+                                0 Rg.
+                            </div>
+                        </div>
+                        <div id="kpi-uberfallig-warning" class="mt-auto z-10 hidden">
+                            <p class="text-xs text-red-600 font-medium whitespace-nowrap overflow-hidden text-ellipsis">
+                                Sofortige Aufmerksamkeit erforderlich</p>
+                        </div>
+                        <div
+                            class="absolute -right-4 -bottom-4 text-red-50 transform rotate-12 group-hover:text-red-50 transition-colors">
+                            <span class="material-symbols-outlined text-[100px]">error_outline</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Quick Actions & Recent Activity -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Quick Actions -->
+                    <div class="bg-white rounded-md border border-slate-200 shadow-sm p-5 flex flex-col gap-4">
+                        <h3 class="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                            <span class="material-symbols-outlined text-primary text-[20px]">bolt</span>
+                            Schnellaktionen
+                        </h3>
+                        <div class="flex flex-col gap-3">
+                            <button onclick="openRechnungModal()"
+                                class="flex items-center gap-3 p-3 rounded border border-slate-200 hover:border-primary hover:bg-slate-50 transition-colors text-left group">
+                                <span
+                                    class="material-symbols-outlined p-2 rounded bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-colors">receipt_long</span>
+                                <div>
+                                    <p class="font-medium text-slate-800 text-sm">Neue Rechnung</p>
+                                    <p class="text-xs text-slate-500">Rechnung erstellen & senden</p>
+                                </div>
+                            </button>
+                            <button onclick="switchView('kunden'); setTimeout(openKundeModal, 100)"
+                                class="flex items-center gap-3 p-3 rounded border border-slate-200 hover:border-primary hover:bg-slate-50 transition-colors text-left group">
+                                <span
+                                    class="material-symbols-outlined p-2 rounded bg-slate-100 text-slate-600 group-hover:bg-primary group-hover:text-white transition-colors">person_add</span>
+                                <div>
+                                    <p class="font-medium text-slate-800 text-sm">Neuer Kunde</p>
+                                    <p class="text-xs text-slate-500">Kontakt im Adressbuch anlegen</p>
+                                </div>
+                            </button>
+                            <button onclick="switchView('artikel'); setTimeout(openArtikelModal, 100)"
+                                class="flex items-center gap-3 p-3 rounded border border-slate-200 hover:border-primary hover:bg-slate-50 transition-colors text-left group">
+                                <span
+                                    class="material-symbols-outlined p-2 rounded bg-slate-100 text-slate-600 group-hover:bg-primary group-hover:text-white transition-colors">inventory_2</span>
+                                <div>
+                                    <p class="font-medium text-slate-800 text-sm">Neuer Artikel</p>
+                                    <p class="text-xs text-slate-500">Produkt zum Katalog hinzufügen</p>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Recent Invoices -->
+                    <div
+                        class="lg:col-span-2 bg-white rounded-md border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                        <div class="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50/50">
+                            <h3 class="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                                <span class="material-symbols-outlined text-slate-500 text-[20px]">history</span>
+                                Letzte Rechnungen
+                            </h3>
+                            <button onclick="switchView('rechnungen')"
+                                class="text-primary hover:text-primary-dark text-xs font-medium flex items-center">
+                                Alle anzeigen <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm dense-table">
+                                <thead class="bg-slate-50 text-slate-500 text-xs uppercase">
+                                    <tr>
+                                        <th class="px-4 py-2 font-medium">Rechnungs-Nr.</th>
+                                        <th class="px-4 py-2 font-medium">Kunde</th>
+                                        <th class="px-4 py-2 font-medium text-right">Betrag</th>
+                                        <th class="px-4 py-2 font-medium text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dashboard-recent-table-body"
+                                    class="divide-y divide-slate-100 text-slate-700">
+                                    <!-- JS populated -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
