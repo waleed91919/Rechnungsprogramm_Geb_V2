@@ -1,0 +1,311 @@
+AUFTRAG: W-Link praktisch analysieren, mit Wettbewerbern vergleichen
+und gezielte Verbesserungen vorschlagen
+
+Repository:
+https://github.com/waleed91919/Rechnungsprogramm_Geb_V2
+
+Vorhandener Bericht:
+ABSCHLUSSBERICHT_AR.md
+
+ROLLE UND ZIEL
+
+Du bist der leitende Produkt-, Software- und UX-Analyst für W-Link.
+
+Untersuche nicht erneut nur, welche Funktionen im Code vorkommen.
+Wir wollen verstehen:
+
+1. Welche Aufgaben ein Mitarbeiter tatsächlich erledigen kann.
+2. Wo Arbeitsabläufe abbrechen oder unnötig kompliziert sind.
+3. Wie passende Wettbewerber dieselben Aufgaben lösen.
+4. Welche kleinen Änderungen W-Link spürbar verbessern würden.
+
+Zielgruppe:
+Deutsche mittelständische Bauunternehmen.
+
+Aktueller Untersuchungsumfang:
+Ein Mitarbeiter im Büro, der Angebote und Bauabrechnung bearbeitet.
+
+Nicht Gegenstand dieser Runde:
+Ein vollständiges Unternehmens-ERP, Großunternehmen, Reinigung/FM,
+umfassende Ressourcenplanung oder die Implementierung von Mehrbenutzerbetrieb.
+
+Der Bericht soll uns eine Entscheidung ermöglichen.
+Nicht automatisch Änderungen umsetzen.
+
+1. REGELN UND VORBEREITUNG
+
+- Produktcode, Datenbankschema und Abhängigkeiten nicht verändern.
+- Keine Commits, Pushes, Pull Requests oder Merges.
+- Keine produktive Datenbank verwenden oder migrieren.
+- Ausschließlich künstliche Kunden-, Projekt- und Zahlungsdaten.
+- Keine echten E-Mails, Bankverbindungen oder Zahlungen.
+- Bestehende uncommittete Änderungen nicht verändern.
+- Neue Analyseberichte nur in einem separaten lokalen Ausgabeordner.
+- Keine Zugangsdaten oder personenbezogenen Daten in Berichte aufnehmen.
+
+Vor Beginn dokumentieren:
+- Branch und vollständigen Commit-SHA.
+- Git-Status.
+- Betriebssystem und Laufzeitversionen.
+- Verfügbare Anwendung: Quellcode, Entwicklungsstart oder gebautes Paket.
+- Verfügbare Möglichkeiten zur UI-Bedienung und Screenshot-Erstellung.
+
+Verwende einen festen, isolierten Snapshot.
+Alle Subagents müssen denselben Stand analysieren.
+Während der Untersuchung nicht auf neuere Commits wechseln.
+
+Lies den bisherigen Bericht als Ausgangspunkt.
+Seine Aussagen sind Hypothesen, keine automatisch bestätigten Fakten.
+Frühere Fehler können inzwischen behoben sein.
+
+2. SUBAGENTS
+
+Setze nach Möglichkeit vier echte Subagents parallel ein:
+
+A — W-Link-Implementierung und Datenfluss
+B — Bedienbarkeit und sichtbare Benutzerführung
+C — Wettbewerber und öffentliche Dokumentation
+D — Tests, Reproduktion und Belegqualität
+
+Der Hauptagent führt die Ergebnisse zusammen und löst Widersprüche
+anhand von Belegen, nicht anhand einer Mehrheitsentscheidung.
+
+Falls echte Subagents nicht verfügbar sind:
+Bearbeite die Pakete nacheinander und kennzeichne das ausdrücklich.
+
+Schreibende UI-Tests dürfen nicht parallel dieselbe Datenbank verwenden.
+Jede Testinstanz benötigt eigene Daten und eigene temporäre Verzeichnisse.
+
+3. DREI ZU PRÜFENDE ARBEITSABLÄUFE
+
+ABLAUF 1 — ANGEBOT BIS PROJEKT
+
+- Testkunden anlegen.
+- Direktangebot mit mehreren Positionen erstellen.
+- Positionen, Mengen und Preise bearbeiten.
+- Angebot speichern, schließen und erneut öffnen.
+- PDF erzeugen und prüfen.
+- Angebot versenden/freigeben, soweit ohne echten Versand möglich.
+- Eine neue Version erstellen.
+- Eine bestimmte Version als angenommen markieren.
+- Projekt aus der angenommenen Version erstellen.
+- Prüfen, welche Daten übernommen werden.
+- Prüfen, ob eine echte Auftragsbestätigung erstellt werden kann.
+
+Zusätzlich den GAEB-Weg untersuchen:
+X83 → Bepreisung → gespeicherter Entwurf → X84
+→ offizielles Angebot → Projekt.
+
+Direktangebot und GAEB-Angebot getrennt bewerten.
+Keine Vollständigkeit aus einem gemeinsamen Namen ableiten.
+
+ABLAUF 2 — AUFMASS BIS ABSCHLAGSRECHNUNG
+
+- Aufmaß zum Projekt erfassen.
+- Aufmaß einer konkreten Leistungsposition zuordnen.
+- Einen Nachtrag anlegen und genehmigen.
+- Nachtrag in die Abrechnung übernehmen.
+- Erste Abschlagsrechnung erzeugen.
+- Weitere Mengen erfassen.
+- Zweite Abschlagsrechnung erzeugen.
+- Prüfen, ob frühere Leistungen korrekt berücksichtigt werden.
+- Prüfen, ob Positionen oder Nachträge doppelt berechnet werden können.
+- Dokumente speichern, erneut öffnen und exportieren.
+
+ABLAUF 3 — ZAHLUNG BIS SCHLUSSRECHNUNG
+
+- Teilzahlung auf eine Rechnung erfassen.
+- Offenen Betrag prüfen.
+- Unterschied zwischen „als bezahlt markieren“
+  und tatsächlicher Zahlungszuordnung untersuchen.
+- Korrektur beziehungsweise Rücknahme einer Zuordnung prüfen.
+- Mahnung als Vorschau/Dokument erstellen, ohne echten Versand.
+- Schlussrechnung erzeugen.
+- Vorgänger, Zahlungen und gegebenenfalls Einbehalte prüfen.
+- PDF und XML vergleichen.
+- Test-Backup erstellen und isoliert wiederherstellen.
+
+Falls ein Vorgang die Dokumentation des Programms anders vorsieht:
+Den vorgesehenen Weg zuerst nachvollziehen.
+Nicht einen selbst erfundenen Ablauf als einzig richtigen Maßstab verwenden.
+
+4. TESTDATEN UND ERWARTETE ERGEBNISSE
+
+Verwende nachvollziehbare künstliche Daten:
+- Ein Kunde.
+- Ein Bauprojekt.
+- Mehrere Positionen mit unterschiedlichen Mengen und Preisen.
+- Ein Nachtrag.
+- Zwei Aufmaßstände.
+- Zwei Abschlagsrechnungen.
+- Eine Teilzahlung.
+- Eine Schlussrechnung.
+
+Lege erwartete Beträge und Zustände vor der Prüfung fest.
+Berechne sie unabhängig von W-Link.
+
+Netto, Umsatzsteuer, Brutto, Leistungsstand, Rechnungsbetrag,
+Zahlung und Restforderung ausdrücklich getrennt darstellen.
+
+Einbehalte nur in einem klar definierten zusätzlichen Testszenario prüfen.
+Keine feste Prozentzahl als universelle Vertragsregel voraussetzen.
+
+5. PRAKTISCHE PRÜFUNG DER OBERFLÄCHE
+
+Wenn du die Anwendung tatsächlich bedienen kannst:
+Führe die Abläufe in einer isolierten Instanz aus und dokumentiere sie.
+
+Für jeden Schritt erfassen:
+- Startpunkt und verwendete Schaltflächen.
+- Ergebnis und gespeicherte Daten.
+- Erneute Eingabe bereits bekannter Informationen.
+- Unklare Begriffe, Felder und Fehlermeldungen.
+- Rückmeldung bei Erfolg, Abbruch oder Fehler.
+- Screenshot, sofern möglich.
+- Tatsächlich gemessene Zeit, sofern sinnvoll.
+
+Ein Tester mit Vorwissen beweist nicht,
+dass ein neuer Nutzer die Aufgabe leicht versteht.
+Bedienungsprobleme als Beobachtung oder Hypothese kennzeichnen.
+
+Wenn UI-Bedienung nicht möglich ist:
+- Grenze offen benennen.
+- Nur einen Code-Walkthrough liefern.
+- Keine Klickzahlen oder Bearbeitungszeiten erfinden.
+- Keine Screenshots ausdenken.
+- Ein konkretes manuelles Testprotokoll für den Nutzer vorbereiten.
+
+Screenshots allein beweisen weder Speicherung noch korrekte Berechnung.
+
+6. WETTBEWERBSVERGLEICH
+
+Wähle höchstens zwei passende Vergleichsprodukte.
+
+Erster Kandidat:
+baufaktura.
+
+Wähle den zweiten Kandidaten anhand der Ähnlichkeit zum aktuellen
+Produktumfang und begründe die Auswahl.
+
+Vergleiche dieselben drei Aufgaben,
+nicht die gesamte Funktionsliste der Anbieter.
+
+Priorisiere:
+- Offizielle Hilfeartikel und Handbücher (Hilfe-Center, Doku, Tutorials des Anbieters).
+- Offizielle Preis-/Leistungsseiten (nur mit URL + Zugriffsdatum zitieren).
+- Erst danach: Fachartikel, Foren, Videos (als schwächere Belege kennzeichnen).
+
+6.1 Auswahl der zwei Vergleichsprodukte
+- Kandidat 1 (fix): baufaktura (https://bau-faktura.de/preise).
+  Grund: deutsche Bau-Abrechnungssoftware für KMU, ähnlicher Kern
+  (Angebot, Aufmaß, Abschlag, Schlussrechnung).
+- Kandidat 2 (nach Ähnlichkeit wählen + begründen): z. B. TopKontor
+  Handwerk (blue:solution) ODER Lexware Handwerk Plus.
+  Auswahlkriterium: Einzelplatz/Desktop, Angebot/Auftrag/Rechnung,
+  Abschlags-/Schlussrechnung, DATEV-Übergabe, GAEB-Bezug, Zielgruppe
+  Handwerk/Bau-KMU.Der gewählte Kandidat ist im Bericht mit einem Satz
+  zu begründen, warum er ähnlicher ist als z. B. AVA-Software
+  (Nevaris/NextBau – eher AVA/Ausschreibung) oder reine Bautagebuch-Apps
+  (123erfasst – eher Baustelle/Zeit).
+- Nicht die gesamte Funktionsliste vergleichen, sondern exakt dieselben
+  drei Abläufe (Angebot→Projekt, Aufmaß→Abschlag, Zahlung→Schluss).
+  Pro Ablauf: 1 Tabelle mit Spalten
+  Anbieter | vorgesehener Weg (mit Hilfeartikel-URL) | Klicks/Screens
+  (nur wenn wirklich bedient) | Unterschied zu W-Link | Beleg.
+
+6.2 Internet-Pflicht für Subagents (sehr wichtig)
+- Alle Subagents MÜSSEN das Internet benutzen (Websuche + Webfetch).
+  Auch A, B, D prüfen mindestens: offizielle Normen/Doku
+  (ZUGFeRD/Factur-X, XRechnung/EN 16931, DATEV EXTF, GAEB DA XML 3.2/3.3,
+  REB 23.003/DA11, VOB/BGB-Regeln via bauprofessor.de).
+- Subagent C zusätzlich: mindestens 4 offizielle Hilfeartikel pro
+  Wettbewerber + Preisquelle + 1 Fachquelle (z. B. bauprofessor.de).
+- Regeln: jede Internet-Aussage mit URL + Zugriffsdatum (YYYY-MM-DD)
+  belegen. Keine Preise, Klickzahlen, Screenshots oder Features erfinden.
+  Wenn eine Seite blockiert/paywalled ist: offen als „nicht einsehbar“
+  kennzeichnen + Alternativquelle suchen. Keine Hersteller-Aussage ohne
+  Zitat übernehmen (Marketing vs. Hilfeartikel trennen).
+- Startquellen (nicht abschließend, zu erweitern):
+  https://bau-faktura.de/preise
+  https://www.bauprofessor.de/
+  https://www.ferd-net.de/ (ZUGFeRD)
+  https://xeinkauf.de/ + https://www.e-rechnung-bund.de/ (XRechnung)
+  https://www.datev.de/ (EXTF/DATEV-Übergabe)
+  https://www.gaeb.de/ (DA XML)
+  Hilfe-Center von baufaktura + Hilfe-Center des 2. Kandidaten
+  (URLs im Bericht dokumentieren).
+
+7. BELEG- UND NACHWEISQUALITÄT (für alle Subagents verbindlich)
+- Status-Skala aus ABSCHLUSSBERICHT_AR.md weiterverwenden:
+  A = isoliert ausgeführt + bestanden (nur für genau diesen Lauf),
+  B = Code vorhanden, Lauf unvollständig, C = partiell/defekt,
+  D = Platzhalter/Plan, E = fehlt/nicht nachweisbar.
+  Kein A für reine Code-Lektüre oder Screenshots.
+- Jeder Befund braucht: Datei:Symbol:Zeilen ODER Testbefehl+Ergebnis
+  ODER URL+Datum. Widerspruchsregel: Beleg schlägt Mehrheit.
+  Screenshots allein beweisen weder Speicherung noch Rechenrichtigkeit –
+  immer DB-/Datei-Gegenprobe verlangen.
+- Verboten: echte Kundendaten, echte E-Mails/Bankdaten/Zahlungen,
+  produktive database.sqlite anfassen/migrieren, Produktcode/Schema/
+  Abhängigkeiten ändern, Commits/Pushes/PRs/Merges.
+
+8. TESTDATEN MIT ERWARTETEN BETRÄGEN (vor der Prüfung festlegen,
+   unabhängig von W-Link berechnen, USt 19 %)
+- Kunde TEST-KUNDE-01 (fiktiv, Musterstraße 1, 12345 Musterstadt).
+- Projekt TEST-BAU-01, 3 Positionen:
+  P1 10 x 100,00 = 1.000,00 | P2 5 x 200,00 = 1.000,00 |
+  P3 1 x 500,00 = 500,00 → Netto 2.500,00, USt 475,00, Brutto 2.975,00.
+- Nachtrag N1: 2 x 150,00 = 300,00 netto (57,00 USt, 357,00 brutto).
+- Aufmaßstand 1: 50 % von P1+P2 (= 1.000,00 netto) + 100 % N1
+  (= 300,00) → Leistung L1 = 1.300,00 netto.
+  Abschlag 1: 1.300,00 + 247,00 USt = 1.547,00 brutto.
+- Aufmaßstand 2: Rest 50 % P1+P2 (= 1.000,00) + 100 % P3 (= 500,00)
+  → kumuliert L2 = 2.800,00 netto (53.200 USt? nein: 532,00 USt,
+  3.332,00 brutto kumuliert). Abschlag 2 = L2 − L1 = 1.500,00 netto
+  (285,00 USt, 1.785,00 brutto). Doppelberechnungs-Probe: Summe
+  F1+F2 muss L2 entsprechen.
+- Teilzahlung 1.500,00 auf Abschlag 1 → Rest aus F1 = 47,00.
+  Schlussrechnung = L2 − F1 − F2 = 0,00 (ohne Einbehalt); mit
+  Zusatzszenario Einbehalt 5 % auf L2 (= 140,00 netto) separat prüfen,
+  nicht als Standard voraussetzen.
+- Netto/USt/Brutto, Leistungsstand, Rechnungsbetrag, Zahlung,
+  Restforderung in jeder Tabelle getrennt ausweisen.
+
+9. AUSGABEORDNER UND BERICHTSSTRUKTUR (kein Produktcode anfassen)
+- Neuer isolierter Ordner: analyse_2026-10-04_run2/ (falls belegt:
+  analyse_YYYY-MM-DD_runN). Darin:
+  00_SNAPSHOT.md (Branch, SHA, git status, OS, node/npm/electron,
+  App-Verfügbarkeit, UI-/Screenshot-Möglichkeit),
+  A_IMPLEMENTIERUNG.md, B_BEDIENBARKEIT.md, C_WETTBEWERB.md
+  (mit URL+Datum-Quellentabelle), D_TESTS_BELEGE.md,
+  MANUELLES_TESTPROTOKOLL.md (ausgefüllt + offen),
+  ENTSCHEIDUNGSBERICHT.md (Zusammenführung, max. 5 Seiten Kern +
+  Anhänge), screenshots/ (nur echte), rohdaten/ (Logs, CSV, XML).
+- Bestehende analyse_2026-10-04/ nicht überschreiben.
+  Keine Berichte in plans/, doc/, root oder views/.
+
+10. ENTSCHEIDUNG + KLEINE VERBESSERUNGEN (keine Umsetzung)
+- ENTSCHEIDUNGSBERICHT muss drei Einsatzurteile getrennt begründen:
+  (1) Einzelplatz Angebot+Bauabrechnung, (2) Büro+mobile Erfassung,
+  (3) Mehrbenutzer Mittelstand – jeweils: geeignet / bedingt / nein +
+  Belege + Restprüfungen + Risiken.
+- Danach: max. 10 kleine Änderungen (je ≤ 2 Sätze: Problem→Änderung→
+  erwarteter Nutzen), sortiert nach Wirkung/Aufwand, z. B. tote Buttons
+  entfernen, Artikel aus „experimentell“ holen, AUFTRAG-Bug fixen/hiden,
+  bezahlt↔Zahlungszuordnung verlinken, B2G-Leitweg-Frühcheck,
+  Doppel-Schluss-Sperre, GAEB-Entwurf→Positionen-Generator,
+  Mahn-Texte/=Versandnachweis klären. Keine Code-Änderung in dieser Runde.
+
+ANHANG A – MANUELLES TESTPROTOKOLL (Vorlage, pro Schritt ausfüllen)
+Schritt | Startpunkt/Button | Erwartung (aus Kap. 8) | Ergebnis/DB-Datei |
+erneute Eingaben | unklare Begriffe/Fehler | Rückmeldung App |
+Screenshot (ja/nein/Pfad) | Zeit | Status A–E | Beleg.
+Wenn UI nicht bedienbar: „Grenze: …“ + Code-Walkthrough-Pfad +
+„nicht erfunden: Klicks/Zeiten/Screenshots“.
+
+ANHANG B – PRÜFLISTE VOR ABGABE
+Snapshot identisch bei allen Subagents? Untracked Changes unberührt?
+Nur Test-DBs/Temp-Dirs benutzt? Alle URLs mit Datum? Kein A ohne Lauf?
+Drei Abläufe je Wettbewerber getrennt? Direkt vs. GAEB getrennt?
+Bezahl-Markierung vs. Zuordnung getrennt? PDF vs. XML verglichen?
+Backup isoliert restore-getestet? Keine Secrets/PII im Bericht?
