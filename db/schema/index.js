@@ -1438,6 +1438,12 @@ function dedupeDuplicateVerrechnungen(db) {
  * (Vermeidet stillen Datenverlust bei Migration des UNIQUE Index)
  */
 function checkDuplicateSchlussrechnungen(db) {
+    // Legacy-/:memory:-Schemas (z. B. Tests) kennen rechnungsart/projektId ggf. nicht
+    // (Spalten kommen erst per Migration). Dann gibt es nichts zu prüfen -> überspringen.
+    const cols = db.prepare(`PRAGMA table_info(dokumente)`).all().map(c => c.name);
+    if (!cols.includes('rechnungsart') || !cols.includes('projektId')) {
+        return;
+    }
     const duplicates = db.prepare(`
         SELECT projektId, COUNT(*) as anzahl
         FROM dokumente
@@ -1496,8 +1502,12 @@ function ensureUniqueConstraints(db) {
     }
 
     try {
-        checkDuplicateSchlussrechnungen(db);
-        db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_dokumente_projekt_schluss_unique ON dokumente(projektId) WHERE rechnungsart = 'SCHLUSSRECHNUNG' AND status != 'Storniert'`);
+        const dokCols = db.prepare(`PRAGMA table_info(dokumente)`).all().map(c => c.name);
+        if (dokCols.includes('rechnungsart') && dokCols.includes('projektId')) {
+            checkDuplicateSchlussrechnungen(db);
+            db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_dokumente_projekt_schluss_unique ON dokumente(projektId) WHERE rechnungsart = 'SCHLUSSRECHNUNG' AND status != 'Storniert'`);
+        }
+        // Legacy-Schema ohne rechnungsart/projektId: Index erst nach Migration möglich
     } catch (e) {
         console.error('[DB Migration] UNIQUE-Index auf dokumente(projektId) (SCHLUSSRECHNUNG) konnte nicht erstellt werden:', e.message);
         throw e; // Harter Abbruch, wenn Doppel-Schluss existiert
