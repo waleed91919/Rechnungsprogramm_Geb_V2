@@ -249,24 +249,10 @@ function createRechnungRow(rech, kundenMap) {
       divActions.appendChild(btnStorno);
     }
     const btnLock = document.createElement('button');
-    btnLock.className = 'text-slate-400 hover:text-amber-600 p-1 transition-colors flex items-center justify-center';
-    btnLock.title = 'Rechnung ist gesperrt (GoBD) - Klicken zum Entsperren (wird protokolliert)';
+    btnLock.className = 'text-slate-400 p-1 transition-colors flex items-center justify-center opacity-50 cursor-not-allowed';
+    btnLock.title = 'GoBD-gesperrt — bitte Storno (InvoiceController 627-669) nutzen.';
     btnLock.setAttribute('aria-label', `Rechnung ${rech.nr} entsperren`);
-    btnLock.onclick = async e => {
-      e.preventDefault();
-      e.stopPropagation();
-      if (!(await safeConfirm(`Rechnung ${rech.nr} wirklich entsperren? Die Freigabe wird GoBD-konform protokolliert und danach sind Inhaltsänderungen wieder möglich.`))) return;
-      try {
-        await window.api.unlockDocument(rech.id, 'Manuelle Freigabe über Dashboard');
-        rech.isLocked = false;
-        showToast(`Rechnung ${rech.nr} wurde entsperrt.`, 'success');
-        renderRechnungen();
-        renderDashboard();
-      } catch (err) {
-        console.error('Fehler beim Entsperren:', err);
-        showToast('Fehler beim Entsperren: ' + (err.message || err), 'error');
-      }
-    };
+    btnLock.disabled = true;
     const spanLock = document.createElement('span');
     spanLock.className = 'material-symbols-outlined text-[18px]';
     spanLock.textContent = 'lock';

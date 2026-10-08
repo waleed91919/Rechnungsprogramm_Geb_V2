@@ -65,8 +65,6 @@ function createWindow() {
         {
             label: 'Datei',
             submenu: [
-                { label: 'Neue Rechnung', accelerator: 'CmdOrCtrl+N', click: () => { } },
-                { type: 'separator' },
                 { label: 'Drucken', accelerator: 'CmdOrCtrl+P', click: () => mainWindow.webContents.print() },
                 { type: 'separator' },
                 { label: 'Beenden', accelerator: 'CmdOrCtrl+Q', role: 'quit' }
