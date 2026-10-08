@@ -15,7 +15,7 @@ contextBridge.exposeInMainWorld('api', {
     bulkSaveDocuments: (docs) => ipcRenderer.invoke('db:bulkSaveDocuments', docs),
     deleteDocument: (id) => ipcRenderer.invoke('db:deleteDocument', id),
     updateDocumentStatus: (id, patch) => ipcRenderer.invoke('db:updateDocumentStatus', id, patch),
-    unlockDocument: (id, grund) => Promise.reject(new Error('GoBD: Belege können nicht entsperrt werden. Bitte Storno nutzen.')),
+    unlockDocument: (id, grund) => Promise.reject(new Error('GoBD-gesperrt — bitte Storno (InvoiceController 627-669) nutzen.')),
     storniereRechnung: (updatedOriginal, stornoDoc) => ipcRenderer.invoke('db:storniereRechnung', updatedOriginal, stornoDoc),
     verifyAuditChain: () => ipcRenderer.invoke('audit:verify'),
 

@@ -25,20 +25,10 @@ function applyRechnungReadOnlyMode(existing, form, submitBtn) {
   // GoBD: Expliziter Freigabe-Weg (Entsperren wird serverseitig audit-protokolliert)
   const unlockBtn = document.createElement('button');
   unlockBtn.type = 'button';
-  unlockBtn.className = 'ml-auto inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 transition-colors';
-  unlockBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">lock_open</span> Entsperren';
-  unlockBtn.onclick = async () => {
-    if (!(await safeConfirm(`Rechnung ${existing.nr} wirklich entsperren? Die Freigabe wird GoBD-konform protokolliert und danach sind Inhaltsänderungen wieder möglich.`))) return;
-    try {
-      await window.api.unlockDocument(existing.id, 'Manuelle Freigabe im Rechnungseditor');
-      showToast(`Rechnung ${existing.nr} wurde entsperrt.`, 'success');
-      closeRechnungModal();
-      openRechnungModal(existing.id);
-    } catch (err) {
-      console.error('Fehler beim Entsperren:', err);
-      showToast('Fehler beim Entsperren: ' + (err.message || err), 'error');
-    }
-  };
+  unlockBtn.className = 'ml-auto inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed';
+  unlockBtn.innerHTML = '<span class="material-symbols-outlined text-[16px]">lock</span> Entsperren';
+  unlockBtn.disabled = true;
+  unlockBtn.title = 'GoBD-gesperrt — bitte Storno (InvoiceController 627-669) nutzen.';
   titleEl.parentElement.insertBefore(unlockBtn, titleEl.nextSibling);
 
   // Fill data

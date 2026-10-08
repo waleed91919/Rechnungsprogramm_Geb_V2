@@ -171,12 +171,12 @@ if (typeof window !== 'undefined' && window.api && window.api.onIdsCartReceived)
 // Rechnungen, Banking/OPOS, Berichte/StB-Export, Einstellungen).
 const CORE_VIEWS = new Set([
     'dashboard', 'kunden', 'angebote', 'projekte', 'projekt-details',
-    'rechnungen', 'banking', 'berichte', 'einstellungen'
+    'rechnungen', 'artikel', 'banking', 'berichte', 'einstellungen'
 ]);
 // Experimentell (Standard: ausgeblendet, Opt-in pro Arbeitsplatz):
 const EXPERIMENTAL_VIEWS = new Set([
     'objekte', 'objekt-details', 'dauerrechnungen', 'putzplan',
-    'maengel', 'zeiterfassung', 'grosshandel', 'sokabau', 'sync', 'artikel'
+    'maengel', 'zeiterfassung', 'grosshandel', 'sokabau', 'sync'
 ]);
 
 function isExperimentalEnabled() {

@@ -100,14 +100,11 @@ async function bulkAction(action) {
     }
     if (await safeConfirm(`Mahnungen für ${toDunning.length} überfällige Rechnungen senden?`)) {
       // Simulation of dunning process
-      showToast(`${toDunning.length} Mahnungen werden generiert und versendet...`, 'info');
-      setTimeout(() => {
-        showToast(`${toDunning.length} Mahnungen erfolgreich versendet.`, 'success');
+      showToast(`${toDunning.length} Mahnungen werden generiert (kein Versandnachweis — folgt J11)`, 'info');
 
-        // Unselect all
-        document.getElementById('selectAll').checked = false;
-        toggleAllSelections(document.getElementById('selectAll'));
-      }, 2000);
+      // Unselect all
+      document.getElementById('selectAll').checked = false;
+      toggleAllSelections(document.getElementById('selectAll'));
     }
   }
 }
