@@ -160,7 +160,8 @@ function createRechnungRow(rech, kundenMap) {
   // Restbetrag cell
   const tdRest = document.createElement('td');
   tdRest.className = 'px-4 text-right tabular-nums ' + (rech.status === 'Ausstehend' || rech.status === 'Überfällig' ? 'font-bold text-slate-700' : 'text-slate-400');
-  tdRest.textContent = rech.status === 'Bezahlt' ? '€0,00' : formatCurrency(rech.brutto);
+  const offenAmt = rech.offener_betrag !== undefined ? parseFloat(rech.offener_betrag) : parseFloat(rech.brutto || 0);
+  tdRest.textContent = offenAmt <= 0.009 ? '€0,00' : formatCurrency(offenAmt);
   tr.appendChild(tdRest);
 
   // Status cell

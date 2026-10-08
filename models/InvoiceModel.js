@@ -55,10 +55,23 @@ window.InvoiceModel = class InvoiceModel {
      */
     async markAsPaid(doc) {
         if (!this.db) return null;
-        doc.status = 'Bezahlt';
-        if (doc.id != null && typeof this.db.updateDocumentStatus === 'function') {
+        
+        const offen = doc.offener_betrag !== undefined ? parseFloat(doc.offener_betrag) : parseFloat(doc.brutto || 0);
+        if (offen > 0.009) {
+            throw new Error('Restbetrag-Prüfung fehlgeschlagen: Die Rechnung hat noch einen offenen Betrag. Bitte verwenden Sie das Banking-Modul für Teilzahlungen.');
+        }
+
+        if (doc.id != null && typeof this.db.applyPaymentMatching === 'function') {
+            await this.db.applyPaymentMatching([{
+                dokumentId: doc.id,
+                betrag: offen,
+                differenzGrund: 'MANUELL_BEZAHLT'
+            }]);
+        } else if (doc.id != null && typeof this.db.updateDocumentStatus === 'function') {
+            doc.status = 'Bezahlt';
             await this.db.updateDocumentStatus(doc.id, { status: 'Bezahlt' });
         } else {
+            doc.status = 'Bezahlt';
             // Fallback für alternative DB-Interfaces ohne Status-Pfad
             await this.db.saveDocument(doc);
         }

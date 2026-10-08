@@ -57,6 +57,40 @@ applyPaymentMatching(matches = [], options = {}) {
             let applied = 0;
 
             for (const m of matches) {
+                if (!m.transaktionId && m.differenzGrund === 'MANUELL_BEZAHLT') {
+                    if (m.dokumentId) {
+                        const doc = getDocumentWithChildren(m.dokumentId);
+                        if (doc) {
+                            const newStatus = 'Bezahlt';
+                            const newLocked = 1;
+                            const newMahnung = 0;
+                            const wasLockedVorZahlung = doc.isLocked ? 1 : 0;
+                            
+                            doc.status = newStatus;
+                            doc.isLocked = newLocked;
+                            doc.mahnungLevel = newMahnung;
+                            
+                            db.prepare(`
+                                UPDATE dokumente
+                                SET status = ?, isLocked = ?, mahnungLevel = ?, was_locked_vor_zahlung = ?
+                                WHERE id = ?
+                            `).run(newStatus, newLocked, newMahnung, wasLockedVorZahlung, doc.id);
+                            
+                            appendAuditLog({
+                                entityType: 'DOKUMENT',
+                                entityId: Number(doc.id),
+                                action: 'MANUELL_BEZAHLT',
+                                details: {
+                                    betrag: m.betrag || 0,
+                                    grund: m.benutzerNotiz || '0-Balance Manuell Bezahlt'
+                                }
+                            });
+                            applied++;
+                        }
+                    }
+                    continue;
+                }
+
                 const txRow = db.prepare('SELECT * FROM bank_transaktionen WHERE id = ?').get(m.transaktionId);
                 if (!txRow) continue;
 
@@ -174,7 +208,7 @@ unmatchTransaction(zuordnungId, grund = '') {
                     const altBezahlt = Math.round((parseFloat(doc.bezahlt_betrag) || 0) * 100) / 100;
                     const neuBezahlt = Math.max(0, Math.round((altBezahlt - zuordnung.betrag) * 100) / 100);
                     const docBrutto = Math.round((parseFloat(doc.brutto) || 0) * 100) / 100;
-                    const neuOffen = Math.round((docBrutto - neuBezahlt) * 100) / 100;
+                    const neuOffen = Math.max(0, Math.round((docBrutto - neuBezahlt) * 100) / 100);
 
                     const newStatus = neuBezahlt <= 0.009 ? 'Ausstehend' : 'Teilweise bezahlt';
                     const newLocked = (doc.was_locked_vor_zahlung !== undefined && doc.was_locked_vor_zahlung !== null)

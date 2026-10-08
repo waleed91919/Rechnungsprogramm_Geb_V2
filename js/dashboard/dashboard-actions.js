@@ -71,19 +71,45 @@ async function bulkAction(action) {
     }
     if (await safeConfirm(`${toUpdate.length} Rechnungen als bezahlt markieren?`)) {
       let successCount = 0;
+      let blockedCount = 0;
       for (const rech of toUpdate) {
         try {
-          // GoBD: Gesperrte Belege nur über den schmalen Status-Pfad ändern
-          await window.api.updateDocumentStatus(rech.id, {
-            status: 'Bezahlt'
-          });
+          const offen = rech.offener_betrag !== undefined ? parseFloat(rech.offener_betrag) : parseFloat(rech.brutto || 0);
+          if (offen > 0.009) {
+             blockedCount++;
+             console.warn(`Rechnung ${rech.nr} hat offenen Betrag und kann nicht manuell als bezahlt markiert werden.`);
+             continue;
+          }
+          // GoBD: Gesperrte Belege nur über den schmalen Status-Pfad ändern.
+          // Für 0-Balance Rechnungen loggen wir den MANUELL_BEZAHLT Audit, 
+          // indem wir den applyPaymentMatching-Pfad mit transaktionId = null nutzen.
+          if (typeof window.api.applyPaymentMatching === 'function') {
+              await window.api.applyPaymentMatching([{
+                  dokumentId: rech.id,
+                  betrag: offen,
+                  differenzGrund: 'MANUELL_BEZAHLT'
+              }]);
+          } else {
+              await window.api.updateDocumentStatus(rech.id, {
+                  status: 'Bezahlt'
+              });
+          }
           rech.status = 'Bezahlt';
           successCount++;
         } catch (e) {
           console.error(`Error saving invoice ${rech.nr}:`, e);
         }
       }
-      showToast(`${successCount} von ${toUpdate.length} Rechnungen als bezahlt markiert.`, 'success');
+      
+      if (blockedCount > 0) {
+          showToast(`${blockedCount} Rechnungen haben noch einen offenen Betrag und wurden blockiert. Bitte nutzen Sie das OPOS-Matching für Teilzahlungen.`, 'warning');
+      }
+      
+      if (successCount > 0) {
+          showToast(`${successCount} von ${toUpdate.length} Rechnungen als bezahlt markiert.`, 'success');
+      } else if (blockedCount === 0) {
+          showToast(`Keine Rechnungen wurden als bezahlt markiert.`, 'info');
+      }
       renderRechnungen();
       renderDashboard();
       handleSelectionChange();
