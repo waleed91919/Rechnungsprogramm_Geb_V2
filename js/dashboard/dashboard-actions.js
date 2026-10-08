@@ -125,8 +125,50 @@ async function bulkAction(action) {
       return;
     }
     if (await safeConfirm(`Mahnungen für ${toDunning.length} überfällige Rechnungen senden?`)) {
-      // Simulation of dunning process
-      showToast(`${toDunning.length} Mahnungen werden generiert (kein Versandnachweis — folgt J11)`, 'info');
+      let successCount = 0;
+      let errorCount = 0;
+      for (const rech of toDunning) {
+          const kundeId = parseInt(rech.kundeId);
+          const kunde = state.kunden.find(k => parseInt(k.id) === kundeId) || {};
+          if (!kunde.email) {
+              console.warn('Keine E-Mail für Kunde:', kundeId);
+              errorCount++;
+              continue;
+          }
+          
+          const heute = new Date().toISOString().split('T')[0];
+          if (rech.mahnungDatum === heute) {
+              if (!(await safeConfirm(`Für Rechnung ${rech.nr} wurde heute bereits eine Mahnung erstellt. Trotzdem senden?`))) {
+                  continue;
+              }
+          }
+
+          const level = rech.mahnungLevel || 1;
+          try {
+              const res = await window.api.sendBelegEmail({
+                  beleg_typ: 'MAHNUNG',
+                  beleg_id: rech.id,
+                  mahnstufe: level,
+                  empfaenger: kunde.email,
+                  betreff: `${level}. Mahnung zu Rechnung ${rech.nr}`
+              });
+              if (res && res.success) {
+                  successCount++;
+                  rech.mahnungDatum = heute;
+              } else {
+                  console.error('SMTP Error:', res?.fehlermeldung);
+                  showToast(`Fehler bei ${rech.nr}: ${res?.fehlermeldung}`, 'error');
+                  errorCount++;
+              }
+          } catch (e) {
+              console.error('SMTP Exception:', e);
+              showToast(`Fehler bei ${rech.nr}: ${e.message}`, 'error');
+              errorCount++;
+          }
+      }
+      
+      if (successCount > 0) showToast(`${successCount} Mahnungen erfolgreich versendet.`, 'success');
+      if (errorCount > 0) showToast(`${errorCount} Mahnungen konnten nicht versendet werden.`, 'warning');
 
       // Unselect all
       document.getElementById('selectAll').checked = false;

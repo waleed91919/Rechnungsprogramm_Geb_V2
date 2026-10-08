@@ -167,7 +167,31 @@ function createRechnungRow(rech, kundenMap) {
   // Status cell
   const tdStatus = document.createElement('td');
   tdStatus.className = 'px-4 text-center';
-  tdStatus.innerHTML = getStatusBadge(rech.status);
+  let finalStatusHtml = getStatusBadge(rech.status);
+  
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const datumObj = rech.datum ? new Date(rech.datum) : today;
+  const diffDays = Math.floor((today - datumObj) / (1000 * 60 * 60 * 24));
+  
+  let fristHtml = '';
+  if (rech.rechnungsart === 'ABSCHLAG_KUMULIERT' || rech.rechnungsart === 'TEILRECHNUNG') {
+      const remaining = 21 - diffDays;
+      if (remaining >= 0) {
+          fristHtml = `<br><span class="text-[10px] text-slate-500 block mt-1" title="VOB/B §16 Abs.1 Nr.3">Abschlag fällig in ${remaining} Tagen</span>`;
+      } else {
+          fristHtml = `<br><span class="text-[10px] text-red-500 font-medium block mt-1" title="VOB/B §16 Abs.1 Nr.3">Abschlag überfällig seit ${Math.abs(remaining)} Tagen</span>`;
+      }
+  } else if (rech.rechnungsart === 'SCHLUSSRECHNUNG') {
+      fristHtml = `<br><span class="text-[10px] text-slate-500 block mt-1 leading-tight" title="VOB/B §16 Abs.3 Nr.1 / §14 Abs.3">VOB 30-Tage Schluss<br>12-Werktage-Einreichung<br><span class="italic text-[9px]">unbestrittenes Guthaben sofort als Abschlag zahlen</span></span>`;
+  }
+  
+  if (rech.status === 'Ausstehend' && diffDays >= 30) {
+      finalStatusHtml = getStatusBadge('Überfällig');
+      fristHtml += '<span class="text-[10px] text-red-500 font-medium block mt-1">30-Tage-Verzug (Auto)</span>';
+  }
+  
+  tdStatus.innerHTML = finalStatusHtml + fristHtml;
   tr.appendChild(tdStatus);
 
   // Actions cell
