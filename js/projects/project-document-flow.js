@@ -21,8 +21,48 @@ function closeAufmassUebergabeModal() {
     if (modal) modal.classList.add('hidden');
 }
 
-function onUebergabeTypChange() {
-    // Mode toggles if needed
+async function onUebergabeTypChange() {
+    const pId = window.currentViewProjektId;
+    const zielTyp = document.getElementById('uebergabe-ziel-typ')?.value || 'RECHNUNG';
+    const panel = document.getElementById('kumulativ-panel');
+    const tbody = document.getElementById('kumulativ-tbody');
+
+    if (zielTyp === 'SCHLUSSRECHNUNG') {
+        panel.classList.remove('hidden');
+        if (window.api && window.api.invoke) {
+            try {
+                const data = await window.api.invoke('db:getKumulativeAbrechnung', pId);
+                tbody.innerHTML = '';
+                if (data && data.vorrechnungen && data.vorrechnungen.length > 0) {
+                    data.vorrechnungen.forEach(v => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td class="px-2 py-1">${v.nummer || 'Entwurf'}</td>
+                            <td class="px-2 py-1 text-right">${formatCurrency(v.netto)}</td>
+                            <td class="px-2 py-1 text-right">${formatCurrency(v.brutto)}</td>
+                            <td class="px-2 py-1 text-right text-emerald-600">${formatCurrency(v.bezahlt)}</td>
+                            <td class="px-2 py-1 text-right text-amber-600">${formatCurrency(v.rest)}</td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                    document.getElementById('kumulativ-sum-netto').textContent = formatCurrency(data.totalNetto);
+                    document.getElementById('kumulativ-sum-brutto').textContent = formatCurrency(data.totalBrutto);
+                    document.getElementById('kumulativ-sum-bezahlt').textContent = formatCurrency(data.totalBezahlt);
+                    document.getElementById('kumulativ-sum-rest').textContent = formatCurrency(data.totalRest);
+
+                    const formulas = data.vorrechnungen.map((v, i) => `F${i+1}`).join('+');
+                    document.getElementById('kumulativ-check-msg').textContent = `Check: ${formulas}=L2 (${formatCurrency(data.totalNetto)} netto)`;
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="5" class="px-2 py-2 text-center text-slate-400">Keine Vorrechnungen gefunden.</td></tr>';
+                    document.getElementById('kumulativ-check-msg').textContent = '';
+                }
+            } catch (e) {
+                console.error("Fehler beim Laden kumulativer Daten", e);
+            }
+        }
+    } else {
+        panel.classList.add('hidden');
+    }
 }
 
 async function executeAufmassUebergabe() {
@@ -48,10 +88,18 @@ async function executeAufmassUebergabe() {
         }
 
         // 2. Aufmaßzeilen konsolidieren (ohne unfertige DRAFTS)
-        const aggAufmass = await window.api.mergeSchlussaufmass(pId);
+        const mergeResult = await window.api.mergeSchlussaufmass(pId);
+        const aggAufmass = mergeResult && mergeResult.rows ? mergeResult.rows : mergeResult;
+
         if (!aggAufmass || aggAufmass.length === 0) {
             showToast('Keine berechneten Aufmaßpositionen zum Übergeben vorhanden.', 'warning');
             return { success: false, reason: 'EMPTY_AUFMASS' };
+        }
+
+        if (mergeResult && mergeResult.warnings && mergeResult.warnings.length > 0) {
+            const missingOZs = mergeResult.warnings.map(w => w.oz_code).join(', ');
+            showToast(`Übergabe blockiert (Prüfbarkeit §14 VOB/B): Für folgende OZs fehlt die LV-Position oder es liegt ein Tippfehler vor: ${missingOZs}`, 'error');
+            return { success: false, reason: 'INVALID_OZ_CODE', warnings: mergeResult.warnings };
         }
 
         const loadDoc = async (id) => {

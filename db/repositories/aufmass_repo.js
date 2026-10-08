@@ -215,8 +215,16 @@ function createAufmassRepo(deps) {
         }
 
         // 3. Aufmaßzeilen mit LV-Preisen anreichern
-        return aufmassRows.map(row => {
+        const warnings = [];
+        const rows = aufmassRows.map(row => {
             const matchedPos = priceMap.get(row.oz_code);
+            if (!matchedPos) {
+                warnings.push({
+                    oz_code: row.oz_code,
+                    grund: 'UNBEKANNT',
+                    message: `Aufmaßposition ${row.oz_code} hat keinen gültigen Vertragspreis (LV-Position fehlt oder Tippfehler in OZ).`
+                });
+            }
             return {
                 oz_code: row.oz_code,
                 summe_menge: Math.round(row.summe_menge * 1000) / 1000,
@@ -230,6 +238,8 @@ function createAufmassRepo(deps) {
                 position_id: matchedPos ? matchedPos.position_id : null
             };
         });
+
+        return { rows, warnings };
     },
 
 // --- GAEB DA XML 3.3 Phase X31 ---
@@ -346,6 +356,62 @@ function createAufmassRepo(deps) {
         });
 
         return tx();
+    },
+
+// --- Kumulative Abrechnung ---
+    async getKumulativeAbrechnung(projectId) {
+        const pId = Number(projectId);
+
+        // Finde alle Rechnungen (insbesondere Abschlagsrechnungen), die zu dem Projekt gehören
+        // (type='rechnung' AND status NOT IN ('Entwurf', 'Storniert'))
+        const docs = await dbQuery(`
+            SELECT d.id, d.nummer, d.status, d.created_at as datum,
+                   COALESCE(SUM(pos.preis * pos.menge), 0) as netto,
+                   COALESCE(SUM(pos.preis * pos.menge * (1 + pos.mwst / 100.0)), 0) as brutto,
+                   (
+                       SELECT COALESCE(SUM(zz.betrag), 0)
+                       FROM zahlung_zuordnungen zz
+                       WHERE zz.dokument_id = d.id
+                   ) as bezahlt
+            FROM dokumente d
+            LEFT JOIN positionen pos ON pos.dokumentId = d.id
+            WHERE d.projektId = ? AND d.type = 'rechnung' AND d.status NOT IN ('Entwurf', 'Storniert')
+            GROUP BY d.id
+            ORDER BY d.id ASC
+        `, [pId]);
+
+        let totalNetto = 0;
+        let totalBrutto = 0;
+        let totalBezahlt = 0;
+
+        const vorrechnungen = docs.map(d => {
+            const n = parseFloat(d.netto) || 0;
+            const b = parseFloat(d.brutto) || 0;
+            const bez = parseFloat(d.bezahlt) || 0;
+
+            totalNetto += n;
+            totalBrutto += b;
+            totalBezahlt += bez;
+
+            return {
+                id: d.id,
+                nummer: d.nummer,
+                status: d.status,
+                datum: d.datum,
+                netto: n,
+                brutto: b,
+                bezahlt: bez,
+                rest: b - bez
+            };
+        });
+
+        return {
+            vorrechnungen,
+            totalNetto,
+            totalBrutto,
+            totalBezahlt,
+            totalRest: totalBrutto - totalBezahlt
+        };
     }
     };
 

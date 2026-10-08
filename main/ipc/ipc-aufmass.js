@@ -136,6 +136,10 @@ function register(ipcMain, context = {}) {
         focusWin(win);
         return result;
     }));
+
+    ipcMain.handle('db:getKumulativeAbrechnung', wrapHandler(async (e, projectId) => {
+        return await dbAPI.getKumulativeAbrechnung(projectId);
+    }));
 }
 
 module.exports = {

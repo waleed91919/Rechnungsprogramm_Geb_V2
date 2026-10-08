@@ -47,6 +47,36 @@
                             <!-- JS populated -->
                         </select>
                     </div>
+
+                    <!-- Kumulations-Panel (nur Lesesicht) -->
+                    <div id="kumulativ-panel" class="hidden mt-4 p-4 border border-slate-200 rounded-lg bg-slate-50">
+                        <h4 class="font-bold text-slate-800 text-sm mb-2">Kumulierte Abrechnung (Vorrechnungen)</h4>
+                        <p class="text-xs text-slate-500 mb-3">Aufmaß nach §14 VOB/B (prüfbar, OZ-Reihenfolge aus LV, Mengenberechnung beifügen).</p>
+                        <table class="w-full text-left text-xs whitespace-nowrap bg-white border border-slate-200">
+                            <thead class="bg-slate-100 text-slate-700">
+                                <tr>
+                                    <th class="px-2 py-1 border-b">Rechnung</th>
+                                    <th class="px-2 py-1 border-b text-right">Netto</th>
+                                    <th class="px-2 py-1 border-b text-right">Brutto</th>
+                                    <th class="px-2 py-1 border-b text-right text-emerald-600">Bezahlt</th>
+                                    <th class="px-2 py-1 border-b text-right text-amber-600">Rest</th>
+                                </tr>
+                            </thead>
+                            <tbody id="kumulativ-tbody" class="divide-y divide-slate-100">
+                                <!-- JS populated -->
+                            </tbody>
+                            <tfoot class="bg-slate-50 font-bold">
+                                <tr>
+                                    <td class="px-2 py-1 text-right">Gesamt (L2):</td>
+                                    <td id="kumulativ-sum-netto" class="px-2 py-1 text-right text-slate-800">0,00 €</td>
+                                    <td id="kumulativ-sum-brutto" class="px-2 py-1 text-right text-slate-800">0,00 €</td>
+                                    <td id="kumulativ-sum-bezahlt" class="px-2 py-1 text-right text-emerald-700">0,00 €</td>
+                                    <td id="kumulativ-sum-rest" class="px-2 py-1 text-right text-amber-700">0,00 €</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                        <div id="kumulativ-check-msg" class="text-xs text-slate-600 mt-2 font-medium"></div>
+                    </div>
                 </div>
 
                 <div class="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-2">

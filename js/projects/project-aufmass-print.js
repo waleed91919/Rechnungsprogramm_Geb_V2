@@ -297,7 +297,8 @@ async function calculateSchlussaufmassForProjekt() {
     if (!pId) return;
     try {
         const projekt = (state.projekte || []).find(p => p.id === pId);
-        const aggRows = await window.api.mergeSchlussaufmass(pId);
+        const mergeResult = await window.api.mergeSchlussaufmass(pId);
+        const aggRows = mergeResult && mergeResult.rows ? mergeResult.rows : mergeResult;
         const blaetter = await window.api.getAufmassBlaetter(pId);
 
         // Collect all positions with Soll-Mengen
