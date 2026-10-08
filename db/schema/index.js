@@ -1434,6 +1434,25 @@ function dedupeDuplicateVerrechnungen(db) {
 }
 
 /**
+ * Wirft einen Fehler, wenn für ein Projekt bereits mehrere Schlussrechnungen existieren.
+ * (Vermeidet stillen Datenverlust bei Migration des UNIQUE Index)
+ */
+function checkDuplicateSchlussrechnungen(db) {
+    const duplicates = db.prepare(`
+        SELECT projektId, COUNT(*) as anzahl
+        FROM dokumente
+        WHERE rechnungsart = 'SCHLUSSRECHNUNG' AND status != 'Storniert'
+        GROUP BY projektId
+        HAVING COUNT(*) > 1
+    `).all();
+
+    if (duplicates.length > 0) {
+        const projIds = duplicates.map(d => d.projektId).join(', ');
+        throw new Error(`[DB Migration] Kritischer Fehler: Es existieren bereits mehrere Schlussrechnungen für die Projekte: ${projIds}. Bitte bereinigen Sie die Daten manuell, bevor das Update angewendet wird.`);
+    }
+}
+
+/**
  * Dedupliziert Sicherheitseinbehalte: pro invoice_id bleibt der neueste Eintrag.
  * Fachlich ist ein Einbehalt pro Rechnung vorgesehen (invoice_id als Anker).
  */
@@ -1474,6 +1493,14 @@ function ensureUniqueConstraints(db) {
         db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_verrechnungen_paar_unique ON rechnung_verrechnungen(aktuelle_rechnung_id, vorherige_rechnung_id)`);
     } catch (e) {
         console.error('[DB Migration] UNIQUE-Index auf rechnung_verrechnungen konnte nicht erstellt werden:', e.message);
+    }
+
+    try {
+        checkDuplicateSchlussrechnungen(db);
+        db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_dokumente_projekt_schluss_unique ON dokumente(projektId) WHERE rechnungsart = 'SCHLUSSRECHNUNG' AND status != 'Storniert'`);
+    } catch (e) {
+        console.error('[DB Migration] UNIQUE-Index auf dokumente(projektId) (SCHLUSSRECHNUNG) konnte nicht erstellt werden:', e.message);
+        throw e; // Harter Abbruch, wenn Doppel-Schluss existiert
     }
 
     try {

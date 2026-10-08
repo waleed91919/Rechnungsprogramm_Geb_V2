@@ -211,6 +211,19 @@ function applyDocumentWrite(d, requestedLockedInt) {
         throw new Error(`Die Belegnummer "${d.nr}" ist bereits vergeben (Dokument #${nrConflict.id}). Bitte verwenden Sie eine andere Nummer.`);
     }
 
+    // J1 Schlussrechnungs-Sperre: Genau eine Schlussrechnung pro Projekt
+    if (d.type === 'rechnung' && d.rechnungsart === 'SCHLUSSRECHNUNG' && d.projektId) {
+        const currentDocId = docId || -1;
+        const existingSchluss = db.prepare(`
+            SELECT nr FROM dokumente
+            WHERE projektId = ? AND rechnungsart = 'SCHLUSSRECHNUNG' AND id != ? AND status != 'Storniert'
+        `).get(d.projektId, currentDocId);
+
+        if (existingSchluss) {
+            throw new Error(`Für dieses Projekt existiert bereits die Schlussrechnung ${existingSchluss.nr}. Es ist genau eine Schlussrechnung pro Projekt zulässig.`);
+        }
+    }
+
     if (docId) {
         action = (calculateDocumentContentHash(existing) === calculateDocumentContentHash(d)) ? 'STATUS_GEÄNDERT' : 'GEÄNDERT';
 
@@ -279,7 +292,7 @@ function applyDocumentWrite(d, requestedLockedInt) {
         }
 
         // Neue Verrechnungen einfügen
-        insertVerrechnungenGuarded(docId, d.verrechnungen);
+        insertVerrechnungenGuarded(docId, d.verrechnungen, d.rechnungsart || (existing ? existing.rechnungsart : 'REGULAER'), d.projektId || (existing ? existing.projektId : null));
 
         const docVersion = d.version !== undefined && d.version !== null ? parseInt(d.version, 10) : (existing ? (existing.version || 1) : 1);
         const parentAngebotId = d.parent_angebot_id !== undefined ? d.parent_angebot_id : (existing ? (existing.parent_angebot_id || null) : null);
@@ -351,7 +364,7 @@ function applyDocumentWrite(d, requestedLockedInt) {
         }
 
         // Verrechnungen einfügen
-        insertVerrechnungenGuarded(docId, d.verrechnungen);
+        insertVerrechnungenGuarded(docId, d.verrechnungen, d.rechnungsart || 'REGULAER', d.projektId);
     }
 
     // GoBD: Audit-Eintrag INNERHALB derselben Transaktion
@@ -378,10 +391,45 @@ function applyDocumentWrite(d, requestedLockedInt) {
  * Eine Vorrechnung darf global nur in EINER aktuellen Rechnung verrechnet sein.
  * Wird innerhalb einer bestehenden Transaktion aufgerufen (kein eigenes Wrapper nötig).
  */
-function insertVerrechnungenGuarded(docId, verrechnungen) {
-    if (!verrechnungen || verrechnungen.length === 0) return;
+function insertVerrechnungenGuarded(docId, verrechnungen, rechnungsart, projektId) {
+    if (!verrechnungen) verrechnungen = [];
 
-    const checkUsedStmt = db.prepare('SELECT aktuelle_rechnung_id FROM rechnung_verrechnungen WHERE vorherige_rechnung_id = ? AND aktuelle_rechnung_id != ?');
+    // J1: "Schluss verrechnet alle"-Check
+    if (rechnungsart === 'SCHLUSSRECHNUNG' && projektId) {
+        // Finde alle kumulativen Vorrechnungen für das Projekt (nicht storniert)
+        const previousDocs = db.prepare(`
+            SELECT id, nr FROM dokumente
+            WHERE projektId = ?
+            AND id != ?
+            AND status != 'Storniert'
+            AND type = 'rechnung'
+            AND rechnungsart IN ('ABSCHLAG', 'TEILSCHLUSSRECHNUNG', 'ABSCHLAG_KUMULIERT')
+        `).all(projektId, docId || -1);
+
+        const verrechneteIds = new Set(verrechnungen.map(v => v.vorherige_rechnung_id));
+        const missingNrs = [];
+
+        for (const prev of previousDocs) {
+            if (!verrechneteIds.has(prev.id)) {
+                missingNrs.push(prev.nr);
+            }
+        }
+
+        if (missingNrs.length > 0) {
+            throw new Error(`Unvollständige Verrechnung: Eine Schlussrechnung muss alle Vorrechnungen (Abschläge/Teilschluss) des Projekts abziehen. Es fehlen: ${missingNrs.join(', ')}`);
+        }
+    }
+
+    if (verrechnungen.length === 0) return;
+
+    const checkUsedStmt = db.prepare(`
+        SELECT rv.aktuelle_rechnung_id
+        FROM rechnung_verrechnungen rv
+        JOIN dokumente d ON rv.aktuelle_rechnung_id = d.id
+        WHERE rv.vorherige_rechnung_id = ?
+        AND rv.aktuelle_rechnung_id != ?
+        AND d.status != 'Storniert'
+    `);
     const seenPairs = new Set();
     for (const v of verrechnungen) {
         if (!v || !v.vorherige_rechnung_id) continue;
@@ -396,7 +444,7 @@ function insertVerrechnungenGuarded(docId, verrechnungen) {
 
         const usedBy = checkUsedStmt.get(v.vorherige_rechnung_id, docId);
         if (usedBy) {
-            throw new Error(`Doppelverrechnung blockiert: Die Rechnung #${v.vorherige_rechnung_id} ist bereits in Rechnung #${usedBy.aktuelle_rechnung_id} verrechnet und kann nicht erneut abgezogen werden.`);
+            throw new Error(`Doppelverrechnung blockiert: Die Rechnung #${v.vorherige_rechnung_id} ist bereits in der nicht stornierten Rechnung #${usedBy.aktuelle_rechnung_id} verrechnet und kann nicht erneut abgezogen werden.`);
         }
     }
 
