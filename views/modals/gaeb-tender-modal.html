@@ -400,6 +400,10 @@
                     <button type="button" onclick="window.GaebTenderController.closeModal()" class="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-50 shadow-sm transition-colors">
                         Schließen
                     </button>
+                    <button type="button" id="gt-btn-create-angebot" onclick="window.GaebTenderController.createAngebotFromDraft()" title="Erzeugt aus diesem Entwurf ein echtes Angebot inkl. Positionen" class="px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-lg shadow hover:shadow-md flex items-center gap-1.5 transition-all">
+                        <span class="material-symbols-outlined text-[16px]">post_add</span>
+                        <span>Positionen ins Angebot übernehmen</span>
+                    </button>
                     <button type="button" id="gt-btn-save-draft" onclick="window.GaebTenderController.saveDraft()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow hover:shadow-md flex items-center gap-1.5 transition-all">
                         <span class="material-symbols-outlined text-[16px]">save</span>
                         <span>Entwurf speichern</span>

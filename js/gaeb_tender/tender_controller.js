@@ -494,6 +494,55 @@
          * Führt den GAEB DA XML X84 Export des aktuellen oder angegebenen Entwurfs durch.
          * @param {number} [targetDraftId] 
          */
+        /**
+         * Erzeugt aus dem aktuell geöffneten Entwurf ein Angebot inkl. Positionen
+         * und verknüpft dieses mit dem Import.
+         */
+        async createAngebotFromDraft() {
+            try {
+                if (!window.GaebTenderState || !window.GaebTenderState.activeDraftId) {
+                    throw new Error('Kein aktiver Entwurf ausgewählt.');
+                }
+                if (!this.selectedImportInfo || !this.selectedImportInfo.id) {
+                    throw new Error('Kein Import ausgewählt.');
+                }
+
+                // 1. Speichere ggf. ungespeicherte Änderungen im UI (falls pending)
+                // Dies stellt sicher, dass die aktuellen Preise berücksichtigt werden.
+                if (window.GaebTenderState.hasUnsavedChanges) {
+                    await this.saveDraft(true); // silent = true
+                }
+
+                const payload = {
+                    importId: this.selectedImportInfo.id,
+                    draftVersion: window.GaebTenderState.activeVersion
+                };
+
+                const ipc = await this.getIpc();
+                const res = await ipc.invoke('gaeb:create-angebot-from-draft', payload);
+
+                if (res && res.success) {
+                    if (typeof showToast === 'function') {
+                        showToast(`Erfolgreich! Angebot mit ${res.insertedCount} Positionen wurde erstellt/aktualisiert.`, 'success');
+                    } else {
+                        alert(`Erfolgreich! Angebot mit ${res.insertedCount} Positionen wurde erstellt/aktualisiert.`);
+                    }
+
+                    // optional: Schließe Modal oder lade Ansicht neu, falls erforderlich
+                    // this.closeModal();
+                } else {
+                    throw new Error('Unbekannter Fehler bei der Angebotserstellung.');
+                }
+            } catch (error) {
+                console.error('[GAEB] Fehler bei createAngebotFromDraft:', error);
+                if (typeof showToast === 'function') {
+                    showToast('Fehler bei der Angebotserstellung: ' + error.message, 'error');
+                } else {
+                    alert('Fehler bei der Angebotserstellung: ' + error.message);
+                }
+            }
+        }
+
         async exportX84(targetDraftId) {
             const draftId = targetDraftId ? Number(targetDraftId) : window.GaebTenderState.currentDraftId;
             if (!draftId) {

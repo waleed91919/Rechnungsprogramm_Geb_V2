@@ -6,7 +6,7 @@
 const { calculateFileHash, detectGaebVersion } = require('./gaeb/gaeb_utils');
 const { saveX83Import } = require('./gaeb/gaeb_persistence');
 const { loadX83Import, listX83Imports, getImportOriginalBuffer } = require('./gaeb/gaeb_loader');
-const { linkImportToAngebot, getLinkedAngebote, isImportLinked, deleteX83Import } = require('./gaeb/gaeb_linking');
+const { linkImportToAngebot, getLinkedAngebote, isImportLinked, deleteX83Import, createAngebotFromDraft } = require('./gaeb/gaeb_linking');
 
 /**
  * Factory-Funktion zur Integration in das zentrale Repositories-Setup.
@@ -24,7 +24,8 @@ function createGaebRepo(deps) {
     linkImportToAngebot: (importId, angebotId, notes) => linkImportToAngebot(db, importId, angebotId, notes),
     getLinkedAngebote: importId => getLinkedAngebote(db, importId),
     isImportLinked: importId => isImportLinked(db, importId),
-    getImportOriginalBuffer: importId => getImportOriginalBuffer(db, importId)
+    getImportOriginalBuffer: importId => getImportOriginalBuffer(db, importId),
+    createAngebotFromDraft: payload => createAngebotFromDraft(db, payload)
   };
 }
 
@@ -39,5 +40,6 @@ module.exports = {
     getLinkedAngebote,
     isImportLinked,
     getImportOriginalBuffer,
-    createGaebRepo
+    createGaebRepo,
+    createAngebotFromDraft
 };

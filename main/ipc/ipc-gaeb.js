@@ -71,6 +71,17 @@ function register(ipcMain, context = {}) {
         return gaebRepo.getLinkedAngebote(db, importId);
     }));
 
+    // Erzeugt ein echtes Angebot (Dokument + Positionen) aus einem GAEB Draft / Import
+    ipcMain.handle('gaeb:create-angebot-from-draft', wrapHandler(async (e, payload = {}) => {
+        if (dbAPI && typeof dbAPI.createAngebotFromDraft === 'function') {
+            return dbAPI.createAngebotFromDraft(payload);
+        }
+        if (gaebRepo && typeof gaebRepo.createAngebotFromDraft === 'function') {
+            return gaebRepo.createAngebotFromDraft(db, payload);
+        }
+        throw new Error('createAngebotFromDraft ist im Repository nicht verfügbar.');
+    }));
+
     // Gibt gezielt den echten Original-Dateipuffer (BLOB) des Imports zurück
     ipcMain.handle('gaeb:get-original-buffer', wrapHandler(async (e, importId) => {
         if (!importId) throw new Error('Import-ID fehlt.');

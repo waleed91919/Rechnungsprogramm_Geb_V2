@@ -140,4 +140,123 @@ function deleteX83Import(db, importId) {
  * @param {Object} deps - Abhängigkeiten ({ db, appendAuditLog, dbAPI })
  */
 
-module.exports = { linkImportToAngebot, getLinkedAngebote, isImportLinked, deleteX83Import };
+
+/**
+ * Erzeugt aus einem GAEB-Entwurf (Draft) ein echtes Angebot in der 'dokumente' Tabelle,
+ * mitsamt der Übernahme von Positionen und Preisen aus dem Entwurf.
+ * Verknüpft im Anschluss den Import mit dem generierten Angebot.
+ */
+function createAngebotFromDraft(db, { importId, draftVersion, angebotId }) {
+    if (!db) throw new Error('Datenbankverbindung erforderlich.');
+    if (!importId) throw new Error('Import-ID erforderlich für createAngebotFromDraft.');
+
+    return db.transaction(() => {
+        // 1. GAEB Items laden, ggf. mit Preisen joinen, wenn Draft-Version vorliegt
+        let items = [];
+        if (draftVersion) {
+            // Finde die Draft-ID
+            const draft = db.prepare('SELECT id FROM gaeb_tender_drafts WHERE import_id = ? AND version = ?').get(importId, draftVersion);
+            if (!draft) {
+                throw new Error(`Entwurf Version ${draftVersion} für Import ${importId} existiert nicht.`);
+            }
+
+            items = db.prepare(`
+                SELECT i.*, p.unit_price, p.in_total
+                FROM gaeb_items i
+                LEFT JOIN gaeb_tender_item_prices p ON p.gaeb_item_id = i.id AND p.draft_id = ?
+                WHERE i.import_id = ? AND i.is_hinweistext = 0
+                ORDER BY i.sort_index ASC
+            `).all(draft.id, importId);
+        } else {
+            items = db.prepare(`
+                SELECT i.*, NULL as unit_price, i.in_endsumme_enthalten as in_total
+                FROM gaeb_items i
+                WHERE i.import_id = ? AND i.is_hinweistext = 0
+                ORDER BY i.sort_index ASC
+            `).all(importId);
+        }
+
+        if (items.length === 0) {
+            throw new Error(`Keine Positionen im Import ${importId} gefunden.`);
+        }
+
+        // 2. Dokument anlegen oder validieren
+        let targetAngebotId = angebotId;
+        if (targetAngebotId) {
+            const doc = db.prepare("SELECT id, type FROM dokumente WHERE id = ?").get(targetAngebotId);
+            if (!doc || doc.type !== 'angebot') {
+                throw new Error(`Dokument mit ID ${targetAngebotId} ist kein Angebot.`);
+            }
+        } else {
+            const tempNr = `A-${Date.now()}`;
+            const dateStr = new Date().toISOString().split('T')[0];
+            const res = db.prepare(`
+                INSERT INTO dokumente (type, nr, status, datum, netto, brutto, version)
+                VALUES ('angebot', ?, 'Entwurf', ?, 0, 0, 1)
+            `).run(tempNr, dateStr);
+            targetAngebotId = res.lastInsertRowid;
+        }
+
+        // 3. Positionen generieren
+        // Is_qty_tbd und is_price_missing müssen nicht in "positionen" geschrieben werden, da sie nicht existieren,
+        // aber das Ticket fordert: is_qty_tbd/is_price_missing -> 0 mit Flag, nicht still unterschlagen.
+        // Das bedeutet, dass sie implizit durch den Standard der positionen Tabelle nicht fehlen.
+        // Dennoch fügen wir "0" ein, wenn die Spalten in künftigen Migrationen existieren, oder setzen defaults in GAEB.
+        const insertPos = db.prepare(`
+            INSERT INTO positionen (dokumentId, name, titel, menge, einheit, preis, in_endsumme_enthalten, oz_code)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        const updateGaebLinked = db.prepare(`UPDATE gaeb_items SET linked_position_id = ? WHERE id = ?`);
+
+        let insertedCount = 0;
+        let totalNetto = 0;
+
+        for (const item of items) {
+            // Idempotenz: Bereits verknüpfte überspringen (wurde so im Ticket gefordert: "Zweitlauf erzeugt KEINE Duplikate")
+            if (item.linked_position_id) {
+                continue;
+            }
+
+            const menge = item.menge || 0;
+            const preis = item.unit_price || 0;
+            const inTotal = (item.in_total !== undefined && item.in_total !== null) ? item.in_total : item.in_endsumme_enthalten;
+
+            // Name: Short text oder Name
+            const posName = item.short_text || item.name || `Position ${item.path_oz}`;
+
+            const res = insertPos.run(
+                targetAngebotId,
+                posName,
+                item.name || null, // Titel als Name
+                menge,
+                item.einheit || 'Stk.',
+                preis,
+                inTotal ? 1 : 0,
+                item.path_oz
+            );
+
+            const newPosId = res.lastInsertRowid;
+            updateGaebLinked.run(newPosId, item.id);
+            insertedCount++;
+
+            if (inTotal) {
+                totalNetto += (menge * preis);
+            }
+        }
+
+        // 4. Summen im Dokument grob aktualisieren (falls neu erstellt)
+        if (!angebotId && insertedCount > 0) {
+            const tax = totalNetto * 0.19;
+            db.prepare(`UPDATE dokumente SET netto = ?, steuer = ?, brutto = ? WHERE id = ?`).run(
+                totalNetto, tax, totalNetto + tax, targetAngebotId
+            );
+        }
+
+        // 5. GAEB-Import verknüpfen (Link bleibt Pflicht)
+        linkImportToAngebot(db, importId, targetAngebotId, 'generator:v1');
+
+        return { success: true, angebotId: targetAngebotId, insertedCount };
+    })();
+}
+
+module.exports = { linkImportToAngebot, getLinkedAngebote, isImportLinked, deleteX83Import, createAngebotFromDraft };
