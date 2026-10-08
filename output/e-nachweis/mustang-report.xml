@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<validation filename="TEST-BAU-01-L1.pdf" datetime="2026-10-08 13:21:33">
+  <pdf>ValidationResult [flavour=3b, totalAssertions=818, assertions=[], isCompliant=true]
+    <info>
+      <signature>unknown</signature>
+      <duration unit="ms">1864</duration>
+    </info>
+    <summary status="valid"/>
+  </pdf>
+  <xml>
+    <info>
+      <version>2</version>
+      <profile>urn:cen.eu:en16931:2017#compliant#urn:xeinkauf.de:kosit:xrechnung_3.0</profile>
+      <validator version="2.26.0"/>
+      <rules>
+        <fired>16</fired>
+        <failed>2</failed>
+      </rules>
+      <duration unit="ms">2261</duration>
+    </info>
+    <messages>
+      <error type="27" location="/rsm:CrossIndustryInvoice/rsm:ExchangedDocumentContext[1]" criterion="ram:BusinessProcessSpecifiedDocumentContextParameter/ram:ID">Business process MUST be provided. [ID PEPPOL-EN16931-R001] from /xslt/XR_30/XRechnung-CII-validation.xslt)</error>
+      <error type="27" location="/rsm:CrossIndustryInvoice/rsm:SupplyChainTradeTransaction[1]/ram:ApplicableHeaderTradeAgreement[1]/ram:BuyerTradeParty[1]" criterion="ram:URIUniversalCommunication/ram:URIID">Buyer electronic address MUST be provided [ID PEPPOL-EN16931-R010] from /xslt/XR_30/XRechnung-CII-validation.xslt)</error>
+    </messages>
+    <summary status="invalid"/>
+  </xml>
+  <messages></messages>
+  <summary status="invalid"/>
+</validation>
