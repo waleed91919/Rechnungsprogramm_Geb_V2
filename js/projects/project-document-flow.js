@@ -176,9 +176,13 @@ async function executeAufmassUebergabe() {
                 aufmass_quelle: 'mergeSchlussaufmass',
                 aufmass_zeitstempel: now
             }));
+            let targetType = 'rechnung';
+            if (zielTyp === 'ANGEBOT') targetType = 'angebot';
+            else if (zielTyp === 'AUFTRAG') targetType = 'auftrag';
+
             const entwurf = {
                 id: null,
-                type: zielTyp === 'RECHNUNG' ? 'rechnung' : 'angebot',
+                type: targetType,
                 typ: zielTyp,
                 nr: null,
                 kundeId: kundeId,
