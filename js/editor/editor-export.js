@@ -243,6 +243,7 @@ function validateERechnungForB2G(currentDoc, customer) {
     }
     // Echtes Gate: Kundentyp bleibt unverändert, B2G-Pflichten greifen nur bei echten B2G-Kunden
     const validation = engine.validateForEN16931(currentDoc, customer, state.einstellungen);
+    if (typeof renderEN16931Fehlerliste === 'function') renderEN16931Fehlerliste(validation.isValid ? [] : validation.errors);
     if (!validation.isValid) {
         showToast('E-Rechnungs-Export blockiert - Validierungsfehler: ' + validation.errors.join(' '), 'error');
         return false;
@@ -251,6 +252,48 @@ function validateERechnungForB2G(currentDoc, customer) {
 }
 
 window.validateERechnungForB2G = validateERechnungForB2G;
+
+function sortEN16931FehlerLeitwegZuerst(errors) {
+    const rank = (msg) => (/leitweg|BT-10|BR-DE-15/i.test(msg || '')) ? 0 : 1;
+    return (errors || []).filter(Boolean).slice().sort((a, b) => rank(a) - rank(b));
+}
+
+function renderEN16931Fehlerliste(errors) {
+    const liste = sortEN16931FehlerLeitwegZuerst(errors);
+    let box = document.getElementById('rechnung-erechnung-fehler');
+    if (liste.length === 0) {
+        if (box) box.classList.add('hidden');
+        return;
+    }
+    if (!box) {
+        const anchor = document.getElementById('rechnung-b2g-section');
+        if (!anchor || !anchor.parentElement) return;
+        box = document.createElement('div');
+        box.id = 'rechnung-erechnung-fehler';
+        box.className = 'rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800';
+        anchor.parentElement.insertBefore(box, anchor);
+    }
+    box.classList.remove('hidden');
+    while (box.firstChild) box.removeChild(box.firstChild);
+    const title = document.createElement('p');
+    title.className = 'font-bold mb-1';
+    title.textContent = 'E-Rechnungs-Prüfung (EN 16931) meldet folgende Fehler — bitte im Formular korrigieren:';
+    box.appendChild(title);
+    const ul = document.createElement('ul');
+    ul.className = 'list-disc pl-5 space-y-0.5';
+    liste.forEach((msg) => {
+        const li = document.createElement('li');
+        li.textContent = msg;
+        ul.appendChild(li);
+    });
+    box.appendChild(ul);
+    if (typeof box.scrollIntoView === 'function') {
+        try { box.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (_e) { /* ignore */ }
+    }
+}
+
+window.renderEN16931Fehlerliste = renderEN16931Fehlerliste;
+window.sortEN16931FehlerLeitwegZuerst = sortEN16931FehlerLeitwegZuerst;
 
 async function openBelegEmailModal() {
     const kontext = collectBelegEmailContext();

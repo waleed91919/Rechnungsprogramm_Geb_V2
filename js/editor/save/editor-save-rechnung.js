@@ -114,6 +114,25 @@ async function saveRechnung() {
 
         newDoc.type = state.isAngebotMode ? 'angebot' : 'rechnung';
 
+        if (!state.isAngebotMode && customer_type === 'B2G') {
+            const engine = (typeof EInvoiceEngine !== 'undefined') ? EInvoiceEngine : (window.EInvoiceEngine || null);
+            if (engine && typeof engine.validateForEN16931 === 'function') {
+                const kunde = (state.kunden || []).find(k => kundeId && parseInt(k.id, 10) === parseInt(kundeId, 10)) || null;
+                const enCheck = engine.validateForEN16931(
+                    { ...newDoc, leitweg_id: (newDoc.leitweg_id || '').trim() || ((kunde && kunde.leitweg_id) || '') },
+                    kunde ? { ...kunde, customer_type } : { name: '', customer_type },
+                    state.einstellungen || {}
+                );
+                if (typeof renderEN16931Fehlerliste === 'function') renderEN16931Fehlerliste(enCheck.isValid ? [] : enCheck.errors);
+                const leitwegFehler = (enCheck.errors || []).filter(e => /leitweg|BT-10|BR-DE-15/i.test(e || ''));
+                if (leitwegFehler.length > 0) {
+                    if (typeof validateRechnungLeitwegField === 'function') validateRechnungLeitwegField();
+                    showToast(`Speichern blockiert: ${leitwegFehler.join(' ')}`, 'error');
+                    return;
+                }
+            }
+        }
+
         // MVC Validation via Controller
         if (window.InvoiceController && window.InvoiceController.validateSaveDocument) {
             const validation = window.InvoiceController.validateSaveDocument(newDoc);

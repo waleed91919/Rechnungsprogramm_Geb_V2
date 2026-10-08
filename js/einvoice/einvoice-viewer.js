@@ -223,11 +223,11 @@ class EInvoiceViewer {
 
         if (customerType === 'B2G') {
             if (!leitwegId) {
-                throw new Error('[E-Rechnung] Leitweg-ID fehlt: Rechnungen an öffentliche Auftraggeber (B2G) erfordern zwingend eine Leitweg-ID (BT-10 gemäß BR-DE-15).');
+                throw new Error('[E-Rechnung] Leitweg-ID fehlt: Rechnungen an öffentliche Auftraggeber (B2G) erfordern zwingend eine Leitweg-ID (BT-10 gemäß BR-DE-15) (im Formular Feld Leitweg-ID / BT-10 prüfen).');
             }
             const check = _getValidation().validateLeitwegId(leitwegId);
             if (!check.valid) {
-                throw new Error(`[E-Rechnung] Leitweg-ID "${leitwegId}" ungültig (BT-10 gemäß BR-DE-15): ${check.message}`);
+                throw new Error(`[E-Rechnung] Leitweg-ID "${leitwegId}" ungültig (BT-10 gemäß BR-DE-15): ${check.message} (im Formular Feld Leitweg-ID / BT-10 prüfen).`);
             }
         } else if (leitwegId) {
             const check = _getValidation().validateLeitwegId(leitwegId);

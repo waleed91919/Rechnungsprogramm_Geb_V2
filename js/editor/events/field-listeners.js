@@ -93,6 +93,8 @@ function handleKundeSelect(event) {
     if (buyerRefInput && kunde.buyer_reference) {
       buyerRefInput.value = kunde.buyer_reference;
     }
+    if (typeof initRechnungLeitwegLiveCheck === 'function') initRechnungLeitwegLiveCheck();
+    if (typeof validateRechnungLeitwegField === 'function') validateRechnungLeitwegField();
 
     // Checkbox defaults for B2C/B2B
     const privCb = document.getElementById('rechnung-ist-privatkunde');
@@ -306,4 +308,61 @@ function removeVerrechnung(id) {
 }
 
 window.removeVerrechnung = removeVerrechnung;
+
+function validateRechnungLeitwegField() {
+  const input = document.getElementById('rechnung-leitweg-id');
+  if (!input) return true;
+  const typeEl = document.getElementById('rechnung-customer-type');
+  const isB2G = !!typeEl && typeEl.value === 'B2G';
+  let err = document.getElementById('rechnung-leitweg-id-fehler');
+  const clearErr = () => {
+    input.classList.remove('border-red-500', 'ring-2', 'ring-red-200');
+    if (err) {
+      err.textContent = '';
+      err.classList.add('hidden');
+    }
+  };
+  if (!isB2G) {
+    clearErr();
+    return true;
+  }
+  const val = (input.value || '').trim();
+  const showErr = (message) => {
+    input.classList.add('border-red-500', 'ring-2', 'ring-red-200');
+    if (!err) {
+      err = document.createElement('p');
+      err.id = 'rechnung-leitweg-id-fehler';
+      err.className = 'text-xs text-red-600 font-medium mt-1';
+      input.insertAdjacentElement('afterend', err);
+    }
+    err.textContent = message || '';
+    err.classList.remove('hidden');
+  };
+  if (!val) {
+    showErr('Leitweg-ID fehlt: Bei B2G (öffentlicher Auftraggeber) ist die Leitweg-ID Pflicht (BT-10 gemäß BR-DE-15).');
+    return false;
+  }
+  const leitwegValidation = (typeof EInvoiceValidation !== 'undefined') ? EInvoiceValidation : null;
+  if (leitwegValidation) {
+    const check = leitwegValidation.validateLeitwegId(val);
+    if (!check.valid) {
+      showErr(check.message);
+      return false;
+    }
+  }
+  clearErr();
+  return true;
+}
+
+window.validateRechnungLeitwegField = validateRechnungLeitwegField;
+
+function initRechnungLeitwegLiveCheck() {
+  const input = document.getElementById('rechnung-leitweg-id');
+  if (input && !input.dataset.hasLeitwegCheck) {
+    input.dataset.hasLeitwegCheck = 'true';
+    input.addEventListener('input', () => validateRechnungLeitwegField());
+  }
+}
+
+window.initRechnungLeitwegLiveCheck = initRechnungLeitwegLiveCheck;
 

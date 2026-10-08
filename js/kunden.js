@@ -119,6 +119,7 @@ function openKundeModal(id = null) {
         document.getElementById('kunde-ustid').value = item.ustId || '';
         document.getElementById('kunde-customer-type').value = item.customer_type || 'B2C';
         document.getElementById('kunde-leitweg-id').value = item.leitweg_id || '';
+        clearKundeLeitwegFehler();
         document.getElementById('kunde-buyer-reference').value = item.buyer_reference || '';
         document.getElementById('kunde-peppol-id').value = item.peppol_id || '';
         document.getElementById('kunde-ist-bauleistender-13b').checked = !!item.ist_bauleistender_13b;
@@ -138,6 +139,7 @@ function openKundeModal(id = null) {
         document.getElementById('kunde-kundennummer').value = '';
         document.getElementById('kunde-customer-type').value = 'B2C';
         document.getElementById('kunde-leitweg-id').value = '';
+        clearKundeLeitwegFehler();
         document.getElementById('kunde-buyer-reference').value = '';
         document.getElementById('kunde-peppol-id').value = '';
         document.getElementById('kunde-ist-bauleistender-13b').checked = false;
@@ -181,6 +183,30 @@ function openKundeModal(id = null) {
 function closeKundeModal() {
     document.getElementById('kunde-modal').classList.add('hidden');
 }
+function setKundeLeitwegFehler(message) {
+    const input = document.getElementById('kunde-leitweg-id');
+    if (!input) return;
+    input.classList.remove('border-blue-300');
+    input.classList.add('border-red-500', 'ring-2', 'ring-red-200');
+    let err = document.getElementById('kunde-leitweg-id-fehler');
+    if (!err) {
+        err = document.createElement('p');
+        err.id = 'kunde-leitweg-id-fehler';
+        err.className = 'text-xs text-red-600 font-medium mt-1';
+        input.insertAdjacentElement('afterend', err);
+    }
+    err.textContent = message || '';
+    err.classList.remove('hidden');
+}
+function clearKundeLeitwegFehler() {
+    const input = document.getElementById('kunde-leitweg-id');
+    if (input) input.classList.remove('border-red-500', 'ring-2', 'ring-red-200');
+    const err = document.getElementById('kunde-leitweg-id-fehler');
+    if (err) {
+        err.textContent = '';
+        err.classList.add('hidden');
+    }
+}
 
 async function saveKunde() {
     const id = document.getElementById('kunde-id').value;
@@ -212,9 +238,23 @@ async function saveKunde() {
         return;
     }
 
-    if (customer_type === 'B2G' && (!leitweg_id || !leitweg_id.trim())) {
-        showToast('Bei B2G (Behörden / öffentlicher Auftraggeber) ist die Leitweg-ID ein zwingendes Pflichtfeld.', 'error');
-        return;
+    clearKundeLeitwegFehler();
+    if (customer_type === 'B2G') {
+        const lidTrimmed = (leitweg_id || '').trim();
+        if (!lidTrimmed) {
+            setKundeLeitwegFehler('Bei B2G (Behörden / öffentlicher Auftraggeber) ist die Leitweg-ID ein zwingendes Pflichtfeld (BT-10 gemäß BR-DE-15).');
+            showToast('Bei B2G (Behörden / öffentlicher Auftraggeber) ist die Leitweg-ID ein zwingendes Pflichtfeld.', 'error');
+            return;
+        }
+        const leitwegValidation = (typeof EInvoiceValidation !== 'undefined') ? EInvoiceValidation : null;
+        if (leitwegValidation) {
+            const check = leitwegValidation.validateLeitwegId(lidTrimmed);
+            if (!check.valid) {
+                setKundeLeitwegFehler(check.message);
+                showToast(`Ungültige Leitweg-ID: ${check.message}`, 'error');
+                return;
+            }
+        }
     }
 
     const bestand = id ? (state.kunden || []).find(k => k.id === parseInt(id)) : null;

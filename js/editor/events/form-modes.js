@@ -299,6 +299,8 @@ function setRechnungCustomerType(type, options = {}) {
       b2gSection.classList.remove('hidden');
       b2gSection.classList.add('ring-2', 'ring-blue-400/40', 'bg-blue-50/80');
     }
+    if (typeof initRechnungLeitwegLiveCheck === 'function') initRechnungLeitwegLiveCheck();
+    if (typeof validateRechnungLeitwegField === 'function') validateRechnungLeitwegField();
   } else if (selectedType === 'B2B') {
     if (typeBadge) {
       typeBadge.textContent = 'B2B (Gewerbe)';
