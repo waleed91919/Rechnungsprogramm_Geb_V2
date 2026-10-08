@@ -168,9 +168,10 @@ function createControllingBautagebuchRepo(deps) {
 
     // --- Eingangsrechnungen & Nachkalkulation ---
     async getEingangsrechnungen(projectId = null) {
+        const selectCols = `e.id, e.project_id, e.lieferant_id, e.rechnungs_nr, e.rechnungs_datum, e.faelligkeits_datum, e.betrag_netto, e.steuersatz, e.betrag_ust, e.betrag_brutto, e.kostenart, e.sec48b_geprueft, e.bauabzugsteuer_einbehalten, e.zahlungs_status, e.bezahlt_am, e.beleg_pfad, e.is_deleted, e.deleted_at, e.deletion_reason`;
         if (projectId) {
             return await dbQuery(`
-                SELECT e.*, k.name as lieferant_name, k.sec48b_status, k.sec48b_valid_until
+                SELECT ${selectCols}, k.name as lieferant_name, COALESCE(k.sec48b_status, 'NONE') as sec48b_status, k.sec48b_valid_until
                 FROM eingangsrechnungen e
                 LEFT JOIN kunden k ON e.lieferant_id = k.id
                 WHERE e.project_id = ?
@@ -178,7 +179,7 @@ function createControllingBautagebuchRepo(deps) {
             `, [projectId]);
         }
         return await dbQuery(`
-            SELECT e.*, k.name as lieferant_name, k.sec48b_status, k.sec48b_valid_until, p.name as projekt_name
+            SELECT ${selectCols}, k.name as lieferant_name, COALESCE(k.sec48b_status, 'NONE') as sec48b_status, k.sec48b_valid_until, p.name as projekt_name
             FROM eingangsrechnungen e
             LEFT JOIN kunden k ON e.lieferant_id = k.id
             LEFT JOIN projekte p ON e.project_id = p.id
@@ -187,6 +188,9 @@ function createControllingBautagebuchRepo(deps) {
     },
 
     async saveEingangsrechnung(data) {
+        const ust = data.betrag_ust !== undefined ? data.betrag_ust : Math.round(data.betrag_netto * ((data.steuersatz || 19) / 100) * 100) / 100;
+        const brutto = data.betrag_brutto !== undefined ? data.betrag_brutto : Math.round((data.betrag_netto + ust) * 100) / 100;
+
         // § 48b EStG Check
         let bauabzug = 0;
         let sec48bChecked = 0;
@@ -198,13 +202,10 @@ function createControllingBautagebuchRepo(deps) {
                 const isValid = lieferant.sec48b_status === 'VALID' && (!lieferant.sec48b_valid_until || lieferant.sec48b_valid_until >= today);
                 if (!isValid && data.kostenart === 'SUBCONTRACTOR') {
                     // 15 % Bauabzugsteuer einbehalten
-                    bauabzug = Math.round((data.betrag_brutto || (data.betrag_netto * 1.19)) * 0.15 * 100) / 100;
+                    bauabzug = Math.round(brutto * 0.15 * 100) / 100;
                 }
             }
         }
-
-        const ust = data.betrag_ust !== undefined ? data.betrag_ust : Math.round(data.betrag_netto * ((data.steuersatz || 19) / 100) * 100) / 100;
-        const brutto = data.betrag_brutto !== undefined ? data.betrag_brutto : Math.round((data.betrag_netto + ust) * 100) / 100;
 
         if (data.id) {
             await dbRun(`
