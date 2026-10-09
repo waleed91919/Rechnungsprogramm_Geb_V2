@@ -57,7 +57,8 @@ const DEFAULT_CRYPTO_ADAPTER = {
 const STANDARD_TEXTE = {
     RECHNUNG: 'Guten Tag {{kunde_name}},\n\nanbei erhalten Sie die Rechnung {{nummer}} vom {{datum}} über {{betrag_brutto}}.\nDie Zahlung wird fällig am {{faelligkeit}}.\n\nMit freundlichen Grüßen\n{{firmenname}}',
     MAHNUNG: 'Guten Tag {{kunde_name}},\n\ntrotz Fälligkeit ist die Rechnung {{nummer}} über {{betrag_brutto}} (fällig am {{faelligkeit}}) noch offen.\nWir bitten um Begleichung bzw. Rückmeldung.\n\nMit freundlichen Grüßen\n{{firmenname}}',
-    ANGEBOT: 'Guten Tag {{kunde_name}},\n\nanbei erhalten Sie unser Angebot {{nummer}} vom {{datum}} über {{betrag_brutto}}.\nFür Rückfragen stehen wir gerne zur Verfügung.\n\nMit freundlichen Grüßen\n{{firmenname}}'
+    ANGEBOT: 'Guten Tag {{kunde_name}},\n\nanbei erhalten Sie unser Angebot {{nummer}} vom {{datum}} über {{betrag_brutto}}.\nFür Rückfragen stehen wir gerne zur Verfügung.\n\nMit freundlichen Grüßen\n{{firmenname}}',
+    AUFTRAG: 'Guten Tag {{kunde_name}},\n\nanbei erhalten Sie unsere Auftragsbestätigung {{nummer}} vom {{datum}} über {{betrag_brutto}}.\n\nMit freundlichen Grüßen\n{{firmenname}}'
 };
 
 function formatiereBetragDe(wert) {
@@ -281,7 +282,7 @@ function createEmailService(deps, overrides = {}) {
     function holeBeleg(belegTyp, belegId) {
         const doc = db.prepare('SELECT id, type, nr, datum, faellig, brutto, netto, kundeId, mahnungLevel, mahnungGebuehr FROM dokumente WHERE id=?').get(Number(belegId));
         if (!doc) throw new Error('Beleg wurde nicht gefunden.');
-        const typErwartet = { RECHNUNG: 'rechnung', ANGEBOT: 'angebot', MAHNUNG: 'rechnung' }[belegTyp];
+        const typErwartet = { RECHNUNG: 'rechnung', ANGEBOT: 'angebot', MAHNUNG: 'rechnung', AUFTRAG: 'auftrag' }[belegTyp];
         if (typErwartet && doc.type !== typErwartet) {
             throw new Error(`Beleg #${belegId} ist keine passende Vorlage für ${belegTyp}.`);
         }
@@ -330,13 +331,18 @@ function createEmailService(deps, overrides = {}) {
         if (!betreff || !String(betreff).trim()) {
             if (templateKey === 'MAHNUNG') betreff = `Mahnung zu Rechnung ${kontext.nummer}`;
             else if (templateKey === 'ANGEBOT') betreff = `Angebot ${kontext.nummer} – ${kontext.firmenname}`;
+            else if (templateKey === 'AUFTRAG') betreff = `Auftragsbestätigung ${kontext.nummer} – ${kontext.firmenname}`;
             else betreff = `Rechnung ${kontext.nummer} – ${kontext.firmenname}`;
         }
         return { text: volltext, betreff: String(betreff).trim() };
     }
 
     function leiteDateinamenAb(belegTyp, doc) {
-        const label = belegTyp === 'ANGEBOT' ? 'Angebot' : (belegTyp === 'MAHNUNG' ? 'Mahnung' : 'Rechnung');
+        let label = 'Rechnung';
+        if (belegTyp === 'ANGEBOT') label = 'Angebot';
+        else if (belegTyp === 'MAHNUNG') label = 'Mahnung';
+        else if (belegTyp === 'AUFTRAG' || doc.type === 'auftrag') label = 'Auftragsbestaetigung';
+
         return `${label}_${doc.nr}.pdf`.replace(/[\\/:*?"<>|]/g, '_');
     }
 

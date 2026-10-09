@@ -493,6 +493,11 @@ function updateAngebotModalFooter(angStatus, existing) {
             `;
     } else {
       projBtnHtml = `
+                <button type="button" onclick="convertToAuftrag(${existing?.id})" id="btn-create-auftrag"
+                    class="px-6 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-md flex items-center gap-2 transition-all mr-2">
+                    <span class="material-symbols-outlined text-[18px]">post_add</span>
+                    Auftragsbestätigung (AB) erstellen
+                </button>
                 <button type="button" onclick="createProjektFromAngebotModal()" id="btn-create-project-angebot" data-legacy-id="btn-angebot-create-project"
                     class="px-6 py-2.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-md hover:shadow-lg transition-all flex items-center gap-2">
                     <span class="material-symbols-outlined text-[18px]">construction</span>

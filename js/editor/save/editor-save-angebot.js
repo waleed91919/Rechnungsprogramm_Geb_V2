@@ -132,6 +132,90 @@ async function deleteAngebot(id) {
 
 window.deleteAngebot = deleteAngebot;
 
+async function convertToAuftrag(angId) {
+    const ang = (state.angebote || []).find(a => a.id === angId);
+    if (!ang) {
+        showToast('Kein Angebot gefunden.', 'error');
+        return;
+    }
+
+    if (!(await safeConfirm(`Aus Angebot ${ang.nr} jetzt eine Auftragsbestätigung (AB) erstellen?`))) {
+        return;
+    }
+
+    try {
+        const today = new Date();
+        const docs = (state.rechnungen || []).concat(state.dokumente || []);
+
+        // Find highest AB number
+        const currentMaxAB = docs
+            .filter(d => d.type === 'auftrag')
+            .reduce((max, d) => Math.max(max, extractLaufendeNummer(d.nr)), 0);
+
+        const nextABNumber = currentMaxAB + 1;
+        const nextNr = `AB-${today.getFullYear()}-${String(nextABNumber).padStart(4, '0')}`;
+
+        const positionenCopy = JSON.parse(JSON.stringify(ang.positionen || []));
+
+        const newDoc = {
+            id: null,
+            type: 'auftrag',
+            typ: 'AUFTRAG',
+            nr: nextNr,
+            kundeId: ang.kundeId,
+            projektId: ang.projektId || null,
+            status: 'Bestätigt',
+            isLocked: false,
+            datum: today.toISOString().split('T')[0],
+            faellig: ang.faellig,
+            netto: ang.netto,
+            steuer: ang.steuer,
+            brutto: ang.brutto,
+            globalRabattAbzug: ang.globalRabattAbzug || 0,
+            globalRabattType: ang.globalRabattType || '%',
+            globalRabattValue: ang.globalRabattValue || 0,
+            anzahlung: ang.anzahlung || 0,
+            eingabemodus: ang.eingabemodus || 'netto',
+            vortext: ang.vortext || '',
+            fusstext: ang.fusstext || '',
+            leistungszeitraum_von: ang.leistungszeitraum_von || '',
+            leistungszeitraum_bis: ang.leistungszeitraum_bis || '',
+            baustellen_adresse: ang.baustellen_adresse || '',
+            vob_vereinbart: ang.vob_vereinbart || 0,
+            ist_privatkunde: ang.ist_privatkunde || 0,
+            unterliegt_bauabzugsteuer: ang.unterliegt_bauabzugsteuer || 0,
+            bauabzugsteuer_betrag: ang.bauabzugsteuer_betrag || 0,
+            ausweis_35a_erforderlich: ang.ausweis_35a_erforderlich || 0,
+            summe_lohnkosten_brutto: ang.summe_lohnkosten_brutto || 0,
+            rechnungsart: 'REGULAER',
+            sicherheitseinbehalt: ang.sicherheitseinbehalt || 0,
+            sicherheitseinbehalt_prozent: ang.sicherheitseinbehalt_prozent || 0,
+            unterliegt_13b: ang.unterliegt_13b || 0,
+            leitweg_id: ang.leitweg_id || null,
+            buyer_reference: ang.buyer_reference || null,
+            objekt_typ: ang.objekt_typ || null,
+            objekt_id: ang.objekt_id || null,
+            skonto_tage: ang.skonto_tage || 0,
+            skonto_prozent: ang.skonto_prozent || 0,
+            zahlbetrag: ang.zahlbetrag || ang.brutto,
+            parent_angebot_id: ang.id,
+            positionen: positionenCopy
+        };
+
+        const savedId = await window.api.saveDocument(newDoc);
+        showToast(`Auftragsbestätigung ${nextNr} erfolgreich erstellt!`, 'success');
+        closeRechnungModal();
+        if (typeof switchView === 'function') {
+            switchView('dashboard');
+        }
+    } catch (err) {
+        console.error('Fehler bei der AB-Erstellung:', err);
+        showToast('Fehler bei AB-Erstellung: ' + (err.message || err), 'error');
+    }
+}
+
+window.convertToAuftrag = convertToAuftrag;
+
 function convertToRechnung(angId) {
     const ang = state.angebote.find(a => a.id === angId);
     if (!ang) return;
