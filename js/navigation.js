@@ -137,6 +137,11 @@ const viewConfig = {
         subtitle: 'Berichte',
         action: () => { if (typeof initBerichte === 'function') initBerichte(); }
     },
+    musterbriefe: {
+        title: 'Musterbriefe',
+        subtitle: 'VOB/BGB Vorlagen',
+        action: (query) => { if (typeof renderMusterbriefe === 'function') renderMusterbriefe(query); }
+    },
     einstellungen: {
         title: 'Systemeinstellungen',
         subtitle: 'Konfiguration',
@@ -146,7 +151,7 @@ const viewConfig = {
 
 const views = [
     'dashboard', 'rechnungen', 'artikel', 'kunden', 'angebote',
-    'projekte', 'projekt-details', 'objekte', 'objekt-details', 'dauerrechnungen', 'putzplan', 'banking', 'maengel', 'zeiterfassung', 'sync', 'grosshandel', 'sokabau', 'berichte', 'einstellungen'
+    'projekte', 'projekt-details', 'objekte', 'objekt-details', 'dauerrechnungen', 'putzplan', 'banking', 'maengel', 'zeiterfassung', 'sync', 'grosshandel', 'sokabau', 'berichte', 'musterbriefe', 'einstellungen'
 ];
 
 // Initialisiere Event-Listener für empfangene IDS-Warenkörbe
@@ -171,7 +176,7 @@ if (typeof window !== 'undefined' && window.api && window.api.onIdsCartReceived)
 // Rechnungen, Banking/OPOS, Berichte/StB-Export, Einstellungen).
 const CORE_VIEWS = new Set([
     'dashboard', 'kunden', 'angebote', 'projekte', 'projekt-details',
-    'rechnungen', 'artikel', 'banking', 'berichte', 'einstellungen'
+    'rechnungen', 'artikel', 'banking', 'berichte', 'musterbriefe', 'einstellungen'
 ]);
 // Experimentell (Standard: ausgeblendet, Opt-in pro Arbeitsplatz):
 const EXPERIMENTAL_VIEWS = new Set([

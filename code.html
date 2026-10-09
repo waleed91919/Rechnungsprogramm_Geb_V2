@@ -259,6 +259,12 @@
                 <span class="text-sm font-medium">Berichte</span>
             </a>
             <div class="pt-4 pb-1 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">System</div>
+            <a id="nav-musterbriefe" onclick="switchView('musterbriefe')"
+                class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer">
+                <span
+                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">description</span>
+                <span class="text-sm font-medium">Musterbriefe</span>
+            </a>
             <a id="nav-einstellungen" onclick="switchView('einstellungen')"
                 class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer">
                 <span
@@ -366,6 +372,9 @@
 
         <!-- Sync View -->
         <div id="view-sync" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden"></div>
+
+        <!-- Musterbriefe View -->
+        <div id="view-musterbriefe" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden"></div>
 
         <!-- System Einstellungen View -->
         <div id="view-einstellungen" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden"></div>
@@ -508,6 +517,8 @@
     <script src="js/settings/settings-mahnung.js"></script>
     <script src="js/settings/settings-smtp.js"></script>
     <script src="js/einstellungen.js"></script>
+    <script src="js/musterbriefe/musterbriefe-data.js"></script>
+    <script src="js/musterbriefe/musterbriefe-ui.js"></script>
         <script src="js/reports/report-filter.js"></script>
     <script src="js/reports/report-calc.js"></script>
     <script src="js/reports/report-ui.js"></script>
