@@ -159,6 +159,24 @@ async function previewAngebotPdf() {
 
 window.previewAngebotPdf = previewAngebotPdf;
 
+// J8: Lieferschein-PDF über das bestehende Layout (wie J7-AB: keine eigene Vorlage).
+async function previewLieferscheinPdf(lsId) {
+    const existingIdVal = lsId !== undefined && lsId !== null ? lsId : document.getElementById('rechnung-id')?.value;
+    const existingId = existingIdVal ? parseInt(existingIdVal, 10) : null;
+    const allDocs = (state.rechnungen || []).concat(state.dokumente || [], state.angebote || []);
+    const ls = existingId ? allDocs.find(d => parseInt(d.id) === existingId && (d.type === 'lieferschein' || d.typ === 'LIEFERSCHEIN')) : null;
+    const target = ls || (existingId ? allDocs.find(d => parseInt(d.id) === existingId) : null);
+    if (!target) {
+        showToast('Kein Lieferschein für die PDF-Vorschau gefunden.', 'error');
+        return;
+    }
+    if (typeof window.generatePdf === 'function') {
+        await window.generatePdf(target.id, false);
+    }
+}
+
+window.previewLieferscheinPdf = previewLieferscheinPdf;
+
 async function openAufmassModalForPosition(posId) {
     if (!window.aufmassViewInstance) {
         window.aufmassViewInstance = new window.AufmassView('aufmass-modal');

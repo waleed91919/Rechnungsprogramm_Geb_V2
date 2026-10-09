@@ -12,6 +12,7 @@ async getFullState() {
             kunden: await dbQuery('SELECT * FROM kunden WHERE COALESCE(is_deleted, 0) = 0'),
             rechnungen: [],
             angebote: [],
+            dokumente: [],
             projekte: await dbQuery('SELECT * FROM projekte'),
             einstellungen: {}
         };
@@ -33,6 +34,10 @@ async getFullState() {
                 state.rechnungen.push(d);
             } else if (d.type === 'angebot') {
                 state.angebote.push(d);
+            } else {
+                // J7/J8: Auftragsbestätigungen, Lieferscheine u.a. Belegtypen
+                // landen in state.dokumente (Frontend-Lookup analog J7/J8).
+                state.dokumente.push(d);
             }
         });
 

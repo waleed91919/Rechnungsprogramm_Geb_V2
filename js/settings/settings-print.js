@@ -1,11 +1,16 @@
 (function() {
 async function generatePdf(id, isAngebot = false) {
     const idNum = parseInt(id);
-    const rech = isAngebot ? state.angebote.find(r => parseInt(r.id) === idNum) : state.rechnungen.find(r => parseInt(r.id) === idNum);
+    // J7/J8: AB- und Lieferschein-Belege liegen in state.dokumente (getFullState).
+    const allDocs = (state.rechnungen || []).concat(state.angebote || [], state.dokumente || []);
+    const rech = isAngebot
+        ? (state.angebote || []).find(r => parseInt(r.id) === idNum) || allDocs.find(r => parseInt(r.id) === idNum)
+        : allDocs.find(r => parseInt(r.id) === idNum);
     if (!rech) return;
 
     // GoBD Compliance Lock (Invoices only)
-    if (!isAngebot && rech.status !== 'Entwurf' && !rech.isLocked) {
+    // J8: Nur echte Rechnungen finalisieren/sperren — AB/LS nutzen nur das Layout.
+    if (!isAngebot && rech.type !== 'angebot' && rech.type !== 'auftrag' && rech.type !== 'lieferschein' && rech.status !== 'Entwurf' && !rech.isLocked) {
         if (!(await safeConfirm(`Durch das Generieren des PDFs wird die Rechnung ${rech.nr} finalisiert und für nachträgliche Änderungen gesperrt (GoBD-konform). Möchten Sie fortfahren?`))) {
             return;
         }

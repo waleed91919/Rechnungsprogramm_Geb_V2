@@ -5,7 +5,7 @@
 function createSchema(db) {
     db.exec(`CREATE TABLE IF NOT EXISTS dokumente (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            type TEXT NOT NULL, -- 'rechnung' or 'angebot'
+            type TEXT NOT NULL, -- 'rechnung', 'angebot', 'auftrag' or 'lieferschein'
             nr TEXT NOT NULL,
             datum TEXT,
             faellig TEXT,
@@ -54,6 +54,7 @@ function createSchema(db) {
             positionstyp TEXT DEFAULT 'NORMAL',
             in_endsumme_enthalten INTEGER DEFAULT 1,
             bieterangabe_wert TEXT,
+            lieferschein_quelle TEXT,
             FOREIGN KEY(dokumentId) REFERENCES dokumente(id),
             FOREIGN KEY(artikelId) REFERENCES artikel(id)
         )`);

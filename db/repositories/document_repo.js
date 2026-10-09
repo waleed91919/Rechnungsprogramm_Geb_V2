@@ -22,6 +22,17 @@ function isLockedInt(doc) {
     return doc && doc.isLocked ? 1 : 0;
 }
 
+// J8: Optionale Herkunftsspalte `positionen.lieferschein_quelle` (LS:{id}:POS:{pos}).
+// Defensiv per PRAGMA geprüft, damit Altschemata ohne Migration nicht brechen.
+function hasLieferscheinQuelleColumn() {
+    try {
+        const cols = db.prepare(`PRAGMA table_info(positionen)`).all();
+        return cols.some(c => c.name === 'lieferschein_quelle');
+    } catch (_e) {
+        return false;
+    }
+}
+
 /**
  * Kernlogik des Beleg-Schreibens OHNE eigene Transaktion. Wird von saveDocument()
  * (eigenes Transaction-Wrapper) und vom atomaren Storno (storniereRechnung)
@@ -253,11 +264,14 @@ function applyDocumentWrite(d, requestedLockedInt) {
 
         // Neue Positionen einfügen
         if (d.positionen && d.positionen.length > 0) {
-            const insertPosStmt = db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a, titel, positionstyp, in_endsumme_enthalten, bieterangabe_wert) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            const withLsQuelle = hasLieferscheinQuelleColumn();
+            const insertPosStmt = withLsQuelle
+                ? db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a, titel, positionstyp, in_endsumme_enthalten, bieterangabe_wert, lieferschein_quelle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                : db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a, titel, positionstyp, in_endsumme_enthalten, bieterangabe_wert) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             const stockDeductionMap = new Map();
 
             for (const p of d.positionen) {
-                insertPosStmt.run(
+                const baseArgs = [
                     docId,
                     p.artikelId || null,
                     p.name || null,
@@ -276,7 +290,9 @@ function applyDocumentWrite(d, requestedLockedInt) {
                     p.positionstyp || 'NORMAL',
                     AngebotController.normalizeInEndsumme(p.in_endsumme_enthalten, p.positionstyp),
                     p.bieterangabe_wert || null
-                );
+                ];
+                if (withLsQuelle) baseArgs.push(p.lieferschein_quelle || null);
+                insertPosStmt.run(...baseArgs);
 
                 if (d.type === 'rechnung' && p.artikelId) {
                     stockDeductionMap.set(p.artikelId, (stockDeductionMap.get(p.artikelId) || 0) + p.menge);
@@ -325,11 +341,14 @@ function applyDocumentWrite(d, requestedLockedInt) {
 
         // Positionen einfügen
         if (d.positionen && d.positionen.length > 0) {
-            const insertPosStmt = db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a, titel, positionstyp, in_endsumme_enthalten, bieterangabe_wert) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            const withLsQuelle = hasLieferscheinQuelleColumn();
+            const insertPosStmt = withLsQuelle
+                ? db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a, titel, positionstyp, in_endsumme_enthalten, bieterangabe_wert, lieferschein_quelle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                : db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a, titel, positionstyp, in_endsumme_enthalten, bieterangabe_wert) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
             const stockDeductionMap = new Map();
 
             for (const p of d.positionen) {
-                insertPosStmt.run(
+                const baseArgs = [
                     docId,
                     p.artikelId || null,
                     p.name || null,
@@ -348,7 +367,9 @@ function applyDocumentWrite(d, requestedLockedInt) {
                     p.positionstyp || 'NORMAL',
                     AngebotController.normalizeInEndsumme(p.in_endsumme_enthalten, p.positionstyp),
                     p.bieterangabe_wert || null
-                );
+                ];
+                if (withLsQuelle) baseArgs.push(p.lieferschein_quelle || null);
+                insertPosStmt.run(...baseArgs);
 
                 if (d.type === 'rechnung' && p.artikelId) {
                     stockDeductionMap.set(p.artikelId, (stockDeductionMap.get(p.artikelId) || 0) + p.menge);

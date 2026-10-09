@@ -3,6 +3,14 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
     // Sicherstellen, dass isAngebot auch anhand von Dokumenteigenschaften sauber erkannt wird
     isAngebot = Boolean(isAngebot || (rech && (rech.type === 'angebot' || rech.doc_type === 'angebot')));
 
+    // J7/J8: Beleglabel für Auftragsbestätigung und Kunden-Lieferschein (Layout wird wiederverwendet).
+    const belegTypNorm = String((rech && (rech.type || rech.doc_type)) || '').toLowerCase();
+    const istLieferschein = belegTypNorm === 'lieferschein';
+    const istAuftrag = belegTypNorm === 'auftrag';
+    const belegLabel = istLieferschein ? 'Lieferschein' : (istAuftrag ? 'Auftragsbestätigung' : (isAngebot ? 'Angebot' : 'Rechnung'));
+    const nrLabel = istLieferschein ? 'Lieferschein-Nr.:' : (istAuftrag ? 'AB-Nr.:' : (isAngebot ? 'Angebots-Nr.:' : 'Rechnungs-Nr.:'));
+    const faelligLabel = istLieferschein ? 'Geliefert am:' : (isAngebot ? 'Gültig bis:' : 'Fällig am:');
+
     const logoHtml = state.einstellungen.logo ? `<img src="${state.einstellungen.logo}" class="max-h-14 max-w-[220px] object-contain" alt="Firmenlogo">` : '';
     const datumStr = formatGermanDate(rech.datum);
     const faelligStr = formatGermanDate(rech.faellig);
@@ -432,8 +440,8 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
     const customKonditionen = (typeof rech.zahlungsbedingungen === 'string' && rech.zahlungsbedingungen.trim())
         ? sanitize(rech.zahlungsbedingungen).trim()
         : ((typeof rech.konditionen === 'string' && rech.konditionen.trim()) ? sanitize(rech.konditionen).trim() : '');
-    const datumLabel = isAngebot ? 'Angebotsdatum:' : 'Rechnungsdatum:';
-    const totalBoxLabel = isAngebot ? 'Angebotssumme (Brutto)' : 'Zahlbetrag';
+    const datumLabel = istLieferschein ? 'Lieferdatum:' : (isAngebot ? 'Angebotsdatum:' : 'Rechnungsdatum:');
+    const totalBoxLabel = istLieferschein ? 'Liefersumme (Brutto)' : (isAngebot ? 'Angebotssumme (Brutto)' : 'Zahlbetrag');
     
     let templateHtml = '';
 
@@ -470,7 +478,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                         <!-- Infoblock -->
                         <div class="w-64 bg-slate-50 p-3 rounded-xl border border-slate-200/80 border-l-4 border-l-blue-600 text-xs text-slate-600 space-y-1.5 shadow-sm">
                             <div class="flex justify-between border-b border-slate-200/60 pb-1">
-                                <span class="text-slate-500 font-medium">${isAngebot ? 'Angebots-Nr.:' : 'Rechnungs-Nr.:'}</span>
+                                <span class="text-slate-500 font-medium">${nrLabel}</span>
                                 <span class="font-bold text-blue-600 font-mono">${sanitize(rech.nr)}</span>
                             </div>
                             <div class="flex justify-between border-b border-slate-200/60 pb-1">
@@ -491,7 +499,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                                 <span class="font-medium text-slate-800 font-mono">${kundenNr}</span>
                             </div>
                             <div class="flex justify-between border-b border-slate-200/60 pb-1">
-                                <span class="text-slate-500">${isAngebot ? 'Gültig bis:' : 'Fällig am:'}</span>
+                                <span class="text-slate-500">${faelligLabel}</span>
                                 <span class="font-bold text-slate-900">${faelligStr}</span>
                             </div>
                             ${kunde.ustId ? `
@@ -511,12 +519,12 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                     <div class="mb-3 flex items-center justify-between">
                         <div>
                             <h2 class="text-xl font-bold text-slate-900 tracking-tight">
-                                ${isAngebot ? 'Angebot' : 'Rechnung'} <span class="text-blue-600 font-medium">#${sanitize(rech.nr)}</span>
+                                ${belegLabel} <span class="text-blue-600 font-medium">#${sanitize(rech.nr)}</span>
                             </h2>
                             ${projektName ? `<p class="text-xs text-slate-600 mt-0.5 font-medium">Bauvorhaben / Projekt: ${sanitize(projektName)}</p>` : ''}
                         </div>
                         <span class="px-2.5 py-1 text-[11px] font-semibold rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                            ${isAngebot ? 'Angebot' : 'Rechnung'}
+                            ${belegLabel}
                         </span>
                     </div>
 
@@ -611,7 +619,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                             ${logoHtml ? `<div class="grayscale opacity-90">${logoHtml}</div>` : `<h1 class="text-lg font-bold tracking-widest uppercase text-black">${sanitize(state.einstellungen.firmenname)}</h1>`}
                         </div>
                         <div class="text-right">
-                            <h2 class="text-xl font-light tracking-widest text-black uppercase">${isAngebot ? 'Angebot' : 'Rechnung'}</h2>
+                            <h2 class="text-xl font-light tracking-widest text-black uppercase">${belegLabel}</h2>
                             <p class="text-xs font-mono font-bold">${sanitize(rech.nr)}</p>
                         </div>
                     </div>
@@ -633,7 +641,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                             <div class="flex justify-between"><span class="text-gray-500">Leistungsdatum:</span> <span class="font-medium">${leistungsdatumStr}</span></div>` : (ausfuehrungStr ? `
                             <div class="flex justify-between"><span class="text-gray-500">Voraussichtl. Ausführung:</span> <span class="font-medium">${ausfuehrungStr}</span></div>` : '')}
                             <div class="flex justify-between"><span class="text-gray-500">Kundennummer:</span> <span class="font-medium font-mono">${kundenNr}</span></div>
-                            <div class="flex justify-between"><span class="text-gray-500">${isAngebot ? 'Gültig bis:' : 'Fällig am:'}</span> <span class="font-bold">${faelligStr}</span></div>
+                            <div class="flex justify-between"><span class="text-gray-500">${faelligLabel}</span> <span class="font-bold">${faelligStr}</span></div>
                             ${kunde.ustId ? `<div class="flex justify-between"><span class="text-gray-500">USt-IdNr.:</span> <span class="font-mono">${sanitize(kunde.ustId)}</span></div>` : ''}
                             ${projektName ? `<div class="flex justify-between"><span class="text-gray-500">Projekt:</span> <span class="font-medium truncate max-w-[110px]">${sanitize(projektName)}</span></div>` : ''}
                         </div>
@@ -642,7 +650,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                     <!-- Titel -->
                     <div class="mb-3">
                         <h2 class="text-base font-bold text-black uppercase tracking-wider">
-                            ${isAngebot ? 'Angebot' : 'Rechnung'} ${sanitize(rech.nr)}
+                            ${belegLabel} ${sanitize(rech.nr)}
                         </h2>
                         ${projektName ? `<p class="text-xs text-gray-600 mt-0.5">Projekt: ${sanitize(projektName)}</p>` : ''}
                     </div>
@@ -759,7 +767,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                         <!-- Infoblock nach DIN 5008 -->
                         <div class="w-64 bg-slate-50/90 p-3 rounded-lg border border-slate-200/70 text-xs text-slate-600 space-y-1.5 shadow-sm">
                             <div class="flex justify-between border-b border-slate-200/50 pb-1">
-                                <span class="text-slate-500 font-medium">${isAngebot ? 'Angebots-Nr.:' : 'Rechnungs-Nr.:'}</span>
+                                <span class="text-slate-500 font-medium">${nrLabel}</span>
                                 <span class="font-bold text-slate-900 font-mono">${sanitize(rech.nr)}</span>
                             </div>
                             <div class="flex justify-between border-b border-slate-200/50 pb-1">
@@ -780,7 +788,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                                 <span class="font-medium text-slate-800 font-mono">${kundenNr}</span>
                             </div>
                             <div class="flex justify-between border-b border-slate-200/50 pb-1">
-                                <span class="text-slate-500">${isAngebot ? 'Gültig bis:' : 'Fällig am:'}</span>
+                                <span class="text-slate-500">${faelligLabel}</span>
                                 <span class="font-bold text-slate-900">${faelligStr}</span>
                             </div>
                             ${kunde.ustId ? `
@@ -799,7 +807,7 @@ async function buildInvoiceDocumentHtml(rech, kunde, isAngebot = false) {
                     <!-- Titel & Betreffzeile -->
                     <div class="mb-3">
                         <h2 class="text-lg font-bold text-slate-900 tracking-tight">
-                            ${isAngebot ? 'Angebot' : 'Rechnung'} <span class="text-slate-500 font-normal">#${sanitize(rech.nr)}</span>
+                            ${belegLabel} <span class="text-slate-500 font-normal">#${sanitize(rech.nr)}</span>
                         </h2>
                         ${projektName ? `<p class="text-xs text-slate-600 mt-0.5 font-medium">Bauvorhaben / Projekt: ${sanitize(projektName)}</p>` : ''}
                     </div>

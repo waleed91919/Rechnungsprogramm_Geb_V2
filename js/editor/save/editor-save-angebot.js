@@ -216,14 +216,127 @@ async function convertToAuftrag(angId) {
 
 window.convertToAuftrag = convertToAuftrag;
 
+async function convertToLieferschein(angId) {
+    const ang = (state.angebote || []).concat(state.dokumente || []).find(a => a.id === angId);
+    if (!ang) {
+        showToast('Kein Dokument gefunden.', 'error');
+        return;
+    }
+
+    if (!(await safeConfirm(`Aus Dokument ${ang.nr} jetzt einen Kunden-Lieferschein erstellen?`))) {
+        return;
+    }
+
+    try {
+        const today = new Date();
+        const docs = (state.rechnungen || []).concat(state.dokumente || []);
+
+        // Find highest LS number
+        const currentMaxLS = docs
+            .filter(d => d.type === 'lieferschein')
+            .reduce((max, d) => Math.max(max, window.extractLaufendeNummer ? window.extractLaufendeNummer(d.nr) : 0), 0);
+
+        const nextLSNumber = currentMaxLS + 1;
+        const nextNr = `LS-${today.getFullYear()}-${String(nextLSNumber).padStart(4, '0')}`;
+
+        const positionenCopy = JSON.parse(JSON.stringify(ang.positionen || []));
+
+        const newDoc = {
+            id: null,
+            type: 'lieferschein',
+            typ: 'LIEFERSCHEIN',
+            nr: nextNr,
+            kundeId: ang.kundeId,
+            projektId: ang.projektId || null,
+            status: 'Offen',
+            isLocked: false,
+            datum: today.toISOString().split('T')[0],
+            faellig: ang.faellig,
+            netto: ang.netto,
+            steuer: ang.steuer,
+            brutto: ang.brutto,
+            globalRabattAbzug: ang.globalRabattAbzug || 0,
+            globalRabattType: ang.globalRabattType || '%',
+            globalRabattValue: ang.globalRabattValue || 0,
+            anzahlung: ang.anzahlung || 0,
+            eingabemodus: ang.eingabemodus || 'netto',
+            vortext: `Wir liefern Ihnen folgende Positionen gemäß ${ang.nr}.`,
+            fusstext: 'Wir bitten um Prüfung und Bestätigung des Erhalts.',
+            leistungszeitraum_von: ang.leistungszeitraum_von,
+            leistungszeitraum_bis: ang.leistungszeitraum_bis,
+            baustellen_adresse: ang.baustellen_adresse,
+            vob_vereinbart: ang.vob_vereinbart || 0,
+            ist_privatkunde: ang.ist_privatkunde || 0,
+            unterliegt_bauabzugsteuer: ang.unterliegt_bauabzugsteuer || 0,
+            bauabzugsteuer_betrag: ang.bauabzugsteuer_betrag || 0,
+            ausweis_35a_erforderlich: ang.ausweis_35a_erforderlich || 0,
+            summe_lohnkosten_brutto: ang.summe_lohnkosten_brutto || 0,
+            rechnungsart: ang.rechnungsart || 'REGULAER',
+            kumulierte_leistung_netto: ang.kumulierte_leistung_netto || 0,
+            sicherheitseinbehalt: ang.sicherheitseinbehalt || 0,
+            sicherheitseinbehalt_prozent: ang.sicherheitseinbehalt_prozent || 0,
+            unterliegt_13b: ang.unterliegt_13b || 0,
+            leitweg_id: ang.leitweg_id || null,
+            buyer_reference: ang.buyer_reference || null,
+            objekt_typ: ang.objekt_typ || null,
+            objekt_id: ang.objekt_id || null,
+            skonto_tage: ang.skonto_tage || 0,
+            skonto_prozent: ang.skonto_prozent || 0,
+            parent_angebot_id: angId, // Optional: Herkunft referenzieren
+            positionen: positionenCopy
+        };
+
+        const savedId = await window.api.saveDocument(newDoc);
+        showToast(`Lieferschein ${nextNr} erfolgreich erstellt!`, 'success');
+        closeRechnungModal();
+        if (typeof switchView === 'function') {
+            switchView('dashboard');
+        }
+    } catch (err) {
+        console.error('Fehler bei der Lieferschein-Erstellung:', err);
+        showToast('Fehler bei Lieferschein-Erstellung: ' + (err.message || err), 'error');
+    }
+}
+
+window.convertToLieferschein = convertToLieferschein;
+
 function convertToRechnung(angId) {
-    const ang = state.angebote.find(a => a.id === angId);
+    const ang = (state.angebote || []).concat(state.dokumente || []).find(a => a.id === angId);
     if (!ang) return;
 
     openRechnungModal();
 
     // Deep copy positions
-    state.currentRechnungPositionen = JSON.parse(JSON.stringify(ang.positionen));
+    let copiedPositions = JSON.parse(JSON.stringify(ang.positionen || []));
+
+    // Idempotent copy logic for Lieferschein
+    if (ang.type === 'lieferschein') {
+        // Merge with existing invoice positions or create new
+        const existingRechnungId = document.getElementById('rechnung-id')?.value;
+        if (existingRechnungId) {
+            // Already have a rechnung open, check for idempotency
+            const currentPos = state.currentRechnungPositionen || [];
+
+            copiedPositions.forEach(pos => {
+                const idempotencyKey = `LS:${ang.id}:POS:${pos.id || pos.oz || pos.oz_code}`;
+                const alreadyAdded = currentPos.find(p => p.lieferschein_quelle === idempotencyKey);
+
+                if (!alreadyAdded) {
+                    pos.lieferschein_quelle = idempotencyKey;
+                    currentPos.push(pos);
+                }
+            });
+            state.currentRechnungPositionen = currentPos;
+        } else {
+            // New rechnung from lieferschein
+            copiedPositions.forEach(pos => {
+                pos.lieferschein_quelle = `LS:${ang.id}:POS:${pos.id || pos.oz || pos.oz_code}`;
+            });
+            state.currentRechnungPositionen = copiedPositions;
+        }
+    } else {
+        state.currentRechnungPositionen = copiedPositions;
+    }
 
     // Fill static fields
     document.getElementById('rechnung-kunde').value = ang.kundeId;

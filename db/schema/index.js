@@ -429,6 +429,7 @@ function runMigrations(db) {
     try { db.exec(`ALTER TABLE positionen ADD COLUMN positionstyp TEXT DEFAULT 'NORMAL'`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
     try { db.exec(`ALTER TABLE positionen ADD COLUMN in_endsumme_enthalten INTEGER DEFAULT 1`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
     try { db.exec(`ALTER TABLE positionen ADD COLUMN bieterangabe_wert TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN lieferschein_quelle TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
 
     // Tabelle projekte:
     try { db.exec(`ALTER TABLE projekte ADD COLUMN source_angebot_id INTEGER REFERENCES dokumente(id)`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
