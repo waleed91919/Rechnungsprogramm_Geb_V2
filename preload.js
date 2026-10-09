@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('api', {
     updateDocumentStatus: (id, patch) => ipcRenderer.invoke('db:updateDocumentStatus', id, patch),
     unlockDocument: (id, grund) => Promise.reject(new Error('GoBD-gesperrt — bitte Storno (InvoiceController 627-669) nutzen.')),
     storniereRechnung: (updatedOriginal, stornoDoc) => ipcRenderer.invoke('db:storniereRechnung', updatedOriginal, stornoDoc),
+    buchenGutschrift: (updatedOriginal, gutschriftDoc) => ipcRenderer.invoke('db:buchenGutschrift', updatedOriginal, gutschriftDoc),
     verifyAuditChain: () => ipcRenderer.invoke('audit:verify'),
 
     saveAufmass: (aufmass) => ipcRenderer.invoke('db:saveAufmass', aufmass),
@@ -45,6 +46,7 @@ contextBridge.exposeInMainWorld('api', {
     getNachtraege: (projectId) => ipcRenderer.invoke('db:getNachtraege', projectId),
     saveNachtrag: (nachtragData, positionen) => ipcRenderer.invoke('db:saveNachtrag', nachtragData, positionen),
     updateNachtragStatus: (nachtragId, status) => ipcRenderer.invoke('db:updateNachtragStatus', nachtragId, status),
+    uebernehmeNachtragInsLV: (nachtragId) => ipcRenderer.invoke('db:uebernehmeNachtragInsLV', nachtragId),
     deleteNachtrag: (nachtragId) => ipcRenderer.invoke('db:deleteNachtrag', nachtragId),
 
     // --- Bautagebuch & Abnahmeprotokoll ---

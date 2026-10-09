@@ -632,6 +632,56 @@ getDokumente: async () => await dbQuery('SELECT * FROM dokumente WHERE COALESCE(
         throw new Error('GoBD-Verstoß (GOBD-2): Das Entsperren festgeschriebener Belege ist nach § 146 Abs. 4 AO und GoBD Rz. 110 unzulässig. Korrekturen müssen zwingend über eine Stornorechnung bzw. Gutschrift erfolgen.');
     },
 
+    // --- Atomare Minderungs-Gutschrift ---
+    // Schlägt ein Schritt fehl, wird BEIDES zurückgerollt.
+    // Sperr-/Idempotenz-Checks: Voll-stornierte Originale werden abgelehnt,
+    // eine bereits vergebene Gutschrift-Nummer löst einen klaren Fehler aus
+    // (keine Doppel-Gutschrift zur selben Referenz).
+    async buchenGutschrift(updatedOriginal, gutschriftDoc) {
+        if (!updatedOriginal || updatedOriginal.id == null) {
+            throw new Error('Gutschrift: Original-Rechnung bzw. ID fehlt.');
+        }
+        if (!gutschriftDoc || !gutschriftDoc.nr) {
+            throw new Error('Gutschrift: Die Gutschrift benötigt eine gültige Belegnummer.');
+        }
+        if (!(parseFloat(gutschriftDoc.netto) < 0)) {
+            throw new Error('Gutschrift: Der Gutschriftbetrag (netto) muss negativ sein.');
+        }
+
+        const tx = db.transaction((origPatch, gutschrift) => {
+            const orig = db.prepare('SELECT id, nr, status FROM dokumente WHERE id = ?').get(origPatch.id);
+            if (!orig) throw new Error(`Dokument mit ID ${origPatch.id} wurde nicht gefunden.`);
+            if (orig.status === 'Storniert') {
+                throw new Error(`Gutschrift: Rechnung ${orig.nr} ist bereits vollständig storniert — eine Minderungs-Gutschrift ist unzulässig.`);
+            }
+
+            // Idempotenz: Doppel-Gutschrift mit gleicher Belegnummer verhindern
+            const gutschriftType = gutschrift.type || 'rechnung';
+            const dup = db.prepare('SELECT id FROM dokumente WHERE type = ? AND nr = ?').get(gutschriftType, gutschrift.nr);
+            if (dup) {
+                throw new Error(`Die Belegnummer "${gutschrift.nr}" ist bereits vergeben (Dokument #${dup.id}). Bitte verwenden Sie eine andere Nummer.`);
+            }
+
+            const neuerStatus = origPatch.status || 'Gemindert/Teilgutgeschrieben';
+            db.prepare('UPDATE dokumente SET status = ? WHERE id = ?').run(neuerStatus, orig.id);
+            appendAuditLog({
+                entityType: 'DOCUMENT',
+                entityId: orig.id,
+                action: 'STATUS_GEÄNDERT',
+                details: {
+                    nr: orig.nr,
+                    vorherigerStatus: orig.status,
+                    neuerStatus
+                }
+            });
+
+            return applyDocumentWrite(gutschrift, 1);
+        });
+
+        const gutschriftId = tx(updatedOriginal, gutschriftDoc);
+        return { success: true, originalId: updatedOriginal.id, gutschriftId };
+    },
+
     // --- Atomares Storno: Original-Status + Gutschrift in EINER Transaktion ---
     // Schlägt ein Schritt fehl, wird BEIDES zurückgerollt (kein halber Zustand
     // "Original storniert, aber ohne Gutschrift").

@@ -75,6 +75,17 @@ function register(ipcMain, context = {}) {
         throw new Error('GoBD-Verstoß: Entsperren von Belegen ist deaktiviert. Bitte erstellen Sie ein Storno.');
     }));
 
+    // Atomare Gutschrift
+    ipcMain.handle('db:buchenGutschrift', wrapHandler(async (e, updatedOriginal, gutschriftDoc) => {
+        if (!updatedOriginal || typeof updatedOriginal !== 'object' || updatedOriginal.id == null) {
+            throw new Error('Ungültige Gutschrift-Daten (Original-Rechnung fehlt)');
+        }
+        if (!gutschriftDoc || typeof gutschriftDoc !== 'object' || !gutschriftDoc.nr) {
+            throw new Error('Ungültige Gutschrift-Daten (Gutschrift ohne Belegnummer)');
+        }
+        return await dbAPI.buchenGutschrift(updatedOriginal, gutschriftDoc);
+    }));
+
     // Atomares Storno: Original-Status + Gutschrift in einer Transaktion
     ipcMain.handle('db:storniereRechnung', wrapHandler(async (e, updatedOriginal, stornoDoc) => {
         if (!updatedOriginal || typeof updatedOriginal !== 'object' || updatedOriginal.id == null) {

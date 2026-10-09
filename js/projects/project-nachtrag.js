@@ -206,11 +206,18 @@ async function saveNachtragData() {
 
 async function updateNachtragStatusAction(nachtragId, status) {
     try {
-        await window.api.updateNachtragStatus(nachtragId, status);
-        showToast(`Nachtrags-Status auf "${status}" aktualisiert.`, 'success');
+        const res = await window.api.updateNachtragStatus(nachtragId, status);
+        let msg = `Nachtrags-Status auf "${status}" aktualisiert.`;
+        if (status === 'GENEHMIGT' && res && typeof res.lvAdded === 'number') {
+            msg += res.lvAdded > 0
+                ? ` ${res.lvAdded} Position(en) in den LV-Stamm übernommen.`
+                : ' (LV-Stamm bereits aktuell — keine Duplikate).';
+        }
+        showToast(msg, 'success');
         loadProjektNachtraege(window.currentViewProjektId);
     } catch (e) {
         console.error('Error updating nachtrag status:', e);
+        showToast((e && e.message) || 'Fehler bei der Statusänderung.', 'error');
     }
 }
 

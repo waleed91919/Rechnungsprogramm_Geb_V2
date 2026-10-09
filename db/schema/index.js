@@ -554,10 +554,16 @@ function runMigrations(db) {
             ekt_geraet_je_me REAL DEFAULT 0.0,
             ekt_sonst_je_me REAL DEFAULT 0.0,
             ekt_nu_je_me REAL DEFAULT 0.0,
+            nachtrag_id INTEGER REFERENCES nachtraege(id) ON DELETE SET NULL,
+            nachtrag_pos_id INTEGER,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )`);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_projekt_positionen_projekt_id ON projekt_positionen(projekt_id)`);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_projekt_positionen_source_pos ON projekt_positionen(source_angebot_pos_id)`);
+        // J13: Nachtrag→LV-Stamm (Idempotenz-Key N:{nachtrag_id}:POS:{pos_id})
+        try { db.exec(`ALTER TABLE projekt_positionen ADD COLUMN nachtrag_id INTEGER REFERENCES nachtraege(id) ON DELETE SET NULL`); } catch (e) { if (!e.message.includes('duplicate column')) { throw e; } }
+        try { db.exec(`ALTER TABLE projekt_positionen ADD COLUMN nachtrag_pos_id INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) { throw e; } }
+        db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_projekt_positionen_nachtrag_unique ON projekt_positionen(projekt_id, nachtrag_id, nachtrag_pos_id) WHERE nachtrag_id IS NOT NULL`);
     } catch (e) {
         if (!e.message.includes('already exists')) {
             console.warn('[DB Migration Warning] projekt_positionen:', e.message);

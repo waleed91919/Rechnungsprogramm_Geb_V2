@@ -271,12 +271,15 @@ class EInvoiceViewer {
             invoice.typ === 'GUTSCHRIFT' ||
             invoice.isStorno ||
             invoice.storno_zu_nr ||
+            invoice.gutschrift_zu_nr ||
             (typeof invoice.nr === 'string' && invoice.nr.startsWith('STORNO')) ||
+            (typeof invoice.nr === 'string' && invoice.nr.startsWith('GUT-')) ||
             invoice.rechnungsart === 'STORNO' ||
             invoice.rechnungsart === 'GUTSCHRIFT'
         );
-        const origNr = (invoice.storno_zu_nr || invoice.storno_urspruengliche_nr ||
-            (typeof invoice.nr === 'string' && invoice.nr.startsWith('STORNO - ') ? invoice.nr.replace('STORNO - ', '') : '') || '').trim();
+        const origNr = (invoice.storno_zu_nr || invoice.gutschrift_zu_nr || invoice.storno_urspruengliche_nr ||
+            (typeof invoice.nr === 'string' && invoice.nr.startsWith('STORNO - ') ? invoice.nr.replace('STORNO - ', '') : '') ||
+            (typeof invoice.nr === 'string' && invoice.nr.startsWith('GUT-') ? invoice.nr.replace(/^GUT-/, '') : '') || '').trim();
         const origDateStr = this.toDate102(invoice.storno_zu_datum || invoice.urspruengliches_datum);
 
         let invoiceReferencedXML = '';

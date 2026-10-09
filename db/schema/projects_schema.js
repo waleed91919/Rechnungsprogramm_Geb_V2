@@ -53,6 +53,8 @@ function createSchema(db) {
             ekt_geraet_je_me REAL DEFAULT 0.0,
             ekt_sonst_je_me REAL DEFAULT 0.0,
             ekt_nu_je_me REAL DEFAULT 0.0,
+            nachtrag_id INTEGER REFERENCES nachtraege(id) ON DELETE SET NULL,
+            nachtrag_pos_id INTEGER,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )`);
 

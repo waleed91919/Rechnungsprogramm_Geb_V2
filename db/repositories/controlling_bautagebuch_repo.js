@@ -14,6 +14,65 @@ function createControllingBautagebuchRepo(deps) {
         return row ? row.value : null;
     };
 
+    // J13: Defensive Spaltenprüfung für den Nachtrag→LV-Write, damit auch
+    // Altschemata/:memory:-Test-DBs ohne gelaufene Migration funktionieren.
+    function ensureNachtragLvColumns() {
+        const cols = db.prepare(`PRAGMA table_info(projekt_positionen)`).all().map(c => c.name);
+        if (!cols.includes('nachtrag_id')) {
+            db.exec(`ALTER TABLE projekt_positionen ADD COLUMN nachtrag_id INTEGER REFERENCES nachtraege(id) ON DELETE SET NULL`);
+        }
+        if (!cols.includes('nachtrag_pos_id')) {
+            db.exec(`ALTER TABLE projekt_positionen ADD COLUMN nachtrag_pos_id INTEGER`);
+        }
+        db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_projekt_positionen_nachtrag_unique ON projekt_positionen(projekt_id, nachtrag_id, nachtrag_pos_id) WHERE nachtrag_id IS NOT NULL`);
+    }
+
+    // J13: Schreibt alle Positionen eines GENEHMIGT-Nachtrags idempotent in den
+    // LV-Stamm. Muss INNERHALB einer better-sqlite3-Transaktion laufen.
+    function insertNachtragLvPositionen(nachtragId) {
+        ensureNachtragLvColumns();
+        const nachtrag = db.prepare('SELECT * FROM nachtraege WHERE id = ?').get(nachtragId);
+        if (!nachtrag) throw new Error(`Nachtrag mit ID ${nachtragId} wurde nicht gefunden.`);
+        if (nachtrag.status !== 'GENEHMIGT') {
+            throw new Error(`Nachtrag ${nachtrag.nachtrag_nr || nachtragId} ist nicht genehmigt (Status: ${nachtrag.status}) — LV-Übernahme blockiert.`);
+        }
+        const posList = db.prepare('SELECT * FROM nachtrag_positionen WHERE nachtrag_id = ? ORDER BY id ASC').all(nachtragId);
+        const existsStmt = db.prepare('SELECT id FROM projekt_positionen WHERE projekt_id = ? AND nachtrag_id = ? AND nachtrag_pos_id = ?');
+        const insertStmt = db.prepare(`
+            INSERT INTO projekt_positionen (
+                projekt_id, source_angebot_id, source_angebot_version, source_angebot_pos_id,
+                nachtrag_id, nachtrag_pos_id,
+                oz_code, titel, name, menge, einheit, preis,
+                cost_type, positionstyp, in_endsumme_enthalten
+            ) VALUES (?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        let added = 0;
+        let skipped = 0;
+        posList.forEach((p, idx) => {
+            const posId = (p.id !== undefined && p.id !== null) ? p.id : (idx + 1);
+            if (existsStmt.get(nachtrag.project_id, nachtrag.id, posId)) {
+                skipped++;
+                return; // Idempotenz-Key N:{nachtrag_id}:POS:{pos_id} bereits im LV
+            }
+            insertStmt.run(
+                nachtrag.project_id,
+                nachtrag.id,
+                posId,
+                p.oz_code || null,
+                p.kurztext || p.bezeichnung || 'Nachtragsposition',
+                `[${nachtrag.nachtrag_nr}] ${p.kurztext || p.bezeichnung || 'Nachtragsposition'}`,
+                parseFloat(p.menge) || 0,
+                p.einheit || 'Stk.',
+                parseFloat(p.einheitspreis) || 0,
+                p.cost_type || 'MATERIAL',
+                'NACHTRAG',
+                1
+            );
+            added++;
+        });
+        return { added, skipped };
+    }
+
     return {
 // --- Nachtragsverwaltung (VOB/B) ---
     async getNachtraege(projectId) {
@@ -80,8 +139,28 @@ function createControllingBautagebuchRepo(deps) {
 
     async updateNachtragStatus(nachtragId, status) {
         const decidedDate = (status === 'GENEHMIGT' || status === 'ABGELEHNT') ? new Date().toISOString().split('T')[0] : null;
-        await dbRun('UPDATE nachtraege SET status = ?, entschieden_am = COALESCE(?, entschieden_am) WHERE id = ?', [status, decidedDate, nachtragId]);
-        return { success: true };
+        const tx = db.transaction((id) => {
+            const row = db.prepare('SELECT id FROM nachtraege WHERE id = ?').get(id);
+            if (!row) throw new Error(`Nachtrag mit ID ${id} wurde nicht gefunden.`);
+            db.prepare('UPDATE nachtraege SET status = ?, entschieden_am = COALESCE(?, entschieden_am) WHERE id = ?').run(status, decidedDate, id);
+            let lv = { added: 0, skipped: 0 };
+            if (status === 'GENEHMIGT') {
+                lv = insertNachtragLvPositionen(id);
+            }
+            return lv;
+        });
+        const lv = tx(nachtragId);
+        return { success: true, lvAdded: lv.added, lvSkipped: lv.skipped };
+    },
+
+    // J13: GENEHMIGT-Nachtrag idempotent in den LV-Stamm (projekt_positionen)
+    // übernehmen. Bereits vorhandene Keys (N:{nachtrag_id}:POS:{pos_id}) werden
+    // übersprungen — kein Doppel-Write, weder im Beleg noch im LV.
+    async uebernehmeNachtragInsLV(nachtragId) {
+        ensureNachtragLvColumns();
+        const tx = db.transaction((id) => insertNachtragLvPositionen(id));
+        const res = tx(nachtragId);
+        return { success: true, added: res.added, skipped: res.skipped };
     },
 
     async deleteNachtrag(nachtragId) {

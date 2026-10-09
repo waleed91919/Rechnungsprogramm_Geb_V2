@@ -31,6 +31,66 @@ async function storniereRechnung(id) {
 
 window.storniereRechnung = storniereRechnung;
 
+// J13: Minderungs-Gutschrift (Teilbetrag) OHNE Voll-Storno buchen.
+// Das Original wird NICHT storniert/gelockt, sondern als
+// 'Gemindert/Teilgutgeschrieben' markiert und bleibt fakturierbar.
+// Sperr-/Idempotenz-Checks: stornierte Originale und bereits vergebene
+// Gutschrift-Nummern (GUT-{nr}) werden abgelehnt.
+async function buchenGutschrift(id, betragNetto, grund) {
+    const original = state.rechnungen.find(r => r.id === id);
+    if (!original) return;
+
+    if (original.status === 'Storniert') {
+        showToast(`Rechnung ${original.nr} ist bereits vollständig storniert — keine Minderungs-Gutschrift möglich.`, 'error');
+        return;
+    }
+    const gutNr = 'GUT-' + original.nr;
+    const bereitsVorhanden = (state.rechnungen || []).some(r => r.nr === gutNr);
+    if (bereitsVorhanden) {
+        showToast(`Zu Rechnung ${original.nr} existiert bereits die Gutschrift ${gutNr} (keine Doppel-Gutschrift).`, 'error');
+        return;
+    }
+    const netto = parseFloat(betragNetto);
+    if (!(netto > 0)) {
+        showToast('Bitte geben Sie einen Minderungsbetrag (netto, > 0) an.', 'error');
+        return;
+    }
+
+    if (await safeConfirm(`Möchten Sie für die Rechnung ${original.nr} wirklich eine Minderungs-Gutschrift über ${netto.toFixed(2)} € (netto) erstellen? Die Original-Rechnung bleibt bestehen und fakturierbar.`)) {
+        let gutschriftData;
+        try {
+            gutschriftData = window.InvoiceController.createGutschriftData(original, netto, grund);
+        } catch (e) {
+            showToast(e && e.message ? e.message : 'Ungültige Gutschrift-Daten.', 'error');
+            return;
+        }
+        if (!gutschriftData) return;
+
+        try {
+            const model = new window.InvoiceModel(window.api);
+            const newState = await model.buchenGutschrift(gutschriftData.updatedOriginal, gutschriftData.gutschriftDoc);
+
+            if (newState) {
+                state.angebote = newState.angebote;
+                state.rechnungen = newState.rechnungen;
+                state.artikel = newState.artikel;
+            }
+
+            if (document.getElementById('view-dashboard') && !document.getElementById('view-dashboard').classList.contains('hidden')) {
+                renderDashboard();
+            } else if (document.getElementById('view-rechnungen') && !document.getElementById('view-rechnungen').classList.contains('hidden')) {
+                renderRechnungen();
+            }
+            showToast(`Minderungs-Gutschrift ${gutschriftData.gutschriftNr} wurde erfolgreich erstellt.`, 'success');
+        } catch (e) {
+            console.error('Fehler beim Buchen der Gutschrift:', e);
+            showToast(e && e.message ? e.message : 'Fehler beim Buchen der Gutschrift', 'error');
+        }
+    }
+}
+
+window.buchenGutschrift = buchenGutschrift;
+
 async function markAsPaid(id) {
     const rech = state.rechnungen.find(r => r.id === id);
     if (!rech) return;

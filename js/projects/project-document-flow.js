@@ -325,14 +325,27 @@ async function applyApprovedNachtraegeToCurrentInvoice() {
                 throw new Error('Persistenz-Verifikation fehlgeschlagen: Beleg nach Speichern nicht in SQLite gefunden.');
             }
         }
+        // J13: GENEHMIGT-Nachträge zusätzlich idempotent in den LV-Stamm
+        // (projekt_positionen) übernehmen — ohne Doppel-Effekt im Beleg.
+        let lvAdded = 0;
+        if (window.api.uebernehmeNachtragInsLV) {
+            for (const n of approved) {
+                try {
+                    const lvRes = await window.api.uebernehmeNachtragInsLV(n.id);
+                    lvAdded += (lvRes && lvRes.added) || 0;
+                } catch (lvErr) {
+                    console.warn(`LV-Übernahme für Nachtrag ${n.nachtrag_nr || n.id} übersprungen:`, lvErr && lvErr.message);
+                }
+            }
+        }
         if (window.api.getFullState) {
             const full = await window.api.getFullState(); // Reload-Read Nachweis
             if (full && Array.isArray(full.dokumente)) state.dokumente = full.dokumente;
             if (full && Array.isArray(full.rechnungen)) state.rechnungen = full.rechnungen;
         }
 
-        showToast(`${added} Positionen aus ${approved.length} genehmigten Nachträgen erfolgreich in Beleg #${savedId || curId} gespeichert.`, 'success');
-        return { success: true, added, docId: savedId };
+        showToast(`${added} Positionen aus ${approved.length} genehmigten Nachträgen erfolgreich in Beleg #${savedId || curId} gespeichert.${lvAdded > 0 ? ` ${lvAdded} LV-Positionen übernommen.` : ''}`, 'success');
+        return { success: true, added, docId: savedId, lvAdded };
 
     } catch (e) {
         console.error('Error applying approved nachtraege:', e);

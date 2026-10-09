@@ -272,6 +272,28 @@ function createRechnungRow(rech, kundenMap) {
       spanStorno.textContent = 'undo';
       btnStorno.appendChild(spanStorno);
       divActions.appendChild(btnStorno);
+      // J13: Minderungs-Gutschrift (Teilbetrag, ohne Voll-Storno)
+      const nrUpper = String(rech.nr || '').toUpperCase();
+      const istKorrekturbeleg = nrUpper.startsWith('STORNO') || nrUpper.startsWith('GUT-');
+      if (!istKorrekturbeleg) {
+        const btnGut = document.createElement('button');
+        btnGut.onclick = e => {
+          e.preventDefault();
+          e.stopPropagation();
+          const betragStr = window.prompt(`Minderungsbetrag (netto, €) für Rechnung ${rech.nr}:`, '');
+          if (betragStr === null) return;
+          const grund = window.prompt('Minderungsgrund (optional, z. B. VOB/B § 13 Abs. 6):', '') || '';
+          buchenGutschrift(rech.id, betragStr, grund);
+        };
+        btnGut.className = 'text-slate-400 hover:text-amber-600 p-1 transition-colors flex items-center justify-center';
+        btnGut.title = 'Minderungs-Gutschrift (ohne Voll-Storno)';
+        btnGut.setAttribute('aria-label', `Minderungs-Gutschrift für Rechnung ${rech.nr} erstellen`);
+        const spanGut = document.createElement('span');
+        spanGut.className = 'material-symbols-outlined text-[18px]';
+        spanGut.textContent = 'price_check';
+        btnGut.appendChild(spanGut);
+        divActions.appendChild(btnGut);
+      }
     }
     const btnLock = document.createElement('button');
     btnLock.className = 'text-slate-400 p-1 transition-colors flex items-center justify-center opacity-50 cursor-not-allowed';

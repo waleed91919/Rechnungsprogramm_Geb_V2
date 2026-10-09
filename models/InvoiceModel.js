@@ -49,6 +49,30 @@ window.InvoiceModel = class InvoiceModel {
     }
 
     /**
+     * Bucht eine Minderungs-Gutschrift (Teilbetrag) OHNE Voll-Storno.
+     * Das Original wird NICHT 'Storniert'/gelockt, sondern als
+     * 'Gemindert/Teilgutgeschrieben' markiert und bleibt fakturierbar.
+     * ATOMAR: Über dbAPI.buchenGutschrift laufen Statusänderung und Gutschrift
+     * in EINER Transaktion.
+     */
+    async buchenGutschrift(updatedOriginal, gutschriftDoc) {
+        if (!this.db) return null;
+        if (typeof this.db.buchenGutschrift === 'function') {
+            await this.db.buchenGutschrift(updatedOriginal, gutschriftDoc);
+            return await this.db.getFullState();
+        }
+        // Fallback für alternative DB-Interfaces ohne atomaren Gutschrift-Pfad
+        const neuerStatus = updatedOriginal.status || 'Gemindert/Teilgutgeschrieben';
+        if (updatedOriginal.id != null && typeof this.db.updateDocumentStatus === 'function') {
+            await this.db.updateDocumentStatus(updatedOriginal.id, { status: neuerStatus });
+        } else {
+            await this.db.saveDocument(updatedOriginal);
+        }
+        await this.db.saveDocument(gutschriftDoc);
+        return await this.db.getFullState();
+    }
+
+    /**
      * Markiert eine Rechnung als bezahlt.
      * GoBD: Bezahlung ist ein Buchhaltungsstatus und darf auch an gesperrten
      * Belegen geändert werden - nur über den schmalen Status-Pfad.

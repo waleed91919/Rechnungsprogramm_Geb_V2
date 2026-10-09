@@ -19,6 +19,13 @@ function register(ipcMain, context = {}) {
         return await dbAPI.updateNachtragStatus(nachtragId, status);
     }));
 
+    // J13: GENEHMIGT-Nachtrag idempotent in den LV-Stamm übernehmen
+    ipcMain.handle('db:uebernehmeNachtragInsLV', wrapHandler(async (e, nachtragId) => {
+        const numId = Number(nachtragId);
+        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Nachtrag-ID');
+        return await dbAPI.uebernehmeNachtragInsLV(numId);
+    }));
+
     ipcMain.handle('db:deleteNachtrag', wrapHandler(async (e, nachtragId) => {
         return await dbAPI.deleteNachtrag(nachtragId);
     }));

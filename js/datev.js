@@ -186,8 +186,10 @@ class DATEVExporter {
 
             const isStorno = parseFloat(r.brutto !== undefined ? r.brutto : r.netto) < 0 ||
                 String(r.nr || '').toUpperCase().startsWith('STORNO') ||
+                String(r.nr || '').toUpperCase().startsWith('GUT-') ||
                 r.status === 'Storniert' ||
                 r.type === 'Gutschrift' ||
+                r.typ === 'GUTSCHRIFT' ||
                 r.rechnungsart === 'STORNO' ||
                 r.rechnungsart === 'GUTSCHRIFT';
 

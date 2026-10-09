@@ -667,6 +667,69 @@ class InvoiceController {
 
         return { updatedOriginal, stornoDoc, stornoNr };
     }
+
+    /**
+     * Erzeugt die Datenobjekte für eine Minderungs-Gutschrift.
+     * Teilbetrag ohne Voll-Storno: Das Original wird NICHT 'Storniert' und NICHT
+     * gelockt, sondern als 'Gemindert/Teilgutgeschrieben' markiert und bleibt
+     * fakturierbar. GoBD-Sperrprüfung: Voll-stornierte Originale werden abgelehnt,
+     * der Betrag muss positiv sein (Beträge sind nur in der Gutschrift negativ).
+     */
+    static createGutschriftData(originalInvoice, amountNetto, reason) {
+        if (!originalInvoice) return null;
+
+        const netto = parseFloat(amountNetto) || 0;
+        if (!(netto > 0)) {
+            throw new Error('Gutschrift: Der Minderungsbetrag (netto) muss größer als 0 sein.');
+        }
+        if (originalInvoice.status === 'Storniert') {
+            throw new Error(`Gutschrift: Rechnung ${originalInvoice.nr} ist bereits vollständig storniert — eine Minderungs-Gutschrift ist unzulässig.`);
+        }
+        const steuer = InvoiceController.round2(netto * 0.19);
+        const brutto = InvoiceController.round2(netto + steuer);
+
+        const gutschriftNr = "GUT-" + originalInvoice.nr;
+        const today = new Date().toISOString().split('T')[0];
+
+        const updatedOriginal = {
+            ...originalInvoice,
+            status: 'Gemindert/Teilgutgeschrieben',
+            // isLocked is explicitly kept unchanged, allowing it to still be billed
+            isLocked: originalInvoice.isLocked
+        };
+
+        const gutschriftDoc = {
+            id: null,
+            type: 'rechnung',
+            typ: 'GUTSCHRIFT',
+            rechnungsart: 'GUTSCHRIFT',
+            isStorno: true,
+            gutschrift_zu_nr: originalInvoice.nr,
+            storno_zu_datum: originalInvoice.datum,
+            nr: gutschriftNr,
+            datum: today,
+            faellig: today,
+            kundeId: originalInvoice.kundeId,
+            projektId: originalInvoice.projektId,
+            positionen: [{
+                name: 'Minderungs-Gutschrift zu ' + originalInvoice.nr + (reason ? ' (' + reason + ')' : ''),
+                menge: 1,
+                einheit: 'Pausch.',
+                preis: -netto,
+                mwst: 19
+            }],
+            netto: -netto,
+            steuer: -steuer,
+            brutto: -brutto,
+            globalRabattAbzug: 0,
+            anzahlung: 0,
+            zahlbetrag: -brutto,
+            status: 'Bezahlt',
+            isLocked: true
+        };
+
+        return { updatedOriginal, gutschriftDoc, gutschriftNr };
+    }
 }
 
 if (typeof module !== 'undefined' && module.exports) {

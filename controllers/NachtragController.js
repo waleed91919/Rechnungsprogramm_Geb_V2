@@ -95,6 +95,43 @@ class NachtragController {
     }
 
     /**
+     * Idempotenz-Key einer Nachtragsposition: N:{nachtrag_id}:POS:{pos_id}.
+     * Wird sowohl für die Beleg-Übernahme als auch für den LV-Stamm-Write
+     * (projekt_positionen) verwendet, damit Doppel-Übernahmen keine Duplikate erzeugen.
+     */
+    static nachtragPosKey(nachtragId, posId) {
+        return `N:${nachtragId}:POS:${posId}`;
+    }
+
+    /**
+     * Baut aus einem GENEHMIGT-Nachtrag die LV-Stamm-Zeilen (projekt_positionen).
+     * Reine Datenaufbereitung ohne DB-Zugriff — der INSERT erfolgt idempotent
+     * über das Repository (uebernehmeNachtragInsLV).
+     */
+    static buildLvPositionsForNachtrag(nachtrag) {
+        if (!nachtrag || nachtrag.status !== 'GENEHMIGT') return [];
+        const posList = nachtrag.positionen || [];
+        return posList.map((p, idx) => {
+            const posId = p.id !== undefined && p.id !== null ? p.id : (p.pos_nr || (idx + 1));
+            return {
+                projekt_id: nachtrag.project_id,
+                nachtrag_id: nachtrag.id,
+                nachtrag_pos_id: posId,
+                idempotenz_key: NachtragController.nachtragPosKey(nachtrag.id, posId),
+                oz_code: p.oz_code || p.oz || null,
+                titel: p.kurztext || p.bezeichnung || 'Nachtragsposition',
+                name: `[${nachtrag.nachtrag_nr}] ${p.kurztext || p.bezeichnung || 'Nachtragsposition'}`,
+                menge: parseFloat(p.menge) || 0,
+                einheit: p.einheit || 'Stk.',
+                preis: parseFloat(p.einheitspreis) || 0,
+                cost_type: p.cost_type || 'MATERIAL',
+                positionstyp: 'NACHTRAG',
+                in_endsumme_enthalten: 1
+            };
+        });
+    }
+
+    /**
      * Filtert alle genehmigten Nachträge eines Projekts und bereitet sie als Rechnungspositionen vor.
      */
     static extractApprovedPositionsForInvoice(nachtraege = []) {
