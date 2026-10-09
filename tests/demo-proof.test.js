@@ -3,10 +3,27 @@ const assert = require('node:assert');
 const { execSync } = require('node:child_process');
 const path = require('path');
 
+function runDemoProof(scriptPath) {
+    try {
+        return execSync(`node "${scriptPath}"`, { encoding: 'utf-8' });
+    } catch (e) {
+        const out = String(e.stdout || '') + String(e.stderr || '') + String(e.message || '');
+        if (out.includes('ERR_DLOPEN_FAILED')) {
+            // System-Node kann better-sqlite3 (Electron-ABI) nicht laden -> Electron-Runtime
+            const electron = require('electron');
+            return execSync(`"${electron}" "${scriptPath}"`, {
+                encoding: 'utf-8',
+                env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+            });
+        }
+        throw e;
+    }
+}
+
 test('J6: Demo-Proof TEST-BAU-01 Execution', async (t) => {
     try {
         const scriptPath = path.join(__dirname, '../scripts/demo-proof-test-bau-01.js');
-        const output = execSync(`node "${scriptPath}"`, { encoding: 'utf-8' });
+        const output = runDemoProof(scriptPath);
 
         // Assert output contains expected pass messages
         assert.ok(output.includes('[PASS] L1 (Abschlag 1) erstellt'), 'Output should contain L1 creation');
