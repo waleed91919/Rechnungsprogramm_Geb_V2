@@ -133,8 +133,9 @@ test('3. BUG-06 & BUG-07: mergeSchlussaufmass schließt DRAFT aus und behält LV
     db.prepare("INSERT INTO aufmass_zeilen (blatt_id, oz_code, zeilen_nr, rechenansatz, ergebnis, vorzeichen) VALUES (?, '01.01.0010', 1, '500.0', 500.0, 1)").run(b1);
     db.prepare("INSERT INTO aufmass_zeilen (blatt_id, oz_code, zeilen_nr, rechenansatz, ergebnis, vorzeichen) VALUES (?, '01.01.0010', 1, '999.0', 999.0, 1)").run(b2);
 
-    // Merge ausführen
-    const merged = await dbAPI.mergeSchlussaufmass(projectId, { includeDrafts: false });
+    // Merge ausführen (J10: Rückgabe { rows, warnings },_alt: Array)
+    const mergeResult = await dbAPI.mergeSchlussaufmass(projectId, { includeDrafts: false });
+    const merged = Array.isArray(mergeResult) ? mergeResult : mergeResult.rows;
     assert.equal(merged.length, 1);
     assert.equal(merged[0].oz_code, '01.01.0010');
     assert.equal(merged[0].summe_menge, 500.0, 'DRAFT-Zeile (999.0) darf nicht im Schlussaufmaß enthalten sein');
@@ -193,21 +194,25 @@ test('5. BUG-09: VOB/B § 16 Kumulatives Controlling addiert Abschläge nicht f�
     });
 
     // 1. Abschlagsrechnung über 10.000 € netto (Zahlbetrag 10.000)
-    await dbAPI.saveDocument({
+    const ar1Id = await dbAPI.saveDocument({
         type: 'rechnung', typ: 'ABSCHLAGSRECHNUNG', rechnungsart: 'ABSCHLAG_KUMULIERT', nr: 'AR-1', projektId: projectId,
         status: 'Bezahlt', netto: 10000, brutto: 11900, kumulierte_leistung_netto: 10000, positionen: []
     });
 
     // 2. Abschlagsrechnung kumuliert über 25.000 € netto
-    await dbAPI.saveDocument({
+    const ar2Id = await dbAPI.saveDocument({
         type: 'rechnung', typ: 'ABSCHLAGSRECHNUNG', rechnungsart: 'ABSCHLAG_KUMULIERT', nr: 'AR-2', projektId: projectId,
         status: 'Bezahlt', netto: 25000, brutto: 29750, kumulierte_leistung_netto: 25000, positionen: []
     });
 
-    // Schlussrechnung kumuliert über 30.000 € netto
+    // Schlussrechnung kumuliert über 30.000 € netto (J1-Folge: muss alle Vorrechnungen verrechnen)
     await dbAPI.saveDocument({
         type: 'rechnung', typ: 'SCHLUSSRECHNUNG', rechnungsart: 'SCHLUSSRECHNUNG', nr: 'SR-1', projektId: projectId,
-        status: 'Festgeschrieben', netto: 30000, brutto: 35700, kumulierte_leistung_netto: 30000, positionen: []
+        status: 'Festgeschrieben', netto: 30000, brutto: 35700, kumulierte_leistung_netto: 30000, positionen: [],
+        verrechnungen: [
+            { vorherige_rechnung_id: ar1Id, abzugsbetrag_netto: 10000, abzugsbetrag_brutto: 11900 },
+            { vorherige_rechnung_id: ar2Id, abzugsbetrag_netto: 25000, abzugsbetrag_brutto: 29750 }
+        ]
     });
 
     const stats = await dbAPI.getControllingStats(projectId);
