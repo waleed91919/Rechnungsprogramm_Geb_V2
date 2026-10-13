@@ -1,5 +1,20 @@
 # Changelog / Fortschritt
 
+## 07.10.2026 (Architektur-Review Umsetzung: sync_views + Preload-Härtung)
+- **Template-Drift-Schutz (`views/partials/` -> `js/view-loader.js`):**
+  - Neu `scripts/sync_views.js` analog `scripts/sync_modals.js`: 19 `view-*.html` einlesen, `VIEW_TEMPLATES` neu bauen, Loader-Logik `initViews/replaceWith` beibehalten. `node scripts/sync_views.js` regeneriert byte-identisch (204956 Bytes, 19 Templates).
+  - `package.json`: nur `"sync-views": "node scripts/sync_views.js"` ergänzt.
+  - Neu `tests/view_templates_integrity.test.js`: prüft pro Partial Key + Inhalt in `js/view-loader.js` (3/3 grün).
+  - Befund aus `ARCHITEKTUR_REVIEW_BERICHT.md` Kap. 4 korrigiert: kein akuter Drift (alle 19 identisch), Modals sind 38 Einzel + 8 `*-modals.html` Bundles, `sync_modals.js:7` überschreibt Aggregate nicht.
+- **Preload-Härtung (`preload.js`, `js/gaeb_tender/tender_controller.js`):**
+  - `preload.js:234` Wildcard `invoke` entfernt, neu `listGaebImports()`; `listTenderDrafts/createTenderDraft/saveTenderDraft/loadTenderDraft/cloneTenderDraft/validateX84Export/exportX84` wiederverwendet.
+  - `tender_controller.js`: `getIpc()` prüft 8 benannte Methoden, alle 16 `api.invoke('gaeb:...')` ersetzt: `list-imports` -> `listGaebImports()`, `list-tender-drafts` -> `listTenderDrafts(id)`, `create-tender-draft` -> `createTenderDraft(id)`, `load-tender-draft` -> `loadTenderDraft(id)`, `save-tender-draft` -> `saveTenderDraft(id,payload)`, `clone-tender-draft` -> `cloneTenderDraft(id,opt)`, `validate-x84-export` -> `validateX84Export(id)`, `export-x84` -> `exportX84(id)`.
+  - Test-Mocks in `tests/gaeb_x84_export.test.js` und `tests/gaeb_tender_view_regression.test.js` auf benannte Methoden umgestellt.
+- **Verifikation:**
+  - `node --test tests/view_templates_integrity.test.js tests/gaeb_x84_export.test.js tests/gaeb_tender_view_regression.test.js tests/gaeb_tender_pricing.test.js`: 11/11 grün. Grep `api.invoke` in `js/`: 0, `invoke:` in `preload.js`: 0.
+  - Full `npm test` in dieser Umgebung mit `ERR_DLOPEN_FAILED better_sqlite3 (128 vs 141)` rot – vorbestehendes Env-Problem, CI (`.github/workflows/tests.yml` existiert) nutzt `npm rebuild`.
+- **Details:** siehe `doc/architektur_review_umsetzung_2026-10-07.md`. `InvoiceController` bewusst nicht aufgespalten.
+
 ## 28.09.2026 (liesen.txt: Juristische Korrektur der § 13b Terminologie & natives printToPDF-Rendering)
 - **Juristisch korrekte § 13b Terminologie (Steuerschuldnerschaft statt «steuerfrei» / kein 0%-Steuersatz):**
   - **Reverse Charge ist keine Steuerbefreiung:** Nach § 13b UStG ist die Bauleistung nicht steuerfrei, sondern die Steuerschuldnerschaft verlagert sich auf den Leistungsempfänger.

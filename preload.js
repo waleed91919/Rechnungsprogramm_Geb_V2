@@ -232,8 +232,8 @@ contextBridge.exposeInMainWorld('api', {
     loadModalPartial: (modalName) => ipcRenderer.invoke('modals:loadPartial', modalName),
     loadAllModalPartials: () => ipcRenderer.invoke('modals:loadAll'),
 
-    // --- Universelle IPC-Invoke Methode & GAEB Ausschreibung / Bepreisung ---
-    invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
+    // --- GAEB Ausschreibung / Bepreisung ---
+    listGaebImports: () => ipcRenderer.invoke('gaeb:list-imports'),
     createTenderDraft: (importId, options) => ipcRenderer.invoke('gaeb:create-tender-draft', { importId, options }),
     saveTenderDraft: (draftId, draftData) => ipcRenderer.invoke('gaeb:save-tender-draft', { draftId, draftData }),
     loadTenderDraft: (draftId) => ipcRenderer.invoke('gaeb:load-tender-draft', draftId),

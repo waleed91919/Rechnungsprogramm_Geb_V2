@@ -98,7 +98,15 @@ function setupJsdomEnv(initialImports = [], initialDrafts = {}) {
                 throw new Error('Unerwarteter Aufruf von create-tender-draft beim reinen Lesen!');
             }
             throw new Error(`Unerwarteter IPC-Kanal im Test: ${channel}`);
-        }
+        },
+        listGaebImports: async () => importsStore,
+        listTenderDrafts: async (importId) => draftsStore[Number(importId)] || [],
+        loadTenderDraft: async (draftId) => window.api.invoke('gaeb:load-tender-draft', draftId),
+        createTenderDraft: async () => { throw new Error('Unerwarteter Aufruf von create-tender-draft beim reinen Lesen!'); },
+        saveTenderDraft: async () => { throw new Error('Unerwarteter Save-Aufruf im Regressionstest'); },
+        cloneTenderDraft: async () => { throw new Error('Unerwarteter Clone-Aufruf im Regressionstest'); },
+        validateX84Export: async () => ({ valid: true, errors: [] }),
+        exportX84: async () => ({ canceled: true })
     };
 
     // Lade Scripts in den Window-Context

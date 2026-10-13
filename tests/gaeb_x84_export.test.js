@@ -918,6 +918,27 @@ describe('GAEB DA XML X84 Export Suite', () => {
                         };
                     }
                     throw new Error(`Unerwarteter IPC-Kanal: ${channel}`);
+                },
+                listGaebImports: async () => [],
+                listTenderDrafts: async () => [],
+                createTenderDraft: async () => { throw new Error('Nicht im Export-Test erwartet'); },
+                loadTenderDraft: async () => { throw new Error('Nicht im Export-Test erwartet'); },
+                saveTenderDraft: async () => { throw new Error('Nicht im Export-Test erwartet'); },
+                cloneTenderDraft: async () => { throw new Error('Nicht im Export-Test erwartet'); },
+                validateX84Export: async (draftId) => validateDraftForExport(db, draftId),
+                exportX84: async (draftId) => {
+                    if (mockExportBehavior === 'cancel') {
+                        return { canceled: true };
+                    }
+                    if (mockExportBehavior === 'error') {
+                        return { success: false, error: 'Simulierter I/O-Fehler' };
+                    }
+                    return {
+                        success: true,
+                        filePath: 'C:\\Users\\Test\\Angebot_v1.x84',
+                        stats: { totalNetto: '13175.00' },
+                        validation: { valid: true }
+                    };
                 }
             }
         };

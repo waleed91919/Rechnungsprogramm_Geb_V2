@@ -2,7 +2,7 @@
  * js/gaeb_tender/tender_controller.js
  * Controller für den modularen GAEB Ausschreibungs- und Bepreisungsablauf.
  * 
- * Verwendet ausschließlich IPC (window.api.invoke) und trennt Renderer strikt
+ * Verwendet ausschließlich benannte IPC-Methoden (window.api.*) und trennt Renderer strikt
  * von Node.js / require().
  */
 
@@ -16,7 +16,15 @@
         }
 
         async getIpc() {
-            if (window.api && typeof window.api.invoke === 'function') {
+            if (window.api
+                && typeof window.api.listGaebImports === 'function'
+                && typeof window.api.listTenderDrafts === 'function'
+                && typeof window.api.createTenderDraft === 'function'
+                && typeof window.api.loadTenderDraft === 'function'
+                && typeof window.api.saveTenderDraft === 'function'
+                && typeof window.api.cloneTenderDraft === 'function'
+                && typeof window.api.validateX84Export === 'function'
+                && typeof window.api.exportX84 === 'function') {
                 return window.api;
             }
             throw new Error('Electron IPC (window.api) nicht verfügbar.');
@@ -60,7 +68,7 @@
 
                 // 3. Mit expliziter importId: Prüfe serverseitig via IPC, ob der Import existiert
                 const api = await this.getIpc();
-                const imports = await api.invoke('gaeb:list-imports');
+                const imports = await api.listGaebImports();
                 const matchingImport = Array.isArray(imports) ? imports.find(i => i.id === targetImportId) : null;
                 if (!matchingImport) {
                     alert(`GAEB-Import mit ID ${targetImportId} existiert nicht.`);
@@ -73,7 +81,7 @@
                 // 4. Wenn zusätzlich draftId übergeben wurde: Validiere, dass der Entwurf zum Import gehört
                 let targetDraftId = draftId ? Number(draftId) : null;
                 if (targetDraftId) {
-                    const drafts = await api.invoke('gaeb:list-tender-drafts', targetImportId);
+                    const drafts = await api.listTenderDrafts(targetImportId);
                     const matchingDraft = Array.isArray(drafts) ? drafts.find(d => d.id === targetDraftId) : null;
                     if (!matchingDraft) {
                         alert(`Entwurf #${targetDraftId} gehört nicht zum GAEB-Import #${targetImportId}.`);
@@ -102,7 +110,7 @@
                 const api = await this.getIpc();
                 window.GaebTenderView.setViewMode('import-list');
 
-                const imports = await api.invoke('gaeb:list-imports');
+                const imports = await api.listGaebImports();
                 window.GaebTenderView.renderImportList(imports);
             } catch (err) {
                 console.error('[GAEB Tender Controller] Fehler beim Laden der Importliste:', err);
@@ -134,7 +142,7 @@
                 const targetImportId = Number(importId);
 
                 // Import-Informationen beschaffen
-                const imports = await api.invoke('gaeb:list-imports');
+                const imports = await api.listGaebImports();
                 const importInfo = Array.isArray(imports) ? imports.find(i => i.id === targetImportId) : null;
                 if (!importInfo) {
                     alert(`Import #${targetImportId} nicht gefunden.`);
@@ -145,7 +153,7 @@
                 this.selectedImportInfo = importInfo;
 
                 // Entwürfe für diesen Import laden
-                const drafts = await api.invoke('gaeb:list-tender-drafts', targetImportId);
+                const drafts = await api.listTenderDrafts(targetImportId);
                 window.GaebTenderView.renderDraftList(importInfo, drafts);
             } catch (err) {
                 console.error('[GAEB Tender Controller] Fehler beim Laden der Entwurfsliste:', err);
@@ -174,9 +182,7 @@
                 const api = await this.getIpc();
                 const targetImportId = Number(importId);
 
-                const newDraft = await api.invoke('gaeb:create-tender-draft', {
-                    importId: targetImportId
-                });
+                const newDraft = await api.createTenderDraft(targetImportId);
 
                 if (typeof showToast === 'function') {
                     showToast(`Neuer Bepreisungsentwurf '${newDraft.name}' angelegt.`, 'success');
@@ -199,7 +205,7 @@
                 const api = await this.getIpc();
                 const targetDraftId = Number(draftId);
 
-                const loadResult = await api.invoke('gaeb:load-tender-draft', targetDraftId);
+                const loadResult = await api.loadTenderDraft(targetDraftId);
                 if (!loadResult || !loadResult.draft) {
                     throw new Error(`Entwurf #${targetDraftId} konnte nicht geladen werden.`);
                 }
@@ -209,7 +215,7 @@
                     throw new Error(`Datenmischung verhindert: Entwurf #${targetDraftId} gehört zu Import #${actualImportId}, nicht zu #${importId}.`);
                 }
 
-                const drafts = await api.invoke('gaeb:list-tender-drafts', actualImportId);
+                const drafts = await api.listTenderDrafts(actualImportId);
 
                 window.GaebTenderState.init(loadResult, drafts);
                 window.GaebTenderView.renderAll(window.GaebTenderState);
@@ -382,10 +388,7 @@
                 }
 
                 const payload = window.GaebTenderState.getExportPayload();
-                const res = await api.invoke('gaeb:save-tender-draft', {
-                    draftId: window.GaebTenderState.currentDraftId,
-                    draftData: payload
-                });
+                const res = await api.saveTenderDraft(window.GaebTenderState.currentDraftId, payload);
 
                 window.GaebTenderState.isDirty = false;
 
@@ -438,14 +441,11 @@
                 const newName = prompt('Name für die neue Entwurfsversion (optional, leer lassen für automatischen Namen):', defaultName);
                 if (newName === null) return;
 
-                const cloned = await api.invoke('gaeb:clone-tender-draft', {
-                    draftId: window.GaebTenderState.currentDraftId,
-                    options: newName.trim() ? { newName: newName.trim() } : {}
-                });
+                const cloned = await api.cloneTenderDraft(window.GaebTenderState.currentDraftId, newName.trim() ? { newName: newName.trim() } : {});
 
                 // Aktualisiere Entwurfs-Auswahl und lade den neuen Entwurf
-                const drafts = await api.invoke('gaeb:list-tender-drafts', window.GaebTenderState.currentImportId);
-                const loadResult = await api.invoke('gaeb:load-tender-draft', cloned.id);
+                const drafts = await api.listTenderDrafts(window.GaebTenderState.currentImportId);
+                const loadResult = await api.loadTenderDraft(cloned.id);
 
                 window.GaebTenderState.init(loadResult, drafts);
                 window.GaebTenderView.renderAll(window.GaebTenderState);
@@ -479,8 +479,8 @@
 
             try {
                 const api = await this.getIpc();
-                const loadResult = await api.invoke('gaeb:load-tender-draft', targetId);
-                const drafts = await api.invoke('gaeb:list-tender-drafts', window.GaebTenderState.currentImportId);
+                const loadResult = await api.loadTenderDraft(targetId);
+                const drafts = await api.listTenderDrafts(window.GaebTenderState.currentImportId);
 
                 window.GaebTenderState.init(loadResult, drafts);
                 window.GaebTenderView.renderAll(window.GaebTenderState);
@@ -562,7 +562,7 @@
                 }
 
                 // 1. Vorvalidierung
-                const validation = await api.invoke('gaeb:validate-x84-export', draftId);
+                const validation = await api.validateX84Export(draftId);
                 if (!validation.valid) {
                     const errList = (validation.errors || []).join('\n• ');
                     if (window.GaebTenderView && typeof window.GaebTenderView.showExportInfo === 'function') {
@@ -577,7 +577,7 @@
                 }
 
                 // 2. Export und Dateidialog
-                const res = await api.invoke('gaeb:export-x84', { draftId });
+                const res = await api.exportX84(draftId);
 
                 if (res.canceled) {
                     // Benutzer hat den Speichern-Dialog abgebrochen
