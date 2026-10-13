@@ -926,6 +926,7 @@ describe('GAEB DA XML X84 Export Suite', () => {
                 saveTenderDraft: async () => { throw new Error('Nicht im Export-Test erwartet'); },
                 cloneTenderDraft: async () => { throw new Error('Nicht im Export-Test erwartet'); },
                 validateX84Export: async (draftId) => validateDraftForExport(db, draftId),
+                createAngebotFromDraft: async () => { throw new Error('Nicht im Export-Test erwartet'); },
                 exportX84: async (draftId) => {
                     if (mockExportBehavior === 'cancel') {
                         return { canceled: true };

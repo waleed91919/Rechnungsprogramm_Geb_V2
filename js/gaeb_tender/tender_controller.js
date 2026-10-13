@@ -24,7 +24,8 @@
                 && typeof window.api.saveTenderDraft === 'function'
                 && typeof window.api.cloneTenderDraft === 'function'
                 && typeof window.api.validateX84Export === 'function'
-                && typeof window.api.exportX84 === 'function') {
+                && typeof window.api.exportX84 === 'function'
+                && typeof window.api.createAngebotFromDraft === 'function') {
                 return window.api;
             }
             throw new Error('Electron IPC (window.api) nicht verfügbar.');
@@ -519,7 +520,7 @@
                 };
 
                 const ipc = await this.getIpc();
-                const res = await ipc.invoke('gaeb:create-angebot-from-draft', payload);
+                const res = await ipc.createAngebotFromDraft(payload);
 
                 if (res && res.success) {
                     if (typeof showToast === 'function') {

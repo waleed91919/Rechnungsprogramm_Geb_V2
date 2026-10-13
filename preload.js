@@ -241,6 +241,7 @@ contextBridge.exposeInMainWorld('api', {
     cloneTenderDraft: (draftId, options) => ipcRenderer.invoke('gaeb:clone-tender-draft', { draftId, options }),
     deleteTenderDraft: (draftId) => ipcRenderer.invoke('gaeb:delete-tender-draft', draftId),
     validateX84Export: (draftId) => ipcRenderer.invoke('gaeb:validate-x84-export', draftId),
-    exportX84: (draftId, options) => ipcRenderer.invoke('gaeb:export-x84', { draftId, options })
+    exportX84: (draftId, options) => ipcRenderer.invoke('gaeb:export-x84', { draftId, options }),
+    createAngebotFromDraft: (payload) => ipcRenderer.invoke('gaeb:create-angebot-from-draft', payload)
 });
 

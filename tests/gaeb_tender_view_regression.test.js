@@ -106,7 +106,8 @@ function setupJsdomEnv(initialImports = [], initialDrafts = {}) {
         saveTenderDraft: async () => { throw new Error('Unerwarteter Save-Aufruf im Regressionstest'); },
         cloneTenderDraft: async () => { throw new Error('Unerwarteter Clone-Aufruf im Regressionstest'); },
         validateX84Export: async () => ({ valid: true, errors: [] }),
-        exportX84: async () => ({ canceled: true })
+        exportX84: async () => ({ canceled: true }),
+        createAngebotFromDraft: async () => { throw new Error('Unerwarteter Angebot-Aufruf im Regressionstest'); }
     };
 
     // Lade Scripts in den Window-Context
