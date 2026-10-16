@@ -111,6 +111,35 @@ function register(ipcMain, context = {}) {
         return { success: false, cancelled: true };
     }));
 
+    // --- DA11 (REB 23.003) Import: Gegenstück zum Export (kein Abtippen) ---
+    ipcMain.handle('aufmass:importDA11', wrapHandler(async (e, projectId, da11Content = null) => {
+        const win = BrowserWindow.fromWebContents(e.sender);
+
+        let content = da11Content;
+        if (!content) {
+            const { filePaths } = await dialog.showOpenDialog(win, {
+                title: 'DA11 Aufmaßdatei (REB 23.003) importieren',
+                properties: ['openFile'],
+                filters: [
+                    { name: 'DA11 REB 23.003 Aufmaß (*.d11, *.da11, *.txt)', extensions: ['d11', 'da11', 'txt'] },
+                    { name: 'Alle Dateien (*.*)', extensions: ['*'] }
+                ]
+            });
+            if (filePaths && filePaths.length > 0) {
+                content = fs.readFileSync(filePaths[0], 'latin1');
+            } else {
+                focusWin(win);
+                return { success: false, cancelled: true };
+            }
+        }
+
+        const numProjectId = Number(projectId);
+        if (!Number.isInteger(numProjectId) || numProjectId <= 0) throw new Error('Ungültige Projekt-ID für DA11-Import.');
+        const result = await dbAPI.importDA11(numProjectId, content);
+        focusWin(win);
+        return result;
+    }));
+
     ipcMain.handle('aufmass:importGAEBX31', wrapHandler(async (e, projectId, xmlContent = null) => {
         const win = BrowserWindow.fromWebContents(e.sender);
 
@@ -138,7 +167,10 @@ function register(ipcMain, context = {}) {
     }));
 
     ipcMain.handle('db:getKumulativeAbrechnung', wrapHandler(async (e, projectId) => {
-        return await dbAPI.getKumulativeAbrechnung(projectId);
+        if (projectId === undefined || projectId === null || projectId === '') throw new Error('Projekt-ID fehlt für kumulative Abrechnung.');
+        const numId = Number(projectId);
+        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Projekt-ID für kumulative Abrechnung.');
+        return await dbAPI.getKumulativeAbrechnung(numId);
     }));
 }
 

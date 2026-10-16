@@ -100,9 +100,14 @@ _matchesNumberVariant(text, docNr) {
       let bestMatch = null;
       for (const doc of offeneRechnungen) {
         const docNr = String(doc.nr || '').toUpperCase().trim();
-        const docBrutto = Math.round((parseFloat(doc.brutto) || 0) * 100) / 100;
+        // VOB/B § 17: fällig ist der Zahlbetrag (brutto abzgl. Einbehalt), nicht
+        // das volle Brutto — sonst matcht keine Abschlagszahlung je exakt.
+        const _zb1 = parseFloat(doc.zahlbetrag);
+        const docSoll1 = (Number.isFinite(_zb1) && _zb1 > 0)
+          ? Math.round(_zb1 * 100) / 100
+          : Math.round((parseFloat(doc.brutto) || 0) * 100) / 100;
         const docBezahlt = Math.round((parseFloat(doc.bezahlt_betrag) || 0) * 100) / 100;
-        const docOffen = Math.round((docBrutto - docBezahlt) * 100) / 100;
+        const docOffen = Math.round((docSoll1 - docBezahlt) * 100) / 100;
         if (docOffen <= 0) continue;
         const hasNrMatch = docNr && this._matchesNumberVariant(vzText, docNr);
         if (hasNrMatch) {
@@ -156,9 +161,12 @@ _matchesNumberVariant(text, docNr) {
       }
       if (!bestMatch) {
         for (const doc of offeneRechnungen) {
-          const docBrutto = Math.round((parseFloat(doc.brutto) || 0) * 100) / 100;
+          const _zb2 = parseFloat(doc.zahlbetrag);
+          const docSoll2 = (Number.isFinite(_zb2) && _zb2 > 0)
+            ? Math.round(_zb2 * 100) / 100
+            : Math.round((parseFloat(doc.brutto) || 0) * 100) / 100;
           const docBezahlt = Math.round((parseFloat(doc.bezahlt_betrag) || 0) * 100) / 100;
-          const docOffen = Math.round((docBrutto - docBezahlt) * 100) / 100;
+          const docOffen = Math.round((docSoll2 - docBezahlt) * 100) / 100;
           if (docOffen <= 0) continue;
           const kundenIban = this._cleanIban(doc.kunden_iban || doc.kunde_iban || doc.iban);
           const kundenName = String(doc.kunden_name || doc.kunde_name || doc.name || '').toUpperCase().trim();

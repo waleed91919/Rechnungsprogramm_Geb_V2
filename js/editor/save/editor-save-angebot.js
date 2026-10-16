@@ -357,6 +357,42 @@ function convertToRechnung(angId) {
 
 window.convertToRechnung = convertToRechnung;
 
+/**
+ * Vorgangs-Strang: Rechnung SPEICHERND aus Angebot/Auftrag/Lieferschein erzeugen
+ * (ohne Abtippen — Positionen, Konditionen und Herkunft wandern per Referenz
+ * mit; Belegnummer wird server-seitig lückenlos vergeben).
+ * Die alte convertToRechnung (Modal-Vorbelegung) bleibt für manuelle Kontrolle.
+ */
+async function createRechnungFromVorgaengerViaApi(angId) {
+    const ang = (state.angebote || []).concat(state.dokumente || []).find(a => a.id === angId);
+    if (!ang) {
+        showToast('Kein Dokument gefunden.', 'error');
+        return;
+    }
+    const typ = String(ang.type || '').toLowerCase();
+    if (!['angebot', 'auftrag', 'lieferschein'].includes(typ)) {
+        showToast(`Typ "${ang.type}" kann nicht in eine Rechnung übernommen werden.`, 'error');
+        return;
+    }
+    if (!(await safeConfirm(`Aus ${typ === 'angebot' ? 'Angebot' : typ === 'auftrag' ? 'Auftragsbestätigung' : 'Lieferschein'} ${ang.nr} jetzt eine Rechnung erzeugen (Positionen werden übernommen)?`))) {
+        return;
+    }
+    try {
+        const fn = typ === 'auftrag' ? window.api.createRechnungFromAuftrag : window.api.createRechnungFromAngebot;
+        const res = await fn.call(window.api, angId, {});
+        if (res && res.success) {
+            showToast(`Rechnung ${res.nr} gespeichert (Herkunft: ${res.herkunft ? res.herkunft.typ + ' ' + ang.nr : ang.nr}).`, 'success');
+            closeRechnungModal();
+            if (typeof switchView === 'function') switchView('dashboard');
+        }
+    } catch (err) {
+        console.error('Fehler bei der Rechnungs-Erzeugung:', err);
+        showToast('Rechnung blockiert: ' + (err.message || err), 'error');
+    }
+}
+
+window.createRechnungFromVorgaengerViaApi = createRechnungFromVorgaengerViaApi;
+
 function syncAngebotFieldToRechnung(srcId, targetId) {
     const src = document.getElementById(srcId);
     const target = document.getElementById(targetId);

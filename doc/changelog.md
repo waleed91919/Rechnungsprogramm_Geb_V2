@@ -1,5 +1,44 @@
 # Changelog / Fortschritt
 
+## 16.10.2026 (Vorgangs-Strang End-to-End: GAEB → Angebot → AB → Aufmaß DA11 → Abschlag → Nachtrag → Schluss → OPOS → Einbehalt-Freigabe)
+- **Ziel:** Ein einziger ununterbrochener Datenstrang ohne manuelles Abtippen von Zahlen (IDs/Herkunft statt Neu-Erfassung). Audit via 3 Subagents: Teilstrecken existierten (GAEB→Angebot-Generator, Nachtrag→Rechnung idempotent, OPOS-Matching, J1-Verrechnungs-Guards), aber 11 Bruchstellen rissen die Kette ab.
+- **Neu `controllers/WorkflowController.js` (rein, DB-frei):** `buildRechnungFromVorgaenger` (Angebot/Auftrag/Lieferschein → speicherfertige Rechnung mit `parent_angebot_id`/`source_auftrag_id`/Positions-Herkunft), `buildPositionenFromAufmass`, `buildSchlussrechnung` (gemessene Menge gewinnt, Nachtrag-Doppel → `skippedOz`, Verrechnungen automatisch), `parseDa11ToImport`, `sollBetrag/offenerBetrag` (zahlbetrag-scharf), `buildRetentionRelease` (nur HELD, Bürgschaft braucht Referenz), `nextBelegNr`, `normalizeOz` (DA11 ohne Punkte ↔ LV mit Punkten).
+- **Neu `db/repositories/workflow_repo.js` + `main/ipc/ipc-workflow.js` (+preload, 8 Kanäle):** `createRechnungFromAngebot/Auftrag`, `createAbschlagFromAufmass` (nur VERIFIED-Blätter, 0-€-Positionen werden gemeldet statt gebucht), `createSchlussrechnung` (J1-konform, Nachtrag-LV-Übernahme inklusive), `verifyAufmassBlatt`, `getSecurityRetentions`/`releaseSecurityRetention`, `getVorgangskette` (ein Strang lesbar).
+- **Schema-Herkunft (frisch + Migration):** `dokumente(herkunft_typ/herkunft_id/source_auftrag_id)`, `positionen(aufmass_blatt_id/quelle/zeitstempel/nachtrag_id/pos_id/herkunft_typ/herkunft_id)`, `aufmass_zeilen(projekt_position_id)`; `document_repo` persistiert sie dynamisch (PRAGMA-geschützt, Minimalschemata brechen nicht) + legt `security_retentions(HELD)` beim Speichern automatisch an (VOB/B § 17).
+- **Aufmaß-Lücken geschlossen:** `aufmass:importDA11` (Gegenstück zum Export, DRAFT + Freigabe-Workflow), OZ-Match normalisiert (DA11-`01020030` findet LV-`01.02.0030`), Preisfindung inkl. Quell-Angebot (`source_angebot_id`) + AB (`auftrag`), `getKumulativeAbrechnung` zahlbetrag-scharf (Rest = Soll − bezahlt).
+- **OPOS-Einbehalt-Fix:** Matching (`opos-matching.js` beide Pässe) + Buchung/Storno (`reconciliation_repo.js`) rechnen gegen `zahlbetrag` statt `brutto` — eine Abschlagszahlung in exakter Höhe matcht jetzt `EXACT_INVOICE_AND_AMOUNT` statt ewigem Teilzahlungs-Rest in Einbehalt-Höhe.
+- **GAEB→EFB:** Generator kopiert UP-EKT-Summe nach `positionen.ek` (spaltentolerant); tote Renderer-Funktionen in `aufmass-export.js` neu implementiert (DA11-/X31-Export, X31-/DA11-Import, GAEB-Dropzone via `GAEBEngine.parseGAEBXML`); Übergabe-Modal mit Abschlag-/Schluss-Erzeugung + Einbehalt-Freigabe-Panel; DA11-Import-Buttons im Projekt-Tab.
+- **Verifikation:** `tests/workflow_e2e.test.js` 10/10 (9 rein + 1 volle Kette Angebot→AB→Projekt→DA11→Abschlag→OPOS→Nachtrag→Schluss→Freigabe auf `:memory:`); Regression in Electron: j9 6/6, uebergaben 5/5, verify_schema_identity, ab 3/3, opos (PASSED-Marker), gutschrift-nachtrag 11/11, data_integrity 38/38, angebot_lifecycle 16/17 (Test 10 Legacy-Migration per Stash-Baseline auch ohne diese Änderungen rot = vorbestehend). `node --check` alle geänderten Dateien OK.
+- **Umgebungshinweis:** `better-sqlite3` ist für Electrons Node-ABI gebaut — NICHT per `npm rebuild` für System-Node umbauen (bricht den App-Start mit NODE_MODULE_VERSION-Fehler; Original wiederhergestellt + in Electron verifiziert). DB-Tests laufen via Electron-as-Node-Harness (Muster `j9-gaeb-generator.test.js`).
+
+## 16.10.2026 (SSoT kaufmännische Rundung: js/money.js, EN 16931 pro Steuer-Bucket)
+- **Audit via 3 Subagents (Editor+Project, InvoiceModel+Cumulative, ZUGFeRD+DATEV):**
+  - 4 parallele `round2`-Kopien mit fast identischer Formel (`InvoiceController`, `AngebotController`, `EInvoiceViewer`, plus implizit `EInvoiceEngine`-Fassade); 12x EPSILON-loses `Math.round(*100)/100` in `CumulativeBillingController`; 1x `Math.round(netto*%)/100` in `editor-calculation.js`; 3 inkonsistente Pfade in `project-calculations.js` (nur 1 rundete); 5x rohes `toFixed(2)` in `datev.js` (Binärfehler `2.675->2.67`); `InvoiceModel.js` rundet gar nicht; `main/zugferd-builder.js` bettet nur fertige `xmlString` ein (keine eigene Rundung — XML kommt aus `einvoice-viewer.js:computeTotals`).
+- **Neu `js/money.js` (einzige Quelle):** `Money.round2` (EPSILON, nicht-finit->0), `percent`, `taxFor` (AE/13b->0, EN16931 je Bucket), `sum2`, `toFixed2`, `toDatev` (Komma, abs). Isomorph (window/globalThis/require), geladen in `code.html` direkt nach `js/state.js`.
+- **Umgestellt (10 Dateien):** `InvoiceController.round2`, `AngebotController.round2`, `EInvoiceViewer.round2` delegieren an `Money`; `CumulativeBillingController` nutzt `R/P/taxFor`, rundet Vor-Summen sofort (kein ungerundet-intern vs. gerundet-ausgegeben mehr); `editor-calculation.js` Einbehalt via `Money.percent`; `project-calculations.js` alle 3 Pfade via SSoT; `datev.js` alle Beträge via `Money.toDatev`; `banking-utils.js` Dedupe-Hash via SSoT.
+- **Verifikation:** `node --check` 10 Dateien OK; `tests/money_rounding.test.js` 9/9 grün (Grenzfälle 2.675/1.005, Delegations-Bitidentität, VOB-Kennzahlen 1000/5%/19% -> 50/190/1190/1140, kein 0,01-Drift); `tests/zugferd.test.js` 19/19 grün (XML-Summen unverändert). Restliche `Math.round`-Treffer nur noch Fallbacks (identische Formel, greift nur wenn `Money` nicht geladen) + Datums-`diffDays` (kein Geld).
+- **Regel (bleibend):** Kein neues `Math.round(*100)/100` oder rohes `toFixed(2)` für Euro-Beträge — immer `Money.*` aus `js/money.js`.
+
+## 16.10.2026 (IPC- & Repository-Disziplin: strikte typisierte Kanäle, keine direkten DB-Zugriffe im Frontend)
+- **Audit via 4 Subagents (`js/*`, `views/*`, `main/ipc/*` + `db/repositories/*`, Bootstrapping):**
+  - `js/`: 3 echte Verstöße (`gaeb_x84_validator.js`, `gaeb_x84_mapper.js`, `gobd.js`) + 2 historische `code.html`-Kommentare, Rest OK (kein `better-sqlite3`/`ipcRenderer`/`window.db` im Renderer).
+  - `views/`: 0 Verstöße (kein SQL/`require`/`ipcRenderer`), nur historisch: Bare-`onclick`, manuelle Modal-Templates, `module.exports`, `README`-Historie.
+  - Bootstrapping: `code.html` (532 Zeilen Hülle) + `modal-loader.js`-Cache aktiv, aber ohne DB-Logik.
+- **Fixes (13 Dateien):**
+  - `js/gaeb_x84/gaeb_x84_validator.js`, `gaeb_x84_mapper.js`, `index.js`: kein `require(../../db/...)`, kein `db.prepare/SELECT` mehr. Reine Funktionen mit `draftData`/`settings` als plain objects. Legacy `(db,id)` nur via injiziertem Repository-Loader (Node/Main/Tests), im Renderer strikt abgewiesen.
+  - `db/repositories/gaeb_tender_repo.js` (`getTenderDraftForExport`): lädt `draftData` + `einstellungen` selbst, ruft reine X84-Funktionen.
+  - `main/ipc/ipc-gaeb.js`: `validate-x84-export`/`export-x84` validieren IDs, laden via `dbAPI.loadTenderDraft`, Settings via `dbAPI.getEinstellung/getFullState` (kein `db.prepare` im Handler); `save/load/delete/link/get-linked/get-original` + `create-angebot` validiert.
+  - `preload.js`: neue typisierte Kanäle `getEinstellung`, `getKumulativeAbrechnung`, `saveGaebImport`, `loadGaebImport`, `deleteGaebImport`, `linkGaebAngebot`, `getGaebLinkedAngebote`, `getGaebOriginalBuffer`.
+  - `main/ipc/ipc-core.js`: `db:getEinstellung` (validiert); `ipc-aufmass.js`: `db:getKumulativeAbrechnung` validiert.
+  - `js/gobd.js`: kein top-level `require('crypto'/'../main/audit')` mehr — lazy nur Main/Node, Renderer via internem SHA-256-Fallback bzw. `window.api`/`audit:verify`.
+  - `js/berichte.js`, `js/dauerrechnungen.js`: `code.html`-Kommentare auf `views/*` + `view-loader` + `window.api` korrigiert.
+  - `views/SyncView.js`, `ZeiterfassungView.js`: `module.exports` entfernt, `state.user` → `window.state.user`.
+- **Verifikation:**
+  - `node --check` alle Kern-Dateien: OK. Pure-Calls (Validator, `getBidderAddress(settings)`, GoBD-Hash 64 Hex): OK.
+  - Grep: `js/` ohne `db.prepare/SELECT`, `views/` ohne DB-Muster.
+  - `node --test tests/gobd_protection.test.js tests/gaeb_validation.test.js tests/modal_modularization.test.js`: 12/12 grün.
+- **Regel (bleibend):** Frontend (`js/*`, `views/*`) nur via `window.api.*` → `main/ipc/*` (validiert) → `db/repositories/*` → SQLite. Kein `require(db)`, kein `better-sqlite3`, kein `ipcRenderer`, kein SQL im Renderer.
+
 ## 07.10.2026 (Architektur-Review Umsetzung: sync_views + Preload-Härtung)
 - **Template-Drift-Schutz (`views/partials/` -> `js/view-loader.js`):**
   - Neu `scripts/sync_views.js` analog `scripts/sync_modals.js`: 19 `view-*.html` einlesen, `VIEW_TEMPLATES` neu bauen, Loader-Logik `initViews/replaceWith` beibehalten. `node scripts/sync_views.js` regeneriert byte-identisch (204956 Bytes, 19 Templates).

@@ -1987,6 +1987,10 @@ const VIEW_TEMPLATES = {
                                 <span class="material-symbols-outlined text-[16px]">file_open</span>
                                 GAEB X31 Import
                             </button>
+                            <button type="button" onclick="importProjektDA11()" class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-lg hover:bg-emerald-100 transition-all" title="DA11 Aufmaßdatei (REB 23.003) importieren — Blätter landen als DRAFT, vor Abrechnung freigeben">
+                                <span class="material-symbols-outlined text-[16px]">file_open</span>
+                                DA11 Import
+                            </button>
                             <button type="button" onclick="calculateSchlussaufmassForProjekt()" class="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold rounded-lg hover:bg-indigo-100 transition-all">
                                 <span class="material-symbols-outlined text-[16px]">calculate</span>
                                 Schlussaufmaß

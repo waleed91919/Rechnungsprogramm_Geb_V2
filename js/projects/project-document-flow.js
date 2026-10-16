@@ -4,6 +4,7 @@ function openAufmassUebergabeModal() {
     const modal = document.getElementById('aufmass-uebergabe-modal');
     if (!modal) return;
     modal.classList.remove('hidden');
+    try { if (typeof loadEinbehaltPanel === 'function') loadEinbehaltPanel(); } catch (_e) {}
 
     const select = document.getElementById('uebergabe-doc-select');
     select.innerHTML = '';
@@ -356,11 +357,215 @@ async function applyApprovedNachtraegeToCurrentInvoice() {
 
 
 
+/**
+ * Vorgangs-Strang (UI): 1. Abschlag direkt aus freigegebenem Aufmaß erzeugen.
+ * Keine Mengen abtippen — mergeSchlussaufmass liefert Mengen + LV-Preise,
+ * der Einbehalt (VOB/B § 17) wird automatisch abgelegt (Status HELD).
+ */
+async function createAbschlagFromAufmassUI() {
+    const pId = window.currentViewProjektId;
+    if (!pId || !window.api || !window.api.createAbschlagFromAufmass) {
+        showToast('Abschlag-Erzeugung ist nicht verfügbar.', 'error');
+        return { success: false, reason: 'NO_API' };
+    }
+    try {
+        const res = await window.api.createAbschlagFromAufmass(pId, {});
+        if (res && res.success) {
+            showToast(`Abschlag ${res.nr} gespeichert (${res.positionCount} Positionen).`, 'success');
+            if (window.api.getFullState) {
+                const full = await window.api.getFullState();
+                if (full && Array.isArray(full.dokumente)) state.dokumente = full.dokumente;
+                if (full && Array.isArray(full.rechnungen)) state.rechnungen = full.rechnungen;
+            }
+            return { success: true, id: res.id, nr: res.nr };
+        }
+        showToast('Abschlag konnte nicht erzeugt werden.', 'error');
+        return { success: false, reason: 'FAILED' };
+    } catch (e) {
+        console.error('Abschlag-Erzeugung fehlgeschlagen:', e);
+        showToast('Abschlag blockiert: ' + (e.message || e), 'error');
+        return { success: false, reason: 'EXCEPTION' };
+    }
+}
+
+/**
+ * Vorgangs-Strang (UI): Schlussrechnung aus Aufmaß + genehmigten Nachträgen.
+ * Vor-Abschläge werden automatisch verrechnet (J1-Guard-konform), gewerkte
+ * OZ-Doppel (Aufmaß misst Nachtrag) werden gemeldet statt doppelt berechnet.
+ */
+async function createSchlussrechnungFromProjekt() {
+    const pId = window.currentViewProjektId;
+    if (!pId || !window.api || !window.api.createSchlussrechnung) {
+        showToast('Schlussrechnung-Erzeugung ist nicht verfügbar.', 'error');
+        return { success: false, reason: 'NO_API' };
+    }
+    try {
+        const confirmed = (typeof safeConfirm === 'function')
+            ? await safeConfirm('Schlussrechnung aus freigegebenem Aufmaß erzeugen? Vor-Abschläge werden automatisch verrechnet.')
+            : true;
+        if (!confirmed) return { success: false, reason: 'CANCELLED' };
+        const res = await window.api.createSchlussrechnung(pId, {});
+        if (res && res.success) {
+            const verrechnet = (res.verrechnet || []).map(v => v.nr).join(', ') || '—';
+            let msg = `Schlussrechnung ${res.nr} gespeichert (verrechnet: ${verrechnet}).`;
+            if (res.skippedOz && res.skippedOz.length > 0) msg += ` Gemessen gewinnt: ${res.skippedOz.join(', ')} einmalig.`;
+            showToast(msg, 'success');
+            if (typeof closeAufmassUebergabeModal === 'function') closeAufmassUebergabeModal();
+            if (window.api.getFullState) {
+                const full = await window.api.getFullState();
+                if (full && Array.isArray(full.dokumente)) state.dokumente = full.dokumente;
+                if (full && Array.isArray(full.rechnungen)) state.rechnungen = full.rechnungen;
+            }
+            return { success: true, id: res.id, nr: res.nr };
+        }
+        showToast('Schlussrechnung konnte nicht erzeugt werden.', 'error');
+        return { success: false, reason: 'FAILED' };
+    } catch (e) {
+        console.error('Schlussrechnung-Erzeugung fehlgeschlagen:', e);
+        showToast('Schlussrechnung blockiert: ' + (e.message || e), 'error');
+        return { success: false, reason: 'EXCEPTION' };
+    }
+}
+
+/**
+ * Vorgangs-Strang (UI): Aufmaßblatt zur Abrechnung freigeben
+ * (DRAFT/SUBMITTED → VERIFIED, § 14 VOB/B).
+ */
+async function verifyAufmassBlattUI(blattId) {
+    if (!blattId || !window.api || !window.api.verifyAufmassBlatt) {
+        showToast('Blatt-Freigabe ist nicht verfügbar.', 'error');
+        return { success: false };
+    }
+    try {
+        const res = await window.api.verifyAufmassBlatt(blattId);
+        showToast(res && res.already ? 'Blatt bereits freigegeben.' : 'Aufmaßblatt freigegeben (VERIFIED).', 'success');
+        try { if (typeof loadProjektAufmassBlaetter === 'function') loadProjektAufmassBlaetter(); } catch (_e) {}
+        return { success: true };
+    } catch (e) {
+        console.error('Blatt-Freigabe fehlgeschlagen:', e);
+        showToast('Freigabe fehlgeschlagen: ' + (e.message || e), 'error');
+        return { success: false };
+    }
+}
+
+/**
+ * Vorgangs-Strang (UI): Einbehalt-Übersicht des Projekts laden (für Freigabe-Panel).
+ */
+async function loadSecurityRetentionsUI() {
+    const pId = window.currentViewProjektId;
+    if (!pId || !window.api || !window.api.getSecurityRetentions) return [];
+    try {
+        return await window.api.getSecurityRetentions(pId) || [];
+    } catch (e) {
+        console.error('Einbehalte konnten nicht geladen werden:', e);
+        return [];
+    }
+}
+
+/**
+ * Vorgangs-Strang (UI): Freigabe-Panel im Übergabe-Modal füllen.
+ * Wird beim Öffnen des Modals und nach jeder Freigabe aufgerufen.
+ */
+async function loadEinbehaltPanel() {
+    const tbody = document.getElementById('einbehalt-tbody');
+    if (!tbody) return;
+    const list = await loadSecurityRetentionsUI();
+    if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="px-2 py-2 text-center text-slate-400">Keine Einbehalte vorhanden.</td></tr>';
+        return;
+    }
+    const esc = (s) => String(s === undefined || s === null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const eur = (v) => (typeof formatCurrency === 'function' ? formatCurrency(v || 0) : `${Number(v || 0).toFixed(2)} €`);
+    tbody.innerHTML = list.map((r) => {
+        const held = r.status === 'HELD';
+        return `<tr>
+            <td class="px-2 py-1">${esc(r.rechnung_nr || ('#' + r.invoice_id))}</td>
+            <td class="px-2 py-1 text-right">${eur(r.amount)}</td>
+            <td class="px-2 py-1 text-center">${held ? '<span class="text-amber-600 font-bold">EINBEHALTEN</span>' : '<span class="text-emerald-600 font-bold">' + esc(r.status) + '</span>'}</td>
+            <td class="px-2 py-1 text-right">${held
+                ? `<button type="button" onclick="releaseSecurityRetentionUI(${r.id}, 'RELEASED')" class="px-2 py-1 bg-emerald-600 text-white text-[11px] font-bold rounded hover:bg-emerald-700">Freigeben</button>
+                   <button type="button" onclick="releaseSecurityRetentionUI(${r.id}, 'GUARANTEE_SUBSTITUTED')" class="px-2 py-1 bg-white border border-slate-300 text-slate-700 text-[11px] font-bold rounded hover:bg-slate-50 ml-1" title="Gegen Bankbürgschaft ablösen">Bürgschaft</button>`
+                : '<span class="text-slate-400 text-[11px]">—</span>'}</td>
+        </tr>`;
+    }).join('');
+}
+
+/**
+ * Vorgangs-Strang (UI): Sicherheitseinbehalt nach Gewährleistung freigeben
+ * (HELD → RELEASED) oder gegen Bürgschaft ablösen (GUARANTEE_SUBSTITUTED).
+ * Freigegebene Beträge werden fällig (OPOS-Abgleich erwartet sie zusätzlich).
+ */
+async function releaseSecurityRetentionUI(retentionId, mode) {
+    if (!retentionId || !window.api || !window.api.releaseSecurityRetention) {
+        showToast('Einbehalt-Freigabe ist nicht verfügbar.', 'error');
+        return { success: false };
+    }
+    const useMode = (mode === 'GUARANTEE_SUBSTITUTED') ? 'GUARANTEE_SUBSTITUTED' : 'RELEASED';
+    try {
+        let guaranteeRef = null;
+        if (useMode === 'GUARANTEE_SUBSTITUTED') {
+            guaranteeRef = (typeof prompt === 'function')
+                ? prompt('Bürgschafts-Referenz (z. B. Bürgschafts-Nr. der Bank):', '')
+                : '';
+            if (!guaranteeRef) { showToast('Ablösung abgebrochen (Referenz fehlt).', 'warning'); return { success: false }; }
+        } else {
+            const confirmed = (typeof safeConfirm === 'function')
+                ? await safeConfirm('Sicherheitseinbehalt freigeben? Der Betrag wird damit fällig.')
+                : true;
+            if (!confirmed) return { success: false };
+        }
+        const res = await window.api.releaseSecurityRetention(retentionId, { mode: useMode, guaranteeRef });
+        showToast(`Einbehalt freigegeben (${useMode === 'RELEASED' ? 'fällig' : 'bürgschaftsablöst'}).`, 'success');
+        try { if (typeof loadEinbehaltPanel === 'function') loadEinbehaltPanel(); } catch (_e) {}
+        return { success: true, retention: res };
+    } catch (e) {
+        console.error('Einbehalt-Freigabe fehlgeschlagen:', e);
+        showToast('Freigabe fehlgeschlagen: ' + (e.message || e), 'error');
+        return { success: false };
+    }
+}
+
+/**
+ * Vorgangs-Strang (UI): Rechnung speichernd aus Angebot/Auftrag erzeugen
+ * (ohne Abtippen — Positionen + Konditionen wandern per Referenz mit).
+ */
+async function createRechnungFromVorgaengerUI(vorgaengerId, vorgaengerTyp) {
+    if (!vorgaengerId || !window.api) {
+        showToast('Rechnungs-Erzeugung ist nicht verfügbar.', 'error');
+        return { success: false };
+    }
+    try {
+        const typ = String(vorgaengerTyp || 'angebot').toLowerCase();
+        const fn = typ === 'auftrag' ? window.api.createRechnungFromAuftrag : window.api.createRechnungFromAngebot;
+        if (!fn) { showToast('Rechnungs-Erzeugung ist nicht verfügbar.', 'error'); return { success: false }; }
+        const res = await fn.call(window.api, vorgaengerId, {});
+        if (res && res.success) {
+            showToast(`Rechnung ${res.nr} aus ${res.herkunft ? res.herkunft.typ : typ} erzeugt (Positionen übernommen).`, 'success');
+            if (typeof switchView === 'function') switchView('dashboard');
+            return { success: true, id: res.id, nr: res.nr };
+        }
+        showToast('Rechnung konnte nicht erzeugt werden.', 'error');
+        return { success: false };
+    } catch (e) {
+        console.error('Rechnungs-Erzeugung fehlgeschlagen:', e);
+        showToast('Rechnung blockiert: ' + (e.message || e), 'error');
+        return { success: false };
+    }
+}
+
 global.openAufmassUebergabeModal = openAufmassUebergabeModal;
 global.closeAufmassUebergabeModal = closeAufmassUebergabeModal;
 global.onUebergabeTypChange = onUebergabeTypChange;
 global.executeAufmassUebergabe = executeAufmassUebergabe;
 global.applyApprovedNachtraegeToCurrentInvoice = applyApprovedNachtraegeToCurrentInvoice;
+global.createAbschlagFromAufmassUI = createAbschlagFromAufmassUI;
+global.createSchlussrechnungFromProjekt = createSchlussrechnungFromProjekt;
+global.verifyAufmassBlattUI = verifyAufmassBlattUI;
+global.loadSecurityRetentionsUI = loadSecurityRetentionsUI;
+global.loadEinbehaltPanel = loadEinbehaltPanel;
+global.releaseSecurityRetentionUI = releaseSecurityRetentionUI;
+global.createRechnungFromVorgaengerUI = createRechnungFromVorgaengerUI;
 
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
@@ -368,7 +573,14 @@ if (typeof module !== 'undefined' && module.exports) {
         closeAufmassUebergabeModal,
         onUebergabeTypChange,
         executeAufmassUebergabe,
-        applyApprovedNachtraegeToCurrentInvoice
+        applyApprovedNachtraegeToCurrentInvoice,
+        createAbschlagFromAufmassUI,
+        createSchlussrechnungFromProjekt,
+        verifyAufmassBlattUI,
+        loadSecurityRetentionsUI,
+        loadEinbehaltPanel,
+        releaseSecurityRetentionUI,
+        createRechnungFromVorgaengerUI
     };
 }
 

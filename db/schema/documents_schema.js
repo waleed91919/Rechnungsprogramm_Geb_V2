@@ -34,9 +34,13 @@ function createSchema(db) {
             vertragsgrundlage TEXT DEFAULT 'BGB_WERKVERTRAG',
             angenommen_am TEXT,
             angenommene_version INTEGER,
+            herkunft_typ TEXT, -- Vorgangs-Strang: ANGEBOT/AUFTRAG/LIEFERSCHEIN/AUFMASS/NACHTRAG (Quelle ohne Abtippen)
+            herkunft_id INTEGER, -- ID des Quellbelegs (dokumente.id / nachtrag / aufmass-Blatt)
+            source_auftrag_id INTEGER, -- AB-Herkunft (dokumente.id type=auftrag), entlastet parent_angebot_id
             FOREIGN KEY(kundeId) REFERENCES kunden(id),
             FOREIGN KEY(projektId) REFERENCES projekte(id),
-            FOREIGN KEY(parent_angebot_id) REFERENCES dokumente(id)
+            FOREIGN KEY(parent_angebot_id) REFERENCES dokumente(id),
+            FOREIGN KEY(source_auftrag_id) REFERENCES dokumente(id)
         )`);
 
     db.exec(`CREATE TABLE IF NOT EXISTS positionen (
@@ -55,6 +59,13 @@ function createSchema(db) {
             in_endsumme_enthalten INTEGER DEFAULT 1,
             bieterangabe_wert TEXT,
             lieferschein_quelle TEXT,
+            aufmass_blatt_id INTEGER, -- Herkunft je Blattzeile (mergeSchlussaufmass)
+            aufmass_quelle TEXT, -- z.B. 'mergeSchlussaufmass'
+            aufmass_zeitstempel TEXT,
+            nachtrag_id INTEGER, -- GENEHMIGT-Nachtrag (N:{id}:POS:{pos} bleibt lesbar)
+            nachtrag_pos_id INTEGER,
+            herkunft_typ TEXT, -- ANGEBOT/AUFTRAG/LIEFERSCHEIN/AUFMASS/NACHTRAG/GAEB
+            herkunft_id INTEGER,
             FOREIGN KEY(dokumentId) REFERENCES dokumente(id),
             FOREIGN KEY(artikelId) REFERENCES artikel(id)
         )`);

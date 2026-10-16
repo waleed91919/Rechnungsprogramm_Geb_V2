@@ -128,9 +128,13 @@ applyPaymentMatching(matches = [], options = {}) {
                     if (doc) {
                         const altBezahlt = Math.round((parseFloat(doc.bezahlt_betrag) || 0) * 100) / 100;
                         const neuBezahlt = Math.round((altBezahlt + matchBetrag) * 100) / 100;
-                        const docBrutto = Math.round((parseFloat(doc.brutto) || 0) * 100) / 100;
+                        // VOB/B § 17: fällig ist der Zahlbetrag (abzgl. Einbehalt), nicht das Brutto.
+                        const _zb = parseFloat(doc.zahlbetrag);
+                        const docSoll = (Number.isFinite(_zb) && _zb > 0)
+                            ? Math.round(_zb * 100) / 100
+                            : Math.round((parseFloat(doc.brutto) || 0) * 100) / 100;
                         const totalErledigt = Math.round((neuBezahlt + skontoAbzug) * 100) / 100;
-                        const neuOffen = Math.max(0, Math.round((docBrutto - totalErledigt) * 100) / 100);
+                        const neuOffen = Math.max(0, Math.round((docSoll - totalErledigt) * 100) / 100);
 
                         const isFull = neuOffen <= 0.009;
                         const newStatus = isFull ? 'Bezahlt' : 'Teilweise bezahlt';
@@ -207,8 +211,11 @@ unmatchTransaction(zuordnungId, grund = '') {
                 if (doc) {
                     const altBezahlt = Math.round((parseFloat(doc.bezahlt_betrag) || 0) * 100) / 100;
                     const neuBezahlt = Math.max(0, Math.round((altBezahlt - zuordnung.betrag) * 100) / 100);
-                    const docBrutto = Math.round((parseFloat(doc.brutto) || 0) * 100) / 100;
-                    const neuOffen = Math.max(0, Math.round((docBrutto - neuBezahlt) * 100) / 100);
+                    const _zbU = parseFloat(doc.zahlbetrag);
+                    const docSollU = (Number.isFinite(_zbU) && _zbU > 0)
+                        ? Math.round(_zbU * 100) / 100
+                        : Math.round((parseFloat(doc.brutto) || 0) * 100) / 100;
+                    const neuOffen = Math.max(0, Math.round((docSollU - neuBezahlt) * 100) / 100);
 
                     const newStatus = neuBezahlt <= 0.009 ? 'Ausstehend' : 'Teilweise bezahlt';
                     const newLocked = (doc.was_locked_vor_zahlung !== undefined && doc.was_locked_vor_zahlung !== null)

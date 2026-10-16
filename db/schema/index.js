@@ -1372,6 +1372,24 @@ function runMigrations(db) {
     try { db.exec(`ALTER TABLE artikel ADD COLUMN eu_verantwortlicher TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
     try { db.exec(`ALTER TABLE artikel ADD COLUMN warnhinweis TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
 
+    // --- Vorgangs-Strang (End-to-End State): Herkunft ohne Abtippen ---
+    // dokumente: generische Vorgänger-Referenz (entlastet parent_angebot_id) + AB-Herkunft
+    try { db.exec(`ALTER TABLE dokumente ADD COLUMN herkunft_typ TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE dokumente ADD COLUMN herkunft_id INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE dokumente ADD COLUMN source_auftrag_id INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    // positionen: Herkunft je Position (Aufmaß-Blatt / Nachtrag / Vorgänger-Beleg)
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN aufmass_blatt_id INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN aufmass_quelle TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN aufmass_zeitstempel TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN nachtrag_id INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN nachtrag_pos_id INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN herkunft_typ TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`ALTER TABLE positionen ADD COLUMN herkunft_id INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    // aufmass_zeilen: LV-Bezug statt nur OZ-Text
+    try { db.exec(`ALTER TABLE aufmass_zeilen ADD COLUMN projekt_position_id INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_positionen_herkunft ON positionen(herkunft_typ, herkunft_id)`); } catch (e) { if (!e.message.includes('already exists')) console.warn('[DB Migration Warning]:', e.message); }
+    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_positionen_nachtrag ON positionen(nachtrag_id, nachtrag_pos_id)`); } catch (e) { if (!e.message.includes('already exists')) console.warn('[DB Migration Warning]:', e.message); }
+
     // --- DB-4, DB-8, GOBD-3, GOBD-4: Indizes, Soft-Delete & SQLite Triggers ---
     ensureGoBDSchemaAndTriggers(db);
 

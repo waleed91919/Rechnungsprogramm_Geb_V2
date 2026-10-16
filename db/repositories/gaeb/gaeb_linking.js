@@ -202,10 +202,41 @@ function createAngebotFromDraft(db, { importId, draftVersion, angebotId }) {
         // aber das Ticket fordert: is_qty_tbd/is_price_missing -> 0 mit Flag, nicht still unterschlagen.
         // Das bedeutet, dass sie implizit durch den Standard der positionen Tabelle nicht fehlen.
         // Dennoch fügen wir "0" ein, wenn die Spalten in künftigen Migrationen existieren, oder setzen defaults in GAEB.
-        const insertPos = db.prepare(`
-            INSERT INTO positionen (dokumentId, name, titel, menge, einheit, preis, in_endsumme_enthalten, oz_code)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `);
+        //
+        // Vorgangs-Strang: EKT-Summe (Lohn/Stoff/Gerät/Sonstiges aus X83-UP-Gliederung)
+        // wandert als `ek` mit ins Angebot — die EFB-Kalkulation liest positionen,
+        // sodass Kalkulationsansätze nicht neu eingetippt werden müssen.
+        let upByItem = new Map();
+        try {
+            const ids = items.map(i => i.id).filter(v => v !== undefined && v !== null);
+            if (ids.length > 0) {
+                const ph = ids.map(() => '?').join(',');
+                const upRows = db.prepare(
+                    `SELECT item_id, lohn, stoff, geraet, sonstiges, total FROM gaeb_item_up_components WHERE item_id IN (${ph})`
+                ).all(...ids);
+                for (const r of upRows) {
+                    const total = parseFloat(r.total);
+                    upByItem.set(r.item_id, Number.isFinite(total) ? total : (
+                        (parseFloat(r.lohn) || 0) + (parseFloat(r.stoff) || 0) +
+                        (parseFloat(r.geraet) || 0) + (parseFloat(r.sonstiges) || 0)
+                    ));
+                }
+            }
+        } catch (_e) { upByItem = new Map(); }
+        // ek nur schreiben, wenn die Spalte existiert (Minimalschemata in Tests).
+        let hasEkCol = false;
+        try {
+            hasEkCol = db.prepare(`PRAGMA table_info(positionen)`).all().some(c => c.name === 'ek');
+        } catch (_e) { hasEkCol = false; }
+        const insertPos = hasEkCol
+            ? db.prepare(`
+                INSERT INTO positionen (dokumentId, name, titel, menge, einheit, preis, ek, in_endsumme_enthalten, oz_code)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `)
+            : db.prepare(`
+                INSERT INTO positionen (dokumentId, name, titel, menge, einheit, preis, in_endsumme_enthalten, oz_code)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `);
         const updateGaebLinked = db.prepare(`UPDATE gaeb_items SET linked_position_id = ? WHERE id = ?`);
 
         let insertedCount = 0;
@@ -220,20 +251,22 @@ function createAngebotFromDraft(db, { importId, draftVersion, angebotId }) {
             const menge = item.menge || 0;
             const preis = item.unit_price || 0;
             const inTotal = (item.in_total !== undefined && item.in_total !== null) ? item.in_total : item.in_endsumme_enthalten;
+            const ek = upByItem.has(item.id) ? upByItem.get(item.id) : 0;
 
             // Name: Short text oder Name
             const posName = item.short_text || item.name || `Position ${item.path_oz}`;
 
-            const res = insertPos.run(
+            const args = [
                 targetAngebotId,
                 posName,
                 item.name || null, // Titel als Name
                 menge,
                 item.einheit || 'Stk.',
-                preis,
-                inTotal ? 1 : 0,
-                item.path_oz
-            );
+                preis
+            ];
+            if (hasEkCol) args.push(ek);
+            args.push(inTotal ? 1 : 0, item.path_oz);
+            const res = insertPos.run(...args);
 
             const newPosId = res.lastInsertRowid;
             updateGaebLinked.run(newPosId, item.id);

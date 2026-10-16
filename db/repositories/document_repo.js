@@ -33,6 +33,91 @@ function hasLieferscheinQuelleColumn() {
     }
 }
 
+// Vorgangs-Strang (End-to-End State): optionale Herkunftsspalten je Position
+// (Aufmaß-Blatt, Nachtrag, Vorgänger-Beleg). Kanonische Reihenfolge; nur
+// Spalten, die in der DB existieren, werden geschrieben.
+const POSITIONEN_HERKUNFT_COLS = Object.freeze([
+    'lieferschein_quelle',
+    'aufmass_blatt_id',
+    'aufmass_quelle',
+    'aufmass_zeitstempel',
+    'nachtrag_id',
+    'nachtrag_pos_id',
+    'herkunft_typ',
+    'herkunft_id'
+]);
+
+function getPositionenExtraColumns() {
+    try {
+        const cols = new Set(db.prepare(`PRAGMA table_info(positionen)`).all().map(c => c.name));
+        return POSITIONEN_HERKUNFT_COLS.filter(c => cols.has(c));
+    } catch (_e) {
+        return [];
+    }
+}
+
+function getDokumenteWorkflowColumns() {
+    try {
+        const cols = new Set(db.prepare(`PRAGMA table_info(dokumente)`).all().map(c => c.name));
+        return ['herkunft_typ', 'herkunft_id', 'source_auftrag_id'].filter(c => cols.has(c));
+    } catch (_e) {
+        return [];
+    }
+}
+
+/**
+ * Schreibt die Vorgänger-Referenzen eines Belegs (herkunft_typ/herkunft_id,
+ * source_auftrag_id). Defensiv: nur wenn die Spalten existieren. Läuft
+ * INNERHALB der aufrufenden Transaktion (kein eigenes db.transaction!).
+ */
+function persistDokumentHerkunft(docId, d, existing) {
+    const cols = getDokumenteWorkflowColumns();
+    if (cols.length === 0) return;
+    const pick = (key) => (d[key] !== undefined ? d[key] : (existing ? (existing[key] || null) : null));
+    const vals = cols.map(pick);
+    db.prepare(`UPDATE dokumente SET ${cols.map(c => `${c}=?`).join(', ')} WHERE id=?`).run(...vals, docId);
+}
+
+/**
+ * Legt zum Beleg den Sicherheitseinbehalt in security_retentions ab
+ * (VOB/B § 17, Status HELD). Idempotent je invoice_id (SELECT-first, damit
+ * auch Schemata ohne UNIQUE-Index genau eine Zeile behalten).
+ * Bricht das Speichern NIE (try/catch) — Einbehalt ist Folge, nicht Guard.
+ */
+function ensureSecurityRetention(docId, d) {
+    try {
+        const amt = parseFloat(d.sicherheitseinbehalt) || 0;
+        if (!(amt > 0.009)) return;
+        const projId = d.projektId || null;
+        if (!projId) return;
+        const mode = String(d.retentionMode || d.retention_mode || 'EXECUTION').toUpperCase() === 'WARRANTY' ? 'WARRANTY' : 'EXECUTION';
+        let due = null;
+        try {
+            const CBC = require('../../controllers/CumulativeBillingController');
+            const entry = CBC.createSecurityRetentionEntry({
+                projectId: projId,
+                invoiceId: docId,
+                amount: amt,
+                retentionType: mode,
+                warrantyYears: parseInt(d.gewährleistung_jahre || d.gewaehrleistung_jahre, 10) || 4,
+                invoiceDate: d.datum || new Date().toISOString().slice(0, 10)
+            });
+            due = entry && entry.dueDate ? entry.dueDate : null;
+        } catch (_e2) { /* Fallback unten */ }
+        if (!due) {
+            const t = new Date();
+            t.setFullYear(t.getFullYear() + (mode === 'WARRANTY' ? 4 : 1));
+            due = t.toISOString().slice(0, 10);
+        }
+        const existing = db.prepare('SELECT id, amount FROM security_retentions WHERE invoice_id=?').get(docId);
+        if (existing) {
+            db.prepare('UPDATE security_retentions SET amount=?, due_date=?, retention_type=? WHERE id=?').run(amt, due, mode, existing.id);
+        } else {
+            db.prepare(`INSERT INTO security_retentions (project_id, invoice_id, retention_type, amount, due_date, status) VALUES (?,?,?,?,?,'HELD')`).run(projId, docId, mode, amt, due);
+        }
+    } catch (_e) { /* Einbehalt darf Speichern nie brechen */ }
+}
+
 /**
  * Kernlogik des Beleg-Schreibens OHNE eigene Transaktion. Wird von saveDocument()
  * (eigenes Transaction-Wrapper) und vom atomaren Storno (storniereRechnung)
@@ -262,12 +347,12 @@ function applyDocumentWrite(d, requestedLockedInt) {
         const deleteVerrechnungStmt = db.prepare('DELETE FROM rechnung_verrechnungen WHERE aktuelle_rechnung_id=?');
         deleteVerrechnungStmt.run(docId);
 
-        // Neue Positionen einfügen
+        // Neue Positionen einfügen (inkl. Vorgangs-Herkunft, falls Spalten existieren)
         if (d.positionen && d.positionen.length > 0) {
-            const withLsQuelle = hasLieferscheinQuelleColumn();
-            const insertPosStmt = withLsQuelle
-                ? db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a, titel, positionstyp, in_endsumme_enthalten, bieterangabe_wert, lieferschein_quelle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-                : db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a, titel, positionstyp, in_endsumme_enthalten, bieterangabe_wert) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            const extraCols = getPositionenExtraColumns();
+            const insertPosStmt = db.prepare(
+                `INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a, titel, positionstyp, in_endsumme_enthalten, bieterangabe_wert${extraCols.length ? ', ' + extraCols.join(', ') : ''}) VALUES (${new Array(18 + extraCols.length).fill('?').join(', ')})`
+            );
             const stockDeductionMap = new Map();
 
             for (const p of d.positionen) {
@@ -289,9 +374,9 @@ function applyDocumentWrite(d, requestedLockedInt) {
                     p.titel || null,
                     p.positionstyp || 'NORMAL',
                     AngebotController.normalizeInEndsumme(p.in_endsumme_enthalten, p.positionstyp),
-                    p.bieterangabe_wert || null
+                    p.bieterangabe_wert || null,
+                    ...extraCols.map(c => (p[c] !== undefined ? p[c] : null))
                 ];
-                if (withLsQuelle) baseArgs.push(p.lieferschein_quelle || null);
                 insertPosStmt.run(...baseArgs);
 
                 if (d.type === 'rechnung' && p.artikelId) {
@@ -324,6 +409,10 @@ function applyDocumentWrite(d, requestedLockedInt) {
         const updateStmt = db.prepare('UPDATE dokumente SET type=?, nr=?, datum=?, faellig=?, kundeId=?, projektId=?, status=?, isLocked=?, netto=?, steuer=?, brutto=?, globalRabattAbzug=?, globalRabattType=?, globalRabattValue=?, anzahlung=?, mahnungLevel=?, mahnungDatum=?, mahnungGebuehr=?, eingabemodus=?, vortext=?, fusstext=?, leistungszeitraum_von=?, leistungszeitraum_bis=?, baustellen_adresse=?, vob_vereinbart=?, ist_privatkunde=?, unterliegt_bauabzugsteuer=?, bauabzugsteuer_betrag=?, ausweis_35a_erforderlich=?, summe_lohnkosten_brutto=?, rechnungsart=?, kumulierte_leistung_netto=?, sicherheitseinbehalt=?, sicherheitseinbehalt_prozent=?, unterliegt_13b=?, leitweg_id=?, buyer_reference=?, objekt_typ=?, objekt_id=?, skonto_tage=?, skonto_prozent=?, sepa_mandat_id=?, sha256_hash=?, zahlbetrag=?, version=?, parent_angebot_id=?, angebot_status=?, freeze_snapshot_json=?, auftraggeber_typ=?, vergabe_verfahren=?, vertragsgrundlage=?, angenommen_am=?, angenommene_version=? WHERE id=?');
         updateStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, requestedLockedInt, d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.mahnungLevel || 0, d.mahnungDatum || null, d.mahnungGebuehr || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.sicherheitseinbehalt_prozent || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.objekt_typ || null, d.objekt_id == null ? null : d.objekt_id, d.skonto_tage || 0, d.skonto_prozent || 0, d.sepa_mandat_id == null ? null : d.sepa_mandat_id, d.sha256_hash || null, d.zahlbetrag !== undefined && d.zahlbetrag !== null ? d.zahlbetrag : 0, docVersion, parentAngebotId, angebotStatus, freezeSnapshot, auftraggeberTyp, vergabeVerfahren, vertragsgrundlage, angenommenAm, angenommeneVersion, docId);
 
+        // Vorgangs-Strang: Herkunft persistieren + Einbehalt ablegen (VOB/B § 17)
+        persistDokumentHerkunft(docId, d, existing);
+        ensureSecurityRetention(docId, d);
+
     } else {
         const docVersion = d.version !== undefined && d.version !== null ? parseInt(d.version, 10) : 1;
         const parentAngebotId = d.parent_angebot_id || null;
@@ -339,12 +428,12 @@ function applyDocumentWrite(d, requestedLockedInt) {
         const res = insertStmt.run(d.type, d.nr, d.datum, d.faellig, d.kundeId, d.projektId, d.status, requestedLockedInt, d.netto, d.steuer, d.brutto, d.globalRabattAbzug || 0, d.globalRabattType || '%', d.globalRabattValue || 0, d.anzahlung || 0, d.eingabemodus || 'netto', d.vortext, d.fusstext, d.leistungszeitraum_von, d.leistungszeitraum_bis, d.baustellen_adresse, d.vob_vereinbart || 0, d.ist_privatkunde || 0, d.unterliegt_bauabzugsteuer || 0, d.bauabzugsteuer_betrag || 0, d.ausweis_35a_erforderlich || 0, d.summe_lohnkosten_brutto || 0, d.rechnungsart || 'REGULAER', d.kumulierte_leistung_netto || 0, d.sicherheitseinbehalt || 0, d.sicherheitseinbehalt_prozent || 0, d.unterliegt_13b || 0, d.leitweg_id || null, d.buyer_reference || null, d.objekt_typ || null, d.objekt_id == null ? null : d.objekt_id, d.skonto_tage || 0, d.skonto_prozent || 0, d.sepa_mandat_id == null ? null : d.sepa_mandat_id, d.sha256_hash || null, d.zahlbetrag !== undefined && d.zahlbetrag !== null ? d.zahlbetrag : 0, docVersion, parentAngebotId, angebotStatus, freezeSnapshot, auftraggeberTyp, vergabeVerfahren, vertragsgrundlage, angenommenAm, angenommeneVersion);
         docId = res.lastInsertRowid;
 
-        // Positionen einfügen
+        // Positionen einfügen (inkl. Vorgangs-Herkunft, falls Spalten existieren)
         if (d.positionen && d.positionen.length > 0) {
-            const withLsQuelle = hasLieferscheinQuelleColumn();
-            const insertPosStmt = withLsQuelle
-                ? db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a, titel, positionstyp, in_endsumme_enthalten, bieterangabe_wert, lieferschein_quelle) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-                : db.prepare('INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a, titel, positionstyp, in_endsumme_enthalten, bieterangabe_wert) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+            const extraCols = getPositionenExtraColumns();
+            const insertPosStmt = db.prepare(
+                `INSERT INTO positionen (dokumentId, artikelId, name, menge, einheit, preis, ek, mwst, rabatt, steuer_schluessel, is13b, cost_type, oz_code, is_tax_deductible_35a, titel, positionstyp, in_endsumme_enthalten, bieterangabe_wert${extraCols.length ? ', ' + extraCols.join(', ') : ''}) VALUES (${new Array(18 + extraCols.length).fill('?').join(', ')})`
+            );
             const stockDeductionMap = new Map();
 
             for (const p of d.positionen) {
@@ -366,9 +455,9 @@ function applyDocumentWrite(d, requestedLockedInt) {
                     p.titel || null,
                     p.positionstyp || 'NORMAL',
                     AngebotController.normalizeInEndsumme(p.in_endsumme_enthalten, p.positionstyp),
-                    p.bieterangabe_wert || null
+                    p.bieterangabe_wert || null,
+                    ...extraCols.map(c => (p[c] !== undefined ? p[c] : null))
                 ];
-                if (withLsQuelle) baseArgs.push(p.lieferschein_quelle || null);
                 insertPosStmt.run(...baseArgs);
 
                 if (d.type === 'rechnung' && p.artikelId) {
@@ -386,6 +475,10 @@ function applyDocumentWrite(d, requestedLockedInt) {
 
         // Verrechnungen einfügen
         insertVerrechnungenGuarded(docId, d.verrechnungen, d.rechnungsart || 'REGULAER', d.projektId);
+
+        // Vorgangs-Strang: Herkunft persistieren + Einbehalt ablegen (VOB/B § 17)
+        persistDokumentHerkunft(docId, d, null);
+        ensureSecurityRetention(docId, d);
     }
 
     // GoBD: Audit-Eintrag INNERHALB derselben Transaktion

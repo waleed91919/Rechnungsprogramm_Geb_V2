@@ -34,8 +34,19 @@ contextBridge.exposeInMainWorld('api', {
     deleteAufmassBlatt: (blattId) => ipcRenderer.invoke('db:deleteAufmassBlatt', blattId),
     mergeSchlussaufmass: (projectId) => ipcRenderer.invoke('db:mergeSchlussaufmass', projectId),
     exportDA11: (projectId, blattId) => ipcRenderer.invoke('aufmass:exportDA11', projectId, blattId),
+    importDA11: (projectId, da11Content) => ipcRenderer.invoke('aufmass:importDA11', projectId, da11Content),
     exportGAEBX31: (projectId, blattId) => ipcRenderer.invoke('aufmass:exportGAEBX31', projectId, blattId),
     importGAEBX31: (projectId, xmlContent) => ipcRenderer.invoke('aufmass:importGAEBX31', projectId, xmlContent),
+
+    // --- Vorgangs-Strang: GAEB → Angebot → AB → Aufmaß → Abschlag → Nachtrag → Schluss → OPOS → Freigabe ---
+    createRechnungFromAngebot: (angebotId, opts) => ipcRenderer.invoke('workflow:createRechnungFromAngebot', angebotId, opts),
+    createRechnungFromAuftrag: (auftragId, opts) => ipcRenderer.invoke('workflow:createRechnungFromAuftrag', auftragId, opts),
+    createAbschlagFromAufmass: (projectId, opts) => ipcRenderer.invoke('workflow:createAbschlagFromAufmass', projectId, opts),
+    createSchlussrechnung: (projectId, opts) => ipcRenderer.invoke('workflow:createSchlussrechnung', projectId, opts),
+    verifyAufmassBlatt: (blattId) => ipcRenderer.invoke('workflow:verifyAufmassBlatt', blattId),
+    getSecurityRetentions: (projectId) => ipcRenderer.invoke('workflow:getSecurityRetentions', projectId),
+    releaseSecurityRetention: (retentionId, opts) => ipcRenderer.invoke('workflow:releaseSecurityRetention', retentionId, opts),
+    getVorgangskette: (projectId) => ipcRenderer.invoke('workflow:getVorgangskette', projectId),
 
     // --- EFB-Preisblätter 221 & 223 (VHB Bund) ---
     getEfbKalkulation: (projectId) => ipcRenderer.invoke('efb:getKalkulation', projectId),
@@ -129,6 +140,8 @@ contextBridge.exposeInMainWorld('api', {
     markiereRuecklastschrift: (positionId, grund) => ipcRenderer.invoke('db:markiereRuecklastschrift', positionId, grund),
 
     saveEinstellung: (key, value) => ipcRenderer.invoke('db:saveEinstellung', key, value),
+    getEinstellung: (key) => ipcRenderer.invoke('db:getEinstellung', key),
+    getKumulativeAbrechnung: (projectId) => ipcRenderer.invoke('db:getKumulativeAbrechnung', projectId),
 
     // --- Phase 2: Zuschlagskalkulation & Mittellohn ---
     getZuschlagskalkulationStamm: (id) => ipcRenderer.invoke('kalkulation:getStammProfil', id),
@@ -232,8 +245,14 @@ contextBridge.exposeInMainWorld('api', {
     loadModalPartial: (modalName) => ipcRenderer.invoke('modals:loadPartial', modalName),
     loadAllModalPartials: () => ipcRenderer.invoke('modals:loadAll'),
 
-    // --- GAEB Ausschreibung / Bepreisung ---
+    // --- GAEB Ausschreibung / Bepreisung (typisierte Kanäle, validiert via main/ipc/ipc-gaeb.js) ---
     listGaebImports: () => ipcRenderer.invoke('gaeb:list-imports'),
+    saveGaebImport: (parsedData, options) => ipcRenderer.invoke('gaeb:save-import', { parsedData, options }),
+    loadGaebImport: (importId) => ipcRenderer.invoke('gaeb:load-import', importId),
+    deleteGaebImport: (importId) => ipcRenderer.invoke('gaeb:delete-import', importId),
+    linkGaebAngebot: (importId, angebotId, notes) => ipcRenderer.invoke('gaeb:link-angebot', { importId, angebotId, notes }),
+    getGaebLinkedAngebote: (importId) => ipcRenderer.invoke('gaeb:get-linked-angebote', importId),
+    getGaebOriginalBuffer: (importId) => ipcRenderer.invoke('gaeb:get-original-buffer', importId),
     createTenderDraft: (importId, options) => ipcRenderer.invoke('gaeb:create-tender-draft', { importId, options }),
     saveTenderDraft: (draftId, draftData) => ipcRenderer.invoke('gaeb:save-tender-draft', { draftId, draftData }),
     loadTenderDraft: (draftId) => ipcRenderer.invoke('gaeb:load-tender-draft', draftId),

@@ -164,13 +164,24 @@ function createAufmassRepo(deps) {
         return tx(blattId);
     },
 
+    /**
+     * Normalisiert eine OZ für den LV-Match: DA11 liefert 9-stellig ohne Punkte
+     * ("01020030"), LV/GAEB mit Punkten ("01.02.0030"). Ohne Normierung matcht
+     * keine DA11-Zeile je einen LV-Preis (stille 0-€-Positionen).
+     */
+    normalizeOz(oz) {
+        const s = (oz === undefined || oz === null) ? '' : String(oz);
+        return s.toUpperCase().replace(/[^0-9A-Z]/g, '');
+    },
+
     async mergeSchlussaufmass(projectId, options = {}) {
         const pId = Number(projectId);
         const includeDrafts = options && options.includeDrafts === true;
 
-        const allowedStatuses = includeDrafts 
+        const allowedStatuses = includeDrafts
             ? "('VERIFIED', 'FINALIZED', 'FREIGEGEBEN', 'SUBMITTED', 'DRAFT')"
             : "('VERIFIED', 'FINALIZED', 'FREIGEGEBEN')";
+        const normalizeOz = (oz) => (((oz === undefined || oz === null) ? '' : String(oz)).toUpperCase().replace(/[^0-9A-Z]/g, ''));
 
         // 1. Aggregation der Aufmaßzeilen mit Blattreferenzen (ohne unfertige DRAFTs standardmäßig)
         const aufmassRows = await dbQuery(`
@@ -190,9 +201,26 @@ function createAufmassRepo(deps) {
             ORDER BY z.oz_code ASC
         `, [pId]);
 
-        // 2. Vertragspositionen (Angebote / Aufträge des Projekts) zur Preisfindung laden
+        // 2. Vertragspositionen zur Preisfindung laden: Belege DES Projekts plus
+        // das Quell-Angebot (projekte.source_angebot_id — trägt i.d.R. noch kein
+        // projektId, ist aber der Vertrag) plus dessen Auftragsbestätigungen.
+        // type='auftrag' (AB) gehört dazu: Der Auftrag ist der Vertrag (VOB/B).
+        let extraDocIds = [];
+        try {
+            const proj = db.prepare('SELECT source_angebot_id FROM projekte WHERE id=?').get(pId);
+            const srcAngebotId = proj && proj.source_angebot_id ? Number(proj.source_angebot_id) : null;
+            if (srcAngebotId) {
+                extraDocIds.push(srcAngebotId);
+                const abs = db.prepare(`SELECT id FROM dokumente WHERE type='auftrag' AND status!='Storniert' AND (projektId=? OR parent_angebot_id=?)`).all(pId, srcAngebotId);
+                for (const r of abs) extraDocIds.push(r.id);
+            } else {
+                const abs = db.prepare(`SELECT id FROM dokumente WHERE type='auftrag' AND status!='Storniert' AND projektId=?`).all(pId);
+                for (const r of abs) extraDocIds.push(r.id);
+            }
+        } catch (_e) { extraDocIds = []; }
+        const extraPh = extraDocIds.length > 0 ? ` OR d.id IN (${extraDocIds.map(() => '?').join(',')})` : '';
         const contractPositions = await dbQuery(`
-            SELECT 
+            SELECT
                 pos.oz_code,
                 pos.name,
                 pos.preis as einheitspreis,
@@ -201,14 +229,14 @@ function createAufmassRepo(deps) {
                 pos.id as position_id
             FROM positionen pos
             JOIN dokumente d ON pos.dokumentId = d.id
-            WHERE d.projektId = ? AND d.type IN ('angebot', 'rechnung') AND d.status NOT IN ('Storniert')
+            WHERE (d.projektId = ? ${extraPh}) AND d.type IN ('angebot', 'auftrag', 'rechnung') AND d.status NOT IN ('Storniert')
             ORDER BY d.id DESC
-        `, [pId]);
+        `, [pId, ...extraDocIds]);
 
-        // Preiskarte nach OZ aufbauen
+        // Preiskarte nach NORMALISIERTER OZ aufbauen (DA11 ohne Punkte matcht LV mit Punkten)
         const priceMap = new Map();
         for (const cp of contractPositions) {
-            const cleanOz = (cp.oz_code || '').trim();
+            const cleanOz = normalizeOz(cp.oz_code);
             if (cleanOz && !priceMap.has(cleanOz)) {
                 priceMap.set(cleanOz, cp);
             }
@@ -217,7 +245,7 @@ function createAufmassRepo(deps) {
         // 3. Aufmaßzeilen mit LV-Preisen anreichern
         const warnings = [];
         const rows = aufmassRows.map(row => {
-            const matchedPos = priceMap.get(row.oz_code);
+            const matchedPos = priceMap.get(normalizeOz(row.oz_code));
             if (!matchedPos) {
                 warnings.push({
                     oz_code: row.oz_code,
@@ -225,8 +253,11 @@ function createAufmassRepo(deps) {
                     message: `Aufmaßposition ${row.oz_code} hat keinen gültigen Vertragspreis (LV-Position fehlt oder Tippfehler in OZ).`
                 });
             }
+            // Bei Match die LV-OZ übernehmen (nachgelagerte OZ-Vergleiche bleiben stabil)
+            const displayOz = (matchedPos && matchedPos.oz_code) ? matchedPos.oz_code : row.oz_code;
             return {
-                oz_code: row.oz_code,
+                oz_code: displayOz,
+                oz_code_raw: row.oz_code,
                 summe_menge: Math.round(row.summe_menge * 1000) / 1000,
                 einheit: (matchedPos && matchedPos.einheit) || row.einheit,
                 bezeichnung: (matchedPos && matchedPos.name) || row.bezeichnung || `Position ${row.oz_code}`,
@@ -358,6 +389,109 @@ function createAufmassRepo(deps) {
         return tx();
     },
 
+// --- DA11 (REB 23.003) Import: Gegenstück zum Export (kein Abtippen) ---
+    importDA11(projectId, da11Content) {
+        const pId = Number(projectId);
+        if (!Number.isInteger(pId) || pId <= 0) throw new Error('Ungültige Projekt-ID für DA11-Import.');
+        let DA11Service;
+        try {
+            DA11Service = require('../../js/da11');
+        } catch (e) {
+            throw new Error('DA11-Parser (js/da11.js) nicht verfügbar.');
+        }
+        const parsed = DA11Service.parseDA11(da11Content);
+        if (!parsed || parsed.success !== true || !Array.isArray(parsed.blaetter) || parsed.blaetter.length === 0) {
+            throw new Error('Keine Aufmaßzeilen (Satzart 11) in der DA11-Datei gefunden.');
+        }
+
+        const tx = db.transaction(() => {
+            const insertBlatt = db.prepare(`
+                INSERT INTO aufmass_blaetter (project_id, blatt_nummer, titel, status)
+                VALUES (?, ?, ?, 'DRAFT')
+            `);
+            const hasProjPosCol = (() => {
+                try {
+                    return db.prepare('PRAGMA table_info(aufmass_zeilen)').all().some(c => c.name === 'projekt_position_id');
+                } catch (_e) { return false; }
+            })();
+            const insertZeile = db.prepare(hasProjPosCol
+                ? `INSERT INTO aufmass_zeilen (blatt_id, oz_code, zeilen_nr, bezeichnung, formel_reb, rechenansatz, ergebnis, einheit, vorzeichen, projekt_position_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+                : `INSERT INTO aufmass_zeilen (blatt_id, oz_code, zeilen_nr, bezeichnung, formel_reb, rechenansatz, ergebnis, einheit, vorzeichen)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+
+            const blattIds = [];
+            let zeilenCreated = 0;
+            for (const b of parsed.blaetter) {
+                const blattRes = insertBlatt.run(pId, String(b.blatt_nummer || '000001'), b.titel || `DA11-Import Blatt ${b.blatt_nummer || ''}`.trim());
+                const blattId = blattRes.lastInsertRowid;
+                blattIds.push(blattId);
+                (b.zeilen || []).forEach((z, zIdx) => {
+                    const args = [
+                        blattId,
+                        z.oz_code || '01.01.0010',
+                        z.zeilen_nr || (zIdx + 1),
+                        z.bezeichnung || '',
+                        z.formel_reb || '91',
+                        z.rechenansatz || '',
+                        parseFloat(z.ergebnis) || 0,
+                        z.einheit || 'm²',
+                        z.vorzeichen !== undefined ? z.vorzeichen : 1
+                    ];
+                    if (hasProjPosCol) args.push(null);
+                    insertZeile.run(...args);
+                    zeilenCreated++;
+                });
+            }
+
+            appendAuditLog({
+                entityType: 'PROJECT',
+                entityId: pId,
+                action: 'DA11_IMPORTED',
+                details: `DA11 importiert: ${blattIds.length} Aufmaßblätter, ${zeilenCreated} Zeilen (Status DRAFT — vor Abrechnung freigeben).`
+            });
+
+            return {
+                success: true,
+                blattIds,
+                sheetsCreated: blattIds.length,
+                zeilenCreated,
+                projektName: parsed.projektName || null
+            };
+        });
+
+        return tx();
+    },
+
+    /**
+     * Gibt ein Aufmaßblatt zur Abrechnung frei (DRAFT/SUBMITTED → VERIFIED).
+     * Erst VERIFIED/FINALIZED-Blätter fließen in mergeSchlussaufmass ein (§ 14 VOB/B:
+     * nur prüfbare, gemeinsam festgestellte Mengen).
+     */
+    verifyAufmassBlatt(blattId) {
+        const id = Number(blattId);
+        if (!Number.isInteger(id) || id <= 0) throw new Error('Ungültige Aufmaßblatt-ID.');
+        const tx = db.transaction(() => {
+            const blatt = db.prepare('SELECT * FROM aufmass_blaetter WHERE id=?').get(id);
+            if (!blatt) throw new Error(`Aufmaßblatt #${id} nicht gefunden.`);
+            if (blatt.status === 'VERIFIED' || blatt.status === 'FINALIZED' || blatt.status === 'FREIGEGEBEN') {
+                return { success: true, already: true, status: blatt.status };
+            }
+            if (blatt.status !== 'DRAFT' && blatt.status !== 'SUBMITTED') {
+                throw new Error(`Aufmaßblatt #${id} kann aus Status ${blatt.status} nicht freigegeben werden.`);
+            }
+            db.prepare('UPDATE aufmass_blaetter SET status=? WHERE id=?').run('VERIFIED', id);
+            appendAuditLog({
+                entityType: 'AUFMASS_BLATT',
+                entityId: id,
+                action: 'AUFMASS_BLATT_VERIFIED',
+                details: `Aufmaßblatt ${blatt.blatt_nummer || id} freigegeben (VERIFIED) — fließt in Schlussaufmaß ein.`
+            });
+            return { success: true, already: false, status: 'VERIFIED' };
+        });
+        return tx();
+    },
+
 // --- Kumulative Abrechnung ---
     async getKumulativeAbrechnung(projectId) {
         const pId = Number(projectId);
@@ -365,14 +499,14 @@ function createAufmassRepo(deps) {
         // Finde alle Rechnungen (insbesondere Abschlagsrechnungen), die zu dem Projekt gehören
         // (type='rechnung' AND status NOT IN ('Entwurf', 'Storniert'))
         const docs = await dbQuery(`
-            SELECT d.id, d.nummer, d.status, d.created_at as datum,
+            SELECT d.id, d.nummer, d.status, d.created_at as datum, d.zahlbetrag,
                    COALESCE(SUM(pos.preis * pos.menge), 0) as netto,
                    COALESCE(SUM(pos.preis * pos.menge * (1 + pos.mwst / 100.0)), 0) as brutto,
                    (
-                       SELECT COALESCE(SUM(zz.betrag), 0)
-                       FROM zahlung_zuordnungen zz
-                       WHERE zz.dokument_id = d.id
-                   ) as bezahlt
+                        SELECT COALESCE(SUM(zz.betrag), 0)
+                        FROM zahlung_zuordnungen zz
+                        WHERE zz.dokument_id = d.id
+                    ) as bezahlt
             FROM dokumente d
             LEFT JOIN positionen pos ON pos.dokumentId = d.id
             WHERE d.projektId = ? AND d.type = 'rechnung' AND d.status NOT IN ('Entwurf', 'Storniert')
@@ -381,16 +515,21 @@ function createAufmassRepo(deps) {
         `, [pId]);
 
         let totalNetto = 0;
-        let totalBrutto = 0;
+        let totalSoll = 0;
         let totalBezahlt = 0;
 
         const vorrechnungen = docs.map(d => {
             const n = parseFloat(d.netto) || 0;
             const b = parseFloat(d.brutto) || 0;
+            // VOB/B § 17: fällig ist der Zahlbetrag (brutto abzgl. Einbehalt),
+            // nicht das volle Brutto. Sonst wäre jede Abschlags-Restanzeige
+            // um den Einbehalt zu hoch und OPOS matcht nie exakt.
+            const zb = parseFloat(d.zahlbetrag);
+            const soll = (Number.isFinite(zb) && zb > 0) ? zb : b;
             const bez = parseFloat(d.bezahlt) || 0;
 
             totalNetto += n;
-            totalBrutto += b;
+            totalSoll += soll;
             totalBezahlt += bez;
 
             return {
@@ -400,17 +539,18 @@ function createAufmassRepo(deps) {
                 datum: d.datum,
                 netto: n,
                 brutto: b,
+                zahlbetrag: soll,
                 bezahlt: bez,
-                rest: b - bez
+                rest: Math.max(0, Math.round((soll - bez) * 100) / 100)
             };
         });
 
         return {
             vorrechnungen,
             totalNetto,
-            totalBrutto,
+            totalBrutto: totalSoll,
             totalBezahlt,
-            totalRest: totalBrutto - totalBezahlt
+            totalRest: Math.max(0, Math.round((totalSoll - totalBezahlt) * 100) / 100)
         };
     }
     };

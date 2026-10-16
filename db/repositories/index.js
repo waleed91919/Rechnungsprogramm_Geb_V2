@@ -18,6 +18,7 @@ const createSokabauSubcontractorRepo = require('./sokabau_subcontractor_repo');
 const createSystemRepo = require('./system_repo');
 const { createGaebRepo } = require('./gaeb_repository');
 const { createGaebTenderRepo } = require('./gaeb_tender_repo');
+const createWorkflowRepo = require('./workflow_repo');
 
 function initRepositories(deps) {
     const { db, dbQuery, dbRun, appendAuditLog, auditLogger, backupService, dbPath } = deps;
@@ -95,12 +96,17 @@ function initRepositories(deps) {
         db, appendAuditLog, dbAPI
     });
 
+    // Vorgangs-Strang: Orchestrierung erst NACH kompletter Facade assemblieren
+    // (nutzt dbAPI.saveDocument/getDocumentById/mergeSchlussaufmass/getNachtraege lazily)
+    const workflowRepo = createWorkflowRepo({ db, dbQuery, dbRun, appendAuditLog, dbAPI });
+
     // Assemble the facade object with all repository methods
     Object.assign(
         dbAPI,
         // GoBD B-3: Atomares Belegladen & Full State
         { getDocumentById: documentRepo.getDocumentById },
         { getDokumente: documentRepo.getDokumente },
+        workflowRepo,
         systemRepo,
         aufmassRepo,
         kundenArtikelRepo,
@@ -137,7 +143,8 @@ function initRepositories(deps) {
             sokabauRepo,
             gaebRepo,
             gaebTenderRepo,
-            systemRepo
+            systemRepo,
+            workflowRepo
         }
     };
 }

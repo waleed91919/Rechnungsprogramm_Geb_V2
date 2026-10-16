@@ -53,7 +53,9 @@ function createSchema(db) {
             ergebnis REAL NOT NULL,
             einheit TEXT NOT NULL DEFAULT 'm²',
             vorzeichen INTEGER DEFAULT 1,
-            FOREIGN KEY (blatt_id) REFERENCES aufmass_blaetter(id) ON DELETE CASCADE
+            projekt_position_id INTEGER, -- LV-Bezug (statt nur OZ-Textmatch)
+            FOREIGN KEY (blatt_id) REFERENCES aufmass_blaetter(id) ON DELETE CASCADE,
+            FOREIGN KEY (projekt_position_id) REFERENCES projekt_positionen(id) ON DELETE SET NULL
         )`);
 
 }
