@@ -287,7 +287,7 @@ class ZeiterfassungView {
         try {
             const res = await window.api.deleteZeiteintrag(uuid, {
                 reason: reason.trim(),
-                user: (typeof state !== 'undefined' && state.user) || 'Desktop-User'
+                user: (typeof window !== 'undefined' && window.state && window.state.user) || 'Desktop-User'
             });
             if (res && res.error) {
                 alert(`Fehler beim Löschen: ${res.error}`);
@@ -316,11 +316,11 @@ class ZeiterfassungView {
     }
 
     static openNewZeiteintragModal() {
-        alert('Bitte erfassen Sie Arbeitszeiten mobil über die PWA oder über die Schnellerfassung.');
+        alert('Bitte erfassen Sie Arbeitszeiten über die Schnellerfassung.');
     }
 
     static openNewVobModal() {
-        alert('Bitte erfassen Sie VOB/B Meldungen mobil über die PWA oder über das Projektmenü.');
+        alert('Bitte erfassen Sie VOB/B Meldungen über das Projektmenü.');
     }
 
     static openNewMitarbeiterModal() {
@@ -350,6 +350,4 @@ class ZeiterfassungView {
 if (typeof window !== 'undefined') {
     window.ZeiterfassungView = ZeiterfassungView;
 }
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = ZeiterfassungView;
-}
+// IPC-Disziplin: Renderer-Modul — kein module.exports / kein Node-require.

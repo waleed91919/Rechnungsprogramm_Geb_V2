@@ -102,10 +102,17 @@ function register(ipcMain, context = {}) {
         return await Promise.resolve(dbAPI.verifiziereAuditKette());
     }));
 
-    // Einstellungen
+    // Einstellungen (typisiert + validiert — einzige Einstellungs-Disziplin via Repository)
     ipcMain.handle('db:saveEinstellung', wrapHandler(async (e, key, val) => {
-        if (!key) throw new Error('Ungültiger Einstellungs-Key');
+        if (!key || typeof key !== 'string' || key.trim().length === 0) throw new Error('Ungültiger Einstellungs-Key');
+        if (key.length > 128) throw new Error('Einstellungs-Key zu lang (max 128).');
         return await dbAPI.saveEinstellung(key, val);
+    }));
+    ipcMain.handle('db:getEinstellung', wrapHandler(async (e, key) => {
+        if (!key || typeof key !== 'string' || key.trim().length === 0) throw new Error('Ungültiger Einstellungs-Key');
+        if (typeof dbAPI.getEinstellung === 'function') return await dbAPI.getEinstellung(key);
+        const st = await dbAPI.getFullState();
+        return st && st.einstellungen ? st.einstellungen[key] : null;
     }));
 }
 

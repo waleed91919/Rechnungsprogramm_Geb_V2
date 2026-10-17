@@ -2642,9 +2642,6 @@ const VIEW_TEMPLATES = {
             </div>
         </div>`,
     "view-sokabau": `<div id="view-sokabau" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6"></div>`,
-    "view-sync": `<div id="view-sync" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden">
-            <!-- Dynamically rendered by SyncView -->
-        </div>`,
     "view-zeiterfassung": `<div id="view-zeiterfassung" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden">
             <!-- Dynamically rendered by ZeiterfassungView -->
         </div>`,

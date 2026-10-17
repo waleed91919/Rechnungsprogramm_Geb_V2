@@ -1,7 +1,19 @@
 /**
  * CumulativeBillingController.js - Logik für Kumulierte Abrechnung nach VOB/B & Sicherheitseinbehalte
  * Berechnungsformel: F_t = L_t - \sum F_i
+ *
+ * SSoT: alle Rundungen über js/money.js (EN 16931, 2 NK, mit EPSILON).
+ * Kein eigenes Math.round(*100)/100 mehr.
  */
+function __resolveMoney_cbc() {
+    if (typeof Money !== 'undefined' && Money && typeof Money.round2 === 'function') return Money;
+    if (typeof window !== 'undefined' && window.Money) return window.Money;
+    if (typeof globalThis !== 'undefined' && globalThis.Money) return globalThis.Money;
+    try {
+        if (typeof require !== 'undefined') return require('../js/money');
+    } catch (e) {}
+    return null;
+}
 class CumulativeBillingController {
     /**
      * Berechnet die kumulierte Abrechnung für ein Bauprojekt nach VOB/B § 14, 16, 17.
@@ -27,18 +39,22 @@ class CumulativeBillingController {
         maxRetentionRate = 5.0,
         currentRetentionRate = null
     }) {
-        // Summe bisheriger Netto-Abschlagsrechnungen (\sum F_i)
-        const totalPreviousBilledNet = previousInvoices.reduce((sum, inv) => {
+        const __M = __resolveMoney_cbc();
+        const R = (v) => __M ? __M.round2(v) : (() => { const n = parseFloat(v); return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 100) / 100 : 0; })();
+        const P = (base, rate) => __M ? __M.percent(base, rate) : R(parseFloat(base) * parseFloat(rate) / 100);
+        // Summe bisheriger Netto-Abschlagsrechnungen (\sum F_i) — sofort gerundet,
+        // damit downstream (MwSt, Rückgabe) mit demselben Wert rechnet.
+        const totalPreviousBilledNet = R(previousInvoices.reduce((sum, inv) => {
             return sum + (parseFloat(inv.netto) || parseFloat(inv.currentPeriodNet) || parseFloat(inv.kumulierte_leistung_netto) || 0);
-        }, 0);
+        }, 0));
 
         // Aktuelle Netto-Leistung dieser Periode: F_t = L_t - \sum F_i
-        const currentPeriodNet = Math.max(0, totalPerformanceNet - totalPreviousBilledNet);
+        const currentPeriodNet = R(Math.max(0, R(totalPerformanceNet) - totalPreviousBilledNet));
 
-        // Bisher einbehaltene Beträge aus Vorrechnungen ermitteln
-        const previousRetentionTotal = previousInvoices.reduce((sum, inv) => {
+        // Bisher einbehaltene Beträge aus Vorrechnungen ermitteln — sofort gerundet.
+        const previousRetentionTotal = R(previousInvoices.reduce((sum, inv) => {
             return sum + (parseFloat(inv.sicherheitseinbehalt) || parseFloat(inv.securityRetentionAmount) || 0);
-        }, 0);
+        }, 0));
 
         // Bestimmung des anzuwendenden Einbehaltssatzes
         const rate = currentRetentionRate !== null ? (parseFloat(currentRetentionRate) || 0) : (parseFloat(securityRetentionRate) || 0);
@@ -52,9 +68,9 @@ class CumulativeBillingController {
             // VOB/B § 17 Abs. 6: Vertragserfüllungssicherheit mit Deckelung auf Netto-Auftragssumme
             const contractNet = parseFloat(contractTotalNet) || 0;
             const maxRate = parseFloat(maxRetentionRate) || 5.0;
-            maxRetentionCap = contractNet > 0 ? Math.round((contractNet * (maxRate / 100)) * 100) / 100 : null;
+            maxRetentionCap = contractNet > 0 ? P(contractNet, maxRate) : null;
 
-            const uncappedTarget = Math.round((totalPerformanceNet * (rate / 100)) * 100) / 100;
+            const uncappedTarget = P(totalPerformanceNet, rate);
             if (maxRetentionCap !== null && uncappedTarget >= maxRetentionCap) {
                 totalRetentionTarget = maxRetentionCap;
                 isCapped = true;
@@ -69,37 +85,37 @@ class CumulativeBillingController {
             }
         } else {
             // Mängelansprüche / Gewährleistungssicherheit (WARRANTY)
-            totalRetentionTarget = Math.round((totalPerformanceNet * (rate / 100)) * 100) / 100;
+            totalRetentionTarget = P(totalPerformanceNet, rate);
         }
 
         // In dieser Periode verbleibender Einbehaltsabzug:
-        const securityRetentionAmount = Math.max(0, Math.round((totalRetentionTarget - previousRetentionTotal) * 100) / 100);
+        const securityRetentionAmount = Math.max(0, R(totalRetentionTarget - previousRetentionTotal));
 
-        // Steuerbare Basis für die aktuelle Periode
+        // Steuerbare Basis für die aktuelle Periode (EN 16931: Steuer auf gerundetes Perioden-Netto je Satz)
         const taxRate = isReverseCharge ? 0 : vatRate;
-        const currentPeriodVat = Math.round(currentPeriodNet * (taxRate / 100) * 100) / 100;
-        const currentPeriodGross = Math.round((currentPeriodNet + currentPeriodVat) * 100) / 100;
+        const currentPeriodVat = (__M ? __M.taxFor(currentPeriodNet, taxRate, isReverseCharge) : R(currentPeriodNet * (parseFloat(taxRate) || 0) / 100));
+        const currentPeriodGross = R(currentPeriodNet + currentPeriodVat);
 
         // Zahlbetrag dieser Rechnung nach Abzug des Sicherheitseinbehalts
-        const netPayableAmount = Math.max(0, Math.round((currentPeriodGross - securityRetentionAmount) * 100) / 100);
+        const netPayableAmount = Math.max(0, R(currentPeriodGross - securityRetentionAmount));
 
         return {
-            totalPerformanceNet: Math.round(totalPerformanceNet * 100) / 100,
-            totalPreviousBilledNet: Math.round(totalPreviousBilledNet * 100) / 100,
-            currentPeriodNet: Math.round(currentPeriodNet * 100) / 100,
-            netto: Math.round(currentPeriodNet * 100) / 100,
+            totalPerformanceNet: R(totalPerformanceNet),
+            totalPreviousBilledNet: R(totalPreviousBilledNet),
+            currentPeriodNet: R(currentPeriodNet),
+            netto: R(currentPeriodNet),
             currentPeriodVat,
-            currentPeriodGross: Math.round(currentPeriodGross * 100) / 100,
+            currentPeriodGross: R(currentPeriodGross),
             securityRetentionRate: rate,
             retentionMode,
             isCapped,
             maxRetentionCap,
             contractTotalNet: parseFloat(contractTotalNet) || 0,
-            totalRetentionTarget: Math.round(totalRetentionTarget * 100) / 100,
-            previousRetentionTotal: Math.round(previousRetentionTotal * 100) / 100,
-            securityRetentionAmount: Math.round(securityRetentionAmount * 100) / 100,
-            sicherheitseinbehalt: Math.round(securityRetentionAmount * 100) / 100,
-            netPayableAmount: Math.round(netPayableAmount * 100) / 100,
+            totalRetentionTarget: R(totalRetentionTarget),
+            previousRetentionTotal: R(previousRetentionTotal),
+            securityRetentionAmount: R(securityRetentionAmount),
+            sicherheitseinbehalt: R(securityRetentionAmount),
+            netPayableAmount: R(netPayableAmount),
             sequenceNumber: previousInvoices.length + 1,
             vobAHint
         };
@@ -200,11 +216,13 @@ class CumulativeBillingController {
 
         const escrow = CumulativeBillingController.getEscrowDeadline(invoiceDate, 18);
 
+        const __M2 = __resolveMoney_cbc();
+        const R2 = (v) => __M2 ? __M2.round2(v) : (() => { const n = parseFloat(v); return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 100) / 100 : 0; })();
         return {
             projectId,
             invoiceId,
             retentionType,
-            amount: Math.round(amount * 100) / 100,
+            amount: R2(amount),
             dueDate: dueDate.toISOString().split('T')[0],
             escrowDueDate: escrow.escrowDueDate,
             escrowStatus: escrow.isOverdue ? 'OVERDUE' : 'PENDING',

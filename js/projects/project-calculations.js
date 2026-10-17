@@ -1,4 +1,24 @@
 (function(global) {
+    // SSoT (js/money.js): einzige Rundungsquelle, kein eigenes Math.round mehr.
+    function _M() {
+        if (typeof Money !== 'undefined' && Money && typeof Money.round2 === 'function') return Money;
+        if (typeof window !== 'undefined' && window.Money) return window.Money;
+        if (typeof globalThis !== 'undefined' && globalThis.Money) return globalThis.Money;
+        try {
+            if (typeof require !== 'undefined') {
+                try { return require('../money'); } catch (e) {}
+                try { return require('./money'); } catch (e) {}
+            }
+        } catch (e) {}
+        return null;
+    }
+    function _round2(v) {
+        const M = _M();
+        if (M) return M.round2(v);
+        const n = parseFloat(v);
+        if (!Number.isFinite(n)) return 0;
+        return Math.round((n + Number.EPSILON) * 100) / 100;
+    }
     function calculateProjektUmsatz(pRechnungen = [], paidStornoOriginalNrs = new Set()) {
         if (!Array.isArray(pRechnungen) || pRechnungen.length === 0) {
             return 0;
@@ -29,12 +49,12 @@
         if (hasCumulativeInvoices) {
             const schlussRechnung = validInvoices.find(r => r.rechnungsart === 'SCHLUSSRECHNUNG' || r.typ === 'SCHLUSSRECHNUNG');
             if (schlussRechnung) {
-                return parseFloat(schlussRechnung.netto || schlussRechnung.gesamtNetto || 0);
+                return _round2(schlussRechnung.netto || schlussRechnung.gesamtNetto || 0);
             }
 
             // Falls noch keine Schlussrechnung vorliegt: Höchste kumulierte Abschlagsleistung L_t
             const maxNetto = Math.max(0, ...validInvoices.map(r => parseFloat(r.kumulierte_leistung_netto || r.netto || r.gesamtNetto || 0)));
-            return Math.max(0, maxNetto);
+            return _round2(Math.max(0, maxNetto));
         }
 
         // 3. Bei reinen Periodenrechnungen: Summe der Netto-Zahlungsanforderungen
@@ -43,7 +63,7 @@
             summeNetto += parseFloat(r.netto || r.gesamtNetto || 0);
         });
 
-        return Math.round(summeNetto * 100) / 100;
+        return _round2(summeNetto);
     }
 
     if (typeof window !== 'undefined') {

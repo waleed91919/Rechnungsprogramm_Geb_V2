@@ -233,12 +233,6 @@
                     class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">schedule</span>
                 <span class="text-sm font-medium">Zeiterfassung</span>
             </a>
-            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
-                id="nav-sync" onclick="switchView('sync')">
-                <span
-                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">sync_saved_locally</span>
-                <span class="text-sm font-medium">PWA &amp; Sync Hub</span>
-            </a>
             <div class="pt-4 pb-1 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Großhandel &amp; Compliance</div>
             <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
                 id="nav-grosshandel" onclick="switchView('grosshandel')">
@@ -370,9 +364,6 @@
         <!-- Zeiterfassung View -->
         <div id="view-zeiterfassung" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden"></div>
 
-        <!-- Sync View -->
-        <div id="view-sync" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden"></div>
-
         <!-- Musterbriefe View -->
         <div id="view-musterbriefe" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden"></div>
 
@@ -402,6 +393,7 @@
     <script src="js/view-loader.js"></script>
     <script src="js/modal-loader.js"></script>
     <script src="js/state.js"></script>
+    <script src="js/money.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/da11.js"></script>
     <script src="js/gaeb-x31.js"></script>
@@ -485,7 +477,6 @@
     <script src="controllers/ZeiterfassungController.js"></script>
     <script src="views/ZeiterfassungView.js"></script>
     <script src="controllers/BautagebuchMobileController.js"></script>
-    <script src="views/SyncView.js"></script>
     <script src="controllers/IDSConnectController.js"></script>
     <script src="views/GrosshandelView.js"></script>
     <script src="controllers/SokaBauController.js"></script>

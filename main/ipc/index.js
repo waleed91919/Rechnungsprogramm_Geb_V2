@@ -5,7 +5,6 @@ const nachtragBau = require('./ipc-nachtrag-bau');
 const banking = require('./ipc-banking');
 const kalkulation = require('./ipc-kalkulation');
 const zeiterfassung = require('./ipc-zeiterfassung');
-const sync = require('./ipc-sync');
 const compliance = require('./ipc-compliance');
 const system = require('./ipc-system');
 const gaeb = require('./ipc-gaeb');
@@ -19,7 +18,6 @@ function registerAllIpc(ipcMain, context = {}) {
     banking.register(ipcMain, context);
     kalkulation.register(ipcMain, context);
     zeiterfassung.register(ipcMain, context);
-    sync.register(ipcMain, context);
     compliance.register(ipcMain, context);
     system.register(ipcMain, context);
     gaeb.register(ipcMain, context);
@@ -35,7 +33,6 @@ module.exports = {
     banking,
     kalkulation,
     zeiterfassung,
-    sync,
     compliance,
     system,
     gaeb,

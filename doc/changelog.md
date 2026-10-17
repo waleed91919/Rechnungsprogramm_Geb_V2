@@ -1,5 +1,30 @@
 # Changelog / Fortschritt
 
+## 17.10.2026 (Vollständiger Rückbau PWA & Sync Hub / Mobile Baustellenbegleiter)
+- **Ziel & Anforderung:** Die PWA-Funktion (mobiler Baustellenbegleiter) und der zugehörige Desktop-Sync-Hub wurden auf Wunsch des Anwenders restlos aus dem Projekt ausgebaut (Option B), um die Anwendung schlanker zu halten, offene Netzwerk-Ports zu beseitigen und die Benutzeroberfläche von ungenutzten Menüpunkten zu befreien.
+- **Frontend & Navigation:**
+  - `code.html`: Navigations-Eintrag `nav-sync` („PWA & Sync Hub“), View-Container `view-sync` und Skripteinbindung `views/SyncView.js` entfernt.
+  - `js/navigation.js`: Route `sync` aus dem Router (`viewConfig`), dem `views`-Array sowie `EXPERIMENTAL_VIEWS` entfernt.
+  - `views/ZeiterfassungView.js`: Hinweis-Dialoge bereinigt (PWA-Verweise aus Zeiterfassungs- und VOB/B-Erstellung entfernt).
+  - `views/SyncView.js` & `views/partials/view-sync.html`: Gelöscht.
+  - `js/view-loader.js`: Mittels `node scripts/sync_views.js` neu generiert (von 19 auf 18 Kern-Views synchronisiert).
+- **Backend, IPC & Repositories:**
+  - `preload.js`: Alle 7 Sync-Kanäle (`getSyncStatus`, `configureSyncServer`, `startSyncServer`, `stopSyncServer`, `getSyncPairingPayload`, `getSyncConflicts`, `resolveSyncConflict`) entfernt.
+  - `main/ipc/index.js`: `ipc-sync` aus Importen, Registrierung (`registerAllIpc`) und Modul-Exporten entfernt.
+  - `main.js`: Autostart (`syncIpc.autoStartSyncServer(db)`) und Shutdown-Hook (`syncIpc.stopSyncServer()`) bereinigt.
+  - `db/repositories/zeiterfassung_repo.js`: Unbenutzte Sync-Schlichtungsmethoden (`resolveSyncConflict`, `getSyncConflicts`) entfernt.
+  - Gelöschte Backend-Dateien: `main/sync-server.js`, `main/sync-config.js`, `main/sync-bundle-importer.js`, `main/hlc.js`, `main/ipc/ipc-sync.js` und das Verzeichnis `main/sync/` (WebSockets, Foto-Uploads, HLC/Idempotenz-Engine).
+- **PWA-Client:**
+  - Der gesamte Ordner `pwa/` (App-Shell, `manifest.webmanifest`, ServiceWorker `sw.js`, IndexedDB/Dexie, Mobile Touch-UI, REB-Aufmaß mobil, Camera-Engine, Barcode- & BLE-Treiber) wurde restlos gelöscht.
+- **Testsuiten:**
+  - Sync-spezifische Testdateien entfernt: `tests/sync_client_security.test.js`, `tests/sync_p0_negativmatrix.test.js`, `tests/sync_photo_magic_bytes.test.js`, `tests/sync_server_security.test.js` und `tests/phase5_stufe1_2_3.test.js`.
+  - `tests/phase3_zeiterfassung_pwa_sync.test.js` zu `tests/phase3_zeiterfassung.test.js` migriert und auf die 4 Desktop-Kern-Testfälle (Schema/Migration, ArbZG-Engine, BRTV-Bau Wegezeiten, VOB/B Bautagebuch) konzentriert.
+- **Verifikation:**
+  - `tests/view_templates_integrity.test.js`: 18/18 View-Templates erfolgreich verifiziert.
+  - `tests/ui_fokusmodus.test.js`: 3/3 bestanden.
+  - `tests/phase3_zeiterfassung.test.js`: 4/4 bestanden.
+  - `tests/money_rounding.test.js` & `tests/zeiterfassung_milog.test.js`: 100% grün.
+
 ## 16.10.2026 (Vorgangs-Strang End-to-End: GAEB → Angebot → AB → Aufmaß DA11 → Abschlag → Nachtrag → Schluss → OPOS → Einbehalt-Freigabe)
 - **Ziel:** Ein einziger ununterbrochener Datenstrang ohne manuelles Abtippen von Zahlen (IDs/Herkunft statt Neu-Erfassung). Audit via 3 Subagents: Teilstrecken existierten (GAEB→Angebot-Generator, Nachtrag→Rechnung idempotent, OPOS-Matching, J1-Verrechnungs-Guards), aber 11 Bruchstellen rissen die Kette ab.
 - **Neu `controllers/WorkflowController.js` (rein, DB-frei):** `buildRechnungFromVorgaenger` (Angebot/Auftrag/Lieferschein → speicherfertige Rechnung mit `parent_angebot_id`/`source_auftrag_id`/Positions-Herkunft), `buildPositionenFromAufmass`, `buildSchlussrechnung` (gemessene Menge gewinnt, Nachtrag-Doppel → `skippedOz`, Verrechnungen automatisch), `parseDa11ToImport`, `sollBetrag/offenerBetrag` (zahlbetrag-scharf), `buildRetentionRelease` (nur HELD, Bürgschaft braucht Referenz), `nextBelegNr`, `normalizeOz` (DA11 ohne Punkte ↔ LV mit Punkten).

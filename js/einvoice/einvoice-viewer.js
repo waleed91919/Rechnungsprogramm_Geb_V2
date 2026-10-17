@@ -3,7 +3,16 @@ const _getProfiles = () => typeof EInvoiceProfiles !== 'undefined' ? EInvoicePro
 const _getValidation = () => typeof EInvoiceValidation !== 'undefined' ? EInvoiceValidation : require('./einvoice-validation.js');
 const _getViewer = () => typeof EInvoiceViewer !== 'undefined' ? EInvoiceViewer : require('./einvoice-viewer.js');
 class EInvoiceViewer {
+    // SSoT: delegiert an js/money.js (keine eigene Rundungsformel mehr).
     static round2(value) {
+        const M = (typeof Money !== 'undefined') ? Money
+            : (typeof window !== 'undefined' && window.Money) ? window.Money
+            : (typeof globalThis !== 'undefined' && globalThis.Money) ? globalThis.Money
+            : null;
+        if (M && typeof M.round2 === 'function') return M.round2(value);
+        try {
+            if (typeof require !== 'undefined') return require('../money').round2(value);
+        } catch (e) { /* Fallback unten */ }
         return Math.round((parseFloat(value) + Number.EPSILON) * 100) / 100;
     }
 

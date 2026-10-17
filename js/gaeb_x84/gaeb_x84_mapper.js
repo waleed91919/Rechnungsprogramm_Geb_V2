@@ -10,7 +10,10 @@
 
 'use strict';
 
-const gaebTenderRepo = require('../../db/repositories/gaeb_tender_repo');
+// IPC- & Repository-Disziplin: Reine Fachlogik ohne DB-Zugriff.
+// KEIN require('../../db/...'), KEIN db.prepare/SELECT — Bieter-/Draft-Daten werden
+// vom Aufrufer (IPC via Repository, Renderer via window.api) vorab geladen und als
+// plain objects übergeben (s. getBidderAddress(settings), mapDraftToX84Model(draftData)).
 
 /**
  * Wandelt einen String in eine für XML xs:ID gültige Zeichenkette (NCName) um.
@@ -30,14 +33,21 @@ function sanitizeXmlId(id, prefix = 'ID_') {
 }
 
 /**
- * Liest Bieter-Adressdaten aus options.bidder oder aus der Tabelle 'einstellungen'.
+ * Bildet Bieter-Adressdaten aus explizit übergebenen Objekten (kein DB-Zugriff).
  * Erfindet KEINE Daten: Fehlt eine Angabe, bleibt sie ein leerer String.
- * 
- * @param {Object} db 
- * @param {Object} options 
+ *
+ * SOLL-Signaturen:
+ *   getBidderAddress(settings, options) — settings = { firmenname/firma, strasse, plz, ort }
+ *   getBidderAddress(dbLegacy, options) — Legacy: db-ähnliches 1. Arg wird als settings-Fallback
+ *     interpretiert, falls es bereits ein plain settings-Objekt ohne .prepare ist.
+ * Ein better-sqlite3-Handle (mit .prepare) wird strikt abgewiesen — Einstellungen bitte
+ * vorab via Repository/IPC (db:getFullState / window.api) laden und hier übergeben.
+ *
+ * @param {Object} settingsOrDb
+ * @param {Object} options
  * @returns {Object} { name1, street, pcode, city }
  */
-function getBidderAddress(db, options = {}) {
+function getBidderAddress(settingsOrDb, options = {}) {
     const bidder = {
         name1: '',
         street: '',
@@ -52,20 +62,24 @@ function getBidderAddress(db, options = {}) {
         bidder.city = String(options.bidder.city || options.bidder.City || options.bidder.ort || options.bidder.Ort || '').trim();
     }
 
-    if (db && typeof db.prepare === 'function') {
-        try {
-            const rows = db.prepare(`SELECT key, value FROM einstellungen WHERE key IN ('firmenname', 'firma', 'strasse', 'plz', 'ort')`).all();
-            const settings = {};
-            rows.forEach(r => { settings[r.key] = r.value; });
-
-            if (!bidder.name1) bidder.name1 = (settings.firmenname || settings.firma || '').trim();
-            if (!bidder.street) bidder.street = (settings.strasse || '').trim();
-            if (!bidder.pcode) bidder.pcode = (settings.plz || '').trim();
-            if (!bidder.city) bidder.city = (settings.ort || '').trim();
-        } catch (_e) {
-            // Einstellungen-Tabelle existiert möglicherweise in isolierten Tests nicht
+    // Explizite Settings (vom Aufrufer via IPC/Repository geladen) — auch via options.settings
+    const settings = {};
+    const pushSettings = (src) => {
+        if (!src || typeof src !== 'object') return;
+        for (const k of ['firmenname', 'firma', 'strasse', 'plz', 'ort']) {
+            if (src[k] !== undefined && src[k] !== null && settings[k] === undefined) settings[k] = src[k];
         }
+    };
+    if (settingsOrDb && typeof settingsOrDb === 'object' && typeof settingsOrDb.prepare !== 'function') {
+        // Plain settings-Objekt (kein DB-Handle) — z. B. state.einstellungen oder Repo-Ergebnis
+        pushSettings(settingsOrDb);
     }
+    if (options.settings && typeof options.settings === 'object') pushSettings(options.settings);
+
+    if (!bidder.name1) bidder.name1 = String(settings.firmenname || settings.firma || '').trim();
+    if (!bidder.street) bidder.street = String(settings.strasse || '').trim();
+    if (!bidder.pcode) bidder.pcode = String(settings.plz || '').trim();
+    if (!bidder.city) bidder.city = String(settings.ort || '').trim();
 
     // Beschränkung auf max. XSD-Längen
     return {
@@ -332,24 +346,61 @@ function mapCategoryRecursive(cat) {
 }
 
 /**
- * Bereitet das vollständige X84-Exportmodell vor.
- * 
- * @param {Object} db - better-sqlite3 Instanz oder vorab geladenes draftData
- * @param {number} [draftId] - ID aus gaeb_tender_drafts
- * @param {Object} [options] - Optionen ({ bidder, bidDate, ... })
+ * Bereitet das vollständige X84-Exportmodell vor (rein, ohne DB-Zugriff).
+ *
+ * SOLL: mapDraftToX84Model(draftData, options) — draftData vorab via
+ * window.api.loadTenderDraft / dbAPI.loadTenderDraft / Repository geladen.
+ * Legacy (db, draftId, options, deps): nur mit injiziertem Loader
+ * (deps.loadTenderDraft / options.loadTenderDraft) — niemals direkt via require/db.prepare.
+ *
+ * @param {Object} draftDataOrDb - Vorab geladenes draftData ODER Legacy-db-Handle
+ * @param {number|Object} [draftIdOrOptions] - Legacy-Draft-ID oder options
+ * @param {Object} [options] - Optionen ({ bidder, settings, bidDate, ... })
+ * @param {Object} [deps] - Loader ({ loadTenderDraft, getSettings })
  * @returns {Object} Vorbereitetes Modell für gaeb_x84_serializer
  */
-function mapDraftToX84Model(db, draftId, options = {}) {
+function mapDraftToX84Model(draftDataOrDb, draftIdOrOptions, options = {}, deps = {}) {
     let draftData = null;
-    let dbInstance = db;
+    let settingsForBidder = null;
 
-    if (db && typeof db === 'object' && db.draft && Array.isArray(db.items)) {
-        draftData = db;
-        dbInstance = options.db || null;
+    if (draftDataOrDb && typeof draftDataOrDb === 'object' && draftDataOrDb.draft && Array.isArray(draftDataOrDb.items)) {
+        draftData = draftDataOrDb;
+        if (draftIdOrOptions && typeof draftIdOrOptions === 'object') options = draftIdOrOptions;
+        settingsForBidder = (options && options.settings) || options.db || null;
+        if (settingsForBidder && typeof settingsForBidder === 'object' && typeof settingsForBidder.prepare === 'function') {
+            throw new Error('IPC-/Repository-Disziplin: getBidderAddress benötigt plain settings, kein db-Handle. Einstellungen vorab via Repository/IPC laden.');
+        }
     } else {
+        const db = draftDataOrDb;
+        const draftId = draftIdOrOptions;
         if (!db) throw new Error('Datenbankverbindung erforderlich.');
         if (!draftId) throw new Error('Draft-ID erforderlich.');
-        draftData = gaebTenderRepo.loadTenderDraft(db, draftId);
+        let effLoader = (deps && typeof deps.loadTenderDraft === 'function')
+            ? deps.loadTenderDraft
+            : (options && typeof options.loadTenderDraft === 'function' ? options.loadTenderDraft : null);
+        const isRenderer = (typeof window !== 'undefined' && typeof window.document !== 'undefined')
+            || (typeof process !== 'undefined' && process.type === 'renderer');
+        if (!effLoader && isRenderer) {
+            throw new Error('IPC-/Repository-Disziplin: mapDraftToX84Model benötigt im Renderer vorab geladene draftData (window.api.loadTenderDraft). Direkter DB-Zugriff ist untersagt.');
+        }
+        if (!effLoader) {
+            // Node/Main/Tests-Fallback strikt via Repository (kein db.prepare hier)
+            try {
+                const repo = require('../../db/repositories/gaeb_tender_repo');
+                if (repo && typeof repo.loadTenderDraft === 'function') effLoader = repo.loadTenderDraft;
+            } catch (_e) { effLoader = null; }
+        }
+        if (!effLoader) {
+            throw new Error('IPC-/Repository-Disziplin: mapDraftToX84Model benötigt vorab geladene draftData (window.api.loadTenderDraft / dbAPI.loadTenderDraft). Direkter DB-Zugriff ist untersagt.');
+        }
+        draftData = effLoader(db, draftId);
+        settingsForBidder = (options && options.settings) || null;
+        if (deps && typeof deps.getSettings === 'function' && !settingsForBidder) {
+            try { settingsForBidder = deps.getSettings(db) || null; } catch (_e) { settingsForBidder = null; }
+        }
+        // Kein db.prepare-Fallback hier (Repository-Disziplin): Settings liefert der Aufrufer
+        // (Repository/IPC via einstellungen-Tabelle, Renderer via window.api.getEinstellung/getFullState,
+        // Tests via options.bidder). Fehlt alles, bleiben Bieter-Felder leer statt erfunden.
     }
 
     const draft = draftData.draft;
@@ -370,8 +421,8 @@ function mapDraftToX84Model(db, draftId, options = {}) {
     const cur = (xmlMeta.cur || draftData.projectInfo?.currency || 'EUR').trim();
     const curLbl = xmlMeta.curLbl || null;
 
-    // Bieter-Adresse
-    const bidder = getBidderAddress(dbInstance, options);
+    // Bieter-Adresse — strikt ohne DB: settings kommen vom Aufrufer (IPC/Repository/window.api)
+    const bidder = getBidderAddress(settingsForBidder, options);
 
     // Datum & Uhrzeit
     const now = new Date();

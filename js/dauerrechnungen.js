@@ -1,8 +1,8 @@
-// Fassade für Dauerrechnungen
-// Lädt die neuen Module, um Kompatibilität für evtl. require() in Node-Tests zu bewahren.
+// Fassade für Dauerrechnungen (MVC: views/* + js/recurring/*, Persistenz via window.api.dauerrechnungen* -> IPC 'db:...' -> Repository).
+// Kompatibilitäts-Stub für evtl. require() in Node-Tests — kein DB-Direktzugriff.
 
 if (typeof window !== 'undefined') {
-    // Im Browser werden die Module über code.html geladen.
+    // Im Renderer werden die Module via views/* + view-loader.js geladen (Daten nur via window.api).
 } else {
     // Für Node.js / Tests:
     // Hier würden die Module per require() eingebunden, falls Node-Tests diese direkt benötigen.

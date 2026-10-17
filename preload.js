@@ -196,15 +196,6 @@ contextBridge.exposeInMainWorld('api', {
     deleteVobMeldung: (id) => ipcRenderer.invoke('vob:delete', id),
     generateVobPdf: (id) => ipcRenderer.invoke('vob:generatePdf', id),
 
-    // --- Phase 3: Local-First P2P Sync Server & Konflikt-Schlichtung ---
-    getSyncStatus: () => ipcRenderer.invoke('sync:getStatus'),
-    configureSyncServer: (config) => ipcRenderer.invoke('sync:configure', config),
-    startSyncServer: () => ipcRenderer.invoke('sync:startServer'),
-    stopSyncServer: () => ipcRenderer.invoke('sync:stopServer'),
-    getSyncPairingPayload: () => ipcRenderer.invoke('sync:getPairingPayload'),
-    getSyncConflicts: () => ipcRenderer.invoke('sync:getConflicts'),
-    resolveSyncConflict: (conflictId, strategy, mergedData) => ipcRenderer.invoke('sync:resolveConflict', { conflictId, strategy, mergedData }),
-
     // --- Phase 4: Großhandel & IDS Connect 2.5 ---
     getIdsKonten: (filter) => ipcRenderer.invoke('ids:getKonten', filter),
     getIdsKonto: (id) => ipcRenderer.invoke('ids:getKonto', id),

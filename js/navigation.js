@@ -79,22 +79,6 @@ const viewConfig = {
             }
         }
     },
-    sync: {
-        title: 'Local-First P2P Sync & Mobile Hub',
-        subtitle: 'PWA-Verbindung, QR-Pairing & Quarantäne-Center',
-        action: () => {
-            if (!window.syncViewInstance && window.SyncView) {
-                window.syncViewInstance = new window.SyncView();
-            }
-            if (window.syncViewInstance) {
-                window.currentViewInstance = window.syncViewInstance;
-                const container = document.getElementById('view-sync');
-                if (container) {
-                    window.syncViewInstance.render().then(html => container.innerHTML = html);
-                }
-            }
-        }
-    },
     grosshandel: {
         title: 'Großhandels-Center & IDS Connect 2.5',
         subtitle: 'GC Online Plus, Richter+Frenzel, Sonepar, Rexel & Würth',
@@ -151,7 +135,7 @@ const viewConfig = {
 
 const views = [
     'dashboard', 'rechnungen', 'artikel', 'kunden', 'angebote',
-    'projekte', 'projekt-details', 'objekte', 'objekt-details', 'dauerrechnungen', 'putzplan', 'banking', 'maengel', 'zeiterfassung', 'sync', 'grosshandel', 'sokabau', 'berichte', 'musterbriefe', 'einstellungen'
+    'projekte', 'projekt-details', 'objekte', 'objekt-details', 'dauerrechnungen', 'putzplan', 'banking', 'maengel', 'zeiterfassung', 'grosshandel', 'sokabau', 'berichte', 'musterbriefe', 'einstellungen'
 ];
 
 // Initialisiere Event-Listener für empfangene IDS-Warenkörbe
@@ -181,7 +165,7 @@ const CORE_VIEWS = new Set([
 // Experimentell (Standard: ausgeblendet, Opt-in pro Arbeitsplatz):
 const EXPERIMENTAL_VIEWS = new Set([
     'objekte', 'objekt-details', 'dauerrechnungen', 'putzplan',
-    'maengel', 'zeiterfassung', 'grosshandel', 'sokabau', 'sync'
+    'maengel', 'zeiterfassung', 'grosshandel', 'sokabau'
 ]);
 
 function isExperimentalEnabled() {

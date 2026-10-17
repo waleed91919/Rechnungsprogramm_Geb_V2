@@ -7,6 +7,19 @@
  * - DAT-3: Vollständiger 31-Felder EXTF 700 Header (ohne Timestamp in Mandantennummer, mit Datum von/bis & Sachkontenlänge)
  */
 
+/**
+ * SSoT (js/money.js): alle Betragsformatierungen über Money.toDatev
+ * (kaufmännisch + EPSILON-sicher), kein rohes toFixed(2) mehr.
+ */
+function __resolveMoney_datev() {
+    if (typeof Money !== 'undefined' && Money && typeof Money.toDatev === 'function') return Money;
+    if (typeof window !== 'undefined' && window.Money) return window.Money;
+    if (typeof globalThis !== 'undefined' && globalThis.Money) return globalThis.Money;
+    try {
+        if (typeof require !== 'undefined') return require('./money');
+    } catch (e) {}
+    return null;
+}
 class DATEVExporter {
     static sanitizeCsvField(val) {
         if (val === null || val === undefined) return '';
@@ -205,24 +218,24 @@ class DATEVExporter {
             const ustSatz = parseFloat(r.ustSatz !== undefined ? r.ustSatz : (r.mwstSatz !== undefined ? r.mwstSatz : 19));
 
             // 1. HAUPTBUCHUNG(EN) BRUTTO (DAT-1: Volles Rechnungsbrutto, NICHT Zahlbetrag)
+            const __M = __resolveMoney_datev();
+            const _toDatev = (v, abs = true) => __M ? __M.toDatev(v, abs)
+                : Math.abs(Math.round((parseFloat(v) + Number.EPSILON) * 100) / 100).toFixed(2).replace('.', ',');
             if (is13b) {
                 // § 13b Reverse Charge: Netto = Brutto, Steuer = 0
-                const rawNetto = Math.abs(parseFloat(r.netto || r.zahlbetrag || 0));
-                const betragStr = rawNetto.toFixed(2).replace('.', ',');
+                const betragStr = _toDatev(r.netto || r.zahlbetrag || 0);
                 const sh = isStorno ? 'S' : 'H';
                 csv += `"${betragStr}";"${sh}";"EUR";"";"${betragStr}";"EUR";"${KONTEN.erloese13b}";"${debitorKonto}";"${KONTEN.bu13b}";"${belegdatum}";"${belegfeld1}";"";"";"${buchungstext}"\n`;
             } else if (steuer7 > 0 && steuer19 > 0) {
-                // Gemischter Steuersatz: 2 getrennte Buchungszeilen
-                const brutto7 = Math.abs(netto7 + steuer7);
-                const brutto19 = Math.abs(netto19 + steuer19);
+                // Gemischter Steuersatz: 2 getrennte Buchungszeilen (je Bucket gerundet, EN 16931)
                 const sh = isStorno ? 'S' : 'H';
 
                 // Buchung 7%
-                const b7Str = brutto7.toFixed(2).replace('.', ',');
+                const b7Str = _toDatev(netto7 + steuer7);
                 csv += `"${b7Str}";"${sh}";"EUR";"";"${b7Str}";"EUR";"${KONTEN.erloese7}";"${debitorKonto}";"";"${belegdatum}";"${belegfeld1}";"";"";"${buchungstext} (7% USt)"\n`;
 
                 // Buchung 19%
-                const b19Str = brutto19.toFixed(2).replace('.', ',');
+                const b19Str = _toDatev(netto19 + steuer19);
                 csv += `"${b19Str}";"${sh}";"EUR";"";"${b19Str}";"EUR";"${KONTEN.erloese19}";"${debitorKonto}";"";"${belegdatum}";"${belegfeld1}";"";"";"${buchungstext} (19% USt)"\n`;
             } else {
                 // Reguläre Einzelbuchung (19%, 7% oder 0%)
@@ -234,8 +247,7 @@ class DATEVExporter {
                 else if (is7Percent) erloeskonto = KONTEN.erloese7;
 
                 // DAT-1: ZWINGEND BRUTTO (Voller Erlös!), NICHT Zahlbetrag
-                const rawBrutto = Math.abs(parseFloat(r.brutto !== undefined && r.brutto !== null ? r.brutto : r.netto) || 0);
-                const umsatzStr = rawBrutto.toFixed(2).replace('.', ',');
+                const umsatzStr = _toDatev(r.brutto !== undefined && r.brutto !== null ? r.brutto : r.netto);
                 const sh = isStorno ? 'S' : 'H';
 
                 csv += `"${umsatzStr}";"${sh}";"EUR";"";"${umsatzStr}";"EUR";"${erloeskonto}";"${debitorKonto}";"";"${belegdatum}";"${belegfeld1}";"";"";"${buchungstext}"\n`;
@@ -245,7 +257,7 @@ class DATEVExporter {
             // Wenn Einbehalt > 0: Soll 1540 / 1240 an Haben Debitor (bzw. umgekehrt bei Storno)
             const sicherheit = parseFloat(r.sicherheitseinbehalt || r.sicherheitseinbehaltNetto || 0);
             if (sicherheit > 0) {
-                const sichStr = sicherheit.toFixed(2).replace('.', ',');
+                const sichStr = _toDatev(sicherheit, false);
                 const sichSh = isStorno ? 'H' : 'S'; // Bei Normalbeleg Soll 1540 an Haben Debitor
                 const sichText = this.sanitizeCsvField(`Sicherheitseinbehalt VOB/B ${r.nr}`);
                 csv += `"${sichStr}";"${sichSh}";"EUR";"";"${sichStr}";"EUR";"${KONTEN.sicherheit}";"${debitorKonto}";"";"${belegdatum}";"${belegfeld1}";"";"";"${sichText}"\n`;

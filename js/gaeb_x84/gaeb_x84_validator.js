@@ -13,28 +13,48 @@
 
 'use strict';
 
-const gaebTenderRepo = require('../../db/repositories/gaeb_tender_repo');
+// IPC- & Repository-Disziplin: Dieses Modul ist reine Fachlogik (Renderer + Main + Tests).
+// KEIN require('../../db/...'), KEIN db.prepare/SELECT/INSERT — DB-Zugriffe nur via
+// typisierte IPC-Kanäle (main/ipc/ipc-gaeb.js: 'gaeb:validate-x84-export') und
+// Repositories (db/repositories/gaeb_tender_repo.js: loadTenderDraft).
+// Aufrufer (Main/IPC/Repository) lädt draftData vorab und übergibt es hier rein.
 
 /**
  * Validiert einen Bepreisungsentwurf auf Exportfähigkeit nach GAEB DA XML X84.
- * 
- * @param {Object} db - better-sqlite3 Instanz oder vorab geladenes draftData
- * @param {number} [draftId] - ID aus gaeb_tender_drafts
- * @param {Object} [options] - Optionale Parameter (z. B. importId zur Verifikation)
+ *
+ * Reine Funktion ohne DB-Zugriff. Erwartet vorab geladene draftData
+ * (via window.api.loadTenderDraft / dbAPI.loadTenderDraft / Repository).
+ *
+ * @param {Object} draftDataOrDb - Vorab geladenes draftData ({ draft, items, ... }) — SOLL.
+ *   Aus Kompatibilität wird auch die Legacy-Signatur (db, draftId, options, deps) erkannt,
+ *   greift dann aber NUR auf einen injizierten Loader (deps.loadTenderDraft / options.loadTenderDraft)
+ *   zurück — niemals direkt auf db.prepare oder db-Repositories.
+ * @param {number} [draftId] - ID aus gaeb_tender_drafts (nur Legacy-Pfad / Fehlermeldungen)
+ * @param {Object} [options] - Optionale Parameter (z. B. importId zur Verifikation, loadTenderDraft-Loader)
+ * @param {Object} [deps] - Optionale Loader ({ loadTenderDraft })
  * @returns {Object} { valid: boolean, errors: string[], warnings: string[], draftSummary: object }
  */
-function validateDraftForExport(db, draftId, options = {}) {
+function validateDraftForExport(draftDataOrDb, draftId, options = {}, deps = {}) {
     const errors = [];
     const warnings = [];
 
     let draftData = null;
     let draft = null;
 
-    // Unterstütze Übergabe eines bereits geladenen draftData-Objekts (z. B. in Tests)
-    if (db && typeof db === 'object' && db.draft && Array.isArray(db.items)) {
-        draftData = db;
+    // SOLL-Pfad: bereits geladenes draftData-Objekt (Renderer via window.api, Main via Repository)
+    if (draftDataOrDb && typeof draftDataOrDb === 'object' && draftDataOrDb.draft && Array.isArray(draftDataOrDb.items)) {
+        draftData = draftDataOrDb;
         draft = draftData.draft;
+        // draftId kann im SOLL-Pfad als options-Override im 2. Arg stecken — normalisieren
+        if (draftId && typeof draftId === 'object' && !options) {
+            options = draftId;
+        }
     } else {
+        // Legacy-Pfad (Node/Main/Tests): (db, draftId) — DB-Zugriff NUR via injizierten Repository-Loader
+        const db = draftDataOrDb;
+        const loader = (deps && typeof deps.loadTenderDraft === 'function')
+            ? deps.loadTenderDraft
+            : (options && typeof options.loadTenderDraft === 'function' ? options.loadTenderDraft : null);
         if (!db) {
             return {
                 valid: false,
@@ -51,29 +71,45 @@ function validateDraftForExport(db, draftId, options = {}) {
                 draftSummary: null
             };
         }
-
-        const draftRow = db.prepare('SELECT * FROM gaeb_tender_drafts WHERE id = ?').get(draftId);
-        if (!draftRow) {
+        let effLoader = loader;
+        if (!effLoader) {
+            // Renderer (window + sandbox): strikt untersagt — nur vorab geladene draftData via window.api.
+            const isRenderer = (typeof window !== 'undefined' && typeof window.document !== 'undefined')
+                || (typeof process !== 'undefined' && process.type === 'renderer');
+            if (isRenderer) {
+                return {
+                    valid: false,
+                    errors: [
+                        'IPC-/Repository-Disziplin: validateDraftForExport benötigt vorab geladene draftData ' +
+                        '(window.api.loadTenderDraft). ' +
+                        `Direkter DB-Zugriff für Draft #${draftId} ist im Renderer untersagt.`
+                    ],
+                    warnings: [],
+                    draftSummary: null
+                };
+            }
+            // Node/Main/Tests: Fallback strikt via Repository (kein db.prepare hier) — Legacy-Kompatibilität.
+            try {
+                const repo = require('../../db/repositories/gaeb_tender_repo');
+                if (repo && typeof repo.loadTenderDraft === 'function') effLoader = repo.loadTenderDraft;
+            } catch (_e) { effLoader = null; }
+        }
+        if (!effLoader) {
             return {
                 valid: false,
-                errors: [`Tender-Draft mit ID ${draftId} nicht gefunden.`],
+                errors: [
+                    'IPC-/Repository-Disziplin: validateDraftForExport benötigt vorab geladene draftData ' +
+                    '(window.api.loadTenderDraft / dbAPI.loadTenderDraft). ' +
+                    `Direkter DB-Zugriff für Draft #${draftId} ist untersagt.`
+                ],
                 warnings: [],
                 draftSummary: null
             };
         }
 
-        if (options.importId && Number(draftRow.import_id) !== Number(options.importId)) {
-            return {
-                valid: false,
-                errors: [`Tender-Draft #${draftId} gehört zu Import #${draftRow.import_id}, nicht zu Import #${options.importId}.`],
-                warnings: [],
-                draftSummary: null
-            };
-        }
-
+        let loaded = null;
         try {
-            draftData = gaebTenderRepo.loadTenderDraft(db, draftId);
-            draft = draftData.draft;
+            loaded = effLoader(db, draftId);
         } catch (e) {
             return {
                 valid: false,
@@ -82,6 +118,24 @@ function validateDraftForExport(db, draftId, options = {}) {
                 draftSummary: null
             };
         }
+        if (!loaded || !loaded.draft) {
+            return {
+                valid: false,
+                errors: [`Tender-Draft mit ID ${draftId} nicht gefunden.`],
+                warnings: [],
+                draftSummary: null
+            };
+        }
+        if (options && options.importId && Number(loaded.draft.import_id) !== Number(options.importId)) {
+            return {
+                valid: false,
+                errors: [`Tender-Draft #${draftId} gehört zu Import #${loaded.draft.import_id}, nicht zu Import #${options.importId}.`],
+                warnings: [],
+                draftSummary: null
+            };
+        }
+        draftData = loaded;
+        draft = draftData.draft;
     }
 
     // 1. GAEB-Version prüfen

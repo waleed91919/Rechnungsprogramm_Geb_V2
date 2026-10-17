@@ -5,8 +5,8 @@
  */
 
 if (typeof module !== 'undefined' && module.exports) {
-    // Wenn wir in Electron (Browser) sind, ignorieren wir den Require-Block,
-    // da die Skripte bereits in code.html als <script> geladen wurden.
+    // MVC-Disziplin: Im Renderer (Electron, sandbox) läuft alles via views/* + view-loader.js
+    // und window.api (IPC). Dieser Require-Block gilt NUR für Node/Tests — niemals DB direkt.
     const isRenderer = typeof process !== 'undefined' && process.type === 'renderer';
     const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
     

@@ -38,8 +38,12 @@ function calculateRechnungTotals() {
         } else if (existing?.sicherheitseinbehalt_prozent !== undefined) {
             sicherheitseinbehalt_prozent = parseFloat(existing.sicherheitseinbehalt_prozent) || 0;
         }
+        // SSoT (js/money.js): Einbehalt = kaufmännisch gerundeter Prozentsatz vom Netto.
+        const _M = (typeof Money !== 'undefined') ? Money
+            : (typeof window !== 'undefined' && window.Money) ? window.Money : null;
         const sicherheitseinbehalt = (totals.netto && sicherheitseinbehalt_prozent > 0)
-            ? Math.round(totals.netto * sicherheitseinbehalt_prozent) / 100
+            ? (_M ? _M.percent(totals.netto, sicherheitseinbehalt_prozent)
+                : Math.round((parseFloat(totals.netto) * parseFloat(sicherheitseinbehalt_prozent) / 100 + Number.EPSILON) * 100) / 100)
             : 0;
 
         state.currentRechnungTotals = {

@@ -2,7 +2,6 @@ const electron = require('electron');
 const { app, BrowserWindow, Menu, ipcMain } = electron;
 const path = require('path');
 const { registerAllIpc } = require('./main/ipc');
-const syncIpc = require('./main/ipc/ipc-sync');
 const systemIpc = require('./main/ipc/ipc-system');
 const { wrapHandler, focusWin, toPdfBuffer, printToPdfWithTimeout } = require('./main/ipc/ipc-util');
 
@@ -153,8 +152,6 @@ function setupIpc() {
     // Starte automatischen Backup-Scheduler falls konfiguriert
     systemIpc.initAutoBackupScheduler(db, dbAPI);
 
-    // Starte Sync-Server automatisch falls konfiguriert
-    syncIpc.autoStartSyncServer(db);
 }
 
 // DB-3 Fix: Deterministischer Shutdown-Lifecycle mit event.preventDefault()
@@ -167,7 +164,6 @@ app.on('before-quit', async (event) => {
 
     try {
         console.log('[App Shutdown] Bereite geordnetes Beenden vor...');
-        await syncIpc.stopSyncServer();
 
         const { db, dbAPI } = require('./db');
         if (db && db.open) {

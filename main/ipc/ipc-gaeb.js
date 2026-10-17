@@ -18,9 +18,11 @@ function register(ipcMain, context = {}) {
     const dialogModule = context.dialog || dialog;
     const browserWindowModule = context.BrowserWindow || BrowserWindow;
 
-    // Speichert ein geparstes X83 Dokument atomar in SQLite
+    // Speichert ein geparstes X83 Dokument atomar in SQLite (validiert — nur via Repository)
     ipcMain.handle('gaeb:save-import', wrapHandler(async (e, payload = {}) => {
-        const { parsedData, options } = payload;
+        const { parsedData, options } = payload || {};
+        if (!parsedData || typeof parsedData !== 'object') throw new Error('Ungültige GAEB-Importdaten (parsedData fehlt).');
+        if (options !== undefined && options !== null && typeof options !== 'object') throw new Error('Ungültige Import-Optionen.');
         if (dbAPI && typeof dbAPI.saveX83Import === 'function') {
             return dbAPI.saveX83Import(parsedData, options);
         }
@@ -29,11 +31,13 @@ function register(ipcMain, context = {}) {
 
     // Lädt einen vollständigen X83 Import (Kopfdaten, Baum, Items, BiReq, UPComponents)
     ipcMain.handle('gaeb:load-import', wrapHandler(async (e, importId) => {
-        if (!importId) throw new Error('Import-ID fehlt.');
+        if (importId === undefined || importId === null || importId === '') throw new Error('Import-ID fehlt.');
+        const numId = Number(importId);
+        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Import-ID.');
         if (dbAPI && typeof dbAPI.loadX83Import === 'function') {
-            return dbAPI.loadX83Import(importId);
+            return dbAPI.loadX83Import(numId);
         }
-        return gaebRepo.loadX83Import(db, importId);
+        return gaebRepo.loadX83Import(db, numId);
     }));
 
     // Listet alle importierten Ausschreibungen mit aggregierten Statistiken
@@ -46,33 +50,46 @@ function register(ipcMain, context = {}) {
 
     // Löscht einen Import mit Verknüpfungsschutz
     ipcMain.handle('gaeb:delete-import', wrapHandler(async (e, importId) => {
-        if (!importId) throw new Error('Import-ID fehlt.');
+        if (importId === undefined || importId === null || importId === '') throw new Error('Import-ID fehlt.');
+        const numId = Number(importId);
+        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Import-ID.');
         if (dbAPI && typeof dbAPI.deleteX83Import === 'function') {
-            return dbAPI.deleteX83Import(importId);
+            return dbAPI.deleteX83Import(numId);
         }
-        return gaebRepo.deleteX83Import(db, importId);
+        return gaebRepo.deleteX83Import(db, numId);
     }));
 
     // Verknüpft einen GAEB-Import mit einem echten Angebot in dokumente
     ipcMain.handle('gaeb:link-angebot', wrapHandler(async (e, payload = {}) => {
-        const { importId, angebotId, notes } = payload;
-        if (dbAPI && typeof dbAPI.linkImportToAngebot === 'function') {
-            return dbAPI.linkImportToAngebot(importId, angebotId, notes);
+        const { importId, angebotId, notes } = payload || {};
+        if (importId === undefined || importId === null || angebotId === undefined || angebotId === null) {
+            throw new Error('Import-ID und Angebots-ID erforderlich.');
         }
-        return gaebRepo.linkImportToAngebot(db, importId, angebotId, notes);
+        const numImport = Number(importId);
+        const numAngebot = Number(angebotId);
+        if (!Number.isInteger(numImport) || numImport <= 0) throw new Error('Ungültige Import-ID.');
+        if (!Number.isInteger(numAngebot) || numAngebot <= 0) throw new Error('Ungültige Angebots-ID.');
+        if (notes !== undefined && notes !== null && typeof notes !== 'string') throw new Error('Ungültige Notizen.');
+        if (dbAPI && typeof dbAPI.linkImportToAngebot === 'function') {
+            return dbAPI.linkImportToAngebot(numImport, numAngebot, notes);
+        }
+        return gaebRepo.linkImportToAngebot(db, numImport, numAngebot, notes);
     }));
 
     // Gibt alle mit dem Import verknüpften Angebote zurück
     ipcMain.handle('gaeb:get-linked-angebote', wrapHandler(async (e, importId) => {
-        if (!importId) throw new Error('Import-ID fehlt.');
+        if (importId === undefined || importId === null || importId === '') throw new Error('Import-ID fehlt.');
+        const numId = Number(importId);
+        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Import-ID.');
         if (dbAPI && typeof dbAPI.getLinkedAngebote === 'function') {
-            return dbAPI.getLinkedAngebote(importId);
+            return dbAPI.getLinkedAngebote(numId);
         }
-        return gaebRepo.getLinkedAngebote(db, importId);
+        return gaebRepo.getLinkedAngebote(db, numId);
     }));
 
     // Erzeugt ein echtes Angebot (Dokument + Positionen) aus einem GAEB Draft / Import
     ipcMain.handle('gaeb:create-angebot-from-draft', wrapHandler(async (e, payload = {}) => {
+        if (!payload || typeof payload !== 'object') throw new Error('Ungültige Angebots-Payload.');
         if (dbAPI && typeof dbAPI.createAngebotFromDraft === 'function') {
             return dbAPI.createAngebotFromDraft(payload);
         }
@@ -84,11 +101,13 @@ function register(ipcMain, context = {}) {
 
     // Gibt gezielt den echten Original-Dateipuffer (BLOB) des Imports zurück
     ipcMain.handle('gaeb:get-original-buffer', wrapHandler(async (e, importId) => {
-        if (!importId) throw new Error('Import-ID fehlt.');
+        if (importId === undefined || importId === null || importId === '') throw new Error('Import-ID fehlt.');
+        const numId = Number(importId);
+        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Import-ID.');
         if (dbAPI && typeof dbAPI.getImportOriginalBuffer === 'function') {
-            return dbAPI.getImportOriginalBuffer(importId);
+            return dbAPI.getImportOriginalBuffer(numId);
         }
-        return gaebRepo.getImportOriginalBuffer(db, importId);
+        return gaebRepo.getImportOriginalBuffer(db, numId);
     }));
 
     // --- Tender Bepreisung & Entwürfe ---
@@ -180,12 +199,23 @@ function register(ipcMain, context = {}) {
     // --- GAEB DA XML X84 Export (Phase 84: Angebotsabgabe) ---
 
     // Validiert einen Tender-Entwurf für den X84-Export
+    // IPC-Disziplin: validiert draftId, lädt draftData strikt via Repository/dbAPI,
+    // reine Prüfung in js/gaeb_x84 (kein direkter DB-Zugriff dort).
     ipcMain.handle('gaeb:validate-x84-export', wrapHandler(async (e, payload) => {
         const draftId = (typeof payload === 'object' && payload !== null && payload.draftId !== undefined)
             ? payload.draftId
             : payload;
-        if (!draftId) throw new Error('Draft-ID fehlt für Validierung.');
-        return gaebX84.validateDraftForExport(db, draftId);
+        if (draftId === undefined || draftId === null || draftId === '') throw new Error('Draft-ID fehlt für Validierung.');
+        const numId = Number(draftId);
+        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Draft-ID für Validierung.');
+        let draftData;
+        if (dbAPI && typeof dbAPI.loadTenderDraft === 'function') {
+            draftData = await dbAPI.loadTenderDraft(numId);
+        } else {
+            draftData = gaebTenderRepo.loadTenderDraft(db, numId);
+        }
+        if (!draftData || !draftData.draft) throw new Error(`Tender-Draft mit ID ${numId} nicht gefunden.`);
+        return gaebX84.validateDraftForExport(draftData, {});
     }));
 
     // Exportiert einen Tender-Entwurf als GAEB DA XML X84 Datei
@@ -197,9 +227,39 @@ function register(ipcMain, context = {}) {
             ? payload.options
             : (maybeOptions || (typeof payload === 'object' && payload !== null && payload.draftId === undefined ? payload : {}));
 
-        if (!draftId) throw new Error('Draft-ID fehlt für X84-Export.');
+        if (draftId === undefined || draftId === null || draftId === '') throw new Error('Draft-ID fehlt für X84-Export.');
+        const numDraftId = Number(draftId);
+        if (!Number.isInteger(numDraftId) || numDraftId <= 0) throw new Error('Ungültige Draft-ID für X84-Export.');
+        if (options !== undefined && options !== null && typeof options !== 'object') throw new Error('Ungültige Export-Optionen.');
 
-        const validation = gaebX84.validateDraftForExport(db, draftId, options);
+        // IPC- & Repository-Disziplin: draftData + settings strikt via Repository/dbAPI laden,
+        // reine Fachlogik in js/gaeb_x84 erhält nur plain objects (kein db-Handle).
+        let draftData;
+        if (dbAPI && typeof dbAPI.loadTenderDraft === 'function') {
+            draftData = await dbAPI.loadTenderDraft(numDraftId);
+        } else {
+            draftData = gaebTenderRepo.loadTenderDraft(db, numDraftId);
+        }
+        if (!draftData || !draftData.draft) throw new Error(`Tender-Draft mit ID ${numDraftId} nicht gefunden.`);
+        let settings = (options && typeof options.settings === 'object') ? options.settings : null;
+        if (!settings) {
+            // Repository-Disziplin: Einstellungen nur via dbAPI/Repository, nie via db.prepare im IPC-Handler.
+            try {
+                if (dbAPI && typeof dbAPI.getEinstellung === 'function') {
+                    const [firmenname, firma, strasse, plz, ort] = await Promise.all([
+                        dbAPI.getEinstellung('firmenname'), dbAPI.getEinstellung('firma'),
+                        dbAPI.getEinstellung('strasse'), dbAPI.getEinstellung('plz'),
+                        dbAPI.getEinstellung('ort')
+                    ]);
+                    settings = { firmenname, firma, strasse, plz, ort };
+                } else {
+                    const st = await dbAPI.getFullState();
+                    if (st && st.einstellungen) settings = st.einstellungen;
+                }
+            } catch (_e) { settings = null; }
+        }
+        const effOptions = Object.assign({}, options, settings ? { settings } : {});
+        const validation = gaebX84.validateDraftForExport(draftData, effOptions);
         if (!validation.valid) {
             return {
                 success: false,
@@ -239,8 +299,8 @@ function register(ipcMain, context = {}) {
 
         const targetFilePath = filePath;
 
-        // Export durchführen (XML erzeugen)
-        const exportResult = gaebX84.exportTenderDraftToX84(db, draftId, options);
+        // Export durchführen (XML erzeugen) — reine Funktion mit vorab geladenen plain objects
+        const exportResult = gaebX84.exportTenderDraftToX84(draftData, effOptions);
         const xml = exportResult.xml;
 
         // XSD-Prüfung vor dem Schreiben

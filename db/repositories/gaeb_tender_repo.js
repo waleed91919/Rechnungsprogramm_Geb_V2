@@ -593,12 +593,28 @@ function getTenderDraftForExport(db, draftId, options = {}) {
     if (!db) throw new Error('Datenbankverbindung erforderlich.');
     if (!draftId) throw new Error('Draft-ID erforderlich.');
 
+    // IPC- & Repository-Disziplin: DB-Zugriff nur hier im Repository.
+    // Reine X84-Fachlogik (js/gaeb_x84) erhält vorab geladene plain objects — kein db-Handle.
     const gaebX84 = require('../../js/gaeb_x84');
-    const validation = gaebX84.validateDraftForExport(db, draftId, options);
     const draftData = loadTenderDraft(db, draftId);
+    if (!draftData || !draftData.draft) {
+        return {
+            draftData: null,
+            validation: { valid: false, errors: [`Tender-Draft mit ID ${draftId} nicht gefunden.`], warnings: [], draftSummary: null },
+            model: null
+        };
+    }
+    let settings = null;
+    try {
+        const rows = db.prepare(`SELECT key, value FROM einstellungen WHERE key IN ('firmenname','firma','strasse','plz','ort')`).all();
+        settings = {};
+        for (const r of rows) settings[r.key] = r.value;
+    } catch (_e) { settings = null; }
+    const effOptions = Object.assign({}, options, settings ? { settings } : {});
+    const validation = gaebX84.validateDraftForExport(draftData, effOptions);
     let model = null;
     if (validation.valid) {
-        model = gaebX84.mapDraftToX84Model(db, draftId, options);
+        model = gaebX84.mapDraftToX84Model(draftData, effOptions);
     }
 
     return {

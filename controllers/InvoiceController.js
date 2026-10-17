@@ -8,7 +8,16 @@ class InvoiceController {
      * Identische Formel wie EInvoiceEngine.round2 (js/einvoice.js), damit
      * beide Rechner zu bitidentischen Summen kommen.
      */
+    // SSoT: delegiert an js/money.js (keine eigene Rundungsformel mehr).
     static round2(value) {
+        const M = (typeof Money !== 'undefined') ? Money
+            : (typeof window !== 'undefined' && window.Money) ? window.Money
+            : (typeof globalThis !== 'undefined' && globalThis.Money) ? globalThis.Money
+            : null;
+        if (M && typeof M.round2 === 'function') return M.round2(value);
+        try {
+            if (typeof require !== 'undefined') return require('../js/money').round2(value);
+        } catch (e) { /* Fallback unten */ }
         return Math.round((parseFloat(value) + Number.EPSILON) * 100) / 100;
     }
 

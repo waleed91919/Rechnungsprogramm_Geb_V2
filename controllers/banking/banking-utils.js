@@ -145,7 +145,15 @@ const bankingUtils = {
 }) {
   const normIban = this._cleanIban(iban || konto_iban || accountIban);
   const normTag = String(buchungstag || '').trim();
-  const normBetrag = (Math.round((parseFloat(betrag) || 0) * 100) / 100).toFixed(2);
+  // SSoT (js/money.js): EPSILON-sichere Rundung statt eigenem Math.round.
+  const __M = (typeof Money !== 'undefined' && Money) ? Money
+    : (typeof window !== 'undefined' && window.Money) ? window.Money
+    : (typeof globalThis !== 'undefined' && globalThis.Money) ? globalThis.Money
+    : null;
+  let __r = parseFloat(betrag);
+  __r = Number.isFinite(__r) ? Math.round((__r + Number.EPSILON) * 100) / 100 : 0;
+  if (__M && typeof __M.round2 === 'function') { try { __r = __M.round2(betrag); } catch (e) {} }
+  const normBetrag = __r.toFixed(2);
   const normText = String(verwendungszweck || '').replace(/\s+/g, ' ').trim().toLowerCase();
   const normPartner = this._cleanIban(partnerIban || partner_iban);
   const normNota = String(primanota || '').trim();
