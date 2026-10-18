@@ -71,6 +71,16 @@ function renderOposVorschlaege(stats = {}) {
                 <td class="px-4 py-3 text-xs font-semibold text-slate-800">
                     <div>Beleg ${escapeHtml(m.belegNr || '')}</div>
                     <div class="text-[11px] font-normal text-slate-500">${typeLabel}</div>
+                    ${(m.matchType === 'PARTIAL_PAYMENT_MATCH' || (m.restOffen && m.restOffen > 0.01)) ? `
+                        <div class="mt-1.5">
+                            <label class="block text-[10px] text-slate-500 font-medium mb-0.5">Differenzbehandlung:</label>
+                            <select onchange="handleMatchDifferenzGrundChange(${idx}, this.value)"
+                                class="text-[11px] border border-amber-300 bg-amber-50/50 rounded px-1.5 py-0.5 text-slate-700 max-w-xs focus:ring-1 focus:ring-amber-500 focus:border-amber-500">
+                                <option value="TEILZAHLUNG" ${m.differenzGrund !== 'ARCHITEKTEN_KUERZUNG_KUMULIERT' ? 'selected' : ''}>Teilzahlung (Restforderung bleibt offen)</option>
+                                <option value="ARCHITEKTEN_KUERZUNG_KUMULIERT" ${m.differenzGrund === 'ARCHITEKTEN_KUERZUNG_KUMULIERT' ? 'selected' : ''}>Prüfkürzung / Architekten-Strich (Restmenge wird im nächsten Abschlag kumuliert abgerechnet)</option>
+                            </select>
+                        </div>
+                    ` : ''}
                 </td>
                 <td class="px-4 py-3 text-xs text-right font-semibold text-slate-800">${betragStr}</td>
                 <td class="px-4 py-3 text-xs text-center">
@@ -86,6 +96,13 @@ function renderOposVorschlaege(stats = {}) {
         `;
   }).join('');
 }
+
+function handleMatchDifferenzGrundChange(idx, val) {
+  if (bankingState.matchVorschlaege && bankingState.matchVorschlaege[idx]) {
+    bankingState.matchVorschlaege[idx].differenzGrund = val;
+  }
+}
+window.handleMatchDifferenzGrundChange = handleMatchDifferenzGrundChange;
 
 async function uebernehmeEinzelMatch(idx) {
   const match = bankingState.matchVorschlaege[idx];

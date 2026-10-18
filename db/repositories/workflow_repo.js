@@ -137,7 +137,7 @@ function createWorkflowRepo(deps) {
                 contractTotalNet: parseFloat(projekt.budget) || 0,
                 previousInvoices: previous
             });
-            const prevNet = previous.reduce((s, d) => s + (parseFloat(d.kumulierte_leistung_netto) || parseFloat(d.netto) || 0), 0);
+            const prevNet = previous.reduce((s, d) => s + (parseFloat(d.geprueft_netto) || parseFloat(d.kumulierte_leistung_netto) || parseFloat(d.netto) || 0), 0);
             const R2 = (v) => WorkflowController.round2(v);
 
             const today = new Date().toISOString().slice(0, 10);

@@ -1,3 +1,5 @@
+const _win = typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : {});
+
 function addRechnungPosition() {
     state.currentRechnungPositionen.push({
         id: Date.now(), // temp id
@@ -12,7 +14,7 @@ function addRechnungPosition() {
     renderRechnungPositionen();
 }
 
-window.addRechnungPosition = addRechnungPosition;
+_win.addRechnungPosition = addRechnungPosition;
 
 function removeRechnungPosition(id) {
     const index = state.currentRechnungPositionen.findIndex(p => p.id === id);
@@ -22,7 +24,7 @@ function removeRechnungPosition(id) {
     renderRechnungPositionen();
 }
 
-window.removeRechnungPosition = removeRechnungPosition;
+_win.removeRechnungPosition = removeRechnungPosition;
 
 function handlePositionChange(id, field, value) {
     const pos = state.currentRechnungPositionen.find(p => p.id === id);
@@ -85,7 +87,7 @@ function handlePositionChange(id, field, value) {
     renderRechnungPositionen();
 }
 
-window.handlePositionChange = handlePositionChange;
+_win.handlePositionChange = handlePositionChange;
 
 function getArtikelName(artikelId, customName) {
     if (!artikelId) return customName || '';
@@ -96,7 +98,7 @@ function getArtikelName(artikelId, customName) {
     return customName || '';
 }
 
-window.getArtikelName = getArtikelName;
+_win.getArtikelName = getArtikelName;
 
 function handleArtikelAutocomplete(posId, query) {
     const pos = state.currentRechnungPositionen.find(p => p.id === posId);
@@ -131,7 +133,7 @@ function handleArtikelAutocomplete(posId, query) {
     renderRechnungPositionen();
 }
 
-window.handleArtikelAutocomplete = handleArtikelAutocomplete;
+_win.handleArtikelAutocomplete = handleArtikelAutocomplete;
 
 function setRabattType(type) {
     const inputType = document.getElementById('rechnung-global-rabatt-type');
@@ -152,7 +154,7 @@ function setRabattType(type) {
     calculateRechnungTotals();
 }
 
-window.setRabattType = setRabattType;
+_win.setRabattType = setRabattType;
 
 function syncSicherheitseinbehalt(sourceId) {
     const src = document.getElementById(sourceId);
@@ -176,4 +178,162 @@ function syncSicherheitseinbehalt(sourceId) {
     }
 }
 
-window.syncSicherheitseinbehalt = syncSicherheitseinbehalt;
+_win.syncSicherheitseinbehalt = syncSicherheitseinbehalt;
+
+function __resolveMoney_pos() {
+    if (typeof Money !== 'undefined' && Money && typeof Money.round2 === 'function') return Money;
+    if (typeof window !== 'undefined' && window.Money) return window.Money;
+    if (typeof globalThis !== 'undefined' && globalThis.Money) return globalThis.Money;
+    try {
+        if (typeof require !== 'undefined') return require('../money');
+    } catch (e) {}
+    return null;
+}
+
+function toggleBauumlageMenu(e) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    const menu = document.getElementById('gu-bauumlage-menu');
+    if (menu) {
+        menu.classList.toggle('hidden');
+    }
+}
+_win.toggleBauumlageMenu = toggleBauumlageMenu;
+
+function closeBauumlageMenu() {
+    const menu = document.getElementById('gu-bauumlage-menu');
+    if (menu && !menu.classList.contains('hidden')) {
+        menu.classList.add('hidden');
+    }
+}
+_win.closeBauumlageMenu = closeBauumlageMenu;
+
+if (typeof document !== 'undefined') {
+    document.addEventListener('click', (e) => {
+        const container = document.getElementById('gu-bauumlage-dropdown-container');
+        if (container && !container.contains(e.target)) {
+            closeBauumlageMenu();
+        }
+    });
+}
+
+/**
+ * Fügt eine GU-Bauumlage (Abzugsposition auf die Zwischensumme aller positiven Leistungspositionen) ein.
+ * @param {string} type - 'strom_wasser' | 'versicherung' | 'kombi'
+ * @param {number} percentValue - z. B. 0.5 für 0,5 %
+ */
+function addBauumlagePosition(type, percentValue) {
+    const _M = __resolveMoney_pos();
+    const R2 = (v) => _M ? _M.round2(v) : (() => { const n = parseFloat(v); return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 100) / 100 : 0; })();
+    const P = (base, rate) => _M ? _M.percent(base, rate) : R2(parseFloat(base) * parseFloat(rate) / 100);
+
+    const positions = (typeof state !== 'undefined' && Array.isArray(state.currentRechnungPositionen))
+        ? state.currentRechnungPositionen
+        : [];
+
+    let zwischensummePositivNetto = 0;
+    const taxCount = {};
+    let has13b = false;
+
+    const isGlobal13bEl = typeof document !== 'undefined' ? document.getElementById('rechnung-13b-ustg') : null;
+    const isGlobal13b = isGlobal13bEl ? isGlobal13bEl.checked : (typeof state !== 'undefined' && state.currentRechnung && (state.currentRechnung.unterliegt_13b || state.currentRechnung.isGlobal13b));
+
+    for (const pos of positions) {
+        if (pos.in_endsumme_enthalten === 0 || pos.positionstyp === 'OPTIONAL' || pos.positionstyp === 'ALTERNATIV') {
+            continue;
+        }
+        const menge = parseFloat(pos.menge) || 0;
+        const preis = parseFloat(pos.preis) || 0;
+        const rabatt = parseFloat(pos.rabatt) || 0;
+        const rowNetto = R2((menge * preis) * (1 - rabatt / 100));
+
+        if (rowNetto > 0) {
+            zwischensummePositivNetto = R2(zwischensummePositivNetto + rowNetto);
+            const rate = pos.is13b ? 0 : (pos.mwst !== undefined ? parseInt(pos.mwst, 10) : 19);
+            taxCount[rate] = (taxCount[rate] || 0) + rowNetto;
+            if (pos.is13b) has13b = true;
+        }
+    }
+
+    if (zwischensummePositivNetto <= 0) {
+        const msg = 'Bitte erfassen Sie zuerst Leistungspositionen mit positivem Betrag.';
+        if (typeof showToast === 'function') {
+            showToast(msg, 'warning');
+        } else if (typeof alert === 'function') {
+            alert(msg);
+        }
+        return null;
+    }
+
+    // Dominanten Steuersatz ermitteln
+    let dominantMwst = 19;
+    let maxBase = -1;
+    for (const [rateStr, base] of Object.entries(taxCount)) {
+        if (base > maxBase) {
+            maxBase = base;
+            dominantMwst = parseInt(rateStr, 10);
+        }
+    }
+    const pos13b = Boolean(isGlobal13b || (has13b && dominantMwst === 0));
+    const finalMwst = pos13b ? 0 : dominantMwst;
+
+    const rate = parseFloat(percentValue) || 0;
+    const abzugBetragNetto = P(zwischensummePositivNetto, rate);
+
+    let bezeichnung = '';
+    if (type === 'strom_wasser') {
+        bezeichnung = `Abzug Bauumlage: Baustrom / Bauwasser (${rate}% gem. Bauvertrag)`;
+    } else if (type === 'versicherung') {
+        bezeichnung = `Abzug Bauumlage: Bauwesenversicherung (${rate}% gem. Bauvertrag)`;
+    } else if (type === 'kombi') {
+        bezeichnung = `Abzug Bauumlage: Kombi Strom/Wasser/Versicherung (${rate}% gem. Bauvertrag)`;
+    } else {
+        bezeichnung = `Abzug Bauumlage (${rate}% gem. Bauvertrag)`;
+    }
+
+    const newPos = {
+        id: Date.now(),
+        artikelId: '',
+        name: bezeichnung,
+        menge: 1,
+        einheit: 'psch',
+        preis: -abzugBetragNetto,
+        mwst: finalMwst,
+        is13b: pos13b,
+        rabatt: 0,
+        positionstyp: 'NORMAL',
+        in_endsumme_enthalten: 1
+    };
+
+    if (typeof state !== 'undefined' && Array.isArray(state.currentRechnungPositionen)) {
+        state.currentRechnungPositionen.push(newPos);
+    }
+    if (typeof renderRechnungPositionen === 'function') {
+        renderRechnungPositionen();
+    }
+    if (typeof calculateRechnungTotals === 'function') {
+        calculateRechnungTotals();
+    }
+
+    return newPos;
+}
+
+_win.addBauumlagePosition = addBauumlagePosition;
+
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        addRechnungPosition,
+        removeRechnungPosition,
+        handlePositionChange,
+        getArtikelName,
+        handleArtikelAutocomplete,
+        setRabattType,
+        syncSicherheitseinbehalt,
+        addBauumlagePosition,
+        toggleBauumlageMenu,
+        closeBauumlageMenu
+    };
+}
+

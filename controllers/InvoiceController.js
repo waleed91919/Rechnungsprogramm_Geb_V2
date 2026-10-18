@@ -150,7 +150,12 @@ class InvoiceController {
             const cumulativeBaseNet = (totalPerformanceNet !== null && totalPerformanceNet !== undefined)
                 ? (parseFloat(totalPerformanceNet) || 0)
                 : (parseFloat(baseNet) || 0) + (Array.isArray(previousInvoices) && previousInvoices.length > 0
-                    ? previousInvoices.reduce((s, inv) => s + (parseFloat(inv.netto) || parseFloat(inv.currentPeriodNet) || parseFloat(inv.kumulierte_leistung_netto) || 0), 0)
+                    ? previousInvoices.reduce((s, inv) => {
+                        const eff = (inv.geprueft_netto !== null && inv.geprueft_netto !== undefined && parseFloat(inv.geprueft_netto) > 0)
+                            ? (parseFloat(inv.geprueft_netto) || 0)
+                            : (parseFloat(inv.netto) || parseFloat(inv.currentPeriodNet) || parseFloat(inv.kumulierte_leistung_netto) || 0);
+                        return s + eff;
+                    }, 0)
                     : 0);
 
             // H-1 & VOB/B § 17 Abs. 6 S. 2: Bei 13b zwingend Netto, sonst vertraglich Netto oder Brutto

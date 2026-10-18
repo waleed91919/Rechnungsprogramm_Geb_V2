@@ -50,7 +50,7 @@ function createSchema(db) {
             eingangsrechnung_id INTEGER,
             betrag REAL NOT NULL CHECK(betrag > 0),
             skonto_abzug REAL DEFAULT 0.0 CHECK(skonto_abzug >= 0),
-            differenz_grund TEXT CHECK(differenz_grund IN ('SKONTO', 'TEILZAHLUNG', 'KULANZ', 'GEBUEHR', 'UEBERZAHLUNG', 'SONSTIGES')),
+            differenz_grund TEXT CHECK(differenz_grund IN ('SKONTO', 'TEILZAHLUNG', 'KULANZ', 'GEBUEHR', 'UEBERZAHLUNG', 'SONSTIGES', 'ARCHITEKTEN_KUERZUNG_KUMULIERT')),
             zugeordnet_am DATETIME DEFAULT CURRENT_TIMESTAMP,
             benutzer_notiz TEXT,
             FOREIGN KEY (transaktion_id) REFERENCES bank_transaktionen(id) ON DELETE CASCADE,

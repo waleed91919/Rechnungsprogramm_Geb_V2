@@ -290,9 +290,14 @@ function addVerrechnung() {
   if (!id) return;
   const rech = state.rechnungen.find(r => r.id === id);
   if (rech) {
+    const isKuerzung = (rech.geprueft_netto !== undefined && rech.geprueft_netto !== null && parseFloat(rech.geprueft_netto) > 0);
+    const abzugNetto = isKuerzung ? parseFloat(rech.geprueft_netto) : rech.netto;
     state.currentRechnungVerrechnungen.push({
       vorherige_rechnung_id: rech.id,
-      abzugsbetrag_netto: rech.netto
+      abzugsbetrag_netto: abzugNetto,
+      geprueft_netto: isKuerzung ? parseFloat(rech.geprueft_netto) : null,
+      kuerzung_grund: rech.kuerzung_grund || null,
+      original_netto: rech.netto
     });
     populateVerrechnungSelect();
     renderVerrechnungen();

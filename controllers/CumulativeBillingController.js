@@ -43,9 +43,9 @@ class CumulativeBillingController {
         const R = (v) => __M ? __M.round2(v) : (() => { const n = parseFloat(v); return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 100) / 100 : 0; })();
         const P = (base, rate) => __M ? __M.percent(base, rate) : R(parseFloat(base) * parseFloat(rate) / 100);
         // Summe bisheriger Netto-Abschlagsrechnungen (\sum F_i) — sofort gerundet,
-        // damit downstream (MwSt, Rückgabe) mit demselben Wert rechnet.
+        // unter Berücksichtigung von geprüften Kürzungen (geprueft_netto).
         const totalPreviousBilledNet = R(previousInvoices.reduce((sum, inv) => {
-            return sum + (parseFloat(inv.netto) || parseFloat(inv.currentPeriodNet) || parseFloat(inv.kumulierte_leistung_netto) || 0);
+            return sum + CumulativeBillingController.effectivePreviousNet(inv);
         }, 0));
 
         // Aktuelle Netto-Leistung dieser Periode: F_t = L_t - \sum F_i
@@ -231,6 +231,22 @@ class CumulativeBillingController {
             status: 'HELD',
             guaranteeDocumentRef: null
         };
+    }
+
+    /**
+     * Ermittelt den wirksamen Netto-Abzugsbetrag einer Vorrechnung unter Berücksichtigung
+     * von Architekten-Kürzungen (geprueft_netto) bei kumulierten Abrechnungen.
+     * @param {Object} inv - Vorrechnung
+     * @returns {number} Effektiver Netto-Betrag
+     */
+    static effectivePreviousNet(inv) {
+        if (!inv) return 0;
+        const M = __resolveMoney_cbc();
+        const R = (v) => M ? M.round2(v) : (() => { const n = parseFloat(v); return Number.isFinite(n) ? Math.round((n + Number.EPSILON) * 100) / 100 : 0; })();
+        if (inv.geprueft_netto !== null && inv.geprueft_netto !== undefined && parseFloat(inv.geprueft_netto) > 0) {
+            return R(inv.geprueft_netto);
+        }
+        return R(inv.netto || inv.currentPeriodNet || inv.kumulierte_leistung_netto || 0);
     }
 }
 

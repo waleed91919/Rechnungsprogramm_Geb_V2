@@ -1592,7 +1592,9 @@ function ensureGoBDSchemaAndTriggers(db) {
         'ALTER TABLE artikel ADD COLUMN deleted_at TEXT',
         'CREATE INDEX IF NOT EXISTS idx_artikel_deleted ON artikel(is_deleted)',
         'ALTER TABLE dokumente ADD COLUMN zahlbetrag REAL DEFAULT 0',
-        'ALTER TABLE rechnung_verrechnungen ADD COLUMN abzugsbetrag_brutto REAL DEFAULT 0'
+        'ALTER TABLE rechnung_verrechnungen ADD COLUMN abzugsbetrag_brutto REAL DEFAULT 0',
+        'ALTER TABLE dokumente ADD COLUMN geprueft_netto REAL DEFAULT NULL',
+        'ALTER TABLE dokumente ADD COLUMN kuerzung_grund TEXT DEFAULT NULL'
     ];
 
     for (const sql of softDeleteMigrations) {
@@ -1603,6 +1605,39 @@ function ensureGoBDSchemaAndTriggers(db) {
                 console.warn('[DB Soft-Delete Migration]:', e.message);
             }
         }
+    }
+
+    // Migration für zahlung_zuordnungen: differenz_grund CHECK constraint aktualisieren falls alte DB
+    try {
+        const zzTable = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='zahlung_zuordnungen'").get();
+        if (zzTable && zzTable.sql && !zzTable.sql.includes('ARCHITEKTEN_KUERZUNG_KUMULIERT')) {
+            db.transaction(() => {
+                db.exec(`
+                    CREATE TABLE zahlung_zuordnungen_new (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        transaktion_id INTEGER NOT NULL,
+                        dokument_id INTEGER,
+                        eingangsrechnung_id INTEGER,
+                        betrag REAL NOT NULL CHECK(betrag > 0),
+                        skonto_abzug REAL DEFAULT 0.0 CHECK(skonto_abzug >= 0),
+                        differenz_grund TEXT CHECK(differenz_grund IN ('SKONTO', 'TEILZAHLUNG', 'KULANZ', 'GEBUEHR', 'UEBERZAHLUNG', 'SONSTIGES', 'ARCHITEKTEN_KUERZUNG_KUMULIERT')),
+                        zugeordnet_am DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        benutzer_notiz TEXT,
+                        FOREIGN KEY (transaktion_id) REFERENCES bank_transaktionen(id) ON DELETE CASCADE,
+                        FOREIGN KEY (dokument_id) REFERENCES dokumente(id) ON DELETE SET NULL,
+                        FOREIGN KEY (eingangsrechnung_id) REFERENCES eingangsrechnungen(id) ON DELETE SET NULL
+                    );
+                    INSERT INTO zahlung_zuordnungen_new SELECT * FROM zahlung_zuordnungen;
+                    DROP TABLE zahlung_zuordnungen;
+                    ALTER TABLE zahlung_zuordnungen_new RENAME TO zahlung_zuordnungen;
+                    CREATE INDEX IF NOT EXISTS idx_zuordnungen_transaktion ON zahlung_zuordnungen(transaktion_id);
+                    CREATE INDEX IF NOT EXISTS idx_zuordnungen_dokument ON zahlung_zuordnungen(dokument_id);
+                    CREATE INDEX IF NOT EXISTS idx_zuordnungen_eingangsrechnung ON zahlung_zuordnungen(eingangsrechnung_id);
+                `);
+            })();
+        }
+    } catch (e) {
+        console.warn('[DB Migration Warning] zahlung_zuordnungen check constraint:', e.message);
     }
 
     // GoBD Engine-Level Triggers für Unveränderbarkeit

@@ -225,10 +225,19 @@ class WorkflowController {
         const positionen = aufmassPositionen.concat(freshNachtraege);
 
         const verrechnungen = (previousDocs || []).map((d) => {
-            const netto = d.kumulierte_leistung_netto !== undefined && d.kumulierte_leistung_netto !== null
-                && parseFloat(d.kumulierte_leistung_netto) !== 0
-                ? parseFloat(d.kumulierte_leistung_netto) : parseFloat(d.netto);
-            const brutto = parseFloat(d.brutto);
+            const hasGeprueft = d.geprueft_netto !== undefined && d.geprueft_netto !== null && parseFloat(d.geprueft_netto) > 0;
+            const netto = hasGeprueft
+                ? parseFloat(d.geprueft_netto)
+                : (d.kumulierte_leistung_netto !== undefined && d.kumulierte_leistung_netto !== null
+                    && parseFloat(d.kumulierte_leistung_netto) !== 0
+                    ? parseFloat(d.kumulierte_leistung_netto) : parseFloat(d.netto));
+            let brutto = parseFloat(d.brutto);
+            if (hasGeprueft) {
+                const origNetto = parseFloat(d.netto) || 0;
+                if (origNetto > 0 && Number.isFinite(brutto)) {
+                    brutto = brutto * (parseFloat(d.geprueft_netto) / origNetto);
+                }
+            }
             return {
                 vorherige_rechnung_id: d.id,
                 abzugsbetrag_netto: WorkflowController.round2(netto),

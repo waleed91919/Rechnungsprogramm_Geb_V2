@@ -296,9 +296,14 @@ function renderVerrechnungen() {
             if (!r) return;
             sum += v.abzugsbetrag_netto;
 
+            const isKuerzung = (r.geprueft_netto !== undefined && r.geprueft_netto !== null && parseFloat(r.geprueft_netto) > 0)
+                || (v.geprueft_netto !== undefined && v.geprueft_netto !== null && parseFloat(v.geprueft_netto) > 0);
+            const origNetto = (v.original_netto !== undefined && v.original_netto !== null) ? v.original_netto : r.netto;
+            const kuerzungBadge = isKuerzung ? ` <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800" title="Geprüft/gekürzt von ${formatCurrency(origNetto)} auf ${formatCurrency(v.abzugsbetrag_netto)}">Geprüft (${formatCurrency(v.abzugsbetrag_netto)})</span>` : '';
+
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td class="px-4 py-2 font-medium">${r.nr}</td>
+                <td class="px-4 py-2 font-medium">${r.nr}${kuerzungBadge}</td>
                 <td class="px-4 py-2">${new Date(r.datum).toLocaleDateString('de-DE')}</td>
                 <td class="px-4 py-2 text-right font-mono text-indigo-700">-${formatCurrency(v.abzugsbetrag_netto)}</td>
                 <td class="px-4 py-2 text-center">

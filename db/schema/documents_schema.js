@@ -37,6 +37,8 @@ function createSchema(db) {
             herkunft_typ TEXT, -- Vorgangs-Strang: ANGEBOT/AUFTRAG/LIEFERSCHEIN/AUFMASS/NACHTRAG (Quelle ohne Abtippen)
             herkunft_id INTEGER, -- ID des Quellbelegs (dokumente.id / nachtrag / aufmass-Blatt)
             source_auftrag_id INTEGER, -- AB-Herkunft (dokumente.id type=auftrag), entlastet parent_angebot_id
+            geprueft_netto REAL DEFAULT NULL, -- Vom Architekten/Kunden anerkannter Netto-Betrag bei Rechnungsprüfung
+            kuerzung_grund TEXT DEFAULT NULL, -- Differenzgrund z. B. ARCHITEKTEN_KUERZUNG_KUMULIERT
             FOREIGN KEY(kundeId) REFERENCES kunden(id),
             FOREIGN KEY(projektId) REFERENCES projekte(id),
             FOREIGN KEY(parent_angebot_id) REFERENCES dokumente(id),
