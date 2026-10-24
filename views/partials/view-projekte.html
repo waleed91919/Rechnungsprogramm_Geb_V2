@@ -4,11 +4,18 @@
                 <div
                     class="flex items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
                     <h3 class="font-semibold text-slate-700 pl-2">Projektübersicht & Rentabilität</h3>
-                    <button onclick="openProjektModal()"
-                        class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow shadow-primary/30 transition-all">
-                        <span class="material-symbols-outlined text-[18px]">add</span>
-                        Neues Projekt
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button onclick="navigateTo('maengel')"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px] text-amber-600">assignment_late</span>
+                            Mängelkataster &amp; VOB-Rügen
+                        </button>
+                        <button onclick="openProjektModal()"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow shadow-primary/30 transition-all">
+                            <span class="material-symbols-outlined text-[18px]">add</span>
+                            Neues Projekt
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Projects Grid -->

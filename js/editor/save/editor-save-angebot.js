@@ -193,8 +193,6 @@ async function convertToAuftrag(angId) {
             unterliegt_13b: ang.unterliegt_13b || 0,
             leitweg_id: ang.leitweg_id || null,
             buyer_reference: ang.buyer_reference || null,
-            objekt_typ: ang.objekt_typ || null,
-            objekt_id: ang.objekt_id || null,
             skonto_tage: ang.skonto_tage || 0,
             skonto_prozent: ang.skonto_prozent || 0,
             zahlbetrag: ang.zahlbetrag || ang.brutto,
@@ -278,8 +276,6 @@ async function convertToLieferschein(angId) {
             unterliegt_13b: ang.unterliegt_13b || 0,
             leitweg_id: ang.leitweg_id || null,
             buyer_reference: ang.buyer_reference || null,
-            objekt_typ: ang.objekt_typ || null,
-            objekt_id: ang.objekt_id || null,
             skonto_tage: ang.skonto_tage || 0,
             skonto_prozent: ang.skonto_prozent || 0,
             parent_angebot_id: angId, // Optional: Herkunft referenzieren
@@ -410,8 +406,6 @@ function collectAngebotFormData() {
 
     const kundeId = document.getElementById('rechnung-kunde')?.value || '';
     const projektId = document.getElementById('rechnung-projekt')?.value || '';
-    const objektWert = document.getElementById('rechnung-objekt')?.value || '';
-    const [objektTyp, objektIdStr] = objektWert ? objektWert.split(':') : [null, null];
     const rawDatum = document.getElementById('rechnung-datum')?.value || '';
     const rawFaellig = document.getElementById('rechnung-faellig')?.value || '';
     const datum = typeof formatDateISO === 'function' ? (formatDateISO(rawDatum) || formatDateISO(new Date())) : rawDatum;
@@ -490,8 +484,6 @@ function collectAngebotFormData() {
         faellig,
         kundeId: kundeId ? parseInt(kundeId, 10) : null,
         projektId: projektId ? parseInt(projektId, 10) : null,
-        objekt_typ: objektTyp || null,
-        objekt_id: objektIdStr ? parseInt(objektIdStr, 10) : null,
         positionen: positions,
         netto: totals.netto,
         steuer: totals.steuer,

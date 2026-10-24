@@ -5,11 +5,9 @@
 const core_schema = require('./core_schema');
 const articles_schema = require('./articles_schema');
 const customers_schema = require('./customers_schema');
-const objects_schema = require('./objects_schema');
 const projects_schema = require('./projects_schema');
 const documents_schema = require('./documents_schema');
 const banking_schema = require('./banking_schema');
-const recurring_schema = require('./recurring_schema');
 const measurement_schema = require('./measurement_schema');
 const construction_schema = require('./construction_schema');
 const workforce_schema = require('./workforce_schema');
@@ -21,13 +19,11 @@ function createSchema(db) {
     core_schema.createSchema(db);
     articles_schema.createSchema(db);
     customers_schema.createSchema(db);
-    objects_schema.createSchema(db);
 
     // Tier 2: Belege & Projekte
     documents_schema.createSchema(db);
     projects_schema.createSchema(db);
     banking_schema.createSchema(db);
-    recurring_schema.createSchema(db);
 
     // Tier 3: Baustelle & Aufmass
     measurement_schema.createSchema(db);
@@ -54,50 +50,6 @@ function createSchema(db) {
     } catch (e) {
         console.error('[DB Schema] Index idx_projekte_unique_source_angebot:', e.message);
     }
-
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_liegenschaften_kunde ON liegenschaften(empfaenger_kunde_id)`); } catch (e) { console.error('[DB Schema] Index idx_liegenschaften_kunde:', e.message); }
-
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_gebaeude_liegenschaft ON gebaeude(liegenschaft_id)`); } catch (e) { console.error('[DB Schema] Index idx_gebaeude_liegenschaft:', e.message); }
-
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_gebaeude_kunde ON gebaeude(empfaenger_kunde_id)`); } catch (e) { console.error('[DB Schema] Index idx_gebaeude_kunde:', e.message); }
-
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_etagen_gebaeude ON etagen(gebaeude_id)`); } catch (e) { console.error('[DB Schema] Index idx_etagen_gebaeude:', e.message); }
-
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_etagen_kunde ON etagen(empfaenger_kunde_id)`); } catch (e) { console.error('[DB Schema] Index idx_etagen_kunde:', e.message); }
-
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_raeume_etage ON raeume(etage_id)`); } catch (e) { console.error('[DB Schema] Index idx_raeume_etage:', e.message); }
-
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_raeume_kunde ON raeume(empfaenger_kunde_id)`); } catch (e) { console.error('[DB Schema] Index idx_raeume_kunde:', e.message); }
-
-    try { db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_abrechnungsplaene_objekt_name ON abrechnungsplaene(objekt_typ, objekt_id, name)`); } catch (e) { console.error('[DB Schema] Index idx_abrechnungsplaene_objekt_name:', e.message); }
-
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_abrechnungsplaene_empfaenger ON abrechnungsplaene(empfaenger_kunde_id)`); } catch (e) { console.error('[DB Schema] Index idx_abrechnungsplaene_empfaenger:', e.message); }
-
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_abrechnungsplaene_faellig ON abrechnungsplaene(aktiv, naechste_lauf_am)`); } catch (e) { console.error('[DB Schema] Index idx_abrechnungsplaene_faellig:', e.message); }
-
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_plan_positionen_plan ON abrechnungsplan_positionen(plan_id)`); } catch (e) { console.error('[DB Schema] Index idx_plan_positionen_plan:', e.message); }
-
-    try {
-        db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_laeufe_plan_periode_unique
-            ON dauerrechnung_laeufe(plan_id, periode_von, periode_bis)
-            WHERE status = 'ERSTELLT'`);
-    } catch (e) { console.error('[DB Schema] Index idx_laeufe_plan_periode_unique:', e.message); }
-
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_laeufe_dokument ON dauerrechnung_laeufe(dokument_id)`); } catch (e) { console.error('[DB Schema] Index idx_laeufe_dokument:', e.message); }
-
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_laeufe_plan ON dauerrechnung_laeufe(plan_id)`); } catch (e) { console.error('[DB Schema] Index idx_laeufe_plan:', e.message); }
-
-    try { db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_lv_bereiche_objekt_name ON lv_bereiche(objekt_typ, objekt_id, name)`); } catch (e) { console.error('[DB Schema] Index idx_lv_bereiche_objekt_name:', e.message); }
-
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_lv_bereiche_objekt ON lv_bereiche(objekt_typ, objekt_id)`); } catch (e) { console.error('[DB Schema] Index idx_lv_bereiche_objekt:', e.message); }
-
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_lv_positionen_bereich ON lv_positionen(bereich_id)`); } catch (e) { console.error('[DB Schema] Index idx_lv_positionen_bereich:', e.message); }
-
-    try { db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_putzplan_eintraege_unique ON putzplan_eintraege(position_id, objekt_typ, objekt_id)`); } catch (e) { console.error('[DB Schema] Index idx_putzplan_eintraege_unique:', e.message); }
-
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_putzplan_eintraege_objekt ON putzplan_eintraege(objekt_typ, objekt_id)`); } catch (e) { console.error('[DB Schema] Index idx_putzplan_eintraege_objekt:', e.message); }
-
-    try { db.exec(`CREATE INDEX IF NOT EXISTS idx_putzplan_eintraege_pos ON putzplan_eintraege(position_id)`); } catch (e) { console.error('[DB Schema] Index idx_putzplan_eintraege_pos:', e.message); }
 
     try { db.exec(`CREATE INDEX IF NOT EXISTS idx_email_historie_beleg ON email_versandhistorie(beleg_typ, beleg_id)`); } catch (e) { console.error('[DB Schema] Index idx_email_historie_beleg:', e.message); }
 
@@ -560,6 +512,7 @@ function runMigrations(db) {
         )`);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_projekt_positionen_projekt_id ON projekt_positionen(projekt_id)`);
         db.exec(`CREATE INDEX IF NOT EXISTS idx_projekt_positionen_source_pos ON projekt_positionen(source_angebot_pos_id)`);
+        construction_schema.createSchema(db);
         // J13: Nachtrag→LV-Stamm (Idempotenz-Key N:{nachtrag_id}:POS:{pos_id})
         try { db.exec(`ALTER TABLE projekt_positionen ADD COLUMN nachtrag_id INTEGER REFERENCES nachtraege(id) ON DELETE SET NULL`); } catch (e) { if (!e.message.includes('duplicate column')) { throw e; } }
         try { db.exec(`ALTER TABLE projekt_positionen ADD COLUMN nachtrag_pos_id INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) { throw e; } }
@@ -684,7 +637,6 @@ function runMigrations(db) {
     // erlaubte Werte (Anwenderebene): 'LIEGENSCHAFT' | 'GEBAEUDE' | 'ETAGE' | 'RAUM'; NULL = kein Objektbezug (Altbestand!)
     try { db.exec(`ALTER TABLE dokumente ADD COLUMN objekt_typ TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
     try { db.exec(`ALTER TABLE dokumente ADD COLUMN objekt_id INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
-    try { db.exec(`ALTER TABLE raeume ADD COLUMN bodenbelag TEXT`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
     try {
         db.exec(`CREATE INDEX IF NOT EXISTS idx_dokumente_objekt ON dokumente(objekt_typ, objekt_id)`);
     } catch (e) {
@@ -695,9 +647,6 @@ function runMigrations(db) {
     } catch (e) {
         if (!e.message.includes('already exists')) console.warn('[DB Migration Warning] idx_dokumente_type_nr:', e.message);
     }
-
-    // --- Migration Putzplan/Reinigungs-LV F3: Plan-Position ↔ LV-Position (kein FK-Enforcement, polymorpher Projektstil) ---
-    try { db.exec(`ALTER TABLE abrechnungsplan_positionen ADD COLUMN lv_position_id INTEGER`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
 
     // --- Banking, OPOS & SEPA (F11) ---
     try { db.exec(`ALTER TABLE dokumente ADD COLUMN skonto_tage INTEGER DEFAULT 0`); } catch (e) { if (!e.message.includes('duplicate column')) { console.warn('[DB Migration Warning]:', e.message); } }
@@ -1001,9 +950,9 @@ function runMigrations(db) {
             uuid TEXT NOT NULL UNIQUE,
             mitarbeiter_id INTEGER NOT NULL REFERENCES mitarbeiter(id) ON DELETE RESTRICT,
             projekt_id INTEGER REFERENCES projekte(id) ON DELETE SET NULL,
-            liegenschaft_id INTEGER REFERENCES liegenschaften(id) ON DELETE SET NULL,
-            gebaeude_id INTEGER REFERENCES gebaeude(id) ON DELETE SET NULL,
-            raum_id INTEGER REFERENCES raeume(id) ON DELETE SET NULL,
+            liegenschaft_id INTEGER,
+            gebaeude_id INTEGER,
+            raum_id INTEGER,
             taetigkeit_typ TEXT NOT NULL DEFAULT 'PRODUKTIV' CHECK(taetigkeit_typ IN (
                 'PRODUKTIV', 'RUESTZEIT', 'WEGEZEIT_FAHRER', 'WEGEZEIT_MITFAHRER', 'SCHLECHTWEWETTER', 'BEREITSCHAFT', 'REINIGUNG'
             )),
@@ -1545,13 +1494,6 @@ function ensureUniqueConstraints(db) {
         console.error('[DB Migration] UNIQUE-Index auf security_retentions(invoice_id) konnte nicht erstellt werden:', e.message);
     }
 
-    try {
-        db.exec(`ALTER TABLE abrechnungsplaene ADD COLUMN preise_live INTEGER DEFAULT 0`);
-    } catch (e) {
-        if (!e.message.includes('duplicate column')) {
-            console.warn('[DB Migration Warning]:', e.message);
-        }
-    }
 }
 
 /**

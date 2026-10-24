@@ -108,7 +108,6 @@ function createSchema(db) {
             status TEXT NOT NULL DEFAULT 'EINGEREICHT' CHECK(status IN ('EINGEREICHT', 'EINGELOEST', 'RUECKLASTSCHRIFT', 'STORNIERT')),
             FOREIGN KEY (lauf_id) REFERENCES sepa_lastschrift_laeufe(id) ON DELETE CASCADE,
             FOREIGN KEY (dokument_id) REFERENCES dokumente(id) ON DELETE SET NULL,
-            FOREIGN KEY (dauerrechnung_lauf_id) REFERENCES dauerrechnung_laeufe(id) ON DELETE SET NULL,
             FOREIGN KEY (mandat_id) REFERENCES kunden_sepa_mandate(id)
         )`);
 

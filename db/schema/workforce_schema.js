@@ -25,9 +25,9 @@ function createSchema(db) {
             uuid TEXT NOT NULL UNIQUE,
             mitarbeiter_id INTEGER NOT NULL REFERENCES mitarbeiter(id) ON DELETE RESTRICT,
             projekt_id INTEGER REFERENCES projekte(id) ON DELETE SET NULL,
-            liegenschaft_id INTEGER REFERENCES liegenschaften(id) ON DELETE SET NULL,
-            gebaeude_id INTEGER REFERENCES gebaeude(id) ON DELETE SET NULL,
-            raum_id INTEGER REFERENCES raeume(id) ON DELETE SET NULL,
+            liegenschaft_id INTEGER,
+            gebaeude_id INTEGER,
+            raum_id INTEGER,
             taetigkeit_typ TEXT NOT NULL DEFAULT 'PRODUKTIV' CHECK(taetigkeit_typ IN (
                 'PRODUKTIV', 'RUESTZEIT', 'WEGEZEIT_FAHRER', 'WEGEZEIT_MITFAHRER', 'SCHLECHTWEWETTER', 'BEREITSCHAFT', 'REINIGUNG'
             )),

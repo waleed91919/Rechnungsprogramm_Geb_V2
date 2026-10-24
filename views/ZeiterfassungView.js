@@ -22,6 +22,18 @@ class ZeiterfassungView {
 
     async render() {
         return `
+            <!-- Übergeordnete Tab-Leiste: Stunden & Compliance -->
+            <div class="flex border-b border-slate-200 bg-white rounded-lg px-4 pt-2 gap-2 shadow-sm mb-6">
+                <button type="button" class="flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 border-primary text-primary transition-all">
+                    <span>⏱️</span>
+                    <span>Stundenerfassung (ArbZG / MiLoG)</span>
+                </button>
+                <button type="button" onclick="navigateTo('sokabau')" class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all cursor-pointer">
+                    <span>🏛️</span>
+                    <span>SOKA-BAU &amp; Nachunternehmer (§ 48b EStG)</span>
+                </button>
+            </div>
+
             <div class="view-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <div>
                     <h1 style="font-size: 24px; font-weight: bold; color: var(--text-color, #1e293b);">

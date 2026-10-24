@@ -50,19 +50,13 @@ async getFullState() {
         state.aufmasse = aufmassRows;
 
         state.objekte = {
-            liegenschaften: await dbQuery('SELECT * FROM liegenschaften ORDER BY name ASC'),
-            gebaeude: await dbQuery('SELECT * FROM gebaeude ORDER BY name ASC'),
-            etagen: await dbQuery('SELECT * FROM etagen ORDER BY COALESCE(ebene_nummer, 999), name ASC'),
-            raeume: await dbQuery('SELECT * FROM raeume ORDER BY name ASC')
+            liegenschaften: [],
+            gebaeude: [],
+            etagen: [],
+            raeume: []
         };
-
-        const plaene = await dbQuery('SELECT * FROM abrechnungsplaene ORDER BY name ASC');
-        const planPosRows = await dbQuery('SELECT * FROM abrechnungsplan_positionen ORDER BY sortier_index ASC');
-        plaene.forEach(p => {
-            p.positionen = planPosRows.filter(pos => pos.plan_id === p.id);
-        });
-        state.abrechnungsplaene = plaene;
-        state.dauerrechnungLaeufe = await dbQuery('SELECT * FROM dauerrechnung_laeufe ORDER BY rechnungs_datum DESC');
+        state.abrechnungsplaene = [];
+        state.dauerrechnungLaeufe = [];
 
         return state;
     },

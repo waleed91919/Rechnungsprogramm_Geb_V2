@@ -333,7 +333,6 @@ function populateSelects() {
     const kSelect = document.getElementById('rechnung-kunde');
     const pKundeSelect = document.getElementById('projekt-kunde');
     const rProjSelect = document.getElementById('rechnung-projekt');
-    const rObjektSelect = document.getElementById('rechnung-objekt');
 
     kSelect.innerHTML = '';
     const optDefaultK = document.createElement('option');
@@ -376,32 +375,6 @@ function populateSelects() {
             opt.textContent = p.name;
             rProjSelect.appendChild(opt);
         });
-    }
-
-    if (rObjektSelect) {
-        rObjektSelect.innerHTML = '';
-        const optDefaultO = document.createElement('option');
-        optDefaultO.value = '';
-        optDefaultO.textContent = 'Kein Objekt';
-        rObjektSelect.appendChild(optDefaultO);
-
-        const OC = window.ObjektController;
-        if (OC && state.objekte) {
-            const eintraege = [
-                { typ: 'LIEGENSCHAFT', liste: state.objekte.liegenschaften || [] },
-                { typ: 'GEBAEUDE', liste: state.objekte.gebaeude || [] },
-                { typ: 'ETAGE', liste: state.objekte.etagen || [] },
-                { typ: 'RAUM', liste: state.objekte.raeume || [] }
-            ];
-            eintraege.forEach(({ typ, liste }) => {
-                liste.forEach(knoten => {
-                    const opt = document.createElement('option');
-                    opt.value = `${typ}:${knoten.id}`;
-                    opt.textContent = OC.buildPfad(typ, knoten.id, state.objekte);
-                    rObjektSelect.appendChild(opt);
-                });
-            });
-        }
     }
 
     // Populate datalist for article autocomplete

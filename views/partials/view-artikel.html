@@ -1,6 +1,18 @@
 <div id="view-artikel" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden">
             <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
 
+                <!-- Navigation Tabs: Artikel / Großhandel -->
+                <div class="flex border-b border-slate-200 bg-white rounded-lg px-4 pt-2 gap-2 shadow-sm">
+                    <button type="button" class="flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 border-primary text-primary transition-all">
+                        <span class="material-symbols-outlined text-[18px]">inventory_2</span>
+                        Eigene Artikel &amp; Leistungen
+                    </button>
+                    <button type="button" onclick="navigateTo('grosshandel')" class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all cursor-pointer">
+                        <span class="material-symbols-outlined text-[18px]">storefront</span>
+                        Großhandel (IDS-Connect) &amp; DATANORM
+                    </button>
+                </div>
+
                 <!-- KPI Cards Row -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div

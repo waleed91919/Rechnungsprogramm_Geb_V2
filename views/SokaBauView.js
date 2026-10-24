@@ -65,6 +65,17 @@ window.SokaBauView = class SokaBauView {
 
         return `
             <div class="max-w-[1600px] mx-auto flex flex-col gap-6 p-6">
+                <!-- Übergeordnete Tab-Leiste: Stunden & Compliance -->
+                <div class="flex border-b border-slate-200 bg-white rounded-lg px-4 pt-2 gap-2 shadow-sm">
+                    <button type="button" onclick="navigateTo('zeiterfassung')" class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all cursor-pointer">
+                        <span>⏱️</span>
+                        <span>Stundenerfassung (ArbZG / MiLoG)</span>
+                    </button>
+                    <button type="button" class="flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 border-primary text-primary transition-all">
+                        <span>🏛️</span>
+                        <span>SOKA-BAU &amp; Nachunternehmer (§ 48b EStG)</span>
+                    </button>
+                </div>
                 <!-- Header Card -->
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                     <div class="flex items-center gap-4">

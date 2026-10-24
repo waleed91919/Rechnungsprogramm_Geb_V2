@@ -94,19 +94,6 @@ function applyRechnungReadOnlyMode(existing, form, submitBtn) {
 
 window.applyRechnungReadOnlyMode = applyRechnungReadOnlyMode;
 
-function setzeRechnungObjektSelect(existing) {
-  const objektSel = document.getElementById('rechnung-objekt');
-  if (!objektSel) return;
-  if (existing && existing.objekt_typ && existing.objekt_id) {
-    const wert = `${existing.objekt_typ}:${existing.objekt_id}`;
-    objektSel.value = objektSel.querySelector(`option[value="${wert}"]`) ? wert : '';
-  } else {
-    objektSel.value = '';
-  }
-}
-
-window.setzeRechnungObjektSelect = setzeRechnungObjektSelect;
-
 function fuegeDauerrechnungsChipHinzu(existing) {
   if (!existing || typeof existing !== 'object') return;
   const istSammel = existing.rechnungsart === 'SAMMELRECHNUNG';
@@ -134,7 +121,6 @@ function applyRechnungEditMode(existing, form, submitBtn) {
   document.getElementById('rechnung-id').value = existing.id;
   document.getElementById('rechnung-kunde').value = existing.kundeId;
   document.getElementById('rechnung-projekt').value = existing.projektId || '';
-  setzeRechnungObjektSelect(existing);
   document.getElementById('rechnung-nr').value = existing.nr;
   document.getElementById('rechnung-datum').value = typeof formatDateISO === 'function' ? formatDateISO(existing.datum) : existing.datum;
   document.getElementById('rechnung-faellig').value = typeof formatDateISO === 'function' ? formatDateISO(existing.faellig) : existing.faellig;
@@ -634,7 +620,6 @@ function applyAngebotEditMode(existing, form, submitBtn) {
   document.getElementById('rechnung-id').value = existing.id;
   document.getElementById('rechnung-kunde').value = existing.kundeId;
   document.getElementById('rechnung-projekt').value = existing.projektId || '';
-  setzeRechnungObjektSelect(existing);
   document.getElementById('rechnung-nr').value = existing.nr;
   document.getElementById('rechnung-datum').value = typeof formatDateISO === 'function' ? formatDateISO(existing.datum) : existing.datum;
   document.getElementById('rechnung-faellig').value = typeof formatDateISO === 'function' ? formatDateISO(existing.faellig) : existing.faellig;

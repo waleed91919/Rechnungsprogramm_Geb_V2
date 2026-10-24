@@ -53,6 +53,18 @@ const VIEW_TEMPLATES = {
     "view-artikel": `<div id="view-artikel" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden">
             <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
 
+                <!-- Navigation Tabs: Artikel / Großhandel -->
+                <div class="flex border-b border-slate-200 bg-white rounded-lg px-4 pt-2 gap-2 shadow-sm">
+                    <button type="button" class="flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 border-primary text-primary transition-all">
+                        <span class="material-symbols-outlined text-[18px]">inventory_2</span>
+                        Eigene Artikel &amp; Leistungen
+                    </button>
+                    <button type="button" onclick="navigateTo('grosshandel')" class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all cursor-pointer">
+                        <span class="material-symbols-outlined text-[18px]">storefront</span>
+                        Großhandel (IDS-Connect) &amp; DATANORM
+                    </button>
+                </div>
+
                 <!-- KPI Cards Row -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div
@@ -805,150 +817,6 @@ const VIEW_TEMPLATES = {
                 </div>
             </div>
         </div>`,
-    "view-dauerrechnungen": `<div id="view-dauerrechnungen" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
-            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
-
-                <!-- KPI Cards Row -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div
-                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
-                        <div class="flex justify-between items-start z-10">
-                            <div>
-                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Aktive Pläne</p>
-                                <h3 id="kpi-plaene-aktiv" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
-                            </div>
-                        </div>
-                        <div
-                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
-                            <span class="material-symbols-outlined text-[100px]">event_repeat</span>
-                        </div>
-                    </div>
-                    <div
-                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
-                        <div class="flex justify-between items-start z-10">
-                            <div>
-                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fällige Läufe (diesen Monat)</p>
-                                <h3 id="kpi-faellig-monat" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
-                            </div>
-                        </div>
-                        <div
-                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
-                            <span class="material-symbols-outlined text-[100px]">schedule_send</span>
-                        </div>
-                    </div>
-                    <div
-                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
-                        <div class="flex justify-between items-start z-10">
-                            <div>
-                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Dauerrechnungs-Umsatz (Monat netto)</p>
-                                <h3 id="kpi-umsatz-dauerrechnungen" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
-                            </div>
-                        </div>
-                        <div
-                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
-                            <span class="material-symbols-outlined text-[100px]">euro</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Toolbar -->
-                <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
-                    <div class="flex items-center gap-2">
-                        <div class="relative">
-                            <span
-                                class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
-                            <input id="search-plaene"
-                                class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-56 placeholder:text-slate-400"
-                                placeholder="Plan suchen..." type="text">
-                        </div>
-                        <select id="filter-plaene-status"
-                            class="px-3 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary">
-                            <option value="alle">Alle</option>
-                            <option value="aktiv">Aktiv</option>
-                            <option value="inaktiv">Inaktiv</option>
-                            <option value="faellig">Fällig</option>
-                        </select>
-                    </div>
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <label class="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer px-2">
-                            <input type="checkbox" id="dr-auto-erstellen" onchange="toggleDauerrechnungenAuto(this.checked)"
-                                class="rounded border-slate-300 text-primary focus:ring-primary h-4 w-4">
-                            Auto-Erstellung beim Start
-                        </label>
-                        <button onclick="openSammelModal()"
-                            class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
-                            <span class="material-symbols-outlined text-[18px]">receipt_long</span>
-                            Sammelrechnung erstellen
-                        </button>
-                        <button onclick="openGenerierungModal()"
-                            class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
-                            <span class="material-symbols-outlined text-[18px]">play_arrow</span>
-                            Fällige generieren
-                        </button>
-                        <button onclick="openPlanModal()"
-                            class="flex items-center gap-2 px-4 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
-                            <span class="material-symbols-outlined text-[18px]">add</span>
-                            Neuer Plan
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Pläne-Tabelle -->
-                <div class="border border-slate-300 rounded-md bg-white shadow-sm overflow-hidden flex flex-col min-h-[300px]">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-sm dense-table">
-                            <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
-                                <tr>
-                                    <th class="px-4 font-semibold whitespace-nowrap">Name</th>
-                                    <th class="px-4 font-semibold whitespace-nowrap">Objekt</th>
-                                    <th class="px-4 font-semibold whitespace-nowrap">Empfänger</th>
-                                    <th class="px-4 font-semibold whitespace-nowrap">Rhythmus</th>
-                                    <th class="px-4 font-semibold whitespace-nowrap">Zeitraum</th>
-                                    <th class="px-4 font-semibold text-right whitespace-nowrap">Netto</th>
-                                    <th class="px-4 font-semibold whitespace-nowrap">Nächster Lauf</th>
-                                    <th class="px-4 font-semibold text-center whitespace-nowrap">Status</th>
-                                    <th class="px-4 font-semibold text-right w-64 whitespace-nowrap">Aktionen</th>
-                                </tr>
-                            </thead>
-                            <tbody id="plaene-table-body" class="divide-y divide-slate-200 text-slate-700 bg-white"></tbody>
-                        </table>
-                    </div>
-                    <div id="plaene-leer" class="hidden p-10 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
-                        <span class="material-symbols-outlined text-4xl text-slate-200">event_repeat</span>
-                        Noch keine Abrechnungspläne angelegt.
-                    </div>
-                </div>
-
-                <!-- Läufe-Panel -->
-                <div id="laeufe-panel" class="hidden bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
-                    <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-                        <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
-                            <span class="material-symbols-outlined text-[18px] text-primary">history</span>
-                            Läufe: <span id="laeufe-plan-name" class="font-bold"></span>
-                        </h3>
-                        <button onclick="closeLaeufePanel()" class="text-slate-400 hover:text-slate-600">
-                            <span class="material-symbols-outlined text-[20px]">close</span>
-                        </button>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-sm dense-table">
-                            <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
-                                <tr>
-                                    <th class="px-4 font-semibold whitespace-nowrap">Periode</th>
-                                    <th class="px-4 font-semibold whitespace-nowrap">Rechnungs-Nr.</th>
-                                    <th class="px-4 font-semibold whitespace-nowrap">Datum</th>
-                                    <th class="px-4 font-semibold whitespace-nowrap">Fällig</th>
-                                    <th class="px-4 font-semibold text-right whitespace-nowrap">Brutto</th>
-                                    <th class="px-4 font-semibold text-center whitespace-nowrap">Status</th>
-                                    <th class="px-4 font-semibold text-right w-28 whitespace-nowrap">Aktion</th>
-                                </tr>
-                            </thead>
-                            <tbody id="laeufe-table-body" class="divide-y divide-slate-200 text-slate-700 bg-white"></tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>`,
     "view-einstellungen": `<div id="view-einstellungen" class="flex-1 overflow-y-auto bg-slate-50/50 p-6 hidden">
             <div class="max-w-4xl mx-auto flex flex-col gap-6">
                 <!-- Header -->
@@ -1484,274 +1352,6 @@ const VIEW_TEMPLATES = {
         </div>`,
     "view-maengel": `<div id="view-maengel" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
             <!-- MaengelView dynamically renders here -->
-        </div>`,
-    "view-objekt-details": `<div id="view-objekt-details" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
-            <div class="max-w-[1200px] mx-auto flex flex-col gap-6">
-
-                <!-- Header Card -->
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
-                    <div class="relative z-10 flex items-start gap-4">
-                        <button onclick="closeObjektDetails()"
-                            class="mt-1 p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"
-                            title="Zurück zur Übersicht">
-                            <span class="material-symbols-outlined">arrow_back</span>
-                        </button>
-                        <div>
-                            <div class="flex items-center gap-3 mb-1">
-                                <h2 id="od-name" class="text-2xl font-bold text-slate-800 tracking-tight">Objekt</h2>
-                                <span id="od-typ"
-                                    class="inline-flex items-center px-2.5 py-0.5 rounded text-[11px] font-bold uppercase tracking-wider bg-slate-100 text-slate-800 border border-slate-200">Typ</span>
-                            </div>
-                            <p id="od-pfad" class="text-sm text-slate-500 font-medium"></p>
-                            <p id="od-empfaenger" class="text-sm text-slate-600 font-medium flex items-center gap-1.5 mt-1"></p>
-                        </div>
-                    </div>
-                    <div class="relative z-10 flex gap-2">
-                        <button id="od-edit-btn"
-                            class="flex items-center gap-2 px-4 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-slate-200">
-                            <span class="material-symbols-outlined text-[18px]">edit</span>
-                            Bearbeiten
-                        </button>
-                        <button id="od-neu-btn"
-                            class="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded-lg shadow-sm transition-all focus:ring-2 focus:ring-primary/20">
-                            <span class="material-symbols-outlined text-[18px]">add</span>
-                            Neu anlegen
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Tab Navigation -->
-                <div class="flex items-center gap-2 border-b border-slate-200 bg-white px-4 pt-3 rounded-xl shadow-sm overflow-x-auto">
-                    <button type="button" onclick="switchObjektTab('stammdaten')" id="od-tab-btn-stammdaten"
-                        class="od-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 border-primary text-primary transition-all">
-                        <span class="material-symbols-outlined text-[18px]">info</span>
-                        Stammdaten
-                    </button>
-                    <button type="button" onclick="switchObjektTab('struktur')" id="od-tab-btn-struktur"
-                        class="od-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
-                        <span class="material-symbols-outlined text-[18px]">account_tree</span>
-                        Struktur
-                    </button>
-                    <button type="button" onclick="switchObjektTab('historie')" id="od-tab-btn-historie"
-                        class="od-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
-                        <span class="material-symbols-outlined text-[18px]">history</span>
-                        Historie
-                    </button>
-                    <button type="button" onclick="switchObjektTab('abrechnungsplaene')" id="od-tab-btn-abrechnungsplaene"
-                        class="od-tab-btn flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all">
-                        <span class="material-symbols-outlined text-[18px]">event_repeat</span>
-                        Abrechnungspläne
-                    </button>
-                </div>
-
-                <!-- TAB 1: STAMMDATEN -->
-                <div id="od-panel-stammdaten" class="od-tab-panel flex flex-col gap-6">
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                <span class="material-symbols-outlined text-[16px]">info</span>
-                                Stammdaten
-                            </h3>
-                            <dl id="od-stammdaten" class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm"></dl>
-                        </div>
-                        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-center">
-                            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                <span class="material-symbols-outlined text-[16px]">analytics</span>
-                                Kennzahlen
-                            </h3>
-                            <div id="od-kennzahlen" class="grid grid-cols-2 gap-4"></div>
-                            <div id="od-notizen" class="mt-4 text-sm text-slate-600 whitespace-pre-wrap leading-relaxed bg-slate-50 p-4 rounded-lg border border-slate-100 italic hidden"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TAB 2: STRUKTUR -->
-                <div id="od-panel-struktur" class="od-tab-panel hidden flex-col gap-4">
-                    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
-                                <span class="material-symbols-outlined text-[18px] text-primary">account_tree</span>
-                                Unterobjekte
-                            </h3>
-                            <button type="button" onclick="odEbeneHinzufuegen()"
-                                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary bg-primary/10 rounded-md hover:bg-primary/20 transition-colors">
-                                <span class="material-symbols-outlined text-[16px]">add</span>
-                                Ebene hinzufügen
-                            </button>
-                        </div>
-                        <ul id="od-struktur-baum" class="text-sm space-y-1"></ul>
-                        <div id="od-struktur-leer" class="hidden p-8 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
-                            <span class="material-symbols-outlined text-4xl text-slate-200">account_tree</span>
-                            Keine Unterobjekte vorhanden.
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TAB 3: HISTORIE -->
-                <div id="od-panel-historie" class="od-tab-panel hidden flex-col gap-4">
-                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
-                        <div class="p-4 border-b border-slate-200 bg-slate-50 flex flex-wrap justify-between items-center gap-2">
-                            <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
-                                <span class="material-symbols-outlined text-[18px] text-primary">history</span>
-                                Beleg-Historie (inkl. Unterobjekte)
-                            </h3>
-                            <div class="flex items-center gap-1" id="od-hist-filter">
-                                <button type="button" data-filter="alle" onclick="setObjektHistorieFilter('alle')"
-                                    class="od-hist-chip px-3 py-1 text-xs font-semibold rounded-full bg-primary text-white">Alle</button>
-                                <button type="button" data-filter="RE" onclick="setObjektHistorieFilter('RE')"
-                                    class="od-hist-chip px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">Nur Rechnungen</button>
-                                <button type="button" data-filter="AN" onclick="setObjektHistorieFilter('AN')"
-                                    class="od-hist-chip px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">Nur Angebote</button>
-                                <button type="button" data-filter="DAUERRECHNUNG" onclick="setObjektHistorieFilter('DAUERRECHNUNG')"
-                                    class="od-hist-chip px-3 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200">Dauerrechnungs-Läufe</button>
-                            </div>
-                        </div>
-                        <div class="overflow-auto max-h-[480px]">
-                            <table class="w-full text-left text-sm dense-table">
-                                <thead class="bg-slate-100 text-slate-600 border-b border-slate-300 sticky top-0">
-                                    <tr>
-                                        <th class="px-4 font-semibold whitespace-nowrap">Nr.</th>
-                                        <th class="px-4 font-semibold whitespace-nowrap">Typ</th>
-                                        <th class="px-4 font-semibold whitespace-nowrap">Datum</th>
-                                        <th class="px-4 font-semibold whitespace-nowrap">Fällig</th>
-                                        <th class="px-4 font-semibold whitespace-nowrap">Status</th>
-                                        <th class="px-4 font-semibold text-right whitespace-nowrap">Netto</th>
-                                        <th class="px-4 font-semibold text-right whitespace-nowrap">Brutto</th>
-                                        <th class="px-4 font-semibold whitespace-nowrap">Kunde</th>
-                                        <th class="px-4 font-semibold text-right w-20 whitespace-nowrap">Aktion</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="od-historie-body" class="divide-y divide-slate-200 text-slate-700 bg-white"></tbody>
-                                <tfoot id="od-historie-summen" class="bg-slate-50 border-t border-slate-300 text-xs font-semibold text-slate-600"></tfoot>
-                            </table>
-                        </div>
-                        <div id="od-historie-leer" class="hidden p-10 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
-                            <span class="material-symbols-outlined text-4xl text-slate-200">history</span>
-                            Keine Belege vorhanden.
-                        </div>
-                    </div>
-                </div>
-
-                <!-- TAB 4: ABRECHNUNGSPLÄNE (Container, wird von F2 befüllt) -->
-                <div id="od-panel-abrechnungsplaene" class="od-tab-panel hidden flex-col gap-4">
-                    <div class="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
-                        <div class="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
-                            <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
-                                <span class="material-symbols-outlined text-[18px] text-primary">event_repeat</span>
-                                Abrechnungspläne für dieses Objekt
-                            </h3>
-                            <button type="button" onclick="odOpenPlanModal()"
-                                class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-primary bg-primary/10 rounded-md hover:bg-primary/20 transition-colors">
-                                <span class="material-symbols-outlined text-[16px]">add</span>
-                                Plan anlegen
-                            </button>
-                        </div>
-                        <div id="od-plaene-inhalt" class="p-6"></div>
-                    </div>
-                </div>
-            </div>
-        </div>`,
-    "view-objekte": `<div id="view-objekte" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
-            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
-
-                <!-- KPI Cards Row -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div
-                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
-                        <div class="flex justify-between items-start z-10">
-                            <div>
-                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Liegenschaften</p>
-                                <h3 id="kpi-anzahl-liegenschaften" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
-                            </div>
-                        </div>
-                        <div
-                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
-                            <span class="material-symbols-outlined text-[100px]">apartment</span>
-                        </div>
-                    </div>
-                    <div
-                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
-                        <div class="flex justify-between items-start z-10">
-                            <div>
-                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Gebäude</p>
-                                <h3 id="kpi-anzahl-gebaeude" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
-                            </div>
-                        </div>
-                        <div
-                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
-                            <span class="material-symbols-outlined text-[100px]">domain</span>
-                        </div>
-                    </div>
-                    <div
-                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
-                        <div class="flex justify-between items-start z-10">
-                            <div>
-                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Fläche gesamt (m²)</p>
-                                <h3 id="kpi-flaeche-gesamt" class="text-2xl font-bold text-slate-800 mt-1">0</h3>
-                            </div>
-                        </div>
-                        <div
-                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
-                            <span class="material-symbols-outlined text-[100px]">square_foot</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Toolbar -->
-                <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <div class="relative">
-                            <span
-                                class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
-                            <input id="search-objekte"
-                                class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-64 placeholder:text-slate-400"
-                                placeholder="Name, Nr., Ort, Raumtyp suchen..." type="text">
-                        </div>
-                        <select id="filter-objekte-status" onchange="renderObjekte()"
-                            class="px-3 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary text-slate-700">
-                            <option value="alle">Alle Status</option>
-                            <option value="aktiv" selected>Nur Aktive</option>
-                            <option value="inaktiv">Nur Inaktive</option>
-                        </select>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="exportObjekteCSV()" type="button"
-                            class="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-sm font-semibold rounded shadow-sm transition-all"
-                            title="Objektstruktur als CSV exportieren">
-                            <span class="material-symbols-outlined text-[18px] text-slate-600">download</span>
-                            Export CSV
-                        </button>
-                        <button onclick="openObjektModal('LIEGENSCHAFT')"
-                            class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
-                            <span class="material-symbols-outlined text-[18px]">add</span>
-                            Neue Liegenschaft
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Data Grid -->
-                <div class="border border-slate-300 rounded-md bg-white shadow-sm overflow-hidden flex flex-col min-h-[400px]">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-sm dense-table">
-                            <thead class="bg-slate-100 text-slate-600 border-b border-slate-300">
-                                <tr>
-                                    <th class="px-4 font-semibold whitespace-nowrap">Objekt-Nr.</th>
-                                    <th class="px-4 font-semibold whitespace-nowrap">Name</th>
-                                    <th class="px-4 font-semibold whitespace-nowrap">Typ</th>
-                                    <th class="px-4 font-semibold whitespace-nowrap">Ort</th>
-                                    <th class="px-4 font-semibold whitespace-nowrap">Rechnungsempfänger</th>
-                                    <th class="px-4 font-semibold text-right whitespace-nowrap">Fläche Σ</th>
-                                    <th class="px-4 font-semibold text-center whitespace-nowrap">Status</th>
-                                    <th class="px-4 font-semibold text-right w-56 whitespace-nowrap">Aktionen</th>
-                                </tr>
-                            </thead>
-                            <tbody id="objekte-table-body" class="divide-y divide-slate-200 text-slate-700 bg-white">
-                                <!-- JS populated -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
         </div>`,
     "view-projekt-details": `<div id="view-projekt-details" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
             <div class="max-w-[1200px] mx-auto flex flex-col gap-6">
@@ -2410,11 +2010,18 @@ const VIEW_TEMPLATES = {
                 <div
                     class="flex items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
                     <h3 class="font-semibold text-slate-700 pl-2">Projektübersicht & Rentabilität</h3>
-                    <button onclick="openProjektModal()"
-                        class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow shadow-primary/30 transition-all">
-                        <span class="material-symbols-outlined text-[18px]">add</span>
-                        Neues Projekt
-                    </button>
+                    <div class="flex items-center gap-2">
+                        <button onclick="navigateTo('maengel')"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
+                            <span class="material-symbols-outlined text-[18px] text-amber-600">assignment_late</span>
+                            Mängelkataster &amp; VOB-Rügen
+                        </button>
+                        <button onclick="openProjektModal()"
+                            class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-semibold rounded shadow shadow-primary/30 transition-all">
+                            <span class="material-symbols-outlined text-[18px]">add</span>
+                            Neues Projekt
+                        </button>
+                    </div>
                 </div>
 
                 <!-- Projects Grid -->
@@ -2423,118 +2030,8 @@ const VIEW_TEMPLATES = {
                     <!-- JS populated -->
                 </div>
             </div>
-        </div>`,
-    "view-putzplan": `<div id="view-putzplan" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
-            <div class="max-w-[1600px] mx-auto flex flex-col gap-6">
-
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div
-                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
-                        <div class="flex justify-between items-start z-10">
-                            <div>
-                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Jahresstunden</p>
-                                <h3 id="kpi-lv-stunden" class="text-2xl font-bold text-slate-800 mt-1">0 h</h3>
-                            </div>
-                        </div>
-                        <div
-                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
-                            <span class="material-symbols-outlined text-[100px]">schedule</span>
-                        </div>
-                    </div>
-                    <div
-                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
-                        <div class="flex justify-between items-start z-10">
-                            <div>
-                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Netto / Jahr (inkl. Zuschläge)</p>
-                                <h3 id="kpi-lv-netto-jahr" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
-                            </div>
-                        </div>
-                        <div
-                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
-                            <span class="material-symbols-outlined text-[100px]">payments</span>
-                        </div>
-                    </div>
-                    <div
-                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
-                        <div class="flex justify-between items-start z-10">
-                            <div>
-                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Netto / Monat</p>
-                                <h3 id="kpi-lv-netto-monat" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
-                            </div>
-                        </div>
-                        <div
-                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
-                            <span class="material-symbols-outlined text-[100px]">calendar_month</span>
-                        </div>
-                    </div>
-                    <div
-                        class="bg-white border border-slate-200 rounded-md shadow-sm p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-primary/30 transition-colors">
-                        <div class="flex justify-between items-start z-10">
-                            <div>
-                                <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Zuschläge / Jahr</p>
-                                <h3 id="kpi-lv-zuschlaege" class="text-2xl font-bold text-slate-800 mt-1">€0,00</h3>
-                            </div>
-                        </div>
-                        <div
-                            class="absolute -right-4 -bottom-4 text-slate-50 transform rotate-12 group-hover:text-slate-100 transition-colors">
-                            <span class="material-symbols-outlined text-[100px]">trending_up</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="flex flex-wrap items-center justify-between gap-3 bg-white p-2 rounded-md border border-slate-200 shadow-sm">
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <select id="putzplan-objekt-select"
-                            class="px-3 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary min-w-[280px]"
-                            onchange="onPutzplanSelectChange(this.value)"></select>
-                        <div class="relative">
-                            <span
-                                class="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
-                            <input id="search-lv"
-                                class="pl-9 pr-4 py-1.5 text-sm bg-slate-50 border border-slate-300 rounded-md focus:ring-1 focus:ring-primary focus:border-primary w-56 placeholder:text-slate-400"
-                                placeholder="LV suchen..." type="text" oninput="renderLvBereiche()">
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <button onclick="openZuschlagsprofilModal()"
-                            class="flex items-center gap-2 px-4 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
-                            <span class="material-symbols-outlined text-[18px]">percent</span>
-                            Zuschlagsprofil
-                        </button>
-                        <button onclick="openLvBereichModal()"
-                            class="flex items-center gap-2 px-4 py-1.5 bg-white hover:bg-slate-50 text-slate-700 text-sm font-semibold rounded shadow-sm border border-slate-300 transition-colors active:translate-y-px">
-                            <span class="material-symbols-outlined text-[18px]">add</span>
-                            Bereich
-                        </button>
-                        <button id="btn-lv-uebernehmen" onclick="uebernehmeLvInPlan()"
-                            disabled
-                            class="flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary-dark disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white text-sm font-semibold rounded shadow-md transition-colors active:translate-y-px">
-                            <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
-                            ➜ Abrechnungsplan erstellen/aktualisieren
-                        </button>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="lg:col-span-1 bg-white border border-slate-200 rounded-md shadow-sm overflow-hidden self-start">
-                        <div class="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-                            <h3 class="font-semibold text-slate-700 text-sm flex items-center gap-2">
-                                <span class="material-symbols-outlined text-[18px] text-primary">account_tree</span>
-                                Objektbaum
-                            </h3>
-                        </div>
-                        <div id="putzplan-baum" class="p-2 max-h-[520px] overflow-y-auto"></div>
-                    </div>
-                    <div class="lg:col-span-2 flex flex-col gap-4">
-                        <div id="lv-bereiche-liste" class="flex flex-col gap-4"></div>
-                        <div id="lv-leer" class="hidden p-10 text-center text-slate-400 text-sm flex flex-col items-center gap-2 bg-white border border-dashed border-slate-300 rounded-md">
-                            <span class="material-symbols-outlined text-4xl text-slate-200">cleaning_services</span>
-                            Kein Leistungsverzeichnis an diesem Objekt. Legen Sie einen Leistungsbereich an.
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>`,
+        </div>
+`,
     "view-rechnungen": `<div id="view-rechnungen" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6">
             <div class="max-w-[1600px] mx-auto flex flex-col gap-6 h-full">
                 <!-- Functional Area -->

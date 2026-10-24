@@ -36,6 +36,17 @@ window.GrosshandelView = class GrosshandelView {
 
         return `
             <div class="max-w-[1600px] mx-auto flex flex-col gap-6 p-6">
+                <!-- Navigation Tabs: Artikel / Großhandel -->
+                <div class="flex border-b border-slate-200 bg-white rounded-lg px-4 pt-2 gap-2 shadow-sm">
+                    <button type="button" onclick="navigateTo('artikel')" class="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition-all cursor-pointer">
+                        <span class="material-symbols-outlined text-[18px]">inventory_2</span>
+                        Eigene Artikel &amp; Leistungen
+                    </button>
+                    <button type="button" class="flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 border-primary text-primary transition-all">
+                        <span class="material-symbols-outlined text-[18px]">storefront</span>
+                        Großhandel (IDS-Connect) &amp; DATANORM
+                    </button>
+                </div>
                 <!-- Header / KPI Row -->
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                     <div class="flex items-center gap-4">

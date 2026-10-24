@@ -28,9 +28,6 @@ describe('Invoice Save Workflow & Validation (saveRechnung)', () => {
                 <select id="rechnung-projekt">
                     <option value="">Kein Projekt</option>
                 </select>
-                <select id="rechnung-objekt">
-                    <option value="">Kein Objekt</option>
-                </select>
                 <input id="rechnung-datum" value="2026-09-25" />
                 <input id="rechnung-faellig" value="2026-10-15" />
                 <input id="rechnung-status" value="Entwurf" />

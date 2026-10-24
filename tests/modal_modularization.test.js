@@ -15,7 +15,7 @@ test('=== Modal Modularization & Components Architecture Suite ===', async (t) =
 
         const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
         assert.ok(Array.isArray(manifest), 'manifest must be an array');
-        assert.strictEqual(manifest.length, 34, 'Must register 34 core modals extracted from code.html');
+        assert.strictEqual(manifest.length, 25, 'Must register 25 core modals extracted from code.html');
 
         manifest.forEach(item => {
             const filePath = path.join(modalsDir, item.file);
@@ -35,9 +35,7 @@ test('=== Modal Modularization & Components Architecture Suite ===', async (t) =
             'banking-modals.html',
             'aufmass-modals.html',
             'stammdaten-modals.html',
-            'lv-modals.html',
             'email-modals.html',
-            'dauerrechnung-modals.html',
             'system-modals.html'
         ];
         bundles.forEach(b => {
@@ -84,7 +82,6 @@ test('=== Modal Modularization & Components Architecture Suite ===', async (t) =
             'rechnung-modal',
             'artikel-modal',
             'kunde-modal',
-            'objekt-modal',
             'aufmass-modal',
             'aufmassblatt-modal',
             'nachtrag-modal',
@@ -93,7 +90,6 @@ test('=== Modal Modularization & Components Architecture Suite ===', async (t) =
             'bank-konto-modal',
             'sepa-prenot-modal',
             'mandat-modal',
-            'plan-modal',
             'email-modal',
             'pdf-preview-modal'
         ];
@@ -140,9 +136,17 @@ test('=== Modal Modularization & Components Architecture Suite ===', async (t) =
             curWin.eval(viewLoaderScript);
         }
 
+        const removedPatterns = [
+            'objekt', 'dauerrechnung', 'putzplan', 'reinigung', 'lv-', 'zuschlagsprofil',
+            'plan-', 'generierung-', 'sammel-', 'storno-lauf', 'nav-sync', 'view-sync',
+            'rechnung-objekt', 'od-', 'dr-', 'laeufe-', 'kpi-anzahl-', 'kpi-flaeche-',
+            'kpi-plaene-', 'kpi-faellig-monat', 'search-plaene', 'filter-plaene-',
+            'plaene-', 'search-lv', 'raumtyp-', 'bodenbelag-', 'zp-'
+        ];
+        const isRemoved = id => removedPatterns.some(p => id.includes(p));
         const missing = [];
         origIds.forEach(id => {
-            if (!curDoc.getElementById(id)) {
+            if (!isRemoved(id) && !curDoc.getElementById(id)) {
                 missing.push(id);
             }
         });

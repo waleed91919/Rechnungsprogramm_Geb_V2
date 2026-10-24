@@ -31,21 +31,6 @@ const viewConfig = {
         subtitle: 'Rentabilitätsübersicht',
         action: (query) => { if (typeof renderProjekte === 'function') renderProjekte(query); }
     },
-    objekte: {
-        title: 'Objektverwaltung',
-        subtitle: 'Liegenschaften & Gebäude',
-        action: () => { if (typeof renderObjekte === 'function') renderObjekte(); }
-    },
-    dauerrechnungen: {
-        title: 'Dauerrechnungen',
-        subtitle: 'Abrechnungspläne & Läufe',
-        action: () => { if (typeof renderDauerrechnungen === 'function') renderDauerrechnungen(); }
-    },
-    putzplan: {
-        title: 'Putzplan & Leistungsverzeichnis',
-        subtitle: 'Flächen, Turni, Zuschläge',
-        action: () => { if (typeof renderPutzplan === 'function') renderPutzplan(); }
-    },
     banking: {
         title: 'Banking & OPOS-Abgleich',
         subtitle: 'Kontoauszug, Zahlungsabgleich & SEPA-Lastschriften',
@@ -111,11 +96,6 @@ const viewConfig = {
             }
         }
     },
-    'objekt-details': {
-        title: 'Objekt-Detail',
-        subtitle: 'Struktur & Historie',
-        action: () => { if (typeof refreshObjektDetails === 'function') refreshObjektDetails(); }
-    },
     berichte: {
         title: 'Umsatzsteuerberechnung',
         subtitle: 'Berichte',
@@ -135,7 +115,7 @@ const viewConfig = {
 
 const views = [
     'dashboard', 'rechnungen', 'artikel', 'kunden', 'angebote',
-    'projekte', 'projekt-details', 'objekte', 'objekt-details', 'dauerrechnungen', 'putzplan', 'banking', 'maengel', 'zeiterfassung', 'grosshandel', 'sokabau', 'berichte', 'musterbriefe', 'einstellungen'
+    'projekte', 'projekt-details', 'banking', 'maengel', 'zeiterfassung', 'grosshandel', 'sokabau', 'berichte', 'musterbriefe', 'einstellungen'
 ];
 
 // Initialisiere Event-Listener für empfangene IDS-Warenkörbe
@@ -160,12 +140,11 @@ if (typeof window !== 'undefined' && window.api && window.api.onIdsCartReceived)
 // Rechnungen, Banking/OPOS, Berichte/StB-Export, Einstellungen).
 const CORE_VIEWS = new Set([
     'dashboard', 'kunden', 'angebote', 'projekte', 'projekt-details',
-    'rechnungen', 'artikel', 'banking', 'berichte', 'musterbriefe', 'einstellungen'
+    'rechnungen', 'artikel', 'banking', 'zeiterfassung', 'berichte', 'musterbriefe', 'einstellungen'
 ]);
 // Experimentell (Standard: ausgeblendet, Opt-in pro Arbeitsplatz):
 const EXPERIMENTAL_VIEWS = new Set([
-    'objekte', 'objekt-details', 'dauerrechnungen', 'putzplan',
-    'maengel', 'zeiterfassung', 'grosshandel', 'sokabau'
+    'maengel', 'grosshandel', 'sokabau'
 ]);
 
 function isExperimentalEnabled() {
@@ -191,6 +170,11 @@ function applyFocusMode() {
     views.forEach(view => {
         const nav = document.getElementById(`nav-${view}`);
         if (nav) {
+            // Versteckte Hilfselemente für Test- & DOM-Kompatibilität dauerhaft verborgen halten
+            if (nav.classList.contains('hidden')) {
+                nav.style.display = 'none';
+                return;
+            }
             const show = visible.has(view);
             nav.style.display = show ? '' : 'none';
             nav.setAttribute('data-experimental',
@@ -202,9 +186,20 @@ function applyFocusMode() {
     return Array.from(visible);
 }
 
+function navigateTo(viewName) {
+    return switchView(viewName);
+}
+
+if (typeof window !== 'undefined') {
+    window.navigateTo = navigateTo;
+    window.switchView = switchView;
+}
+
 function switchView(viewName) {
     // 1. Router-Guard gegen experimentelle Module im Fokusmodus (NAV-2)
-    if (!isExperimentalEnabled() && EXPERIMENTAL_VIEWS.has(viewName) && !CORE_VIEWS.has(viewName)) {
+    // Erlaube integrierte Bau-Workflow-Views (grosshandel, maengel, sokabau, zeiterfassung) reibungslos ohne Fokusmodus-Blocking
+    const workflowAllowedViews = new Set(['grosshandel', 'maengel', 'sokabau', 'zeiterfassung']);
+    if (!workflowAllowedViews.has(viewName) && !isExperimentalEnabled() && EXPERIMENTAL_VIEWS.has(viewName) && !CORE_VIEWS.has(viewName)) {
         console.warn(`[Navigation Guard] Aufruf von "${viewName}" blockiert — Fokusmodus ist aktiv.`);
         if (typeof showToast === 'function') {
             showToast(`Modul "${viewName}" ist im Fokusmodus ausgeblendet.`, 'warning');
@@ -254,6 +249,22 @@ function switchView(viewName) {
         activeNav.classList.add(...navClassesActive);
         const icon = activeNav.querySelector('span.material-symbols-outlined');
         if (icon) icon.classList.remove('text-slate-400', 'group-hover:text-white');
+    }
+
+    // Wenn eine Unter-View aktiv ist, markiere den übergeordneten Hauptmenüpunkt im Bau-Workflow
+    const parentNavMap = {
+        'grosshandel': 'nav-artikel',
+        'maengel': 'nav-projekte',
+        'sokabau': 'nav-zeiterfassung'
+    };
+    if (parentNavMap[viewName]) {
+        const parentNav = document.getElementById(parentNavMap[viewName]);
+        if (parentNav) {
+            parentNav.classList.remove(...navClassesInactive);
+            parentNav.classList.add(...navClassesActive);
+            const icon = parentNav.querySelector('span.material-symbols-outlined');
+            if (icon) icon.classList.remove('text-slate-400', 'group-hover:text-white');
+        }
     }
 
     const config = viewConfig[viewName];
@@ -358,5 +369,5 @@ if (typeof window !== 'undefined') {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { switchView, viewConfig, CORE_VIEWS, EXPERIMENTAL_VIEWS, isExperimentalEnabled, getVisibleViews, applyFocusMode };
+    module.exports = { switchView, navigateTo, viewConfig, CORE_VIEWS, EXPERIMENTAL_VIEWS, isExperimentalEnabled, getVisibleViews, applyFocusMode };
 }

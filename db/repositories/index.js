@@ -6,8 +6,6 @@ const createDocumentRepo = require('./document_repo');
 const createKundenArtikelRepo = require('./kunden_artikel_repo');
 const createAufmassRepo = require('./aufmass_repo');
 const createControllingBautagebuchRepo = require('./controlling_bautagebuch_repo');
-const createObjektReinigungRepo = require('./objekt_reinigung_repo');
-const createDauerrechnungRepo = require('./dauerrechnung_repo');
 const createBankingRepo = require('./banking_repo');
 const createEfbRepo = require('./efb_repo');
 const createBackupRepo = require('./backup_repo');
@@ -42,22 +40,6 @@ function initRepositories(deps) {
 
     const controllingBautagebuchRepo = createControllingBautagebuchRepo({
         db, dbQuery, dbRun, appendAuditLog, auditLogger, getEinstellung, dbAPI
-    });
-
-    const objektReinigungRepo = createObjektReinigungRepo({
-        db, dbQuery, dbRun, appendAuditLog, dbAPI
-    });
-
-    const dauerrechnungRepo = createDauerrechnungRepo({
-        db, dbQuery, dbRun, appendAuditLog, dbAPI,
-        applyDocumentWrite: documentRepo.applyDocumentWrite,
-        getDocumentWithChildren: documentRepo.getDocumentWithChildren,
-        baueObjektPfad: objektReinigungRepo.baueObjektPfad,
-        loeseObjektEmpfaengerAuf: objektReinigungRepo.loeseObjektEmpfaengerAuf,
-        ladeObjekteState: objektReinigungRepo.ladeObjekteState,
-        leseZuschlagsProfil: objektReinigungRepo.leseZuschlagsProfil,
-        kalkuliereLvPosition: objektReinigungRepo.kalkuliereLvPosition,
-        OBJEKT_EBENEN: objektReinigungRepo.OBJEKT_EBENEN
     });
 
     const bankingRepo = createBankingRepo({
@@ -112,8 +94,6 @@ function initRepositories(deps) {
         kundenArtikelRepo,
         documentRepo,
         controllingBautagebuchRepo,
-        objektReinigungRepo,
-        dauerrechnungRepo,
         backupRepo,
         bankingRepo,
         efbRepo,
@@ -132,8 +112,6 @@ function initRepositories(deps) {
             kundenArtikelRepo,
             aufmassRepo,
             controllingBautagebuchRepo,
-            objektReinigungRepo,
-            dauerrechnungRepo,
             bankingRepo,
             efbRepo,
             backupRepo,
@@ -155,8 +133,6 @@ module.exports = {
     createKundenArtikelRepo,
     createAufmassRepo,
     createControllingBautagebuchRepo,
-    createObjektReinigungRepo,
-    createDauerrechnungRepo,
     createBankingRepo,
     createEfbRepo,
     createBackupRepo,

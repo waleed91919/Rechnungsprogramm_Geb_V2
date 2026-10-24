@@ -13,7 +13,6 @@ if (typeof handleKundeSelect !== 'undefined') window.handleKundeSelect = handleK
 if (typeof handleRechtlicheCheckboxes !== 'undefined') window.handleRechtlicheCheckboxes = handleRechtlicheCheckboxes;
 if (typeof initRechnungDateHandlers !== 'undefined') window.initRechnungDateHandlers = initRechnungDateHandlers;
 if (typeof applyRechnungReadOnlyMode !== 'undefined') window.applyRechnungReadOnlyMode = applyRechnungReadOnlyMode;
-if (typeof setzeRechnungObjektSelect !== 'undefined') window.setzeRechnungObjektSelect = setzeRechnungObjektSelect;
 if (typeof fuegeDauerrechnungsChipHinzu !== 'undefined') window.fuegeDauerrechnungsChipHinzu = fuegeDauerrechnungsChipHinzu;
 if (typeof applyRechnungEditMode !== 'undefined') window.applyRechnungEditMode = applyRechnungEditMode;
 if (typeof applyRechnungNewMode !== 'undefined') window.applyRechnungNewMode = applyRechnungNewMode;

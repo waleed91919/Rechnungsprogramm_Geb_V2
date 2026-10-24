@@ -822,7 +822,7 @@ getDokumente: async () => await dbQuery('SELECT * FROM dokumente WHERE COALESCE(
         return auditLogger.verifiziereAuditKette();
     },
 
-        // Interne Hilfsfunktionen für Belegschreibzugriffe (auch für Dauerrechnungen)
+        // Interne Hilfsfunktionen für Belegschreibzugriffe
         getDocumentWithChildren,
         isLockedInt,
         applyDocumentWrite,

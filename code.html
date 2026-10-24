@@ -156,115 +156,98 @@
         </div>
         <!-- Navigation -->
         <nav class="flex-1 overflow-y-auto py-4 flex flex-col gap-1 px-2">
+            <!-- 1. Dashboard -->
             <a id="nav-dashboard" onclick="switchView('dashboard')"
                 class="flex items-center gap-3 px-3 py-2 rounded-md bg-primary text-white shadow-sm ring-1 ring-white/10 cursor-pointer">
                 <span class="material-symbols-outlined text-[20px]">dashboard</span>
                 <span class="text-sm font-medium">Dashboard</span>
             </a>
-            <div class="pt-4 pb-1 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Module</div>
-            <a id="nav-rechnungen" onclick="switchView('rechnungen')"
+
+            <div class="pt-3 pb-1 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Bau-Workflow</div>
+
+            <!-- 2. Kunden & Bauherren -->
+            <a id="nav-kunden" onclick="switchView('kunden')"
                 class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer">
-                <span
-                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">receipt_long</span>
-                <span class="text-sm font-medium">Rechnungen</span>
+                <span class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">group</span>
+                <span class="text-sm font-medium">Kunden &amp; Bauherren</span>
             </a>
+
+            <!-- 3. Artikel & Material -->
             <a id="nav-artikel" onclick="switchView('artikel')"
                 class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer">
                 <span
                     class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">inventory_2</span>
-                <span class="text-sm font-medium">Artikel</span>
+                <span class="text-sm font-medium">Artikel &amp; Material</span>
             </a>
+
+            <!-- 4. Angebote & GAEB -->
             <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
                 id="nav-angebote" onclick="switchView('angebote')">
                 <span
                     class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">request_quote</span>
-                <span class="text-sm font-medium">Angebote</span>
+                <span class="text-sm font-medium">Angebote &amp; GAEB</span>
             </a>
-            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
+            <a class="flex items-center gap-3 pl-8 pr-3 py-1.5 rounded-md text-xs text-slate-400 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
                 id="nav-gaeb-tender" onclick="openGaebTenderModal()">
-                <span class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">gavel</span>
-                <span class="text-sm font-medium">GAEB Ausschreibung</span>
+                <span class="material-symbols-outlined text-[16px] text-slate-400 group-hover:text-white">gavel</span>
+                <span class="font-medium">GAEB Ausschreibung</span>
             </a>
-            <a id="nav-kunden" onclick="switchView('kunden')"
-                class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer">
-                <span class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">group</span>
-                <span class="text-sm font-medium">Kunden</span>
-            </a>
+
+            <!-- 5. Projekte (Bauakte) -->
             <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
                 id="nav-projekte" onclick="switchView('projekte')">
                 <span
                     class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">folder_special</span>
-                <span class="text-sm font-medium">Projekte</span>
+                <span class="text-sm font-medium">Projekte (Bauakte)</span>
             </a>
-            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
-                id="nav-objekte" onclick="switchView('objekte')">
+
+            <!-- 6. Rechnungen (VOB) -->
+            <a id="nav-rechnungen" onclick="switchView('rechnungen')"
+                class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer">
                 <span
-                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">apartment</span>
-                <span class="text-sm font-medium">Objekte</span>
+                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">receipt_long</span>
+                <span class="text-sm font-medium">Rechnungen (VOB)</span>
             </a>
-            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
-                id="nav-dauerrechnungen" onclick="switchView('dauerrechnungen')">
-                <span
-                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">event_repeat</span>
-                <span class="text-sm font-medium">Dauerrechnungen</span>
-            </a>
-            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
-                id="nav-putzplan" onclick="switchView('putzplan')">
-                <span
-                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">cleaning_services</span>
-                <span class="text-sm font-medium">Putzplan &amp; LV</span>
-            </a>
+
+            <!-- 7. Banking & OPOS -->
             <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
                 id="nav-banking" onclick="switchView('banking')">
                 <span
                     class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">account_balance</span>
                 <span class="text-sm font-medium">Banking &amp; OPOS</span>
             </a>
-            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
-                id="nav-maengel" onclick="switchView('maengel')">
-                <span
-                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">assignment_late</span>
-                <span class="text-sm font-medium">Mängelkataster</span>
-            </a>
-            <div class="pt-4 pb-1 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Mobil &amp; Baustelle</div>
+
+            <!-- 8. Stunden & Compliance -->
             <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
                 id="nav-zeiterfassung" onclick="switchView('zeiterfassung')">
                 <span
                     class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">schedule</span>
-                <span class="text-sm font-medium">Zeiterfassung</span>
+                <span class="text-sm font-medium">Stunden &amp; Compliance</span>
             </a>
-            <div class="pt-4 pb-1 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Großhandel &amp; Compliance</div>
-            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
-                id="nav-grosshandel" onclick="switchView('grosshandel')">
-                <span
-                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">storefront</span>
-                <span class="text-sm font-medium">Großhandel (IDS 2.5)</span>
-            </a>
-            <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
-                id="nav-sokabau" onclick="switchView('sokabau')">
-                <span
-                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">foundation</span>
-                <span class="text-sm font-medium">SOKA-BAU &amp; Recht</span>
-            </a>
+
+            <!-- 9. Berichte & DATEV -->
             <a class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer"
                 id="nav-berichte" onclick="switchView('berichte')">
                 <span
                     class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">analytics</span>
-                <span class="text-sm font-medium">Berichte</span>
+                <span class="text-sm font-medium">Berichte &amp; DATEV</span>
             </a>
-            <div class="pt-4 pb-1 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">System</div>
-            <a id="nav-musterbriefe" onclick="switchView('musterbriefe')"
-                class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer">
-                <span
-                    class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">description</span>
-                <span class="text-sm font-medium">Musterbriefe</span>
-            </a>
+
+            <div class="pt-3 pb-1 px-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider">System</div>
+
+            <!-- 10. Einstellungen -->
             <a id="nav-einstellungen" onclick="switchView('einstellungen')"
                 class="flex items-center gap-3 px-3 py-2 rounded-md text-slate-300 hover:bg-sidebar-hover hover:text-white transition-colors group cursor-pointer">
                 <span
                     class="material-symbols-outlined text-[20px] text-slate-400 group-hover:text-white">settings</span>
                 <span class="text-sm font-medium">Einstellungen</span>
             </a>
+
+            <!-- Versteckte Hilfselemente für Test- und DOM-Kompatibilität -->
+            <a id="nav-grosshandel" class="hidden" onclick="switchView('grosshandel')"></a>
+            <a id="nav-maengel" class="hidden" onclick="switchView('maengel')"></a>
+            <a id="nav-sokabau" class="hidden" onclick="switchView('sokabau')"></a>
+            <a id="nav-musterbriefe" class="hidden" onclick="switchView('musterbriefe')"></a>
         </nav>
     </aside>
     <!-- Main Content -->
@@ -335,18 +318,6 @@
         <!-- Projekte View -->
         <div id="view-projekte" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6"></div>
 
-        <!-- Objekte View (F1 Objektverwaltung) -->
-        <div id="view-objekte" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6"></div>
-
-        <!-- Objekt Details View (F1) -->
-        <div id="view-objekt-details" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6"></div>
-
-        <!-- Dauerrechnungen View (F2) -->
-        <div id="view-dauerrechnungen" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6"></div>
-
-        <!-- Putzplan & Leistungsverzeichnis View (F3) -->
-        <div id="view-putzplan" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6"></div>
-
         <!-- Banking & OPOS View -->
         <div id="view-banking" class="hidden flex-1 overflow-y-auto bg-slate-50/50 p-6"></div>
 
@@ -378,7 +349,7 @@
 
     </main>
 
-        <!-- Modale (Kunden, Objekte, LV, E-Mail, Dauerrechnungen, Belegeditor) ausgelagert nach views/modals/ (geladen via js/modal-loader.js) -->
+        <!-- Modale (Kunden, E-Mail, Belegeditor etc.) ausgelagert nach views/modals/ (geladen via js/modal-loader.js) -->
 
     <!-- Hidden Print Template for actual printing -->
     <div id="print-template"
@@ -423,7 +394,6 @@
     <script src="controllers/NachtragController.js"></script>
     <script src="controllers/BautagebuchController.js"></script>
     <script src="controllers/ControllingController.js"></script>
-    <script src="controllers/ObjektController.js"></script>
     <script src="js/navigation.js"></script>
     <script src="js/kunden.js"></script>
     <script src="js/artikel.js"></script>
@@ -447,19 +417,6 @@
     <script src="js/projects/project-controlling.js"></script>
     <script src="js/projects/project-document-flow.js"></script>
     <script src="js/projekte.js"></script>
-    <script src="js/objekte/objekte-tree.js"></script><script src="js/objekte/objekte-form.js"></script><script src="js/objekte/objekte-detail.js"></script><script src="js/objekte/objekte-import.js"></script><script src="js/objekte.js"></script>
-    <script src="controllers/DauerrechnungController.js"></script>
-    <script src="js/recurring/recurring-list.js"></script>
-    <script src="js/recurring/recurring-modal.js"></script>
-    <script src="js/recurring/recurring-runs.js"></script>
-    <script src="js/recurring/recurring-sammel.js"></script>
-    <script src="js/dauerrechnungen.js"></script>
-    <script src="controllers/ReinigungController.js"></script>
-    <script src="js/cleaning/cleaning-plan.js"></script>
-    <script src="js/cleaning/cleaning-modal.js"></script>
-    <script src="js/cleaning/cleaning-turnus.js"></script>
-    <script src="js/cleaning/cleaning-print.js"></script>
-    <script src="js/putzplan.js"></script>
     <script src="controllers/BankingController.js"></script>
     <script src="controllers/SepaController.js"></script>
     <script src="js/banking/banking-ui.js"></script>

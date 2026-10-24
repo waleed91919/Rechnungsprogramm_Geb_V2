@@ -83,21 +83,18 @@
     
             const stmt = db.prepare(`
                 INSERT INTO zeiterfassung (
-                    uuid, mitarbeiter_id, projekt_id, liegenschaft_id, gebaeude_id, raum_id,
+                    uuid, mitarbeiter_id, projekt_id,
                     taetigkeit_typ, zeit_von, zeit_bis, dauer_min, pause_min, qr_code_scanned,
                     geo_lat, geo_lng, bemerkung, wegezeit_eur, status, device_id,
                     is_verspaetet, status_milog, created_at, updated_at
                 ) VALUES (
-                    @uuid, @mitarbeiter_id, @projekt_id, @liegenschaft_id, @gebaeude_id, @raum_id,
+                    @uuid, @mitarbeiter_id, @projekt_id,
                     @taetigkeit_typ, @zeit_von, @zeit_bis, @dauer_min, @pause_min, @qr_code_scanned,
                     @geo_lat, @geo_lng, @bemerkung, @wegezeit_eur, @status, @device_id,
                     @is_verspaetet, @status_milog, @created_at, CURRENT_TIMESTAMP
                 ) ON CONFLICT(uuid) DO UPDATE SET
                     mitarbeiter_id = excluded.mitarbeiter_id,
                     projekt_id = excluded.projekt_id,
-                    liegenschaft_id = excluded.liegenschaft_id,
-                    gebaeude_id = excluded.gebaeude_id,
-                    raum_id = excluded.raum_id,
                     taetigkeit_typ = excluded.taetigkeit_typ,
                     zeit_von = excluded.zeit_von,
                     zeit_bis = excluded.zeit_bis,
@@ -118,9 +115,6 @@
                 uuid,
                 mitarbeiter_id: parseInt(data.mitarbeiter_id, 10),
                 projekt_id: data.projekt_id ? parseInt(data.projekt_id, 10) : null,
-                liegenschaft_id: data.liegenschaft_id ? parseInt(data.liegenschaft_id, 10) : null,
-                gebaeude_id: data.gebaeude_id ? parseInt(data.gebaeude_id, 10) : null,
-                raum_id: data.raum_id ? parseInt(data.raum_id, 10) : null,
                 taetigkeit_typ: data.taetigkeit_typ || 'PRODUKTIV',
                 zeit_von: data.zeit_von,
                 zeit_bis: data.zeit_bis || null,
@@ -194,12 +188,10 @@
             let query = `
                 SELECT z.*, 
                        m.vorname AS mitarbeiter_vorname, m.nachname AS mitarbeiter_nachname, m.personalnummer, m.lohngruppe_id,
-                       p.name AS projekt_name,
-                       l.name AS liegenschaft_name
+                       p.name AS projekt_name
                 FROM zeiterfassung z
                 LEFT JOIN mitarbeiter m ON z.mitarbeiter_id = m.id
                 LEFT JOIN projekte p ON z.projekt_id = p.id
-                LEFT JOIN liegenschaften l ON z.liegenschaft_id = l.id
                 WHERE COALESCE(z.is_deleted, 0) = 0
             `;
             const params = [];

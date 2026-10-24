@@ -13,7 +13,7 @@ const gaebX84 = require('../../js/gaeb_x84');
 
 function register(ipcMain, context = {}) {
     const db = context.db || (context.dbAPI && context.dbAPI.db) || require('../../db').db;
-    const dbAPI = context.dbAPI || require('../../db').dbAPI;
+    const dbAPI = context.dbAPI || (context.db ? null : require('../../db').dbAPI);
     const wrapHandler = context.wrapHandler || defaultWrapHandler;
     const dialogModule = context.dialog || dialog;
     const browserWindowModule = context.BrowserWindow || BrowserWindow;

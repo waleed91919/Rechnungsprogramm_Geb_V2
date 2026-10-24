@@ -16,8 +16,6 @@ async function saveRechnung() {
 
         const kundeId = document.getElementById('rechnung-kunde')?.value || '';
         const projektId = document.getElementById('rechnung-projekt')?.value || '';
-        const objektWert = document.getElementById('rechnung-objekt') ? document.getElementById('rechnung-objekt').value : '';
-        const [objektTyp, objektIdStr] = objektWert ? objektWert.split(':') : [null, null];
         const rawDatum = document.getElementById('rechnung-datum')?.value || '';
         const rawFaellig = document.getElementById('rechnung-faellig')?.value || '';
         const datum = typeof formatDateISO === 'function' ? (formatDateISO(rawDatum) || formatDateISO(new Date())) : rawDatum;
@@ -42,8 +40,6 @@ async function saveRechnung() {
             faellig,
             kundeId: kundeId ? parseInt(kundeId) : null,
             projektId: projektId ? parseInt(projektId) : null,
-            objekt_typ: objektTyp || null,
-            objekt_id: objektIdStr ? parseInt(objektIdStr) : null,
             positionen: [...(state.currentRechnungPositionen || [])],
             netto: state.currentRechnungTotals ? state.currentRechnungTotals.netto : 0,
             steuer: state.currentRechnungTotals ? state.currentRechnungTotals.steuer : 0,

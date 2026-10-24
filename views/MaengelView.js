@@ -94,6 +94,13 @@ window.MaengelView = class MaengelView {
 
         container.innerHTML = `
             <div class="space-y-6 max-w-7xl mx-auto p-4">
+                <!-- Navigation / Back to Projekte -->
+                <div class="flex items-center">
+                    <button type="button" onclick="navigateTo('projekte')" class="inline-flex items-center gap-2 px-3.5 py-1.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg shadow-sm transition-all cursor-pointer">
+                        <span class="material-symbols-outlined text-[16px]">arrow_back</span>
+                        ← Zurück zu Projekte (Bauakte)
+                    </button>
+                </div>
                 <!-- Top Header & Aktionen -->
                 <div class="flex flex-wrap items-center justify-between gap-4">
                     <div>

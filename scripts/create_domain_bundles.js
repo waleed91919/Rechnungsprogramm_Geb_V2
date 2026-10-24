@@ -23,23 +23,10 @@ const bundles = {
     'stammdaten-modals.html': [
         'artikel-modal.html',
         'kunde-modal.html',
-        'objekt-modal.html'
-    ],
-    'lv-modals.html': [
-        'lv-bereich-modal.html',
-        'lv-position-modal.html',
-        'lv-eintrag-modal.html',
-        'zuschlagsprofil-modal.html'
     ],
     'email-modals.html': [
         'smtp-konto-modal.html',
         'email-modal.html'
-    ],
-    'dauerrechnung-modals.html': [
-        'plan-modal.html',
-        'generierung-modal.html',
-        'sammel-modal.html',
-        'storno-lauf-modal.html'
     ],
     'system-modals.html': [
         'rechnung-modal.html',

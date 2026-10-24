@@ -11,11 +11,11 @@ test('P0.6 Standard: nur Kern-Views sichtbar, nichts gelöscht', () => {
     for (const v of ['dashboard', 'kunden', 'angebote', 'projekte', 'rechnungen', 'banking', 'berichte', 'einstellungen']) {
         assert.ok(visible.includes(v), `Kern-View ${v} muss sichtbar sein`);
     }
-    for (const v of ['objekte', 'dauerrechnungen', 'putzplan', 'grosshandel', 'sokabau']) {
+    for (const v of ['grosshandel', 'sokabau']) {
         assert.ok(!visible.includes(v), `Experimentell ${v} muss Standard-aus sein`);
     }
     // viewConfig unversehrt (nichts gelöscht)
-    for (const v of ['objekte', 'dauerrechnungen', 'putzplan', 'grosshandel', 'sokabau', 'maengel']) {
+    for (const v of ['grosshandel', 'sokabau', 'maengel']) {
         assert.ok(nav.viewConfig[v], `${v} darf nicht gelöscht sein`);
     }
     delete global.state;
@@ -24,7 +24,7 @@ test('P0.6 Standard: nur Kern-Views sichtbar, nichts gelöscht', () => {
 test('P0.6 Opt-in: alle Views sichtbar', () => {
     global.state = { einstellungen: { experimental_module: true } };
     const visible = nav.getVisibleViews();
-    for (const v of ['objekte', 'dauerrechnungen', 'putzplan', 'grosshandel', 'sokabau']) {
+    for (const v of ['grosshandel', 'sokabau']) {
         assert.ok(visible.includes(v), `${v} muss mit Flag sichtbar sein`);
     }
     delete global.state;

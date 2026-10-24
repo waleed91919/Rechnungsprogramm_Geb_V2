@@ -1,6 +1,5 @@
 const { wrapHandler: defaultWrapHandler } = require('./ipc-util');
 
-const OBJEKT_TYPEN = ['LIEGENSCHAFT', 'GEBAEUDE', 'ETAGE', 'RAUM'];
 
 function register(ipcMain, context = {}) {
     const dbAPI = context.dbAPI || require('../../db').dbAPI;
@@ -76,86 +75,9 @@ function register(ipcMain, context = {}) {
         return await dbAPI.saveProjekt(projekt);
     }));
 
-    // --- Objektverwaltung (F1) ---
-    ipcMain.handle('db:getObjektBaum', wrapHandler(async () => {
-        return await dbAPI.getObjektBaum();
-    }));
-
-    ipcMain.handle('db:saveLiegenschaft', wrapHandler(async (e, data) => {
-        if (!data || typeof data !== 'object' || !data.name || !String(data.name).trim()) {
-            throw new Error('Ungültige Liegenschafts-Daten');
-        }
-        return await dbAPI.saveLiegenschaft(data);
-    }));
-
-    ipcMain.handle('db:deleteLiegenschaft', wrapHandler(async (e, id) => {
-        const numId = Number(id);
-        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Liegenschaft-ID');
-        return await dbAPI.deleteLiegenschaft(numId);
-    }));
-
-    ipcMain.handle('db:saveGebaeude', wrapHandler(async (e, data) => {
-        if (!data || typeof data !== 'object' || !data.name || !String(data.name).trim()) {
-            throw new Error('Ungültige Gebäude-Daten');
-        }
-        if (data.liegenschaft_id == null || !Number.isInteger(Number(data.liegenschaft_id))) throw new Error('Ungültige Gebäude-Daten');
-        return await dbAPI.saveGebaeude(data);
-    }));
-
-    ipcMain.handle('db:deleteGebaeude', wrapHandler(async (e, id) => {
-        const numId = Number(id);
-        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Gebäude-ID');
-        return await dbAPI.deleteGebaeude(numId);
-    }));
-
-    ipcMain.handle('db:saveEtage', wrapHandler(async (e, data) => {
-        if (!data || typeof data !== 'object' || !data.name || !String(data.name).trim()) {
-            throw new Error('Ungültige Etagen-Daten');
-        }
-        if (data.gebaeude_id == null || !Number.isInteger(Number(data.gebaeude_id))) throw new Error('Ungültige Etagen-Daten');
-        return await dbAPI.saveEtage(data);
-    }));
-
-    ipcMain.handle('db:deleteEtage', wrapHandler(async (e, id) => {
-        const numId = Number(id);
-        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Etage-ID');
-        return await dbAPI.deleteEtage(numId);
-    }));
-
-    ipcMain.handle('db:saveRaum', wrapHandler(async (e, data) => {
-        if (!data || typeof data !== 'object' || !data.name || !String(data.name).trim()) {
-            throw new Error('Ungültige Raum-Daten');
-        }
-        if (data.etage_id == null || !Number.isInteger(Number(data.etage_id))) throw new Error('Ungültige Raum-Daten');
-        if (data.flaeche != null && data.flaeche !== '' && (isNaN(parseFloat(data.flaeche)) || parseFloat(data.flaeche) < 0)) {
-            throw new Error('Ungültige Fläche');
-        }
-        return await dbAPI.saveRaum(data);
-    }));
-
-    ipcMain.handle('db:deleteRaum', wrapHandler(async (e, id) => {
-        const numId = Number(id);
-        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Raum-ID');
-        return await dbAPI.deleteRaum(numId);
-    }));
-
-    ipcMain.handle('db:getObjektDetails', wrapHandler(async (e, objektTyp, objektId) => {
-        if (!OBJEKT_TYPEN.includes(objektTyp)) throw new Error('Ungültiger Objekttyp');
-        const numId = Number(objektId);
-        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Objekt-ID');
-        return await dbAPI.getObjektDetails(objektTyp, numId);
-    }));
-
-    ipcMain.handle('db:getObjektHistorie', wrapHandler(async (e, objektTyp, objektId, optionen = {}) => {
-        if (!OBJEKT_TYPEN.includes(objektTyp)) throw new Error('Ungültiger Objekttyp');
-        const numId = Number(objektId);
-        if (!Number.isInteger(numId) || numId <= 0) throw new Error('Ungültige Objekt-ID');
-        return await dbAPI.getObjektHistorie(objektTyp, numId, optionen.includeKinder !== false);
-    }));
 }
 
 module.exports = {
     register,
-    registerIpc: register,
-    OBJEKT_TYPEN
+    registerIpc: register
 };
